@@ -63,6 +63,16 @@
   mvn -DskipTests clean package
   java -jar server/target/server.jar --spring.profiles.active=dev
 
+如何克隆（包含子模块 web-ui）
+
+- 推荐一次性拉取主仓库和所有子模块（建议开发者使用此命令）：
+  git clone --recurse-submodules https://github.com/surpass999/gemrun-java.git
+
+- 若已经克隆主仓库，可以手动初始化并更新子模块：
+  git clone https://github.com/surpass999/gemrun-java.git
+  cd gemrun-java
+  git submodule update --init --recursive
+
 常见故障与排查
 - 启动时报 "No plugin found for prefix 'spring-boot'"：可用完整插件坐标运行或在项目根先 `mvn -DskipTests clean install`。示例（完整坐标）：
   mvn -pl server -am org.springframework.boot:spring-boot-maven-plugin:2.7.18:run -Dspring-boot.run.profiles=dev
