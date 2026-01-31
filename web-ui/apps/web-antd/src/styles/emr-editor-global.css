@@ -1,0 +1,86 @@
+.emr-editor {
+  /* 主题变量默认值（可由 .emr-theme-* 覆盖） */
+  --emr-toolbar-height: 40px;
+  --emr-toolbar-bg: #ffffff;
+  --emr-toolbar-border: #e5e7eb;
+  --emr-toolbar-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  --emr-button-size: 32px;
+  --emr-button-radius: 4px;
+  --emr-button-color: #374151;
+  --emr-button-hover-bg: #f9fafb;
+  --emr-button-active-bg: #f3f4f6;
+  --emr-editor-bg: #ffffff;
+  --emr-editor-border: #e5e7eb;
+  --emr-menu-divider: #e5e7eb;
+}
+
+.emr-editor .menu {
+  height: var(--emr-toolbar-height);
+  background: var(--emr-toolbar-bg);
+  border: 1px solid var(--emr-toolbar-border);
+  border-bottom: none;
+  box-shadow: var(--emr-toolbar-shadow);
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  font-size: 14px;
+  /* 放在编辑器容器内并在滚动到顶部时吸顶（非初始化即吸顶） */
+  position: sticky;
+  top: 0px; /* 可根据应用头部高度调整（或暴露为 CSS 变量） */
+  z-index: 60;
+}
+
+.emr-editor .menu-item {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.emr-editor .menu-item > div {
+  width: var(--emr-button-size);
+  height: var(--emr-button-size);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--emr-button-radius);
+  cursor: pointer;
+  color: var(--emr-button-color);
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.emr-editor .menu-item > div:hover {
+  background: var(--emr-button-hover-bg);
+}
+
+.emr-editor .menu-item > div:active,
+.emr-editor .menu-item > div.active {
+  background: var(--emr-button-active-bg);
+}
+
+.emr-editor .menu-divider {
+  width: 1px;
+  height: 24px;
+  background: var(--emr-menu-divider);
+  margin: 0 12px;
+  flex-shrink: 0;
+}
+
+.emr-editor .canvas-editor-container {
+  border: 1px solid var(--emr-editor-border);
+  border-top: none;
+  background: var(--emr-editor-bg);
+  min-height: 400px;
+}
+
+/* 主题示例 */
+.emr-editor.emr-theme-medical {
+  --emr-toolbar-bg: #f8f9fa;
+  --emr-button-color: #1890ff;
+  --emr-button-hover-bg: #e6f7ff;
+  --emr-button-active-bg: #bae7ff;
+}
+

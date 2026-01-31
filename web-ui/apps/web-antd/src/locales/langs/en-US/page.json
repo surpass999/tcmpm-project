@@ -1,0 +1,50 @@
+{
+  "common": {
+    "ok": "OK",
+    "cancel": "Cancel",
+    "create": "Create",
+    "update": "Edit",
+    "delete": "Delete",
+    "export": "Export",
+    "import": "Import",
+    "upload": "Upload",
+    "download": "Download",
+    "save": "Save",
+    "reset": "Reset",
+    "search": "Search",
+    "refresh": "Refresh",
+    "confirm": "Confirm",
+    "tip": "Tip",
+    "warning": "Warning",
+    "loading": "Loading",
+    "more": "More",
+    "action": "Action",
+    "detail": "Detail",
+    "look": "View",
+    "empty": "No Data"
+  },
+  "page": {
+    "medical": {
+      "title": "Medical Editor",
+      "editor": "Medical Editor",
+      "templateManagement": "Template Management",
+      "newTemplate": "New Template",
+      "editTemplate": "Edit Template",
+      "templateName": "Template Name",
+      "templateCategory": "Template Category",
+      "templateContent": "Template Content",
+      "saveTemplate": "Save Template",
+      "categoryManagement": "Category Management",
+      "newCategory": "New Category",
+      "categoryName": "Category Name"
+    },
+    "dashboard": {
+      "title": "Dashboard",
+      "analytics": "Analytics",
+      "workspace": "Workspace"
+    },
+    "tenant": {
+      "placeholder": "Please select tenant"
+    }
+  }
+}

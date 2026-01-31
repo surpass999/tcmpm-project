@@ -1,0 +1,46 @@
+{
+  "name": "@vben/emr-editor",
+  "version": "1.0.0",
+  "homepage": "https://github.com/vbenjs/vue-vben-admin",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vbenjs/vue-vben-admin.git",
+    "directory": "packages/emr-editor"
+  },
+  "license": "MIT",
+  "main": "./src/components/EMREditor.vue",
+  "types": "./src/components/EMREditor.vue",
+  "type": "module",
+  "sideEffects": ["**/*.css"],
+  "scripts": {
+    "build": "vite build --mode lib"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/editor/index.ts",
+      "default": "./src/editor/index.ts"
+    },
+    "./EMREditor": {
+      "types": "./src/emr-editor.ts",
+      "default": "./src/emr-editor.ts"
+    },
+    "./config": {
+      "types": "./src/config/index.ts",
+      "default": "./src/config/index.ts"
+    },
+    "./types": {
+      "types": "./dist/types/src/editor/index.d.ts"
+    },
+    "./MREditor": {
+      "default": "./dist/emr-editor.js"
+    },
+    "./style.css": "./dist/style.css"
+  },
+  "dependencies": {
+    "prismjs": "catalog:",
+    "vue": "catalog:"
+  },
+  "peerDependencies": {
+    "vue": "^3.5.0"
+  }
+}

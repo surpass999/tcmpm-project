@@ -1,0 +1,8 @@
+export { default as Toolbar } from './Toolbar.vue'
+export { default as BasicButtons } from './components/BasicButtons.vue'
+export { default as FontSelector } from './components/FontSelector.vue'
+export { default as TextFormatButtons } from './components/TextFormatButtons.vue'
+export { default as ColorPickers } from './components/ColorPickers.vue'
+export { default as TableInserter } from './components/TableInserter.vue'
+export { default as ImageInserter } from './components/ImageInserter.vue'
+export { default as AdvancedButtons } from './components/AdvancedButtons.vue'

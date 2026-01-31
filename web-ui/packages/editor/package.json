@@ -1,0 +1,29 @@
+{
+  "name": "@vben/editor",
+  "version": "5.5.9",
+  "homepage": "https://github.com/vbenjs/vue-vben-admin",
+  "bugs": "https://github.com/vbenjs/vue-vben-admin/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vbenjs/vue-vben-admin.git",
+    "directory": "packages/editor"
+  },
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "exports": {
+    ".": {
+      "types": "./src/editor/index.ts",
+      "default": "./src/editor/index.ts"
+    },
+    "./MREditor": {
+      "default": "./src/components/MREditor.vue"
+    },
+    "./style.css": "./src/editor/assets/css/index.css"
+  },
+  "dependencies": {
+    "prismjs": "catalog:"
+  }
+}

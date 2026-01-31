@@ -1,0 +1,17 @@
+{
+  "extends": "@vben/tsconfig/web-app.json",
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "declaration": true,
+    "noEmit": true,
+    "allowJs": true,
+    "moduleResolution": "Node",
+    "types": [],
+    "skipLibCheck": true,
+    "verbatimModuleSyntax": false,
+    "strict": false
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.vue"],
+  "exclude": ["node_modules", "dist"]
+}
