@@ -1,5 +1,5 @@
-/www/wwwroot/gemrun-base/framework/spring-boot-starter-redis/src/main/java/cn/gemrun/base/framework/redis/config/BaseCacheAutoConfiguration.java
-/www/wwwroot/gemrun-base/framework/spring-boot-starter-redis/src/main/java/cn/gemrun/base/framework/redis/config/BaseCacheProperties.java
-/www/wwwroot/gemrun-base/framework/spring-boot-starter-redis/src/main/java/cn/gemrun/base/framework/redis/config/BaseRedisAutoConfiguration.java
-/www/wwwroot/gemrun-base/framework/spring-boot-starter-redis/src/main/java/cn/gemrun/base/framework/redis/core/TimeoutRedisCacheManager.java
-/www/wwwroot/gemrun-base/framework/spring-boot-starter-redis/src/main/java/cn/gemrun/base/framework/redis/package-info.java
+/www/wwwroot/tcmpm/framework/spring-boot-starter-redis/src/main/java/cn/gemrun/base/framework/redis/config/BaseCacheAutoConfiguration.java
+/www/wwwroot/tcmpm/framework/spring-boot-starter-redis/src/main/java/cn/gemrun/base/framework/redis/config/BaseCacheProperties.java
+/www/wwwroot/tcmpm/framework/spring-boot-starter-redis/src/main/java/cn/gemrun/base/framework/redis/config/BaseRedisAutoConfiguration.java
+/www/wwwroot/tcmpm/framework/spring-boot-starter-redis/src/main/java/cn/gemrun/base/framework/redis/core/TimeoutRedisCacheManager.java
+/www/wwwroot/tcmpm/framework/spring-boot-starter-redis/src/main/java/cn/gemrun/base/framework/redis/package-info.java

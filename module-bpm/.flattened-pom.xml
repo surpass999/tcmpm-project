@@ -5,13 +5,13 @@
   <groupId>cn.gemrun</groupId>
   <artifactId>module-bpm</artifactId>
   <version>2025.12-jdk8-SNAPSHOT</version>
-  <name>base-module-bpm</name>
+  <name>module-bpm</name>
   <description>bpm 包下，业务流程管理（Business Process Management），我们放工作流的功能。
         例如说：流程定义、表单配置、审核中心（我的申请、我的待办、我的已办）等等
         bpm 解释：https://baike.baidu.com/item/BPM/1933
 
         工作流基于 Flowable 6 实现，分成流程定义、流程表单、流程实例、流程任务等功能模块。</description>
-  <url>https://github.com/YunaiV/ruoyi-vue-pro/base-module-bpm</url>
+  <url>https://github.com/YunaiV/ruoyi-vue-pro/module-bpm</url>
   <dependencies>
     <dependency>
       <groupId>cn.gemrun</groupId>

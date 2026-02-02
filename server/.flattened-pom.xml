@@ -6,7 +6,7 @@
   <artifactId>server</artifactId>
   <version>2025.12-jdk8-SNAPSHOT</version>
   <name>server</name>
-  <description>后端 Server 的主项目，通过引入需要 base-module-xxx 的依赖，
+  <description>后端 Server 的主项目，通过引入需要 module-xxx 的依赖，
         从而实现提供 RESTful API 给 base-ui-admin、base-ui-user 等前端项目。
         本质上来说，它就是个空壳（容器）！</description>
   <url>https://github.com/YunaiV/ruoyi-vue-pro</url>
@@ -30,6 +30,18 @@
       <scope>compile</scope>
     </dependency>
     <dependency>
+      <groupId>cn.gemrun</groupId>
+      <artifactId>module-declare</artifactId>
+      <version>2025.12-jdk8-SNAPSHOT</version>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>cn.gemrun</groupId>
+      <artifactId>module-bpm</artifactId>
+      <version>2025.12-jdk8-SNAPSHOT</version>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-configuration-processor</artifactId>
       <version>2.7.18</version>
@@ -41,6 +53,13 @@
       <artifactId>spring-boot-starter-protection</artifactId>
       <version>2025.12-jdk8-SNAPSHOT</version>
       <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-devtools</artifactId>
+      <version>2.7.18</version>
+      <scope>compile</scope>
+      <optional>true</optional>
     </dependency>
   </dependencies>
   <repositories>

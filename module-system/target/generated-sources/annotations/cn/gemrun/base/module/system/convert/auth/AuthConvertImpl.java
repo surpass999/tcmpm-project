@@ -10,7 +10,7 @@ import javax.annotation.Generated;
 
 @Generated(
     value = "org.mapstruct.ap.MappingProcessor",
-    date = "2026-01-29T22:43:56+0800",
+    date = "2026-02-02T15:54:04+0800",
     comments = "version: 1.6.3, compiler: javac, environment: Java 1.8.0_371 (Oracle Corporation)"
 )
 public class AuthConvertImpl implements AuthConvert {

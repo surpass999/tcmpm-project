@@ -1,0 +1,7 @@
+[
+    {
+        "key": "ctrl+shift+3",
+        "command": "workbench.tasks.runTask",
+        "args": "Restart Server"
+    }
+]

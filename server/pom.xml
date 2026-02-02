@@ -14,7 +14,7 @@
 
     <name>${project.artifactId}</name>
     <description>
-        后端 Server 的主项目，通过引入需要 base-module-xxx 的依赖，
+        后端 Server 的主项目，通过引入需要 module-xxx 的依赖，
         从而实现提供 RESTful API 给 base-ui-admin、base-ui-user 等前端项目。
         本质上来说，它就是个空壳（容器）！
     </description>
@@ -38,19 +38,24 @@
            <artifactId>module-member</artifactId>
            <version>${revision}</version>
        </dependency>
+       <!-- 申报模块。默认注释，保证编译速度 -->
+       <dependency>
+           <groupId>cn.gemrun</groupId>
+           <artifactId>module-declare</artifactId>
+           <version>${revision}</version>
+       </dependency>
 
         <!-- 数据报表。默认注释，保证编译速度 -->
 <!--        <dependency>-->
 <!--            <groupId>cn.gemrun</groupId>-->
 <!--            <artifactId>module-report</artifactId>-->
 <!--            <version>${revision}</version>-->
-<!--        </dependency>-->
         <!-- 工作流。默认注释，保证编译速度 -->
-       <!-- <dependency>
+       <dependency>
            <groupId>cn.gemrun</groupId>
            <artifactId>module-bpm</artifactId>
            <version>${revision}</version>
-       </dependency> -->
+       </dependency>
         <!-- 支付服务。默认注释，保证编译速度 -->
 <!--        <dependency>-->
 <!--            <groupId>cn.gemrun</groupId>-->
@@ -126,6 +131,12 @@
         <dependency>
             <groupId>cn.gemrun</groupId>
             <artifactId>spring-boot-starter-protection</artifactId>
+        </dependency>
+        <!-- 开发工具-热部署 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-devtools</artifactId>
+            <optional>true</optional>
         </dependency>
 
     </dependencies>

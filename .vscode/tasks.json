@@ -1,0 +1,16 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "Restart Server",
+        "type": "shell",
+        "command": "/www/wwwroot/tcmpm/script/shell/dev.sh restart",
+        "presentation": { 
+          "reveal": "always", 
+          "panel": "new",
+          "close": true
+        },
+        "problemMatcher": []
+      }
+    ]
+  }

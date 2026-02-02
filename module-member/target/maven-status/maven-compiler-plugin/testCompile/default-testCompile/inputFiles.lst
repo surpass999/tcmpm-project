@@ -1,6 +1,6 @@
-/www/wwwroot/gemrun-base/module-member/src/test/java/cn/gemrun/base/module/member/service/address/MemberAddressServiceImplTest.java
-/www/wwwroot/gemrun-base/module-member/src/test/java/cn/gemrun/base/module/member/service/auth/MemberAuthServiceTest.java
-/www/wwwroot/gemrun-base/module-member/src/test/java/cn/gemrun/base/module/member/service/group/MemberGroupServiceImplTest.java
-/www/wwwroot/gemrun-base/module-member/src/test/java/cn/gemrun/base/module/member/service/level/MemberLevelServiceImplTest.java
-/www/wwwroot/gemrun-base/module-member/src/test/java/cn/gemrun/base/module/member/service/tag/MemberTagServiceImplTest.java
-/www/wwwroot/gemrun-base/module-member/src/test/java/cn/gemrun/base/module/member/service/user/MemberUserServiceImplTest.java
+/www/wwwroot/tcmpm/module-member/src/test/java/cn/gemrun/base/module/member/service/address/MemberAddressServiceImplTest.java
+/www/wwwroot/tcmpm/module-member/src/test/java/cn/gemrun/base/module/member/service/auth/MemberAuthServiceTest.java
+/www/wwwroot/tcmpm/module-member/src/test/java/cn/gemrun/base/module/member/service/group/MemberGroupServiceImplTest.java
+/www/wwwroot/tcmpm/module-member/src/test/java/cn/gemrun/base/module/member/service/level/MemberLevelServiceImplTest.java
+/www/wwwroot/tcmpm/module-member/src/test/java/cn/gemrun/base/module/member/service/tag/MemberTagServiceImplTest.java
+/www/wwwroot/tcmpm/module-member/src/test/java/cn/gemrun/base/module/member/service/user/MemberUserServiceImplTest.java

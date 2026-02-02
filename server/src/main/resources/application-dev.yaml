@@ -176,6 +176,16 @@ base:
     transfer-notify-url: https://yunai.natapp1.cc/admin-api/pay/notify/transfer # 支付渠道的【转账】回调地址
   demo: false # 开启演示模式
   tencent-lbs-key: TVDBZ-TDILD-4ON4B-PFDZA-RNLKH-VVF6E # QQ 地图的密钥 https://lbs.qq.com/service/staticV2/staticGuide/staticDoc
+  # 新添加的内容
+  security:
+    permit-all_urls:
+      - /admin-api/mp/open/** # 微信公众号开放平台，微信回调接口，不需要登录
+      - /admin-api/declare/test # 申报模块测试接口，不需要登录
+  tenant:
+    enable: true
+    ignore-urls:
+      - /jmreport/* # 积木报表，无法携带租户编号
+      - /admin-api/declare/test # 申报模块测试接口
 
 justauth:
   enabled: true
