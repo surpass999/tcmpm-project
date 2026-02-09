@@ -1,7 +1,7 @@
 package cn.gemrun.base.module.system.dal.dataobject.permission;
 
 import cn.gemrun.base.framework.common.enums.CommonStatusEnum;
-import cn.gemrun.base.framework.tenant.core.db.TenantBaseDO;
+import cn.gemrun.base.framework.mybatis.core.dataobject.BaseDO;
 import cn.gemrun.base.module.system.enums.permission.DataScopeEnum;
 import cn.gemrun.base.module.system.enums.permission.RoleTypeEnum;
 import com.baomidou.mybatisplus.annotation.KeySequence;
@@ -23,7 +23,7 @@ import java.util.Set;
 @KeySequence("system_role_seq") // 用于 Oracle、PostgreSQL、Kingbase、DB2、H2 数据库的主键自增。如果是 MySQL 等数据库，可不写。
 @Data
 @EqualsAndHashCode(callSuper = true)
-public class RoleDO extends TenantBaseDO {
+public class RoleDO extends BaseDO {
 
     /**
      * 角色ID

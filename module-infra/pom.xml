@@ -19,11 +19,7 @@
     </description>
 
     <dependencies>
-        <!-- 业务组件 -->
-        <dependency>
-            <groupId>cn.gemrun</groupId>
-            <artifactId>spring-boot-starter-biz-tenant</artifactId>
-        </dependency>
+
 
         <!-- Web 相关 -->
         <dependency>

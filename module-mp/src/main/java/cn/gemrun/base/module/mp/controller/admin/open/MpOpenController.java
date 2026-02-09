@@ -2,8 +2,6 @@ package cn.gemrun.base.module.mp.controller.admin.open;
 
 import cn.hutool.core.lang.Assert;
 import cn.hutool.core.util.StrUtil;
-import cn.gemrun.base.framework.tenant.core.aop.TenantIgnore;
-import cn.gemrun.base.framework.tenant.core.util.TenantUtils;
 import cn.gemrun.base.module.mp.controller.admin.open.vo.MpOpenCheckSignatureReqVO;
 import cn.gemrun.base.module.mp.controller.admin.open.vo.MpOpenHandleMessageReqVO;
 import cn.gemrun.base.module.mp.dal.dataobject.account.MpAccountDO;
@@ -43,22 +41,15 @@ public class MpOpenController {
      */
     @Operation(summary = "处理消息")
     @PostMapping(value = "/{appId}", produces = "application/xml; charset=UTF-8")
-    @TenantIgnore
     public String handleMessage(@PathVariable("appId") String appId,
                                 @RequestBody String content,
                                 MpOpenHandleMessageReqVO reqVO) {
         log.info("[handleMessage][appId({}) 推送消息，参数({}) 内容({})]", appId, reqVO, content);
 
-        // 处理 appId + 多租户的上下文
         MpAccountDO account = mpAccountService.getAccountFromCache(appId);
         Assert.notNull(account, "公众号 appId({}) 不存在", appId);
-        try {
-            MpContextHolder.setAppId(appId);
-            return TenantUtils.execute(account.getTenantId(),
-                    () -> handleMessage0(appId, content, reqVO));
-        } finally {
-            MpContextHolder.clear();
-        }
+        MpContextHolder.setAppId(appId);
+        return handleMessage0(appId, content, reqVO);
     }
 
     /**
@@ -68,7 +59,6 @@ public class MpOpenController {
      */
     @Operation(summary = "校验签名") // 参见
     @GetMapping(value = "/{appId}", produces = "text/plain;charset=utf-8")
-    @TenantIgnore
     public String checkSignature(@PathVariable("appId") String appId,
                                  MpOpenCheckSignatureReqVO reqVO) {
         log.info("[checkSignature][appId({}) 接收到来自微信服务器的认证消息({})]", appId, reqVO);

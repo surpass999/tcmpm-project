@@ -1,6 +1,5 @@
 package cn.gemrun.base.module.system.dal.dataobject.sms;
 
-import cn.gemrun.base.framework.tenant.core.aop.TenantIgnore;
 import cn.gemrun.base.module.system.enums.sms.SmsTemplateTypeEnum;
 import cn.gemrun.base.framework.common.enums.CommonStatusEnum;
 import cn.gemrun.base.framework.mybatis.core.dataobject.BaseDO;
@@ -25,7 +24,7 @@ import java.util.List;
 @Data
 @EqualsAndHashCode(callSuper = true)
 @ToString(callSuper = true)
-@TenantIgnore
+
 public class SmsTemplateDO extends BaseDO {
 
     /**

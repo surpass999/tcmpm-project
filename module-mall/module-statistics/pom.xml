@@ -44,11 +44,6 @@
             <version>${revision}</version>
         </dependency>
 
-        <!-- 业务组件 -->
-        <dependency>
-            <groupId>cn.gemrun</groupId>
-            <artifactId>spring-boot-starter-biz-tenant</artifactId>
-        </dependency>
         <dependency>
             <groupId>cn.gemrun</groupId>
             <artifactId>spring-boot-starter-biz-ip</artifactId>

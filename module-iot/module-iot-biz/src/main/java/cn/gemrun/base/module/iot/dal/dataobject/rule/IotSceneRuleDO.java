@@ -1,7 +1,7 @@
 package cn.gemrun.base.module.iot.dal.dataobject.rule;
 
 import cn.gemrun.base.framework.common.enums.CommonStatusEnum;
-import cn.gemrun.base.framework.tenant.core.db.TenantBaseDO;
+import cn.gemrun.base.framework.mybatis.core.dataobject.BaseDO;
 import cn.gemrun.base.module.iot.core.mq.message.IotDeviceMessage;
 import cn.gemrun.base.module.iot.dal.dataobject.alert.IotAlertConfigDO;
 import cn.gemrun.base.module.iot.dal.dataobject.device.IotDeviceDO;
@@ -35,7 +35,7 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class IotSceneRuleDO extends TenantBaseDO {
+public class IotSceneRuleDO extends BaseDO {
 
     /**
      * 场景联动编号

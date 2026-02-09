@@ -3,7 +3,6 @@ package cn.gemrun.base.module.ai.util;
 import cn.hutool.core.util.ObjUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.gemrun.base.framework.security.core.util.SecurityFrameworkUtils;
-import cn.gemrun.base.framework.tenant.core.context.TenantContextHolder;
 import cn.gemrun.base.module.ai.enums.model.AiPlatformEnum;
 import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatOptions;
 import org.springaicommunity.moonshot.MoonshotChatOptions;
@@ -104,7 +103,7 @@ public class AiUtils {
     public static Map<String, Object> buildCommonToolContext() {
         Map<String, Object> context = new HashMap<>();
         context.put(TOOL_CONTEXT_LOGIN_USER, SecurityFrameworkUtils.getLoginUser());
-        context.put(TOOL_CONTEXT_TENANT_ID, TenantContextHolder.getTenantId());
+        context.put(TOOL_CONTEXT_TENANT_ID, null);
         return context;
     }
 

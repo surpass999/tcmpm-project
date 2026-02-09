@@ -3,7 +3,6 @@ package cn.gemrun.base.module.ai.tool.function;
 import cn.gemrun.base.module.ai.util.AiUtils;
 import cn.gemrun.base.framework.common.util.object.BeanUtils;
 import cn.gemrun.base.framework.security.core.LoginUser;
-import cn.gemrun.base.framework.tenant.core.util.TenantUtils;
 import cn.gemrun.base.module.system.api.user.AdminUserApi;
 import cn.gemrun.base.module.system.api.user.dto.AdminUserRespDTO;
 import com.fasterxml.jackson.annotation.JsonClassDescription;
@@ -83,10 +82,8 @@ public class UserProfileQueryToolFunction
             }
             request.setId(loginUser.getId());
         }
-        return TenantUtils.execute(tenantId, () -> {
-            AdminUserRespDTO user = adminUserApi.getUser(request.getId());
-            return BeanUtils.toBean(user, Response.class);
-        });
+        AdminUserRespDTO user = adminUserApi.getUser(request.getId());
+        return BeanUtils.toBean(user, Response.class);
     }
 
 }

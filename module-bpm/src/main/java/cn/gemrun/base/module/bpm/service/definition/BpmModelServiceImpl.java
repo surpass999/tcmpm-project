@@ -18,7 +18,6 @@ import cn.gemrun.base.module.bpm.enums.task.BpmReasonEnum;
 import cn.gemrun.base.module.bpm.framework.flowable.core.candidate.BpmTaskCandidateInvoker;
 import cn.gemrun.base.module.bpm.framework.flowable.core.enums.BpmTaskCandidateStrategyEnum;
 import cn.gemrun.base.module.bpm.framework.flowable.core.util.BpmnModelUtils;
-import cn.gemrun.base.module.bpm.framework.flowable.core.util.FlowableUtils;
 import cn.gemrun.base.module.bpm.framework.flowable.core.util.SimpleModelUtils;
 import cn.gemrun.base.module.bpm.service.task.BpmProcessInstanceCopyService;
 import lombok.extern.slf4j.Slf4j;
@@ -42,7 +41,6 @@ import org.springframework.validation.annotation.Validated;
 
 import javax.annotation.Resource;
 import javax.validation.Valid;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -89,7 +87,6 @@ public class BpmModelServiceImpl implements BpmModelService {
         if (StrUtil.isNotEmpty(name)) {
             modelQuery.modelNameLike("%" + name + "%");
         }
-        modelQuery.modelTenantId(FlowableUtils.getTenantId());
         return modelQuery.list();
     }
 
@@ -97,7 +94,6 @@ public class BpmModelServiceImpl implements BpmModelService {
     public Long getModelCountByCategory(String category) {
         return repositoryService.createModelQuery()
                 .modelCategory(category)
-                .modelTenantId(FlowableUtils.getTenantId())
                 .count();
     }
 
@@ -117,7 +113,6 @@ public class BpmModelServiceImpl implements BpmModelService {
         createReqVO.setSort(System.currentTimeMillis()); // 使用当前时间，作为排序
         Model model = repositoryService.newModel();
         BpmModelConvert.INSTANCE.copyToModel(model, createReqVO);
-        model.setTenantId(FlowableUtils.getTenantId());
 
         // 3. 保存模型
         saveModel(model, createReqVO);
@@ -168,7 +163,7 @@ public class BpmModelServiceImpl implements BpmModelService {
     public void updateModelSortBatch(Long userId, List<String> ids) {
         // 1.1 校验流程模型存在
         List<Model> models = repositoryService.createModelQuery()
-                .modelTenantId(FlowableUtils.getTenantId()).list();
+                .list();
         models.removeIf(model -> !ids.contains(model.getId()));
         if (ids.size() != models.size()) {
             throw exception(MODEL_NOT_EXISTS);
@@ -232,14 +227,14 @@ public class BpmModelServiceImpl implements BpmModelService {
         String simpleJson = getModelSimpleJson(model.getId());
 
         // 2.1 创建流程定义
-        String definitionId = processDefinitionService.createProcessDefinition(model, metaInfo, bpmnBytes, simpleJson,
-                form);
+        String definitionId = processDefinitionService.createProcessDefinition(model, metaInfo, bpmnBytes, simpleJson, form);
 
         // 2.2 将老的流程定义进行挂起。也就是说，只有最新部署的流程定义，才可以发起任务。
         updateProcessDefinitionSuspended(model.getDeploymentId());
 
         // 2.3 更新 model 的 deploymentId，进行关联
         ProcessDefinition definition = processDefinitionService.getProcessDefinition(definitionId);
+        
         model.setDeploymentId(definition.getDeploymentId());
         repositoryService.saveModel(model);
     }
@@ -428,7 +423,6 @@ public class BpmModelServiceImpl implements BpmModelService {
 
     private Model getModelByKey(String key) {
         return repositoryService.createModelQuery()
-                .modelTenantId(FlowableUtils.getTenantId())
                 .modelKey(key).singleResult();
     }
 

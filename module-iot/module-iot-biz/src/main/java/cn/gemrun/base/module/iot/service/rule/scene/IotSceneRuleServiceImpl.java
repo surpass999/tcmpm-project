@@ -7,8 +7,6 @@ import cn.hutool.extra.spring.SpringUtil;
 import cn.gemrun.base.framework.common.enums.CommonStatusEnum;
 import cn.gemrun.base.framework.common.pojo.PageResult;
 import cn.gemrun.base.framework.common.util.object.BeanUtils;
-import cn.gemrun.base.framework.tenant.core.aop.TenantIgnore;
-import cn.gemrun.base.framework.tenant.core.util.TenantUtils;
 import cn.gemrun.base.module.iot.controller.admin.rule.vo.scene.IotSceneRulePageReqVO;
 import cn.gemrun.base.module.iot.controller.admin.rule.vo.scene.IotSceneRuleSaveReqVO;
 import cn.gemrun.base.module.iot.core.mq.message.IotDeviceMessage;
@@ -159,7 +157,6 @@ public class IotSceneRuleServiceImpl implements IotSceneRuleService {
 
     @Override
     @Cacheable(value = RedisKeyConstants.SCENE_RULE_LIST, key = "#productId + '_' + #deviceId ")
-    @TenantIgnore // 忽略租户隔离：因为 IotSceneRuleMessageHandler 调用时，一般未传递租户，所以需要忽略
     public List<IotSceneRuleDO> getSceneRuleListByProductIdAndDeviceIdFromCache(Long productId, Long deviceId) {
         // 1. 查询启用状态的规则场景
         List<IotSceneRuleDO> enabledList = sceneRuleMapper.selectList(IotSceneRuleDO::getStatus, CommonStatusEnum.ENABLE.getStatus());
@@ -197,7 +194,6 @@ public class IotSceneRuleServiceImpl implements IotSceneRuleService {
     public void executeSceneRuleByDevice(IotDeviceMessage message) {
         // 1.1 这里的 tenantId，通过设备获取；
         IotDeviceDO device = deviceService.getDeviceFromCache(message.getDeviceId());
-        TenantUtils.execute(device.getTenantId(), () -> {
             // 1.2 获得设备匹配的规则场景
             List<IotSceneRuleDO> sceneRules = getMatchedSceneRuleListByMessage(message);
             if (CollUtil.isEmpty(sceneRules)) {
@@ -206,13 +202,12 @@ public class IotSceneRuleServiceImpl implements IotSceneRuleService {
 
             // 2. 执行规则场景
             executeSceneRuleAction(message, sceneRules);
-        });
     }
 
     @Override
     public void executeSceneRuleByTimer(Long id) {
         // 1.1 获得规则场景
-        IotSceneRuleDO scene = TenantUtils.executeIgnore(() -> sceneRuleMapper.selectById(id));
+        IotSceneRuleDO scene = sceneRuleMapper.selectById(id);
         if (scene == null) {
             log.error("[executeSceneRuleByTimer][规则场景({}) 不存在]", id);
             return;
@@ -230,8 +225,7 @@ public class IotSceneRuleServiceImpl implements IotSceneRuleService {
         }
 
         // 2. 执行规则场景
-        TenantUtils.execute(scene.getTenantId(),
-                () -> executeSceneRuleAction(null, ListUtil.toList(scene)));
+        executeSceneRuleAction(null, ListUtil.toList(scene));
     }
 
     /**

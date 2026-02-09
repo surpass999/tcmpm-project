@@ -11,7 +11,7 @@ import javax.annotation.Generated;
 
 @Generated(
     value = "org.mapstruct.ap.MappingProcessor",
-    date = "2026-02-02T15:54:15+0800",
+    date = "2026-02-09T17:50:52+0800",
     comments = "version: 1.6.3, compiler: javac, environment: Java 1.8.0_371 (Oracle Corporation)"
 )
 public class MemberTagConvertImpl implements MemberTagConvert {

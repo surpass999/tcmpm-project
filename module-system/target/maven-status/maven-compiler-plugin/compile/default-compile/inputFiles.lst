@@ -48,7 +48,6 @@
 /www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/api/social/dto/SocialWxaOrderUploadShippingInfoReqDTO.java
 /www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/api/social/dto/SocialWxaSubscribeMessageSendReqDTO.java
 /www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/api/social/dto/SocialWxaSubscribeTemplateRespDTO.java
-/www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/api/tenant/TenantApiImpl.java
 /www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/api/user/AdminUserApi.java
 /www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/api/user/AdminUserApiImpl.java
 /www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/api/user/dto/AdminUserRespDTO.java
@@ -170,15 +169,6 @@
 /www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/controller/admin/socail/vo/user/SocialUserPageReqVO.java
 /www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/controller/admin/socail/vo/user/SocialUserRespVO.java
 /www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/controller/admin/socail/vo/user/SocialUserUnbindReqVO.java
-/www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/controller/admin/tenant/TenantController.java
-/www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/controller/admin/tenant/TenantPackageController.java
-/www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/controller/admin/tenant/vo/packages/TenantPackagePageReqVO.java
-/www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/controller/admin/tenant/vo/packages/TenantPackageRespVO.java
-/www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/controller/admin/tenant/vo/packages/TenantPackageSaveReqVO.java
-/www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/controller/admin/tenant/vo/packages/TenantPackageSimpleRespVO.java
-/www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/controller/admin/tenant/vo/tenant/TenantPageReqVO.java
-/www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/controller/admin/tenant/vo/tenant/TenantRespVO.java
-/www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/controller/admin/tenant/vo/tenant/TenantSaveReqVO.java
 /www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/controller/admin/user/UserController.java
 /www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/controller/admin/user/UserProfileController.java
 /www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/controller/admin/user/vo/profile/UserProfileRespVO.java
@@ -202,7 +192,6 @@
 /www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/convert/auth/AuthConvert.java
 /www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/convert/oauth2/OAuth2OpenConvert.java
 /www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/convert/package-info.java
-/www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/convert/tenant/TenantConvert.java
 /www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/convert/user/UserConvert.java
 /www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/dal/dataobject/dept/DeptDO.java
 /www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/dal/dataobject/dept/PostDO.java
@@ -233,8 +222,6 @@
 /www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/dal/dataobject/social/SocialClientDO.java
 /www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/dal/dataobject/social/SocialUserBindDO.java
 /www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/dal/dataobject/social/SocialUserDO.java
-/www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/dal/dataobject/tenant/TenantDO.java
-/www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/dal/dataobject/tenant/TenantPackageDO.java
 /www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/dal/dataobject/user/AdminUserDO.java
 /www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/dal/mysql/dept/DeptMapper.java
 /www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/dal/mysql/dept/PostMapper.java
@@ -266,8 +253,6 @@
 /www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/dal/mysql/social/SocialClientMapper.java
 /www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/dal/mysql/social/SocialUserBindMapper.java
 /www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/dal/mysql/social/SocialUserMapper.java
-/www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/dal/mysql/tenant/TenantMapper.java
-/www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/dal/mysql/tenant/TenantPackageMapper.java
 /www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/dal/mysql/user/AdminUserMapper.java
 /www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/dal/redis/RedisKeyConstants.java
 /www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/dal/redis/oauth2/OAuth2AccessTokenRedisDAO.java
@@ -399,12 +384,6 @@
 /www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/service/social/SocialClientServiceImpl.java
 /www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/service/social/SocialUserService.java
 /www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/service/social/SocialUserServiceImpl.java
-/www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/service/tenant/TenantPackageService.java
-/www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/service/tenant/TenantPackageServiceImpl.java
-/www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/service/tenant/TenantService.java
-/www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/service/tenant/TenantServiceImpl.java
-/www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/service/tenant/handler/TenantInfoHandler.java
-/www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/service/tenant/handler/TenantMenuHandler.java
 /www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/service/user/AdminUserService.java
 /www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/service/user/AdminUserServiceImpl.java
 /www/wwwroot/tcmpm/module-system/src/main/java/cn/gemrun/base/module/system/util/oauth2/OAuth2Utils.java

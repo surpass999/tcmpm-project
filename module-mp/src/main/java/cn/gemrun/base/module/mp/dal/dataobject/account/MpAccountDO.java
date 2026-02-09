@@ -1,6 +1,6 @@
 package cn.gemrun.base.module.mp.dal.dataobject.account;
 
-import cn.gemrun.base.framework.tenant.core.db.TenantBaseDO;
+import cn.gemrun.base.framework.mybatis.core.dataobject.BaseDO;
 import com.baomidou.mybatisplus.annotation.KeySequence;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -19,7 +19,7 @@ import lombok.*;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class MpAccountDO extends TenantBaseDO {
+public class MpAccountDO extends BaseDO {
 
     /**
      * 编号

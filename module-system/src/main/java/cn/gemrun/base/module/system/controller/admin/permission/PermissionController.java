@@ -6,7 +6,6 @@ import cn.gemrun.base.module.system.controller.admin.permission.vo.permission.Pe
 import cn.gemrun.base.module.system.controller.admin.permission.vo.permission.PermissionAssignRoleMenuReqVO;
 import cn.gemrun.base.module.system.controller.admin.permission.vo.permission.PermissionAssignUserRoleReqVO;
 import cn.gemrun.base.module.system.service.permission.PermissionService;
-import cn.gemrun.base.module.system.service.tenant.TenantService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.Operation;
@@ -32,9 +31,6 @@ public class PermissionController {
 
     @Resource
     private PermissionService permissionService;
-    @Resource
-    private TenantService tenantService;
-
     @Operation(summary = "获得角色拥有的菜单编号")
     @Parameter(name = "roleId", description = "角色编号", required = true)
     @GetMapping("/list-role-menus")
@@ -47,10 +43,7 @@ public class PermissionController {
     @Operation(summary = "赋予角色菜单")
     @PreAuthorize("@ss.hasPermission('system:permission:assign-role-menu')")
     public CommonResult<Boolean> assignRoleMenu(@Validated @RequestBody PermissionAssignRoleMenuReqVO reqVO) {
-        // 开启多租户的情况下，需要过滤掉未开通的菜单
-        tenantService.handleTenantMenu(menuIds -> reqVO.getMenuIds().removeIf(menuId -> !CollUtil.contains(menuIds, menuId)));
-
-        // 执行菜单的分配
+        // 单租户模式下，直接执行菜单分配
         permissionService.assignRoleMenu(reqVO.getRoleId(), reqVO.getMenuIds());
         return success(true);
     }

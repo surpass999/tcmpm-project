@@ -5,8 +5,6 @@ import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.extra.spring.SpringUtil;
 import cn.gemrun.base.framework.common.core.KeyValue;
 import cn.gemrun.base.framework.common.util.json.JsonUtils;
-import cn.gemrun.base.framework.tenant.core.context.TenantContextHolder;
-import cn.gemrun.base.framework.tenant.core.util.TenantUtils;
 import cn.gemrun.base.module.bpm.controller.admin.definition.vo.form.BpmFormFieldVO;
 import cn.gemrun.base.module.bpm.dal.dataobject.definition.BpmProcessDefinitionInfoDO;
 import cn.gemrun.base.module.bpm.enums.definition.BpmModelFormTypeEnum;
@@ -18,7 +16,6 @@ import org.flowable.common.engine.impl.el.ExpressionManager;
 import org.flowable.common.engine.impl.identity.Authentication;
 import org.flowable.common.engine.impl.variable.MapDelegateVariableContainer;
 import org.flowable.engine.ManagementService;
-import org.flowable.engine.ProcessEngineConfiguration;
 import org.flowable.engine.history.HistoricProcessInstance;
 import org.flowable.engine.impl.cfg.ProcessEngineConfigurationImpl;
 import org.flowable.engine.impl.util.CommandContextUtil;
@@ -28,7 +25,6 @@ import org.flowable.task.api.TaskInfo;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.Callable;
 import java.util.stream.Collectors;
 
@@ -62,30 +58,22 @@ public class FlowableUtils {
         }
     }
 
-    public static String getTenantId() {
-        Long tenantId = TenantContextHolder.getTenantId();
-        return tenantId != null ? String.valueOf(tenantId) : ProcessEngineConfiguration.NO_TENANT_ID;
-    }
-
     public static void execute(String tenantIdStr, Runnable runnable) {
-        if (ObjectUtil.isEmpty(tenantIdStr)
-                || Objects.equals(tenantIdStr, ProcessEngineConfiguration.NO_TENANT_ID)) {
-            runnable.run();
-        } else {
-            Long tenantId = Long.valueOf(tenantIdStr);
-            TenantUtils.execute(tenantId, runnable);
-        }
+        runnable.run();
     }
 
     @SneakyThrows
-    public static <V> V execute(String tenantIdStr, Callable<V> callable) {
-        if (ObjectUtil.isEmpty(tenantIdStr)
-                || Objects.equals(tenantIdStr, ProcessEngineConfiguration.NO_TENANT_ID)) {
-            return callable.call();
-        } else {
-            Long tenantId = Long.valueOf(tenantIdStr);
-            return TenantUtils.execute(tenantId, callable);
-        }
+    public static <V> V execute(String tenantIdStr, Callable<V> callable) {  
+        return callable.call();
+    }
+
+    /**
+     * 获得当前租户ID（已移除租户功能，返回空字符串）
+     *
+     * @return 空字符串
+     */
+    public static String getTenantId() {
+        return "";
     }
 
     // ========== Execution 相关的工具方法 ==========

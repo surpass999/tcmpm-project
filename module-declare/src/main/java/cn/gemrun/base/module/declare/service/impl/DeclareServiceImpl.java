@@ -1,6 +1,6 @@
 package cn.gemrun.base.module.declare.service.impl;
 
-import cn.gemrun.base.module.declare.api.DeclareCreateReqVO;
+import cn.gemrun.base.module.declare.controller.admin.vo.DeclareCreateReqVO;
 import cn.gemrun.base.module.declare.dal.DeclareDO;
 import cn.gemrun.base.module.declare.dal.mapper.DeclareMapper;
 import cn.gemrun.base.module.declare.service.DeclareService;

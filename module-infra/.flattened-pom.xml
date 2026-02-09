@@ -13,12 +13,6 @@
   <dependencies>
     <dependency>
       <groupId>cn.gemrun</groupId>
-      <artifactId>spring-boot-starter-biz-tenant</artifactId>
-      <version>2025.12-jdk8-SNAPSHOT</version>
-      <scope>compile</scope>
-    </dependency>
-    <dependency>
-      <groupId>cn.gemrun</groupId>
       <artifactId>spring-boot-starter-security</artifactId>
       <version>2025.12-jdk8-SNAPSHOT</version>
       <scope>compile</scope>

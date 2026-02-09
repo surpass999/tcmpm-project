@@ -4,7 +4,7 @@ import cn.gemrun.base.framework.common.enums.CommonStatusEnum;
 import cn.gemrun.base.framework.common.enums.TerminalEnum;
 import cn.gemrun.base.framework.ip.core.Area;
 import cn.gemrun.base.framework.mybatis.core.type.LongListTypeHandler;
-import cn.gemrun.base.framework.tenant.core.db.TenantBaseDO;
+import cn.gemrun.base.framework.mybatis.core.dataobject.BaseDO;
 import cn.gemrun.base.module.member.dal.dataobject.group.MemberGroupDO;
 import cn.gemrun.base.module.member.dal.dataobject.level.MemberLevelDO;
 import cn.gemrun.base.module.system.enums.common.SexEnum;
@@ -32,7 +32,7 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class MemberUserDO extends TenantBaseDO {
+public class MemberUserDO extends BaseDO {
 
     // ========== 账号信息 ==========
 

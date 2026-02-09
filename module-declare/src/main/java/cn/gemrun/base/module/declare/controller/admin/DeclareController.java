@@ -1,12 +1,12 @@
 package cn.gemrun.base.module.declare.controller.admin;
 
 import cn.gemrun.base.framework.common.pojo.CommonResult;
-import cn.gemrun.base.framework.tenant.core.aop.TenantIgnore;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
 
 import javax.annotation.security.PermitAll;
 
@@ -20,9 +20,9 @@ public class DeclareController {
 
     @GetMapping("/test")
     @PermitAll
-    @TenantIgnore
     @Operation(summary = "测试接口-无需登录")
     public CommonResult<String> test() {
+        
         return CommonResult.success("54321接口请求成功112");
     }
 }

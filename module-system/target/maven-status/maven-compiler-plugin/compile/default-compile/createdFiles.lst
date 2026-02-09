@@ -1,4 +1,3 @@
-cn/gemrun/base/module/system/controller/admin/tenant/vo/tenant/TenantPageReqVO.class
 cn/gemrun/base/module/system/controller/admin/dept/vo/dept/DeptRespVO.class
 cn/gemrun/base/module/system/controller/admin/dept/vo/dept/DeptSaveReqVO.class
 cn/gemrun/base/module/system/service/logger/LoginLogServiceImpl.class
@@ -8,7 +7,6 @@ cn/gemrun/base/module/system/framework/sms/core/client/impl/AbstractSmsClient.cl
 cn/gemrun/base/module/system/controller/admin/ip/vo/AreaNodeRespVO.class
 cn/gemrun/base/module/system/dal/dataobject/sms/SmsLogDO$SmsLogDOBuilder.class
 cn/gemrun/base/module/system/service/notify/NotifySendService.class
-cn/gemrun/base/module/system/controller/admin/tenant/vo/packages/TenantPackageRespVO.class
 cn/gemrun/base/module/system/service/sms/SmsLogServiceImpl.class
 cn/gemrun/base/module/system/dal/dataobject/dept/DeptDO.class
 cn/gemrun/base/module/system/api/permission/RoleApi.class
@@ -21,7 +19,6 @@ cn/gemrun/base/module/system/controller/admin/mail/vo/log/MailLogPageReqVO.class
 cn/gemrun/base/module/system/framework/datapermission/config/DataPermissionConfiguration.class
 cn/gemrun/base/module/system/mq/producer/sms/SmsProducer.class
 cn/gemrun/base/module/system/controller/app/dict/AppDictDataController.class
-cn/gemrun/base/module/system/service/tenant/TenantServiceImpl.class
 cn/gemrun/base/module/system/dal/mysql/permission/UserRoleMapper.class
 cn/gemrun/base/module/system/enums/sms/SmsSendStatusEnum.class
 cn/gemrun/base/module/system/api/logger/dto/LoginLogCreateReqDTO.class
@@ -75,10 +72,8 @@ cn/gemrun/base/module/system/api/dept/dto/PostRespDTO.class
 cn/gemrun/base/module/system/controller/admin/auth/vo/AuthLoginReqVO.class
 cn/gemrun/base/module/system/controller/admin/oauth2/OAuth2OpenController$1.class
 cn/gemrun/base/module/system/dal/dataobject/dict/DictTypeDO$DictTypeDOBuilder.class
-cn/gemrun/base/module/system/controller/admin/tenant/vo/tenant/TenantRespVO.class
 cn/gemrun/base/module/system/dal/dataobject/permission/RoleMenuDO.class
 cn/gemrun/base/module/system/controller/admin/auth/vo/CaptchaVerificationReqVO.class
-cn/gemrun/base/module/system/controller/admin/tenant/vo/packages/TenantPackageSimpleRespVO.class
 cn/gemrun/base/module/system/convert/auth/AuthConvert.class
 cn/gemrun/base/module/system/framework/justauth/core/AuthRequestFactory$1.class
 cn/gemrun/base/module/system/dal/dataobject/oauth2/OAuth2ClientDO.class
@@ -93,7 +88,6 @@ cn/gemrun/base/module/system/convert/oauth2/OAuth2OpenConvertImpl.class
 cn/gemrun/base/module/system/api/dict/DictDataApi.class
 cn/gemrun/base/module/system/controller/admin/auth/AuthController.class
 cn/gemrun/base/module/system/service/permission/RoleService.class
-cn/gemrun/base/module/system/service/tenant/TenantService.class
 cn/gemrun/base/module/system/controller/admin/dept/vo/post/PostPageReqVO.class
 cn/gemrun/base/module/system/dal/dataobject/oauth2/OAuth2ApproveDO.class
 cn/gemrun/base/module/system/controller/admin/socail/vo/client/SocialClientSaveReqVO.class
@@ -115,13 +109,11 @@ cn/gemrun/base/module/system/controller/admin/socail/vo/client/SocialClientRespV
 cn/gemrun/base/module/system/service/oauth2/OAuth2ApproveService.class
 cn/gemrun/base/module/system/service/logger/LoginLogService.class
 cn/gemrun/base/module/system/api/logger/OperateLogApi.class
-cn/gemrun/base/module/system/controller/admin/tenant/vo/packages/TenantPackagePageReqVO.class
 cn/gemrun/base/module/system/framework/sms/core/client/impl/AliyunSmsClient.class
 cn/gemrun/base/module/system/controller/admin/dict/DictTypeController.class
 cn/gemrun/base/module/system/dal/dataobject/sms/SmsTemplateDO.class
 cn/gemrun/base/module/system/enums/ErrorCodeConstants.class
 cn/gemrun/base/module/system/service/auth/AdminAuthService.class
-cn/gemrun/base/module/system/dal/dataobject/tenant/TenantDO.class
 cn/gemrun/base/module/system/controller/admin/mail/vo/template/MailTemplateSimpleRespVO.class
 cn/gemrun/base/module/system/enums/sms/SmsReceiveStatusEnum.class
 cn/gemrun/base/module/system/controller/admin/user/vo/user/UserUpdatePasswordReqVO.class
@@ -133,13 +125,11 @@ cn/gemrun/base/module/system/api/sms/SmsSendApiImpl.class
 cn/gemrun/base/module/system/controller/admin/oauth2/vo/open/OAuth2OpenAccessTokenRespVO.class
 cn/gemrun/base/module/system/api/sms/dto/code/SmsCodeUseReqDTO.class
 cn/gemrun/base/module/system/dal/dataobject/dept/UserPostDO.class
-cn/gemrun/base/module/system/dal/mysql/tenant/TenantMapper.class
 cn/gemrun/base/module/system/service/sms/SmsTemplateServiceImpl.class
 cn/gemrun/base/module/system/controller/admin/captcha/CaptchaController.class
 cn/gemrun/base/module/system/service/oauth2/OAuth2TokenServiceImpl.class
 cn/gemrun/base/module/system/service/dept/DeptService.class
 cn/gemrun/base/module/system/controller/admin/mail/vo/account/MailAccountPageReqVO.class
-cn/gemrun/base/module/system/controller/admin/tenant/vo/tenant/TenantSaveReqVO.class
 cn/gemrun/base/module/system/dal/mysql/mail/MailLogMapper.class
 cn/gemrun/base/module/system/controller/admin/logger/vo/loginlog/LoginLogRespVO.class
 cn/gemrun/base/module/system/dal/mysql/notify/NotifyTemplateMapper.class
@@ -174,7 +164,6 @@ cn/gemrun/base/module/system/convert/user/UserConvert.class
 cn/gemrun/base/module/system/api/logger/OperateLogApiImpl.class
 cn/gemrun/base/module/system/controller/admin/oauth2/vo/user/OAuth2UserUpdateReqVO.class
 cn/gemrun/base/module/system/api/package-info.class
-cn/gemrun/base/module/system/service/tenant/TenantPackageServiceImpl.class
 cn/gemrun/base/module/system/mq/producer/mail/MailProducer.class
 cn/gemrun/base/module/system/framework/sms/core/client/dto/SmsSendRespDTO.class
 cn/gemrun/base/module/system/service/permission/PermissionServiceImpl.class
@@ -193,7 +182,6 @@ cn/gemrun/base/module/system/dal/mysql/logger/LoginLogMapper.class
 cn/gemrun/base/module/system/service/dept/PostServiceImpl.class
 cn/gemrun/base/module/system/api/user/dto/AdminUserRespDTO.class
 cn/gemrun/base/module/system/api/dept/dto/DeptRespDTO.class
-cn/gemrun/base/module/system/controller/admin/tenant/TenantPackageController.class
 cn/gemrun/base/module/system/controller/admin/permission/vo/menu/MenuRespVO.class
 cn/gemrun/base/module/system/dal/mysql/permission/RoleMenuMapper.class
 cn/gemrun/base/module/system/dal/dataobject/social/SocialUserBindDO.class
@@ -219,7 +207,6 @@ cn/gemrun/base/module/system/controller/admin/mail/vo/account/MailAccountSimpleR
 cn/gemrun/base/module/system/service/sms/SmsCodeService.class
 cn/gemrun/base/module/system/framework/operatelog/core/BooleanParseFunction.class
 cn/gemrun/base/module/system/controller/admin/auth/vo/AuthLoginRespVO$AuthLoginRespVOBuilder.class
-cn/gemrun/base/module/system/controller/admin/tenant/vo/packages/TenantPackageSaveReqVO.class
 cn/gemrun/base/module/system/controller/admin/auth/vo/AuthLoginRespVO.class
 cn/gemrun/base/module/system/controller/admin/sms/vo/channel/SmsChannelPageReqVO.class
 cn/gemrun/base/module/system/enums/permission/MenuTypeEnum.class
@@ -233,11 +220,9 @@ cn/gemrun/base/module/system/service/permission/PermissionService.class
 cn/gemrun/base/module/system/mq/consumer/sms/SmsSendConsumer.class
 cn/gemrun/base/module/system/controller/admin/dept/vo/post/PostSaveReqVO.class
 cn/gemrun/base/module/system/dal/dataobject/dict/DictTypeDO.class
-cn/gemrun/base/module/system/convert/tenant/TenantConvertImpl.class
 cn/gemrun/base/module/system/dal/mysql/oauth2/OAuth2AccessTokenMapper.class
 cn/gemrun/base/module/system/controller/admin/mail/vo/template/MailTemplateSendReqVO.class
 cn/gemrun/base/module/system/controller/admin/socail/SocialUserController.class
-cn/gemrun/base/module/system/dal/dataobject/tenant/TenantPackageDO$TenantPackageDOBuilder.class
 cn/gemrun/base/module/system/dal/mysql/dept/DeptMapper.class
 cn/gemrun/base/module/system/service/auth/AdminAuthServiceImpl.class
 cn/gemrun/base/module/system/dal/mysql/oauth2/OAuth2CodeMapper.class
@@ -250,18 +235,15 @@ cn/gemrun/base/module/system/mq/message/mail/MailSendMessage.class
 cn/gemrun/base/module/system/job/package-info.class
 cn/gemrun/base/module/system/api/notify/NotifyMessageSendApiImpl.class
 cn/gemrun/base/module/system/service/dict/DictDataService.class
-cn/gemrun/base/module/system/controller/admin/tenant/TenantController.class
 cn/gemrun/base/module/system/dal/mysql/user/AdminUserMapper.class
 cn/gemrun/base/module/system/controller/admin/user/vo/user/UserSimpleRespVO.class
 cn/gemrun/base/module/system/controller/admin/notice/vo/NoticeRespVO.class
-cn/gemrun/base/module/system/convert/tenant/TenantConvert.class
 cn/gemrun/base/module/system/dal/mysql/social/SocialUserBindMapper.class
 cn/gemrun/base/module/system/api/social/SocialClientApi.class
 cn/gemrun/base/module/system/controller/admin/notify/NotifyTemplateController.class
 cn/gemrun/base/module/system/framework/datapermission/package-info.class
 cn/gemrun/base/module/system/controller/admin/dict/vo/type/DictTypePageReqVO.class
 cn/gemrun/base/module/system/controller/admin/sms/vo/template/SmsTemplateSaveReqVO.class
-cn/gemrun/base/module/system/service/tenant/handler/TenantMenuHandler.class
 META-INF/spring-configuration-metadata.json
 cn/gemrun/base/module/system/dal/dataobject/mail/MailTemplateDO.class
 cn/gemrun/base/module/system/controller/admin/notify/vo/template/NotifyTemplateRespVO.class
@@ -272,7 +254,6 @@ cn/gemrun/base/module/system/dal/dataobject/mail/MailAccountDO.class
 cn/gemrun/base/module/system/service/notify/NotifyTemplateServiceImpl.class
 cn/gemrun/base/module/system/controller/admin/oauth2/vo/client/OAuth2ClientPageReqVO.class
 cn/gemrun/base/module/system/enums/common/SexEnum.class
-cn/gemrun/base/module/system/service/tenant/handler/TenantInfoHandler.class
 cn/gemrun/base/module/system/framework/sms/core/client/impl/QiniuSmsClient.class
 cn/gemrun/base/module/system/controller/admin/dept/vo/dept/DeptSimpleRespVO.class
 cn/gemrun/base/module/system/controller/admin/user/vo/profile/UserProfileUpdatePasswordReqVO.class
@@ -284,7 +265,6 @@ cn/gemrun/base/module/system/controller/admin/dept/DeptController.class
 cn/gemrun/base/module/system/controller/admin/permission/vo/role/RoleSaveReqVO.class
 cn/gemrun/base/module/system/framework/sms/core/client/dto/SmsReceiveRespDTO.class
 cn/gemrun/base/module/system/controller/admin/auth/vo/AuthLoginReqVO$AuthLoginReqVOBuilder.class
-cn/gemrun/base/module/system/dal/dataobject/tenant/TenantPackageDO.class
 cn/gemrun/base/module/system/framework/operatelog/package-info.class
 cn/gemrun/base/module/system/framework/operatelog/core/PostParseFunction.class
 cn/gemrun/base/module/system/dal/mysql/dict/DictDataMapper.class
@@ -338,8 +318,6 @@ cn/gemrun/base/module/system/framework/sms/core/client/impl/SmsClientFactoryImpl
 cn/gemrun/base/module/system/service/social/SocialUserServiceImpl.class
 cn/gemrun/base/module/system/controller/admin/sms/SmsChannelController.class
 cn/gemrun/base/module/system/controller/admin/socail/vo/user/SocialUserBindReqVO.class
-cn/gemrun/base/module/system/service/tenant/TenantPackageService.class
-cn/gemrun/base/module/system/dal/mysql/tenant/TenantPackageMapper.class
 cn/gemrun/base/module/system/enums/notify/NotifyTemplateTypeEnum.class
 cn/gemrun/base/module/system/framework/operatelog/core/AdminUserParseFunction.class
 cn/gemrun/base/module/system/dal/dataobject/logger/OperateLogDO.class
@@ -361,7 +339,6 @@ cn/gemrun/base/module/system/enums/DictTypeConstants.class
 cn/gemrun/base/module/system/api/dept/DeptApiImpl.class
 cn/gemrun/base/module/system/controller/admin/mail/MailLogController.class
 cn/gemrun/base/module/system/api/notify/NotifyMessageSendApi.class
-cn/gemrun/base/module/system/api/tenant/TenantApiImpl.class
 cn/gemrun/base/module/system/service/oauth2/OAuth2GrantServiceImpl.class
 cn/gemrun/base/module/system/service/member/package-info.class
 cn/gemrun/base/module/system/dal/dataobject/dict/DictDataDO.class
@@ -428,7 +405,6 @@ cn/gemrun/base/module/system/dal/dataobject/sms/SmsCodeDO$SmsCodeDOBuilder.class
 cn/gemrun/base/module/system/controller/admin/auth/vo/AuthSocialLoginReqVO.class
 cn/gemrun/base/module/system/controller/admin/user/UserController.class
 cn/gemrun/base/module/system/framework/sms/core/enums/SmsTemplateAuditStatusEnum.class
-cn/gemrun/base/module/system/dal/dataobject/tenant/TenantDO$TenantDOBuilder.class
 cn/gemrun/base/module/system/controller/admin/notify/NotifyMessageController.class
 cn/gemrun/base/module/system/service/sms/SmsCodeServiceImpl.class
 cn/gemrun/base/module/system/service/mail/MailTemplateServiceImpl.class

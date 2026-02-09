@@ -10,7 +10,6 @@ import cn.gemrun.base.framework.common.pojo.CommonResult;
 import cn.gemrun.base.framework.common.pojo.PageResult;
 import cn.gemrun.base.framework.common.util.date.DateUtils;
 import cn.gemrun.base.framework.common.util.json.JsonUtils;
-import cn.gemrun.base.framework.tenant.core.util.TenantUtils;
 import cn.gemrun.base.module.pay.api.notify.dto.PayOrderNotifyReqDTO;
 import cn.gemrun.base.module.pay.api.notify.dto.PayRefundNotifyReqDTO;
 import cn.gemrun.base.module.pay.api.notify.dto.PayTransferNotifyReqDTO;
@@ -247,7 +246,6 @@ public class PayNotifyServiceImpl implements PayNotifyService {
         }
         // 拼接 header 参数
         Map<String, String> headers = new HashMap<>();
-        TenantUtils.addTenantHeader(headers, task.getTenantId());
 
         // 发起请求
         try (HttpResponse response = HttpUtil.createPost(task.getNotifyUrl())

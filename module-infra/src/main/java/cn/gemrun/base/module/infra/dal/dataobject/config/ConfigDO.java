@@ -1,7 +1,6 @@
 package cn.gemrun.base.module.infra.dal.dataobject.config;
 
 import cn.gemrun.base.framework.mybatis.core.dataobject.BaseDO;
-import cn.gemrun.base.framework.tenant.core.aop.TenantIgnore;
 import cn.gemrun.base.module.infra.enums.config.ConfigTypeEnum;
 import com.baomidou.mybatisplus.annotation.KeySequence;
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -20,7 +19,6 @@ import lombok.ToString;
 @Data
 @EqualsAndHashCode(callSuper = true)
 @ToString(callSuper = true)
-@TenantIgnore
 public class ConfigDO extends BaseDO {
 
     /**

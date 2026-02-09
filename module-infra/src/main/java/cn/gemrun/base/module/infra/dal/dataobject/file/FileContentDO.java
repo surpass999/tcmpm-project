@@ -1,7 +1,6 @@
 package cn.gemrun.base.module.infra.dal.dataobject.file;
 
 import cn.gemrun.base.framework.mybatis.core.dataobject.BaseDO;
-import cn.gemrun.base.framework.tenant.core.aop.TenantIgnore;
 import cn.gemrun.base.module.infra.framework.file.core.client.db.DBFileClient;
 import com.baomidou.mybatisplus.annotation.KeySequence;
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -23,7 +22,6 @@ import lombok.*;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@TenantIgnore
 public class FileContentDO extends BaseDO {
 
     /**

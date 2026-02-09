@@ -34,6 +34,4 @@
 /www/wwwroot/tcmpm/module-system/src/test/java/cn/gemrun/base/module/system/service/sms/SmsTemplateServiceImplTest.java
 /www/wwwroot/tcmpm/module-system/src/test/java/cn/gemrun/base/module/system/service/social/SocialClientServiceImplTest.java
 /www/wwwroot/tcmpm/module-system/src/test/java/cn/gemrun/base/module/system/service/social/SocialUserServiceImplTest.java
-/www/wwwroot/tcmpm/module-system/src/test/java/cn/gemrun/base/module/system/service/tenant/TenantPackageServiceImplTest.java
-/www/wwwroot/tcmpm/module-system/src/test/java/cn/gemrun/base/module/system/service/tenant/TenantServiceImplTest.java
 /www/wwwroot/tcmpm/module-system/src/test/java/cn/gemrun/base/module/system/service/user/AdminUserServiceImplTest.java

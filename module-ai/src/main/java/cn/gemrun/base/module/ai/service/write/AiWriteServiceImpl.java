@@ -10,7 +10,6 @@ import cn.gemrun.base.module.ai.util.AiUtils;
 import cn.gemrun.base.framework.common.pojo.CommonResult;
 import cn.gemrun.base.framework.common.pojo.PageResult;
 import cn.gemrun.base.framework.common.util.object.BeanUtils;
-import cn.gemrun.base.framework.tenant.core.util.TenantUtils;
 import cn.gemrun.base.module.ai.controller.admin.write.vo.AiWriteGenerateReqVO;
 import cn.gemrun.base.module.ai.controller.admin.write.vo.AiWritePageReqVO;
 import cn.gemrun.base.module.ai.dal.dataobject.model.AiChatRoleDO;
@@ -93,14 +92,10 @@ public class AiWriteServiceImpl implements AiWriteService {
             // 响应结果
             return success(newContent);
         }).doOnComplete(() -> {
-            // 忽略租户，因为 Flux 异步无法透传租户
-            TenantUtils.executeIgnore(() ->
-                    writeMapper.updateById(new AiWriteDO().setId(writeDO.getId()).setGeneratedContent(contentBuffer.toString())));
+            writeMapper.updateById(new AiWriteDO().setId(writeDO.getId()).setGeneratedContent(contentBuffer.toString()));
         }).doOnError(throwable -> {
             log.error("[generateWriteContent][generateReqVO({}) 发生异常]", generateReqVO, throwable);
-            // 忽略租户，因为 Flux 异步无法透传租户
-            TenantUtils.executeIgnore(() ->
-                    writeMapper.updateById(new AiWriteDO().setId(writeDO.getId()).setErrorMessage(throwable.getMessage())));
+            writeMapper.updateById(new AiWriteDO().setId(writeDO.getId()).setErrorMessage(throwable.getMessage()));
         }).onErrorResume(error -> Flux.just(error(ErrorCodeConstants.WRITE_STREAM_ERROR)));
     }
 

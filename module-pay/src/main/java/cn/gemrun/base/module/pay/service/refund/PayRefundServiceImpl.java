@@ -6,7 +6,6 @@ import cn.gemrun.base.framework.common.pojo.PageResult;
 import cn.gemrun.base.module.pay.framework.pay.core.client.PayClient;
 import cn.gemrun.base.module.pay.framework.pay.core.client.dto.refund.PayRefundRespDTO;
 import cn.gemrun.base.module.pay.framework.pay.core.client.dto.refund.PayRefundUnifiedReqDTO;
-import cn.gemrun.base.framework.tenant.core.util.TenantUtils;
 import cn.gemrun.base.module.pay.api.refund.dto.PayRefundCreateReqDTO;
 import cn.gemrun.base.module.pay.controller.admin.refund.vo.PayRefundExportReqVO;
 import cn.gemrun.base.module.pay.controller.admin.refund.vo.PayRefundPageReqVO;
@@ -189,7 +188,7 @@ public class PayRefundServiceImpl implements PayRefundService {
         // 校验支付渠道是否有效
         PayChannelDO channel = channelService.validPayChannel(channelId);
         // 更新退款订单
-        TenantUtils.execute(channel.getTenantId(), () -> getSelf().notifyRefund(channel, notify));
+        getSelf().notifyRefund(channel, notify);
     }
 
     /**

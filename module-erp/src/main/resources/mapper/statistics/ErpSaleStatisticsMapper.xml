@@ -10,9 +10,7 @@
                <if test="endTime != null">
                    AND out_time &lt; #{endTime}
                </if>
-               <if test="@cn.gemrun.base.framework.tenant.core.context.TenantContextHolder@getTenantId() != null">
-                   AND tenant_id = ${@cn.gemrun.base.framework.tenant.core.context.TenantContextHolder@getTenantId()}
-               </if>
+               <!-- 单租户模式下，不再按租户过滤 -->
                AND deleted = 0) -
             (SELECT IFNULL(SUM(total_price), 0)
                 FROM erp_sale_return
@@ -20,9 +18,7 @@
                 <if test="endTime != null">
                     AND return_time &lt; #{endTime}
                 </if>
-                <if test="@cn.gemrun.base.framework.tenant.core.context.TenantContextHolder@getTenantId() != null">
-                    AND tenant_id = ${@cn.gemrun.base.framework.tenant.core.context.TenantContextHolder@getTenantId()}
-                </if>
+                <!-- 单租户模式下，不再按租户过滤 -->
                 AND deleted = 0)
     </select>
 

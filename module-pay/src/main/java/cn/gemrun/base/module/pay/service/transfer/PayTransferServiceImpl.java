@@ -9,7 +9,6 @@ import cn.gemrun.base.framework.common.util.object.BeanUtils;
 import cn.gemrun.base.module.pay.framework.pay.core.client.PayClient;
 import cn.gemrun.base.module.pay.framework.pay.core.client.dto.transfer.PayTransferRespDTO;
 import cn.gemrun.base.module.pay.framework.pay.core.client.dto.transfer.PayTransferUnifiedReqDTO;
-import cn.gemrun.base.framework.tenant.core.util.TenantUtils;
 import cn.gemrun.base.module.pay.api.transfer.dto.PayTransferCreateReqDTO;
 import cn.gemrun.base.module.pay.api.transfer.dto.PayTransferCreateRespDTO;
 import cn.gemrun.base.module.pay.controller.admin.transfer.vo.PayTransferPageReqVO;
@@ -301,7 +300,7 @@ public class PayTransferServiceImpl implements PayTransferService {
         // 校验渠道是否有效
         PayChannelDO channel = channelService.validPayChannel(channelId);
         // 通知转账结果给对应的业务
-        TenantUtils.execute(channel.getTenantId(), () -> getSelf().notifyTransfer(channel, notify));
+        getSelf().notifyTransfer(channel, notify);
     }
 
     /**

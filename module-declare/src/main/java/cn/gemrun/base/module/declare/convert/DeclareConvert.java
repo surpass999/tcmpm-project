@@ -1,6 +1,6 @@
 package cn.gemrun.base.module.declare.convert;
 
-import cn.gemrun.base.module.declare.api.DeclareCreateReqVO;
+import cn.gemrun.base.module.declare.controller.admin.vo.DeclareCreateReqVO;
 import cn.gemrun.base.module.declare.dal.DeclareDO;
 
 /**

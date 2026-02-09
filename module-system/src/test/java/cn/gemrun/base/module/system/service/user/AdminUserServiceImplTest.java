@@ -18,7 +18,6 @@ import cn.gemrun.base.module.system.controller.admin.user.vo.user.UserSaveReqVO;
 import cn.gemrun.base.module.system.dal.dataobject.dept.DeptDO;
 import cn.gemrun.base.module.system.dal.dataobject.dept.PostDO;
 import cn.gemrun.base.module.system.dal.dataobject.dept.UserPostDO;
-import cn.gemrun.base.module.system.dal.dataobject.tenant.TenantDO;
 import cn.gemrun.base.module.system.dal.dataobject.user.AdminUserDO;
 import cn.gemrun.base.module.system.dal.mysql.dept.UserPostMapper;
 import cn.gemrun.base.module.system.dal.mysql.user.AdminUserMapper;
@@ -27,7 +26,6 @@ import cn.gemrun.base.module.system.service.dept.DeptService;
 import cn.gemrun.base.module.system.service.dept.PostService;
 import cn.gemrun.base.module.system.service.oauth2.OAuth2TokenService;
 import cn.gemrun.base.module.system.service.permission.PermissionService;
-import cn.gemrun.base.module.system.service.tenant.TenantService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.stubbing.Answer;
@@ -78,8 +76,6 @@ public class AdminUserServiceImplTest extends BaseDbUnitTest {
     @MockBean
     private PasswordEncoder passwordEncoder;
     @MockBean
-    private TenantService tenantService;
-    @MockBean
     private FileApi fileApi;
     @MockBean
     private ConfigApi configApi;
@@ -100,12 +96,6 @@ public class AdminUserServiceImplTest extends BaseDbUnitTest {
             o.setMobile(randomString());
             o.setPostIds(asSet(1L, 2L));
         }).setId(null); // 避免 id 被赋值
-        // mock 账户额度充足
-        TenantDO tenant = randomPojo(TenantDO.class, o -> o.setAccountCount(1));
-        doNothing().when(tenantService).handleTenantInfo(argThat(handler -> {
-            handler.handle(tenant);
-            return true;
-        }));
         // mock deptService 的方法
         DeptDO dept = randomPojo(DeptDO.class, o -> {
             o.setId(reqVO.getDeptId());
@@ -134,21 +124,7 @@ public class AdminUserServiceImplTest extends BaseDbUnitTest {
         assertEquals(1L, userPosts.get(0).getPostId());
         assertEquals(2L, userPosts.get(1).getPostId());
     }
-
-    @Test
-    public void testCreatUser_max() {
-        // 准备参数
-        UserSaveReqVO reqVO = randomPojo(UserSaveReqVO.class);
-        // mock 账户额度不足
-        TenantDO tenant = randomPojo(TenantDO.class, o -> o.setAccountCount(-1));
-        doNothing().when(tenantService).handleTenantInfo(argThat(handler -> {
-            handler.handle(tenant);
-            return true;
-        }));
-
-        // 调用，并断言异常
-        assertServiceException(() -> userService.createUser(reqVO), USER_COUNT_MAX, -1);
-    }
+    // 单租户模式下，不再校验租户账号上限，只要字段合法即可创建，这里不再测试账号上限异常
 
     @Test
     public void testUpdateUser_success() {

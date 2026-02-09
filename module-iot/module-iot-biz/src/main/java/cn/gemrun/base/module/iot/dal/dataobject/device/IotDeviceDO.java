@@ -1,7 +1,7 @@
 package cn.gemrun.base.module.iot.dal.dataobject.device;
 
 import cn.gemrun.base.framework.mybatis.core.type.LongSetTypeHandler;
-import cn.gemrun.base.framework.tenant.core.db.TenantBaseDO;
+import cn.gemrun.base.framework.mybatis.core.dataobject.BaseDO;
 import cn.gemrun.base.module.iot.dal.dataobject.ota.IotOtaFirmwareDO;
 import cn.gemrun.base.module.iot.dal.dataobject.product.IotProductDO;
 import cn.gemrun.base.module.iot.core.enums.IotDeviceStateEnum;
@@ -26,7 +26,7 @@ import java.util.Set;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class IotDeviceDO extends TenantBaseDO {
+public class IotDeviceDO extends BaseDO {
 
     /**
      * 设备编号 - 全部设备

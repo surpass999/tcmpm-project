@@ -128,11 +128,6 @@
             </dependency>
             <dependency>
                 <groupId>cn.gemrun</groupId>
-                <artifactId>spring-boot-starter-biz-tenant</artifactId>
-                <version>${revision}</version>
-            </dependency>
-            <dependency>
-                <groupId>cn.gemrun</groupId>
                 <artifactId>spring-boot-starter-biz-data-permission</artifactId>
                 <version>${revision}</version>
             </dependency>

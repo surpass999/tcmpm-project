@@ -1,6 +1,5 @@
 package cn.gemrun.base.module.iot.mq.consumer.rule;
 
-import cn.gemrun.base.framework.tenant.core.util.TenantUtils;
 import cn.gemrun.base.module.iot.core.messagebus.core.IotMessageBus;
 import cn.gemrun.base.module.iot.core.messagebus.core.IotMessageSubscriber;
 import cn.gemrun.base.module.iot.core.mq.message.IotDeviceMessage;
@@ -43,7 +42,7 @@ public class IotDataRuleMessageHandler implements IotMessageSubscriber<IotDevice
 
     @Override
     public void onMessage(IotDeviceMessage message) {
-        TenantUtils.execute(message.getTenantId(), () -> dataRuleService.executeDataRule(message));
+        dataRuleService.executeDataRule(message);
     }
 
 }

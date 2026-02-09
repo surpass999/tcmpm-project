@@ -1,7 +1,6 @@
 package cn.gemrun.base.module.system.dal.dataobject.sms;
 
 import cn.gemrun.base.framework.mybatis.core.dataobject.BaseDO;
-import cn.gemrun.base.framework.tenant.core.aop.TenantIgnore;
 import com.baomidou.mybatisplus.annotation.KeySequence;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.*;
@@ -22,7 +21,6 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@TenantIgnore
 public class SmsCodeDO extends BaseDO {
 
     /**

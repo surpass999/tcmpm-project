@@ -1,7 +1,6 @@
 package cn.gemrun.base.module.iot.mq.consumer.device;
 
 import cn.hutool.core.util.ObjectUtil;
-import cn.gemrun.base.framework.tenant.core.util.TenantUtils;
 import cn.gemrun.base.module.iot.core.enums.IotDeviceMessageMethodEnum;
 import cn.gemrun.base.module.iot.core.enums.IotDeviceStateEnum;
 import cn.gemrun.base.module.iot.core.messagebus.core.IotMessageBus;
@@ -62,7 +61,6 @@ public class IotDeviceMessageSubscriber implements IotMessageSubscriber<IotDevic
             return;
         }
 
-        TenantUtils.execute(message.getTenantId(), () -> {
             // 1.1 更新设备的最后时间
             IotDeviceDO device = deviceService.validateDeviceExistsFromCache(message.getDeviceId());
             devicePropertyService.updateDeviceReportTimeAsync(device.getId(), LocalDateTime.now());
@@ -75,7 +73,6 @@ public class IotDeviceMessageSubscriber implements IotMessageSubscriber<IotDevic
 
             // 3. 核心：处理消息
             deviceMessageService.handleUpstreamDeviceMessage(message, device);
-        });
     }
 
     private void forceDeviceOnline(IotDeviceMessage message, IotDeviceDO device) {

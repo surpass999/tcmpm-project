@@ -2,7 +2,6 @@ package cn.gemrun.base.module.system.dal.dataobject.sms;
 
 import cn.gemrun.base.framework.common.enums.UserTypeEnum;
 import cn.gemrun.base.framework.mybatis.core.dataobject.BaseDO;
-import cn.gemrun.base.framework.tenant.core.aop.TenantIgnore;
 import cn.gemrun.base.module.system.enums.sms.SmsReceiveStatusEnum;
 import cn.gemrun.base.module.system.enums.sms.SmsSendStatusEnum;
 import com.baomidou.mybatisplus.annotation.KeySequence;
@@ -28,7 +27,6 @@ import java.util.Map;
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-@TenantIgnore
 public class SmsLogDO extends BaseDO {
 
     /**

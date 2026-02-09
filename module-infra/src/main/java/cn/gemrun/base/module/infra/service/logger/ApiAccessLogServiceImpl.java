@@ -4,8 +4,6 @@ import cn.gemrun.base.framework.common.biz.infra.logger.dto.ApiAccessLogCreateRe
 import cn.gemrun.base.framework.common.pojo.PageResult;
 import cn.gemrun.base.framework.common.util.object.BeanUtils;
 import cn.gemrun.base.framework.common.util.string.StrUtils;
-import cn.gemrun.base.framework.tenant.core.context.TenantContextHolder;
-import cn.gemrun.base.framework.tenant.core.util.TenantUtils;
 import cn.gemrun.base.module.infra.controller.admin.logger.vo.apiaccesslog.ApiAccessLogPageReqVO;
 import cn.gemrun.base.module.infra.dal.dataobject.logger.ApiAccessLogDO;
 import cn.gemrun.base.module.infra.dal.mysql.logger.ApiAccessLogMapper;
@@ -37,12 +35,7 @@ public class ApiAccessLogServiceImpl implements ApiAccessLogService {
         ApiAccessLogDO apiAccessLog = BeanUtils.toBean(createDTO, ApiAccessLogDO.class);
         apiAccessLog.setRequestParams(StrUtils.maxLength(apiAccessLog.getRequestParams(), REQUEST_PARAMS_MAX_LENGTH));
         apiAccessLog.setResultMsg(StrUtils.maxLength(apiAccessLog.getResultMsg(), RESULT_MSG_MAX_LENGTH));
-        if (TenantContextHolder.getTenantId() != null) {
-            apiAccessLogMapper.insert(apiAccessLog);
-        } else {
-            // 极端情况下，上下文中没有租户时，此时忽略租户上下文，避免插入失败！
-            TenantUtils.executeIgnore(() -> apiAccessLogMapper.insert(apiAccessLog));
-        }
+        apiAccessLogMapper.insert(apiAccessLog);
     }
 
     @Override

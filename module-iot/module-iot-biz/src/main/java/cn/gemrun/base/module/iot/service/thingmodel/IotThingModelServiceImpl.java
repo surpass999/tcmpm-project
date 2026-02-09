@@ -5,7 +5,6 @@ import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.extra.spring.SpringUtil;
 import cn.gemrun.base.framework.common.pojo.PageResult;
-import cn.gemrun.base.framework.tenant.core.aop.TenantIgnore;
 import cn.gemrun.base.module.iot.controller.admin.thingmodel.vo.IotThingModelListReqVO;
 import cn.gemrun.base.module.iot.controller.admin.thingmodel.vo.IotThingModelPageReqVO;
 import cn.gemrun.base.module.iot.controller.admin.thingmodel.vo.IotThingModelSaveReqVO;
@@ -128,7 +127,6 @@ public class IotThingModelServiceImpl implements IotThingModelService {
 
     @Override
     @Cacheable(value = RedisKeyConstants.THING_MODEL_LIST, key = "#productId")
-    @TenantIgnore // 忽略租户信息
     public List<IotThingModelDO> getThingModelListByProductIdFromCache(Long productId) {
         return thingModelMapper.selectListByProductId(productId);
     }
@@ -206,7 +204,6 @@ public class IotThingModelServiceImpl implements IotThingModelService {
     }
 
     @CacheEvict(value = RedisKeyConstants.THING_MODEL_LIST, key = "#productId")
-    @TenantIgnore // 忽略租户信息
     public void deleteThingModelListCache0(Long productId) {
     }
 

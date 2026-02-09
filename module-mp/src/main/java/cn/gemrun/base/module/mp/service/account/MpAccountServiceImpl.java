@@ -4,7 +4,6 @@ import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.ObjUtil;
 import cn.gemrun.base.framework.common.exception.util.ServiceExceptionUtil;
 import cn.gemrun.base.framework.common.pojo.PageResult;
-import cn.gemrun.base.framework.tenant.core.util.TenantUtils;
 import cn.gemrun.base.module.mp.controller.admin.account.vo.MpAccountCreateReqVO;
 import cn.gemrun.base.module.mp.controller.admin.account.vo.MpAccountPageReqVO;
 import cn.gemrun.base.module.mp.controller.admin.account.vo.MpAccountUpdateReqVO;
@@ -67,7 +66,6 @@ public class MpAccountServiceImpl implements MpAccountService {
     @PostConstruct
     public void initLocalCache() {
         // 注意：忽略自动多租户，因为要全局初始化缓存
-        TenantUtils.executeIgnore(() -> {
             // 第一步：查询数据
             List<MpAccountDO> accounts = Collections.emptyList();
             try {
@@ -83,7 +81,6 @@ public class MpAccountServiceImpl implements MpAccountService {
             // 第二步：构建缓存。创建或更新支付 Client
             mpServiceFactory.init(accounts);
             accountCache = convertMap(accounts, MpAccountDO::getAppId);
-        });
     }
 
     /**
@@ -94,7 +91,6 @@ public class MpAccountServiceImpl implements MpAccountService {
     @Scheduled(initialDelay = 60, fixedRate = 60, timeUnit = TimeUnit.SECONDS)
     public void refreshLocalCache() {
         // 注意：忽略自动多租户，因为要全局初始化缓存
-        TenantUtils.executeIgnore(() -> {
             // 情况一：如果缓存里没有数据，则直接刷新缓存
             if (CollUtil.isEmpty(accountCache)) {
                 initLocalCache();
@@ -106,7 +102,6 @@ public class MpAccountServiceImpl implements MpAccountService {
             if (mpAccountMapper.selectCountByUpdateTimeGt(maxTime) > 0) {
                 initLocalCache();
             }
-        });
     }
 
     @Override
@@ -160,7 +155,6 @@ public class MpAccountServiceImpl implements MpAccountService {
     @VisibleForTesting
     public void validateAppIdUnique(Long id, String appId) {
         // 多个租户，appId 是不能重复，否则公众号回调会无法识别
-        TenantUtils.executeIgnore(() -> {
             MpAccountDO account = mpAccountMapper.selectByAppId(appId);
             if (account == null) {
                 return;
@@ -170,7 +164,6 @@ public class MpAccountServiceImpl implements MpAccountService {
                     || ObjUtil.notEqual(id, account.getId())) { // 更新时，如果 id 不一致，说明重复
                 throw exception(USER_USERNAME_EXISTS);
             }
-        });
     }
 
     @Override

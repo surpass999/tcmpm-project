@@ -25,14 +25,12 @@ cn/gemrun/base/module/system/framework/sms/core/client/impl/QiniuSmsClientTest.c
 cn/gemrun/base/module/system/service/permission/MenuServiceImplTest.class
 cn/gemrun/base/module/system/service/dept/DeptServiceImplTest.class
 cn/gemrun/base/module/system/service/sms/SmsCodeServiceImplTest.class
-cn/gemrun/base/module/system/service/tenant/TenantServiceImplTest.class
 cn/gemrun/base/module/system/framework/sms/core/client/impl/TencentSmsClientTest.class
 cn/gemrun/base/module/system/service/oauth2/OAuth2TokenServiceImplTest.class
 cn/gemrun/base/module/system/service/oauth2/OAuth2ApproveServiceImplTest.class
 cn/gemrun/base/module/system/service/oauth2/OAuth2GrantServiceImplTest.class
 cn/gemrun/base/module/system/service/auth/AdminAuthServiceImplTest.class
 cn/gemrun/base/module/system/service/logger/LoginLogServiceImplTest.class
-cn/gemrun/base/module/system/service/tenant/TenantPackageServiceImplTest.class
 cn/gemrun/base/module/system/service/user/AdminUserServiceImplTest.class
 cn/gemrun/base/module/system/service/sms/SmsTemplateServiceImplTest.class
 cn/gemrun/base/module/system/service/sms/SmsChannelServiceTest.class

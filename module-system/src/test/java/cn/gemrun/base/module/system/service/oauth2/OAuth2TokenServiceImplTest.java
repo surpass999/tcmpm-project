@@ -5,7 +5,6 @@ import cn.gemrun.base.framework.common.enums.UserTypeEnum;
 import cn.gemrun.base.framework.common.exception.ErrorCode;
 import cn.gemrun.base.framework.common.pojo.PageResult;
 import cn.gemrun.base.framework.common.util.date.DateUtils;
-import cn.gemrun.base.framework.tenant.core.context.TenantContextHolder;
 import cn.gemrun.base.framework.test.core.ut.BaseDbAndRedisUnitTest;
 import cn.gemrun.base.module.system.controller.admin.oauth2.vo.token.OAuth2AccessTokenPageReqVO;
 import cn.gemrun.base.module.system.dal.dataobject.oauth2.OAuth2AccessTokenDO;
@@ -59,7 +58,6 @@ public class OAuth2TokenServiceImplTest extends BaseDbAndRedisUnitTest {
 
     @Test
     public void testCreateAccessToken() {
-        TenantContextHolder.setTenantId(0L);
         // 准备参数
         Long userId = randomLongId();
         Integer userType = UserTypeEnum.ADMIN.getValue();
@@ -149,7 +147,6 @@ public class OAuth2TokenServiceImplTest extends BaseDbAndRedisUnitTest {
 
     @Test
     public void testRefreshAccessToken_success() {
-        TenantContextHolder.setTenantId(0L);
         // 准备参数
         String refreshToken = randomString();
         String clientId = randomString();
@@ -161,8 +158,7 @@ public class OAuth2TokenServiceImplTest extends BaseDbAndRedisUnitTest {
         OAuth2RefreshTokenDO refreshTokenDO = randomPojo(OAuth2RefreshTokenDO.class, o ->
                 o.setRefreshToken(refreshToken).setClientId(clientId)
                         .setExpiresTime(LocalDateTime.now().plusDays(1))
-                        .setUserType(UserTypeEnum.ADMIN.getValue())
-                        .setTenantId(TenantContextHolder.getTenantId()));
+                        .setUserType(UserTypeEnum.ADMIN.getValue()));
         oauth2RefreshTokenMapper.insert(refreshTokenDO);
         // mock 数据（访问令牌）
         OAuth2AccessTokenDO accessTokenDO = randomPojo(OAuth2AccessTokenDO.class).setRefreshToken(refreshToken)

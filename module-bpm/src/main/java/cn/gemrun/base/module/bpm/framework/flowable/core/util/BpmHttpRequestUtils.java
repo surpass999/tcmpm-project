@@ -6,7 +6,6 @@ import cn.gemrun.base.framework.common.core.KeyValue;
 import cn.gemrun.base.framework.common.pojo.CommonResult;
 import cn.gemrun.base.framework.common.util.json.JsonUtils;
 import cn.gemrun.base.framework.common.util.spring.SpringUtils;
-import cn.gemrun.base.framework.tenant.core.context.TenantContextHolder;
 import cn.gemrun.base.module.bpm.api.event.BpmProcessInstanceStatusEvent;
 import cn.gemrun.base.module.bpm.controller.admin.definition.vo.model.simple.BpmSimpleModelNodeVO;
 import cn.gemrun.base.module.bpm.enums.definition.BpmHttpRequestParamTypeEnum;
@@ -25,7 +24,6 @@ import java.util.List;
 import java.util.Map;
 
 import static cn.gemrun.base.framework.common.exception.util.ServiceExceptionUtil.exception;
-import static cn.gemrun.base.framework.web.core.util.WebFrameworkUtils.HEADER_TENANT_ID;
 import static cn.gemrun.base.module.bpm.enums.ErrorCodeConstants.PROCESS_INSTANCE_HTTP_CALL_ERROR;
 
 /**
@@ -83,15 +81,6 @@ public class BpmHttpRequestUtils {
         // 1.1 设置请求头
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
-        if (TenantContextHolder.getTenantId() != null) {
-            headers.add(HEADER_TENANT_ID, String.valueOf(TenantContextHolder.getTenantId()));
-        } else {
-            BpmProcessInstanceService processInstanceService = SpringUtils.getBean(BpmProcessInstanceService.class);
-            ProcessInstance processInstance = processInstanceService.getProcessInstance(event.getId());
-            if (processInstance != null) {
-                headers.add(HEADER_TENANT_ID, String.valueOf(TenantContextHolder.getTenantId()));
-            }
-        }
         // 1.2 设置请求体
 //        MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
 //        body.add("id", event.getId());
@@ -125,7 +114,6 @@ public class BpmHttpRequestUtils {
     public static MultiValueMap<String, String> buildHttpHeaders(ProcessInstance processInstance,
                                                                  List<BpmSimpleModelNodeVO.HttpRequestParam> headerSettings) {
         MultiValueMap<String, String> headers = new LinkedMultiValueMap<>();
-        headers.add(HEADER_TENANT_ID, processInstance.getTenantId());
         Map<String, Object> processVariables = processInstance.getProcessVariables();
         addHttpRequestParam(headers, headerSettings, processVariables);
         return headers;

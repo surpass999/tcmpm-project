@@ -1,7 +1,7 @@
 package cn.gemrun.base.module.system.dal.dataobject.user;
 
 import cn.gemrun.base.framework.common.enums.CommonStatusEnum;
-import cn.gemrun.base.framework.tenant.core.db.TenantBaseDO;
+import cn.gemrun.base.framework.mybatis.core.dataobject.BaseDO;
 import cn.gemrun.base.module.system.enums.common.SexEnum;
 import com.baomidou.mybatisplus.annotation.KeySequence;
 import com.baomidou.mybatisplus.annotation.TableField;
@@ -26,7 +26,7 @@ import java.util.Set;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class AdminUserDO extends TenantBaseDO {
+public class AdminUserDO extends BaseDO {
 
     /**
      * 用户ID

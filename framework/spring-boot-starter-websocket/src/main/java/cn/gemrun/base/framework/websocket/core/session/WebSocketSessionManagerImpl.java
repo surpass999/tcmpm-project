@@ -2,7 +2,6 @@ package cn.gemrun.base.framework.websocket.core.session;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.gemrun.base.framework.security.core.LoginUser;
-import cn.gemrun.base.framework.tenant.core.context.TenantContextHolder;
 import cn.gemrun.base.framework.websocket.core.util.WebSocketFrameworkUtils;
 import org.springframework.web.socket.WebSocketSession;
 
@@ -95,18 +94,11 @@ public class WebSocketSessionManagerImpl implements WebSocketSessionManager {
             return new ArrayList<>();
         }
         LinkedList<WebSocketSession> result = new LinkedList<>(); // 避免扩容
-        Long contextTenantId = TenantContextHolder.getTenantId();
         for (List<WebSocketSession> sessions : userSessionsMap.values()) {
             if (CollUtil.isEmpty(sessions)) {
                 continue;
             }
-            // 特殊：如果租户不匹配，则直接排除
-            if (contextTenantId != null) {
-                Long userTenantId = WebSocketFrameworkUtils.getTenantId(sessions.get(0));
-                if (!contextTenantId.equals(userTenantId)) {
-                    continue;
-                }
-            }
+            // 单租户模式：不再按租户过滤，直接加入所有会话
             result.addAll(sessions);
         }
         return result;

@@ -11,7 +11,6 @@ import cn.gemrun.base.module.system.dal.dataobject.permission.MenuDO;
 import cn.gemrun.base.module.system.dal.mysql.permission.MenuMapper;
 import cn.gemrun.base.module.system.dal.redis.RedisKeyConstants;
 import cn.gemrun.base.module.system.enums.permission.MenuTypeEnum;
-import cn.gemrun.base.module.system.service.tenant.TenantService;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Lists;
 import lombok.extern.slf4j.Slf4j;
@@ -43,10 +42,6 @@ public class MenuServiceImpl implements MenuService {
     private MenuMapper menuMapper;
     @Resource
     private PermissionService permissionService;
-    @Resource
-    @Lazy // 延迟，避免循环依赖报错
-    private TenantService tenantService;
-
     @Override
     @CacheEvict(value = RedisKeyConstants.PERMISSION_MENU_ID_LIST, key = "#createReqVO.permission",
             condition = "#createReqVO.permission != null")
@@ -131,8 +126,7 @@ public class MenuServiceImpl implements MenuService {
     public List<MenuDO> getMenuListByTenant(MenuListReqVO reqVO) {
         // 查询所有菜单，并过滤掉关闭的节点
         List<MenuDO> menus = getMenuList(reqVO);
-        // 开启多租户的情况下，需要过滤掉未开通的菜单
-        tenantService.handleTenantMenu(menuIds -> menus.removeIf(menu -> !CollUtil.contains(menuIds, menu.getId())));
+        // 单租户模式下，直接返回过滤后的菜单列表
         return menus;
     }
 

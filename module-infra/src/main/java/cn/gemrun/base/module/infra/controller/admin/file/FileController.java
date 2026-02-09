@@ -6,7 +6,6 @@ import cn.hutool.core.util.URLUtil;
 import cn.gemrun.base.framework.common.pojo.CommonResult;
 import cn.gemrun.base.framework.common.pojo.PageResult;
 import cn.gemrun.base.framework.common.util.object.BeanUtils;
-import cn.gemrun.base.framework.tenant.core.aop.TenantIgnore;
 import cn.gemrun.base.module.infra.controller.admin.file.vo.file.*;
 import cn.gemrun.base.module.infra.dal.dataobject.file.FileDO;
 import cn.gemrun.base.module.infra.service.file.FileService;
@@ -100,7 +99,6 @@ public class FileController {
 
     @GetMapping("/{configId}/get/**")
     @PermitAll
-    @TenantIgnore
     @Operation(summary = "下载文件")
     @Parameter(name = "configId", description = "配置编号", required = true)
     public void getFileContent(HttpServletRequest request,

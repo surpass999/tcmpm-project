@@ -9,8 +9,6 @@ import cn.gemrun.base.framework.common.exception.ServiceException;
 import cn.gemrun.base.framework.common.pojo.PageResult;
 import cn.gemrun.base.framework.common.util.object.BeanUtils;
 import cn.gemrun.base.framework.common.util.validation.ValidationUtils;
-import cn.gemrun.base.framework.tenant.core.aop.TenantIgnore;
-import cn.gemrun.base.framework.tenant.core.util.TenantUtils;
 import cn.gemrun.base.module.iot.controller.admin.device.vo.device.*;
 import cn.gemrun.base.module.iot.core.biz.dto.IotDeviceAuthReqDTO;
 import cn.gemrun.base.module.iot.core.enums.IotDeviceStateEnum;
@@ -86,11 +84,9 @@ public class IotDeviceServiceImpl implements IotDeviceService {
     private void validateCreateDeviceParam(String productKey, String deviceName,
                                            Long gatewayId, IotProductDO product) {
         // 校验设备名称在同一产品下是否唯一
-        TenantUtils.executeIgnore(() -> {
-            if (deviceMapper.selectByProductKeyAndDeviceName(productKey, deviceName) != null) {
-                throw exception(DEVICE_NAME_EXISTS);
-            }
-        });
+        if (deviceMapper.selectByProductKeyAndDeviceName(productKey, deviceName) != null) {
+            throw exception(DEVICE_NAME_EXISTS);
+        }
         // 校验父设备是否为合法网关
         if (IotProductDeviceTypeEnum.isGatewaySub(product.getDeviceType())
                 && gatewayId != null) {
@@ -246,14 +242,12 @@ public class IotDeviceServiceImpl implements IotDeviceService {
 
     @Override
     @Cacheable(value = RedisKeyConstants.DEVICE, key = "#id", unless = "#result == null")
-    @TenantIgnore // 忽略租户信息
     public IotDeviceDO getDeviceFromCache(Long id) {
         return deviceMapper.selectById(id);
     }
 
     @Override
     @Cacheable(value = RedisKeyConstants.DEVICE, key = "#productKey + '_' + #deviceName", unless = "#result == null")
-    @TenantIgnore // 忽略租户信息，跨租户 productKey + deviceName 是唯一的
     public IotDeviceDO getDeviceFromCache(String productKey, String deviceName) {
         return deviceMapper.selectByProductKeyAndDeviceName(productKey, deviceName);
     }

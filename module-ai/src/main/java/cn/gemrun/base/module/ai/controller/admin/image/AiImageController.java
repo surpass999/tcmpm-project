@@ -5,7 +5,6 @@ import cn.gemrun.base.module.ai.framework.ai.core.model.midjourney.api.Midjourne
 import cn.gemrun.base.framework.common.pojo.CommonResult;
 import cn.gemrun.base.framework.common.pojo.PageResult;
 import cn.gemrun.base.framework.common.util.object.BeanUtils;
-import cn.gemrun.base.framework.tenant.core.aop.TenantIgnore;
 import cn.gemrun.base.module.ai.controller.admin.image.vo.*;
 import cn.gemrun.base.module.ai.controller.admin.image.vo.midjourney.AiMidjourneyActionReqVO;
 import cn.gemrun.base.module.ai.controller.admin.image.vo.midjourney.AiMidjourneyImagineReqVO;
@@ -96,7 +95,6 @@ public class AiImageController {
     @Operation(summary = "【Midjourney】通知图片进展", description = "由 Midjourney Proxy 回调")
     @PostMapping("/midjourney/notify") // 必须是 POST 方法，否则会报错
     @PermitAll
-    @TenantIgnore
     public CommonResult<Boolean> midjourneyNotify(@Valid @RequestBody MidjourneyApi.Notify notify) {
         imageService.midjourneyNotify(notify);
         return success(true);

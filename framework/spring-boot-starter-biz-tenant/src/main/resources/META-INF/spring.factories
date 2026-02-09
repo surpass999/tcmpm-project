@@ -1,2 +1,0 @@
-org.springframework.boot.env.EnvironmentPostProcessor=\
-  cn.gemrun.base.framework.tenant.core.mq.kafka.TenantKafkaEnvironmentPostProcessor

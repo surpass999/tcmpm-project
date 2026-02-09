@@ -173,6 +173,13 @@ const IOT_DICT = {
   IOT_VALIDATE_TYPE: 'iot_validate_type', // IOT 数据校验级别
 } as const;
 
+/** ========== DECLARE - 项目模块 ========== */
+const DECLARE_DICT = {
+  DECLARE_FILING_STATUS: 'declare_filing_status', // 备案状态
+  DECLARE_PROJECT_TYPE: 'declare_project_type', // 项目类型
+} as const;
+
+
 /** 字典类型枚举 - 统一导出 */
 const DICT_TYPE = {
   ...AI_DICT,
@@ -187,6 +194,7 @@ const DICT_TYPE = {
   ...MALL_DICT,
   ...SYSTEM_DICT,
   ...COMMON_DICT,
+  ...DECLARE_DICT,
 } as const;
 
 export { DICT_TYPE };

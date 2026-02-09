@@ -1,6 +1,6 @@
 package cn.gemrun.base.module.pay.dal.dataobject.notify;
 
-import cn.gemrun.base.framework.tenant.core.db.TenantBaseDO;
+import cn.gemrun.base.framework.mybatis.core.dataobject.BaseDO;
 import cn.gemrun.base.module.pay.dal.dataobject.app.PayAppDO;
 import cn.gemrun.base.module.pay.dal.dataobject.order.PayOrderDO;
 import cn.gemrun.base.module.pay.dal.dataobject.refund.PayRefundDO;
@@ -23,7 +23,7 @@ import java.time.LocalDateTime;
 @TableName("pay_notify_task")
 @KeySequence("pay_notify_task_seq") // 用于 Oracle、PostgreSQL、Kingbase、DB2、H2 数据库的主键自增。如果是 MySQL 等数据库，可不写。
 @Data
-public class PayNotifyTaskDO extends TenantBaseDO {
+public class PayNotifyTaskDO extends BaseDO {
 
     /**
      * 通知频率，单位为秒。

@@ -3,7 +3,7 @@ package cn.gemrun.base.module.pay.dal.dataobject.channel;
 import cn.hutool.core.util.StrUtil;
 import cn.gemrun.base.framework.common.enums.CommonStatusEnum;
 import cn.gemrun.base.framework.common.util.json.JsonUtils;
-import cn.gemrun.base.framework.tenant.core.db.TenantBaseDO;
+import cn.gemrun.base.framework.mybatis.core.dataobject.BaseDO;
 import cn.gemrun.base.module.pay.dal.dataobject.app.PayAppDO;
 import cn.gemrun.base.module.pay.enums.PayChannelEnum;
 import cn.gemrun.base.module.pay.framework.pay.core.client.PayClientConfig;
@@ -35,7 +35,7 @@ import java.lang.reflect.Field;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class PayChannelDO extends TenantBaseDO {
+public class PayChannelDO extends BaseDO {
 
     /**
      * 渠道编号，数据库自增

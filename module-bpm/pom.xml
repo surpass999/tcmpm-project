@@ -32,10 +32,7 @@
             <groupId>cn.gemrun</groupId>
             <artifactId>spring-boot-starter-biz-data-permission</artifactId>
         </dependency>
-        <dependency>
-            <groupId>cn.gemrun</groupId>
-            <artifactId>spring-boot-starter-biz-tenant</artifactId>
-        </dependency>
+
 
         <!-- Web 相关 -->
         <dependency>

@@ -54,12 +54,6 @@
       <scope>compile</scope>
       <optional>true</optional>
     </dependency>
-    <dependency>
-      <groupId>cn.gemrun</groupId>
-      <artifactId>spring-boot-starter-biz-tenant</artifactId>
-      <version>2025.12-jdk8-SNAPSHOT</version>
-      <scope>provided</scope>
-    </dependency>
   </dependencies>
   <repositories>
     <repository>

@@ -9,7 +9,6 @@ import cn.hutool.http.HttpUtil;
 import cn.gemrun.base.framework.common.pojo.CommonResult;
 import cn.gemrun.base.framework.common.pojo.PageResult;
 import cn.gemrun.base.framework.common.util.object.BeanUtils;
-import cn.gemrun.base.framework.tenant.core.util.TenantUtils;
 import cn.gemrun.base.module.ai.controller.admin.chat.vo.message.AiChatMessagePageReqVO;
 import cn.gemrun.base.module.ai.controller.admin.chat.vo.message.AiChatMessageRespVO;
 import cn.gemrun.base.module.ai.controller.admin.chat.vo.message.AiChatMessageSendReqVO;
@@ -242,7 +241,7 @@ public class AiChatMessageServiceImpl implements AiChatMessageService {
             // 仅首次：返回知识库、联网搜索
             if (StrUtil.isEmpty(contentBuffer)) {
                 if (firstExecuteFlag.compareAndSet(true, false)) { // CAS 操作，确保仅执行一次
-                    Map<Long, AiKnowledgeDocumentDO> documentMap = TenantUtils.executeIgnore(() -> knowledgeDocumentService.getKnowledgeDocumentMap(
+                    Map<Long, AiKnowledgeDocumentDO> documentMap = knowledgeDocumentService.getKnowledgeDocumentMap(
                             convertSet(knowledgeSegments, AiKnowledgeSegmentSearchRespBO::getDocumentId)));
                     cacheSegments.set(BeanUtils.toBean(knowledgeSegments, AiChatMessageRespVO.KnowledgeSegment.class, segment -> {
                         AiKnowledgeDocumentDO document = documentMap.get(segment.getDocumentId());
@@ -269,36 +268,28 @@ public class AiChatMessageServiceImpl implements AiChatMessageService {
                             .setReasoningContent(StrUtil.nullToDefault(newReasoningContent, "")) // 避免 null 的 情况
                             .setSegments(cacheSegments.get()).setWebSearchPages(cacheWebSearchPages.get()))); // 知识库 + 联网搜索
         }).doOnComplete(() -> {
-            // 忽略租户，因为 Flux 异步无法透传租户
-            TenantUtils.executeIgnore(() -> chatMessageMapper.updateById(
-                    new AiChatMessageDO().setId(assistantMessage.getId()).setContent(contentBuffer.toString())
-                            .setReasoningContent(reasoningContentBuffer.toString())));
+            chatMessageMapper.updateById(new AiChatMessageDO().setId(assistantMessage.getId()).setContent(contentBuffer.toString())
+                    .setReasoningContent(reasoningContentBuffer.toString()));
         }).doOnError(throwable -> {
             log.error("[sendChatMessageStream][userId({}) sendReqVO({}) 发生异常]", userId, sendReqVO, throwable);
-            // 忽略租户，因为 Flux 异步无法透传租户
-            TenantUtils.executeIgnore(() -> {
-                // 如果有内容，则更新内容
-                if (StrUtil.isNotEmpty(contentBuffer)) {
-                    chatMessageMapper.updateById(new AiChatMessageDO().setId(assistantMessage.getId())
-                            .setContent(contentBuffer.toString()).setReasoningContent(reasoningContentBuffer.toString()));
-                } else {
-                    // 否则，则进行删除
-                    chatMessageMapper.deleteById(assistantMessage.getId());
-                }
-            });
+            // 如果有内容，则更新内容
+            if (StrUtil.isNotEmpty(contentBuffer)) {
+                chatMessageMapper.updateById(new AiChatMessageDO().setId(assistantMessage.getId())
+                        .setContent(contentBuffer.toString()).setReasoningContent(reasoningContentBuffer.toString()));
+            } else {
+                // 否则，则进行删除
+                chatMessageMapper.deleteById(assistantMessage.getId());
+            }
         }).doOnCancel(() -> {
             log.info("[sendChatMessageStream][userId({}) sendReqVO({}) 取消请求]", userId, sendReqVO);
-            // 忽略租户，因为 Flux 异步无法透传租户
-            TenantUtils.executeIgnore(() -> {
-                // 如果有内容，则更新内容
-                if (StrUtil.isNotEmpty(contentBuffer)) {
-                    chatMessageMapper.updateById(new AiChatMessageDO().setId(assistantMessage.getId())
-                            .setContent(contentBuffer.toString()).setReasoningContent(reasoningContentBuffer.toString()));
-                } else {
-                    // 否则，则进行删除
-                    chatMessageMapper.deleteById(assistantMessage.getId());
-                }
-            });
+            // 如果有内容，则更新内容
+            if (StrUtil.isNotEmpty(contentBuffer)) {
+                chatMessageMapper.updateById(new AiChatMessageDO().setId(assistantMessage.getId())
+                        .setContent(contentBuffer.toString()).setReasoningContent(reasoningContentBuffer.toString()));
+            } else {
+                // 否则，则进行删除
+                chatMessageMapper.deleteById(assistantMessage.getId());
+            }
         }).onErrorResume(error -> Flux.just(error(ErrorCodeConstants.CHAT_STREAM_ERROR)));
     }
 

@@ -3,10 +3,7 @@ package cn.gemrun.base.module.system.controller.app.tenant;
 import cn.gemrun.base.framework.common.enums.CommonStatusEnum;
 import cn.gemrun.base.framework.common.pojo.CommonResult;
 import cn.gemrun.base.framework.common.util.object.BeanUtils;
-import cn.gemrun.base.framework.tenant.core.aop.TenantIgnore;
 import cn.gemrun.base.module.system.controller.app.tenant.vo.AppTenantRespVO;
-import cn.gemrun.base.module.system.dal.dataobject.tenant.TenantDO;
-import cn.gemrun.base.module.system.service.tenant.TenantService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -25,20 +22,12 @@ import static cn.gemrun.base.framework.common.pojo.CommonResult.success;
 @RequestMapping("/system/tenant")
 public class AppTenantController {
 
-    @Resource
-    private TenantService tenantService;
-
     @GetMapping("/get-by-website")
     @PermitAll
-    @TenantIgnore
     @Operation(summary = "使用域名，获得租户信息", description = "根据用户的域名，获得租户信息")
     @Parameter(name = "website", description = "域名", required = true, example = "www.iocoder.cn")
     public CommonResult<AppTenantRespVO> getTenantByWebsite(@RequestParam("website") String website) {
-        TenantDO tenant = tenantService.getTenantByWebsite(website);
-        if (tenant == null || CommonStatusEnum.isDisable(tenant.getStatus())) {
-            return success(null);
-        }
-        return success(BeanUtils.toBean(tenant, AppTenantRespVO.class));
+        return success(null);
     }
 
 }
