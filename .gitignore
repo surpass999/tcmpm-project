@@ -6,4 +6,3 @@ node_modules/
 # ignore build artifacts
 **/target/
 server/target/*
-docs/
