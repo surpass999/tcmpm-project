@@ -11,22 +11,19 @@
       "name": "base.security.mock-enable",
       "type": "java.lang.Boolean",
       "description": "mock 模式的开关",
-      "sourceType": "cn.gemrun.base.framework.security.config.SecurityProperties",
-      "defaultValue": false
+      "sourceType": "cn.gemrun.base.framework.security.config.SecurityProperties"
     },
     {
       "name": "base.security.mock-secret",
       "type": "java.lang.String",
       "description": "mock 模式的密钥 一定要配置密钥，保证安全性",
-      "sourceType": "cn.gemrun.base.framework.security.config.SecurityProperties",
-      "defaultValue": "test"
+      "sourceType": "cn.gemrun.base.framework.security.config.SecurityProperties"
     },
     {
       "name": "base.security.password-encoder-length",
       "type": "java.lang.Integer",
       "description": "PasswordEncoder 加密复杂度，越高开销越大",
-      "sourceType": "cn.gemrun.base.framework.security.config.SecurityProperties",
-      "defaultValue": 4
+      "sourceType": "cn.gemrun.base.framework.security.config.SecurityProperties"
     },
     {
       "name": "base.security.permit-all-urls",
@@ -38,15 +35,13 @@
       "name": "base.security.token-header",
       "type": "java.lang.String",
       "description": "HTTP 请求时，访问令牌的请求 Header",
-      "sourceType": "cn.gemrun.base.framework.security.config.SecurityProperties",
-      "defaultValue": "Authorization"
+      "sourceType": "cn.gemrun.base.framework.security.config.SecurityProperties"
     },
     {
       "name": "base.security.token-parameter",
       "type": "java.lang.String",
       "description": "HTTP 请求时，访问令牌的请求参数 初始目的：解决 WebSocket 无法通过 header 传参，只能通过 token 参数拼接",
-      "sourceType": "cn.gemrun.base.framework.security.config.SecurityProperties",
-      "defaultValue": "token"
+      "sourceType": "cn.gemrun.base.framework.security.config.SecurityProperties"
     }
   ],
   "hints": []

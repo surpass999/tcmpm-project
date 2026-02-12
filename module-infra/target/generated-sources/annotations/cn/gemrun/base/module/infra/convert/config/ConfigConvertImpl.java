@@ -10,8 +10,8 @@ import javax.annotation.Generated;
 
 @Generated(
     value = "org.mapstruct.ap.MappingProcessor",
-    date = "2026-02-09T17:50:35+0800",
-    comments = "version: 1.6.3, compiler: javac, environment: Java 1.8.0_371 (Oracle Corporation)"
+    date = "2026-02-12T21:04:48+0800",
+    comments = "version: 1.6.3, compiler: Eclipse JDT (IDE) 3.45.0.v20260128-0750, environment: Java 21.0.9 (Eclipse Adoptium)"
 )
 public class ConfigConvertImpl implements ConfigConvert {
 
@@ -52,14 +52,14 @@ public class ConfigConvertImpl implements ConfigConvert {
         ConfigRespVO configRespVO = new ConfigRespVO();
 
         configRespVO.setKey( bean.getConfigKey() );
-        configRespVO.setId( bean.getId() );
         configRespVO.setCategory( bean.getCategory() );
-        configRespVO.setName( bean.getName() );
-        configRespVO.setValue( bean.getValue() );
-        configRespVO.setType( bean.getType() );
-        configRespVO.setVisible( bean.getVisible() );
-        configRespVO.setRemark( bean.getRemark() );
         configRespVO.setCreateTime( bean.getCreateTime() );
+        configRespVO.setId( bean.getId() );
+        configRespVO.setName( bean.getName() );
+        configRespVO.setRemark( bean.getRemark() );
+        configRespVO.setType( bean.getType() );
+        configRespVO.setValue( bean.getValue() );
+        configRespVO.setVisible( bean.getVisible() );
 
         return configRespVO;
     }
@@ -73,12 +73,12 @@ public class ConfigConvertImpl implements ConfigConvert {
         ConfigDO configDO = new ConfigDO();
 
         configDO.setConfigKey( bean.getKey() );
-        configDO.setId( bean.getId() );
         configDO.setCategory( bean.getCategory() );
+        configDO.setId( bean.getId() );
         configDO.setName( bean.getName() );
+        configDO.setRemark( bean.getRemark() );
         configDO.setValue( bean.getValue() );
         configDO.setVisible( bean.getVisible() );
-        configDO.setRemark( bean.getRemark() );
 
         return configDO;
     }

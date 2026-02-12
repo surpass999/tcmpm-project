@@ -1,7 +1,6 @@
 <script lang="ts" setup>
 import type { NotificationItem } from '@vben/layouts';
 
-import type { SystemTenantApi } from '#/api/system/tenant';
 
 import { computed, onMounted, ref, watch } from 'vue';
 
@@ -35,7 +34,6 @@ import {
   updateAllNotifyMessageRead,
   updateNotifyMessageRead,
 } from '#/api/system/notify/message';
-import { getSimpleTenantList } from '#/api/system/tenant';
 import { $t } from '#/locales';
 import { router } from '#/router';
 import { useAuthStore } from '#/store';
@@ -155,41 +153,12 @@ function handleNotificationOpen(open: boolean) {
   handleNotificationGetUnreadCount();
 }
 
-// 租户列表
-const tenants = ref<SystemTenantApi.Tenant[]>([]);
-const tenantEnable = computed(
-  () => hasAccessByCodes(['system:tenant:visit']) && isTenantEnable(),
-);
 
-/** 获取租户列表 */
-async function handleGetTenantList() {
-  if (tenantEnable.value) {
-    tenants.value = await getSimpleTenantList();
-  }
-}
-
-/** 处理租户切换 */
-async function handleTenantChange(tenant: SystemTenantApi.Tenant) {
-  if (!tenant || !tenant.id) {
-    message.error('切换租户失败');
-    return;
-  }
-  // 设置访问租户 ID
-  accessStore.setVisitTenantId(tenant.id as number);
-  // 关闭其他标签页，只保留当前页
-  await closeOtherTabs();
-  // 刷新当前页面
-  await refreshTab();
-  // 提示切换成功
-  message.success(`切换当前租户为: ${tenant.name}`);
-}
 
 // ========== 初始化 ==========
 onMounted(() => {
   // 首次加载未读数量
   handleNotificationGetUnreadCount();
-  // 获取租户列表
-  handleGetTenantList();
   // 轮询刷新未读数量
   setInterval(
     () => {
@@ -245,16 +214,6 @@ watch(
         @open="handleNotificationOpen"
         @read="handleNotificationRead"
       />
-    </template>
-    <template #header-right-1>
-      <div v-if="tenantEnable">
-        <TenantDropdown
-          class="mr-2"
-          :tenant-list="tenants"
-          :visit-tenant-id="accessStore.visitTenantId"
-          @success="handleTenantChange"
-        />
-      </div>
     </template>
     <template #extra>
       <AuthenticationLoginExpiredModal

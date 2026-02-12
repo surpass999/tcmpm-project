@@ -10,8 +10,8 @@ import javax.annotation.Generated;
 
 @Generated(
     value = "org.mapstruct.ap.MappingProcessor",
-    date = "2026-02-09T17:50:51+0800",
-    comments = "version: 1.6.3, compiler: javac, environment: Java 1.8.0_371 (Oracle Corporation)"
+    date = "2026-02-12T21:04:58+0800",
+    comments = "version: 1.6.3, compiler: Eclipse JDT (IDE) 3.45.0.v20260128-0750, environment: Java 21.0.9 (Eclipse Adoptium)"
 )
 public class MemberSignInRecordConvertImpl implements MemberSignInRecordConvert {
 
@@ -51,10 +51,10 @@ public class MemberSignInRecordConvertImpl implements MemberSignInRecordConvert 
 
         AppMemberSignInRecordRespVO appMemberSignInRecordRespVO = new AppMemberSignInRecordRespVO();
 
-        appMemberSignInRecordRespVO.setDay( memberSignInRecordDO.getDay() );
-        appMemberSignInRecordRespVO.setPoint( memberSignInRecordDO.getPoint() );
-        appMemberSignInRecordRespVO.setExperience( memberSignInRecordDO.getExperience() );
         appMemberSignInRecordRespVO.setCreateTime( memberSignInRecordDO.getCreateTime() );
+        appMemberSignInRecordRespVO.setDay( memberSignInRecordDO.getDay() );
+        appMemberSignInRecordRespVO.setExperience( memberSignInRecordDO.getExperience() );
+        appMemberSignInRecordRespVO.setPoint( memberSignInRecordDO.getPoint() );
 
         return appMemberSignInRecordRespVO;
     }
@@ -66,11 +66,11 @@ public class MemberSignInRecordConvertImpl implements MemberSignInRecordConvert 
 
         MemberSignInRecordRespVO memberSignInRecordRespVO = new MemberSignInRecordRespVO();
 
-        memberSignInRecordRespVO.setId( memberSignInRecordDO.getId() );
-        memberSignInRecordRespVO.setUserId( memberSignInRecordDO.getUserId() );
-        memberSignInRecordRespVO.setDay( memberSignInRecordDO.getDay() );
-        memberSignInRecordRespVO.setPoint( memberSignInRecordDO.getPoint() );
         memberSignInRecordRespVO.setCreateTime( memberSignInRecordDO.getCreateTime() );
+        memberSignInRecordRespVO.setDay( memberSignInRecordDO.getDay() );
+        memberSignInRecordRespVO.setId( memberSignInRecordDO.getId() );
+        memberSignInRecordRespVO.setPoint( memberSignInRecordDO.getPoint() );
+        memberSignInRecordRespVO.setUserId( memberSignInRecordDO.getUserId() );
 
         return memberSignInRecordRespVO;
     }

@@ -9,8 +9,8 @@ import javax.annotation.Generated;
 
 @Generated(
     value = "org.mapstruct.ap.MappingProcessor",
-    date = "2026-02-09T17:50:51+0800",
-    comments = "version: 1.6.3, compiler: javac, environment: Java 1.8.0_371 (Oracle Corporation)"
+    date = "2026-02-12T21:04:58+0800",
+    comments = "version: 1.6.3, compiler: Eclipse JDT (IDE) 3.45.0.v20260128-0750, environment: Java 21.0.9 (Eclipse Adoptium)"
 )
 public class MemberLevelRecordConvertImpl implements MemberLevelRecordConvert {
 
@@ -22,16 +22,16 @@ public class MemberLevelRecordConvertImpl implements MemberLevelRecordConvert {
 
         MemberLevelRecordRespVO memberLevelRecordRespVO = new MemberLevelRecordRespVO();
 
-        memberLevelRecordRespVO.setUserId( bean.getUserId() );
-        memberLevelRecordRespVO.setLevelId( bean.getLevelId() );
-        memberLevelRecordRespVO.setLevel( bean.getLevel() );
+        memberLevelRecordRespVO.setDescription( bean.getDescription() );
         memberLevelRecordRespVO.setDiscountPercent( bean.getDiscountPercent() );
         memberLevelRecordRespVO.setExperience( bean.getExperience() );
-        memberLevelRecordRespVO.setUserExperience( bean.getUserExperience() );
+        memberLevelRecordRespVO.setLevel( bean.getLevel() );
+        memberLevelRecordRespVO.setLevelId( bean.getLevelId() );
         memberLevelRecordRespVO.setRemark( bean.getRemark() );
-        memberLevelRecordRespVO.setDescription( bean.getDescription() );
-        memberLevelRecordRespVO.setId( bean.getId() );
+        memberLevelRecordRespVO.setUserExperience( bean.getUserExperience() );
+        memberLevelRecordRespVO.setUserId( bean.getUserId() );
         memberLevelRecordRespVO.setCreateTime( bean.getCreateTime() );
+        memberLevelRecordRespVO.setId( bean.getId() );
 
         return memberLevelRecordRespVO;
     }

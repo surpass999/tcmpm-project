@@ -8,8 +8,8 @@ import javax.annotation.Generated;
 
 @Generated(
     value = "org.mapstruct.ap.MappingProcessor",
-    date = "2026-02-09T17:50:52+0800",
-    comments = "version: 1.6.3, compiler: javac, environment: Java 1.8.0_371 (Oracle Corporation)"
+    date = "2026-02-12T21:04:58+0800",
+    comments = "version: 1.6.3, compiler: Eclipse JDT (IDE) 3.45.0.v20260128-0750, environment: Java 21.0.9 (Eclipse Adoptium)"
 )
 public class MemberConfigConvertImpl implements MemberConfigConvert {
 
@@ -22,8 +22,8 @@ public class MemberConfigConvertImpl implements MemberConfigConvert {
         MemberConfigRespVO memberConfigRespVO = new MemberConfigRespVO();
 
         memberConfigRespVO.setPointTradeDeductEnable( bean.getPointTradeDeductEnable() );
-        memberConfigRespVO.setPointTradeDeductUnitPrice( bean.getPointTradeDeductUnitPrice() );
         memberConfigRespVO.setPointTradeDeductMaxPrice( bean.getPointTradeDeductMaxPrice() );
+        memberConfigRespVO.setPointTradeDeductUnitPrice( bean.getPointTradeDeductUnitPrice() );
         memberConfigRespVO.setPointTradeGivePoint( bean.getPointTradeGivePoint() );
         memberConfigRespVO.setId( bean.getId() );
 
@@ -39,8 +39,8 @@ public class MemberConfigConvertImpl implements MemberConfigConvert {
         MemberConfigDO.MemberConfigDOBuilder memberConfigDO = MemberConfigDO.builder();
 
         memberConfigDO.pointTradeDeductEnable( bean.getPointTradeDeductEnable() );
-        memberConfigDO.pointTradeDeductUnitPrice( bean.getPointTradeDeductUnitPrice() );
         memberConfigDO.pointTradeDeductMaxPrice( bean.getPointTradeDeductMaxPrice() );
+        memberConfigDO.pointTradeDeductUnitPrice( bean.getPointTradeDeductUnitPrice() );
         memberConfigDO.pointTradeGivePoint( bean.getPointTradeGivePoint() );
 
         return memberConfigDO.build();
@@ -55,8 +55,8 @@ public class MemberConfigConvertImpl implements MemberConfigConvert {
         MemberConfigRespDTO memberConfigRespDTO = new MemberConfigRespDTO();
 
         memberConfigRespDTO.setPointTradeDeductEnable( config.getPointTradeDeductEnable() );
-        memberConfigRespDTO.setPointTradeDeductUnitPrice( config.getPointTradeDeductUnitPrice() );
         memberConfigRespDTO.setPointTradeDeductMaxPrice( config.getPointTradeDeductMaxPrice() );
+        memberConfigRespDTO.setPointTradeDeductUnitPrice( config.getPointTradeDeductUnitPrice() );
         memberConfigRespDTO.setPointTradeGivePoint( config.getPointTradeGivePoint() );
 
         return memberConfigRespDTO;

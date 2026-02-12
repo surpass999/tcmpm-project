@@ -12,8 +12,8 @@ import javax.annotation.Generated;
 
 @Generated(
     value = "org.mapstruct.ap.MappingProcessor",
-    date = "2026-02-09T17:50:51+0800",
-    comments = "version: 1.6.3, compiler: javac, environment: Java 1.8.0_371 (Oracle Corporation)"
+    date = "2026-02-12T21:04:58+0800",
+    comments = "version: 1.6.3, compiler: Eclipse JDT (IDE) 3.45.0.v20260128-0750, environment: Java 21.0.9 (Eclipse Adoptium)"
 )
 public class AddressConvertImpl implements AddressConvert {
 
@@ -25,11 +25,11 @@ public class AddressConvertImpl implements AddressConvert {
 
         MemberAddressDO.MemberAddressDOBuilder memberAddressDO = MemberAddressDO.builder();
 
-        memberAddressDO.name( bean.getName() );
-        memberAddressDO.mobile( bean.getMobile() );
         memberAddressDO.areaId( bean.getAreaId() );
-        memberAddressDO.detailAddress( bean.getDetailAddress() );
         memberAddressDO.defaultStatus( bean.getDefaultStatus() );
+        memberAddressDO.detailAddress( bean.getDetailAddress() );
+        memberAddressDO.mobile( bean.getMobile() );
+        memberAddressDO.name( bean.getName() );
 
         return memberAddressDO.build();
     }
@@ -42,12 +42,12 @@ public class AddressConvertImpl implements AddressConvert {
 
         MemberAddressDO.MemberAddressDOBuilder memberAddressDO = MemberAddressDO.builder();
 
-        memberAddressDO.id( bean.getId() );
-        memberAddressDO.name( bean.getName() );
-        memberAddressDO.mobile( bean.getMobile() );
         memberAddressDO.areaId( bean.getAreaId() );
-        memberAddressDO.detailAddress( bean.getDetailAddress() );
         memberAddressDO.defaultStatus( bean.getDefaultStatus() );
+        memberAddressDO.detailAddress( bean.getDetailAddress() );
+        memberAddressDO.id( bean.getId() );
+        memberAddressDO.mobile( bean.getMobile() );
+        memberAddressDO.name( bean.getName() );
 
         return memberAddressDO.build();
     }
@@ -63,11 +63,11 @@ public class AddressConvertImpl implements AddressConvert {
         if ( bean.getAreaId() != null ) {
             appAddressRespVO.setAreaName( convertAreaIdToAreaName( bean.getAreaId().intValue() ) );
         }
-        appAddressRespVO.setName( bean.getName() );
-        appAddressRespVO.setMobile( bean.getMobile() );
         appAddressRespVO.setAreaId( bean.getAreaId() );
-        appAddressRespVO.setDetailAddress( bean.getDetailAddress() );
         appAddressRespVO.setDefaultStatus( bean.getDefaultStatus() );
+        appAddressRespVO.setDetailAddress( bean.getDetailAddress() );
+        appAddressRespVO.setMobile( bean.getMobile() );
+        appAddressRespVO.setName( bean.getName() );
         appAddressRespVO.setId( bean.getId() );
 
         return appAddressRespVO;
@@ -95,15 +95,15 @@ public class AddressConvertImpl implements AddressConvert {
 
         MemberAddressRespDTO memberAddressRespDTO = new MemberAddressRespDTO();
 
-        memberAddressRespDTO.setId( bean.getId() );
-        memberAddressRespDTO.setUserId( bean.getUserId() );
-        memberAddressRespDTO.setName( bean.getName() );
-        memberAddressRespDTO.setMobile( bean.getMobile() );
         if ( bean.getAreaId() != null ) {
             memberAddressRespDTO.setAreaId( bean.getAreaId().intValue() );
         }
-        memberAddressRespDTO.setDetailAddress( bean.getDetailAddress() );
         memberAddressRespDTO.setDefaultStatus( bean.getDefaultStatus() );
+        memberAddressRespDTO.setDetailAddress( bean.getDetailAddress() );
+        memberAddressRespDTO.setId( bean.getId() );
+        memberAddressRespDTO.setMobile( bean.getMobile() );
+        memberAddressRespDTO.setName( bean.getName() );
+        memberAddressRespDTO.setUserId( bean.getUserId() );
 
         return memberAddressRespDTO;
     }
@@ -129,13 +129,13 @@ public class AddressConvertImpl implements AddressConvert {
 
         AddressRespVO addressRespVO = new AddressRespVO();
 
-        addressRespVO.setName( memberAddressDO.getName() );
-        addressRespVO.setMobile( memberAddressDO.getMobile() );
         addressRespVO.setAreaId( memberAddressDO.getAreaId() );
-        addressRespVO.setDetailAddress( memberAddressDO.getDetailAddress() );
         addressRespVO.setDefaultStatus( memberAddressDO.getDefaultStatus() );
-        addressRespVO.setId( memberAddressDO.getId() );
+        addressRespVO.setDetailAddress( memberAddressDO.getDetailAddress() );
+        addressRespVO.setMobile( memberAddressDO.getMobile() );
+        addressRespVO.setName( memberAddressDO.getName() );
         addressRespVO.setCreateTime( memberAddressDO.getCreateTime() );
+        addressRespVO.setId( memberAddressDO.getId() );
 
         return addressRespVO;
     }

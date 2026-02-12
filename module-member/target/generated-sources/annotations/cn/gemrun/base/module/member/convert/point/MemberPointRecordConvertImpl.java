@@ -9,8 +9,8 @@ import javax.annotation.Generated;
 
 @Generated(
     value = "org.mapstruct.ap.MappingProcessor",
-    date = "2026-02-09T17:50:51+0800",
-    comments = "version: 1.6.3, compiler: javac, environment: Java 1.8.0_371 (Oracle Corporation)"
+    date = "2026-02-12T21:04:58+0800",
+    comments = "version: 1.6.3, compiler: Eclipse JDT (IDE) 3.45.0.v20260128-0750, environment: Java 21.0.9 (Eclipse Adoptium)"
 )
 public class MemberPointRecordConvertImpl implements MemberPointRecordConvert {
 
@@ -35,15 +35,15 @@ public class MemberPointRecordConvertImpl implements MemberPointRecordConvert {
 
         MemberPointRecordRespVO memberPointRecordRespVO = new MemberPointRecordRespVO();
 
-        memberPointRecordRespVO.setId( memberPointRecordDO.getId() );
-        memberPointRecordRespVO.setUserId( memberPointRecordDO.getUserId() );
         memberPointRecordRespVO.setBizId( memberPointRecordDO.getBizId() );
         memberPointRecordRespVO.setBizType( memberPointRecordDO.getBizType() );
-        memberPointRecordRespVO.setTitle( memberPointRecordDO.getTitle() );
-        memberPointRecordRespVO.setDescription( memberPointRecordDO.getDescription() );
-        memberPointRecordRespVO.setPoint( memberPointRecordDO.getPoint() );
-        memberPointRecordRespVO.setTotalPoint( memberPointRecordDO.getTotalPoint() );
         memberPointRecordRespVO.setCreateTime( memberPointRecordDO.getCreateTime() );
+        memberPointRecordRespVO.setDescription( memberPointRecordDO.getDescription() );
+        memberPointRecordRespVO.setId( memberPointRecordDO.getId() );
+        memberPointRecordRespVO.setPoint( memberPointRecordDO.getPoint() );
+        memberPointRecordRespVO.setTitle( memberPointRecordDO.getTitle() );
+        memberPointRecordRespVO.setTotalPoint( memberPointRecordDO.getTotalPoint() );
+        memberPointRecordRespVO.setUserId( memberPointRecordDO.getUserId() );
 
         return memberPointRecordRespVO;
     }

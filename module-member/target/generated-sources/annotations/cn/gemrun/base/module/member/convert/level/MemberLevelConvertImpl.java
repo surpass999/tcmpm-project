@@ -13,8 +13,8 @@ import javax.annotation.Generated;
 
 @Generated(
     value = "org.mapstruct.ap.MappingProcessor",
-    date = "2026-02-09T17:50:52+0800",
-    comments = "version: 1.6.3, compiler: javac, environment: Java 1.8.0_371 (Oracle Corporation)"
+    date = "2026-02-12T21:04:58+0800",
+    comments = "version: 1.6.3, compiler: Eclipse JDT (IDE) 3.45.0.v20260128-0750, environment: Java 21.0.9 (Eclipse Adoptium)"
 )
 public class MemberLevelConvertImpl implements MemberLevelConvert {
 
@@ -26,12 +26,12 @@ public class MemberLevelConvertImpl implements MemberLevelConvert {
 
         MemberLevelDO.MemberLevelDOBuilder memberLevelDO = MemberLevelDO.builder();
 
-        memberLevelDO.name( bean.getName() );
-        memberLevelDO.level( bean.getLevel() );
-        memberLevelDO.experience( bean.getExperience() );
-        memberLevelDO.discountPercent( bean.getDiscountPercent() );
-        memberLevelDO.icon( bean.getIcon() );
         memberLevelDO.backgroundUrl( bean.getBackgroundUrl() );
+        memberLevelDO.discountPercent( bean.getDiscountPercent() );
+        memberLevelDO.experience( bean.getExperience() );
+        memberLevelDO.icon( bean.getIcon() );
+        memberLevelDO.level( bean.getLevel() );
+        memberLevelDO.name( bean.getName() );
         memberLevelDO.status( bean.getStatus() );
 
         return memberLevelDO.build();
@@ -45,13 +45,13 @@ public class MemberLevelConvertImpl implements MemberLevelConvert {
 
         MemberLevelDO.MemberLevelDOBuilder memberLevelDO = MemberLevelDO.builder();
 
-        memberLevelDO.id( bean.getId() );
-        memberLevelDO.name( bean.getName() );
-        memberLevelDO.level( bean.getLevel() );
-        memberLevelDO.experience( bean.getExperience() );
-        memberLevelDO.discountPercent( bean.getDiscountPercent() );
-        memberLevelDO.icon( bean.getIcon() );
         memberLevelDO.backgroundUrl( bean.getBackgroundUrl() );
+        memberLevelDO.discountPercent( bean.getDiscountPercent() );
+        memberLevelDO.experience( bean.getExperience() );
+        memberLevelDO.icon( bean.getIcon() );
+        memberLevelDO.id( bean.getId() );
+        memberLevelDO.level( bean.getLevel() );
+        memberLevelDO.name( bean.getName() );
         memberLevelDO.status( bean.getStatus() );
 
         return memberLevelDO.build();
@@ -65,15 +65,15 @@ public class MemberLevelConvertImpl implements MemberLevelConvert {
 
         MemberLevelRespVO memberLevelRespVO = new MemberLevelRespVO();
 
-        memberLevelRespVO.setName( bean.getName() );
-        memberLevelRespVO.setExperience( bean.getExperience() );
-        memberLevelRespVO.setLevel( bean.getLevel() );
-        memberLevelRespVO.setDiscountPercent( bean.getDiscountPercent() );
-        memberLevelRespVO.setIcon( bean.getIcon() );
         memberLevelRespVO.setBackgroundUrl( bean.getBackgroundUrl() );
+        memberLevelRespVO.setDiscountPercent( bean.getDiscountPercent() );
+        memberLevelRespVO.setExperience( bean.getExperience() );
+        memberLevelRespVO.setIcon( bean.getIcon() );
+        memberLevelRespVO.setLevel( bean.getLevel() );
+        memberLevelRespVO.setName( bean.getName() );
         memberLevelRespVO.setStatus( bean.getStatus() );
-        memberLevelRespVO.setId( bean.getId() );
         memberLevelRespVO.setCreateTime( bean.getCreateTime() );
+        memberLevelRespVO.setId( bean.getId() );
 
         return memberLevelRespVO;
     }
@@ -128,11 +128,11 @@ public class MemberLevelConvertImpl implements MemberLevelConvert {
 
         MemberLevelRespDTO memberLevelRespDTO = new MemberLevelRespDTO();
 
-        memberLevelRespDTO.setId( bean.getId() );
-        memberLevelRespDTO.setName( bean.getName() );
-        memberLevelRespDTO.setLevel( bean.getLevel() );
-        memberLevelRespDTO.setExperience( bean.getExperience() );
         memberLevelRespDTO.setDiscountPercent( bean.getDiscountPercent() );
+        memberLevelRespDTO.setExperience( bean.getExperience() );
+        memberLevelRespDTO.setId( bean.getId() );
+        memberLevelRespDTO.setLevel( bean.getLevel() );
+        memberLevelRespDTO.setName( bean.getName() );
         memberLevelRespDTO.setStatus( bean.getStatus() );
 
         return memberLevelRespDTO;
@@ -145,9 +145,9 @@ public class MemberLevelConvertImpl implements MemberLevelConvert {
 
         MemberLevelSimpleRespVO memberLevelSimpleRespVO = new MemberLevelSimpleRespVO();
 
+        memberLevelSimpleRespVO.setIcon( memberLevelDO.getIcon() );
         memberLevelSimpleRespVO.setId( memberLevelDO.getId() );
         memberLevelSimpleRespVO.setName( memberLevelDO.getName() );
-        memberLevelSimpleRespVO.setIcon( memberLevelDO.getIcon() );
 
         return memberLevelSimpleRespVO;
     }
@@ -159,12 +159,12 @@ public class MemberLevelConvertImpl implements MemberLevelConvert {
 
         AppMemberLevelRespVO appMemberLevelRespVO = new AppMemberLevelRespVO();
 
-        appMemberLevelRespVO.setName( memberLevelDO.getName() );
-        appMemberLevelRespVO.setLevel( memberLevelDO.getLevel() );
-        appMemberLevelRespVO.setExperience( memberLevelDO.getExperience() );
-        appMemberLevelRespVO.setDiscountPercent( memberLevelDO.getDiscountPercent() );
-        appMemberLevelRespVO.setIcon( memberLevelDO.getIcon() );
         appMemberLevelRespVO.setBackgroundUrl( memberLevelDO.getBackgroundUrl() );
+        appMemberLevelRespVO.setDiscountPercent( memberLevelDO.getDiscountPercent() );
+        appMemberLevelRespVO.setExperience( memberLevelDO.getExperience() );
+        appMemberLevelRespVO.setIcon( memberLevelDO.getIcon() );
+        appMemberLevelRespVO.setLevel( memberLevelDO.getLevel() );
+        appMemberLevelRespVO.setName( memberLevelDO.getName() );
 
         return appMemberLevelRespVO;
     }

@@ -11,8 +11,8 @@ import javax.annotation.Generated;
 
 @Generated(
     value = "org.mapstruct.ap.MappingProcessor",
-    date = "2026-02-09T17:50:52+0800",
-    comments = "version: 1.6.3, compiler: javac, environment: Java 1.8.0_371 (Oracle Corporation)"
+    date = "2026-02-12T21:04:58+0800",
+    comments = "version: 1.6.3, compiler: Eclipse JDT (IDE) 3.45.0.v20260128-0750, environment: Java 21.0.9 (Eclipse Adoptium)"
 )
 public class MemberSignInConfigConvertImpl implements MemberSignInConfigConvert {
 
@@ -25,8 +25,8 @@ public class MemberSignInConfigConvertImpl implements MemberSignInConfigConvert 
         MemberSignInConfigDO.MemberSignInConfigDOBuilder memberSignInConfigDO = MemberSignInConfigDO.builder();
 
         memberSignInConfigDO.day( bean.getDay() );
-        memberSignInConfigDO.point( bean.getPoint() );
         memberSignInConfigDO.experience( bean.getExperience() );
+        memberSignInConfigDO.point( bean.getPoint() );
         memberSignInConfigDO.status( bean.getStatus() );
 
         return memberSignInConfigDO.build();
@@ -40,10 +40,10 @@ public class MemberSignInConfigConvertImpl implements MemberSignInConfigConvert 
 
         MemberSignInConfigDO.MemberSignInConfigDOBuilder memberSignInConfigDO = MemberSignInConfigDO.builder();
 
-        memberSignInConfigDO.id( bean.getId() );
         memberSignInConfigDO.day( bean.getDay() );
-        memberSignInConfigDO.point( bean.getPoint() );
         memberSignInConfigDO.experience( bean.getExperience() );
+        memberSignInConfigDO.id( bean.getId() );
+        memberSignInConfigDO.point( bean.getPoint() );
         memberSignInConfigDO.status( bean.getStatus() );
 
         return memberSignInConfigDO.build();
@@ -58,13 +58,13 @@ public class MemberSignInConfigConvertImpl implements MemberSignInConfigConvert 
         MemberSignInConfigRespVO memberSignInConfigRespVO = new MemberSignInConfigRespVO();
 
         memberSignInConfigRespVO.setDay( bean.getDay() );
-        memberSignInConfigRespVO.setPoint( bean.getPoint() );
         memberSignInConfigRespVO.setExperience( bean.getExperience() );
+        memberSignInConfigRespVO.setPoint( bean.getPoint() );
         memberSignInConfigRespVO.setStatus( bean.getStatus() );
+        memberSignInConfigRespVO.setCreateTime( bean.getCreateTime() );
         if ( bean.getId() != null ) {
             memberSignInConfigRespVO.setId( bean.getId().intValue() );
         }
-        memberSignInConfigRespVO.setCreateTime( bean.getCreateTime() );
 
         return memberSignInConfigRespVO;
     }

@@ -14,8 +14,8 @@ import javax.annotation.Generated;
 
 @Generated(
     value = "org.mapstruct.ap.MappingProcessor",
-    date = "2026-02-09T17:50:52+0800",
-    comments = "version: 1.6.3, compiler: javac, environment: Java 1.8.0_371 (Oracle Corporation)"
+    date = "2026-02-12T21:04:58+0800",
+    comments = "version: 1.6.3, compiler: Eclipse JDT (IDE) 3.45.0.v20260128-0750, environment: Java 21.0.9 (Eclipse Adoptium)"
 )
 public class MemberUserConvertImpl implements MemberUserConvert {
 
@@ -29,13 +29,13 @@ public class MemberUserConvertImpl implements MemberUserConvert {
 
         AppMemberUserInfoRespVO appMemberUserInfoRespVO = new AppMemberUserInfoRespVO();
 
-        appMemberUserInfoRespVO.setId( bean.getId() );
-        appMemberUserInfoRespVO.setNickname( bean.getNickname() );
         appMemberUserInfoRespVO.setAvatar( bean.getAvatar() );
-        appMemberUserInfoRespVO.setMobile( bean.getMobile() );
-        appMemberUserInfoRespVO.setSex( bean.getSex() );
-        appMemberUserInfoRespVO.setPoint( bean.getPoint() );
         appMemberUserInfoRespVO.setExperience( bean.getExperience() );
+        appMemberUserInfoRespVO.setId( bean.getId() );
+        appMemberUserInfoRespVO.setMobile( bean.getMobile() );
+        appMemberUserInfoRespVO.setNickname( bean.getNickname() );
+        appMemberUserInfoRespVO.setPoint( bean.getPoint() );
+        appMemberUserInfoRespVO.setSex( bean.getSex() );
 
         return appMemberUserInfoRespVO;
     }
@@ -51,11 +51,11 @@ public class MemberUserConvertImpl implements MemberUserConvert {
         if ( bean != null ) {
             appMemberUserInfoRespVO.setId( bean.getId() );
             appMemberUserInfoRespVO.setExperience( bean.getExperience() );
-            appMemberUserInfoRespVO.setNickname( bean.getNickname() );
             appMemberUserInfoRespVO.setAvatar( bean.getAvatar() );
             appMemberUserInfoRespVO.setMobile( bean.getMobile() );
-            appMemberUserInfoRespVO.setSex( bean.getSex() );
+            appMemberUserInfoRespVO.setNickname( bean.getNickname() );
             appMemberUserInfoRespVO.setPoint( bean.getPoint() );
+            appMemberUserInfoRespVO.setSex( bean.getSex() );
         }
         appMemberUserInfoRespVO.setLevel( memberLevelDOToLevel( level ) );
 
@@ -70,14 +70,14 @@ public class MemberUserConvertImpl implements MemberUserConvert {
 
         MemberUserRespDTO memberUserRespDTO = new MemberUserRespDTO();
 
-        memberUserRespDTO.setId( bean.getId() );
-        memberUserRespDTO.setNickname( bean.getNickname() );
-        memberUserRespDTO.setStatus( bean.getStatus() );
         memberUserRespDTO.setAvatar( bean.getAvatar() );
-        memberUserRespDTO.setMobile( bean.getMobile() );
         memberUserRespDTO.setCreateTime( bean.getCreateTime() );
+        memberUserRespDTO.setId( bean.getId() );
         memberUserRespDTO.setLevelId( bean.getLevelId() );
+        memberUserRespDTO.setMobile( bean.getMobile() );
+        memberUserRespDTO.setNickname( bean.getNickname() );
         memberUserRespDTO.setPoint( bean.getPoint() );
+        memberUserRespDTO.setStatus( bean.getStatus() );
 
         return memberUserRespDTO;
     }
@@ -104,26 +104,26 @@ public class MemberUserConvertImpl implements MemberUserConvert {
 
         MemberUserDO.MemberUserDOBuilder memberUserDO = MemberUserDO.builder();
 
-        memberUserDO.id( bean.getId() );
-        memberUserDO.mobile( bean.getMobile() );
-        if ( bean.getStatus() != null ) {
-            memberUserDO.status( bean.getStatus().intValue() );
-        }
-        memberUserDO.nickname( bean.getNickname() );
-        memberUserDO.avatar( bean.getAvatar() );
-        memberUserDO.name( bean.getName() );
-        memberUserDO.sex( bean.getSex() );
-        memberUserDO.birthday( bean.getBirthday() );
         if ( bean.getAreaId() != null ) {
             memberUserDO.areaId( bean.getAreaId().intValue() );
         }
+        memberUserDO.avatar( bean.getAvatar() );
+        memberUserDO.birthday( bean.getBirthday() );
+        memberUserDO.groupId( bean.getGroupId() );
+        memberUserDO.id( bean.getId() );
+        memberUserDO.levelId( bean.getLevelId() );
         memberUserDO.mark( bean.getMark() );
+        memberUserDO.mobile( bean.getMobile() );
+        memberUserDO.name( bean.getName() );
+        memberUserDO.nickname( bean.getNickname() );
+        memberUserDO.sex( bean.getSex() );
+        if ( bean.getStatus() != null ) {
+            memberUserDO.status( bean.getStatus().intValue() );
+        }
         List<Long> list = bean.getTagIds();
         if ( list != null ) {
             memberUserDO.tagIds( new ArrayList<Long>( list ) );
         }
-        memberUserDO.levelId( bean.getLevelId() );
-        memberUserDO.groupId( bean.getGroupId() );
 
         return memberUserDO.build();
     }
@@ -151,32 +151,32 @@ public class MemberUserConvertImpl implements MemberUserConvert {
         MemberUserRespVO memberUserRespVO = new MemberUserRespVO();
 
         memberUserRespVO.setAreaName( addressConvert.convertAreaIdToAreaName( bean.getAreaId() ) );
-        memberUserRespVO.setMobile( bean.getMobile() );
-        if ( bean.getStatus() != null ) {
-            memberUserRespVO.setStatus( bean.getStatus().byteValue() );
-        }
-        memberUserRespVO.setNickname( bean.getNickname() );
-        memberUserRespVO.setAvatar( bean.getAvatar() );
-        memberUserRespVO.setName( bean.getName() );
-        memberUserRespVO.setSex( bean.getSex() );
         if ( bean.getAreaId() != null ) {
             memberUserRespVO.setAreaId( bean.getAreaId().longValue() );
         }
+        memberUserRespVO.setAvatar( bean.getAvatar() );
         memberUserRespVO.setBirthday( bean.getBirthday() );
+        memberUserRespVO.setGroupId( bean.getGroupId() );
+        memberUserRespVO.setLevelId( bean.getLevelId() );
         memberUserRespVO.setMark( bean.getMark() );
+        memberUserRespVO.setMobile( bean.getMobile() );
+        memberUserRespVO.setName( bean.getName() );
+        memberUserRespVO.setNickname( bean.getNickname() );
+        memberUserRespVO.setSex( bean.getSex() );
+        if ( bean.getStatus() != null ) {
+            memberUserRespVO.setStatus( bean.getStatus().byteValue() );
+        }
         List<Long> list = bean.getTagIds();
         if ( list != null ) {
             memberUserRespVO.setTagIds( new ArrayList<Long>( list ) );
         }
-        memberUserRespVO.setLevelId( bean.getLevelId() );
-        memberUserRespVO.setGroupId( bean.getGroupId() );
-        memberUserRespVO.setId( bean.getId() );
-        memberUserRespVO.setRegisterIp( bean.getRegisterIp() );
-        memberUserRespVO.setLoginIp( bean.getLoginIp() );
-        memberUserRespVO.setLoginDate( bean.getLoginDate() );
         memberUserRespVO.setCreateTime( bean.getCreateTime() );
-        memberUserRespVO.setPoint( bean.getPoint() );
         memberUserRespVO.setExperience( bean.getExperience() );
+        memberUserRespVO.setId( bean.getId() );
+        memberUserRespVO.setLoginDate( bean.getLoginDate() );
+        memberUserRespVO.setLoginIp( bean.getLoginIp() );
+        memberUserRespVO.setPoint( bean.getPoint() );
+        memberUserRespVO.setRegisterIp( bean.getRegisterIp() );
 
         return memberUserRespVO;
     }
@@ -188,10 +188,10 @@ public class MemberUserConvertImpl implements MemberUserConvert {
 
         AppMemberUserInfoRespVO.Level level = new AppMemberUserInfoRespVO.Level();
 
-        level.setId( memberLevelDO.getId() );
-        level.setName( memberLevelDO.getName() );
-        level.setLevel( memberLevelDO.getLevel() );
         level.setIcon( memberLevelDO.getIcon() );
+        level.setId( memberLevelDO.getId() );
+        level.setLevel( memberLevelDO.getLevel() );
+        level.setName( memberLevelDO.getName() );
 
         return level;
     }

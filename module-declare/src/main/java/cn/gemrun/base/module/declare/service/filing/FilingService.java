@@ -59,4 +59,31 @@ public interface FilingService {
      */
     PageResult<FilingDO> getFilingPage(FilingPageReqVO pageReqVO);
 
+    // ========== 流程相关方法 ==========
+
+    /**
+     * 提交备案
+     * 状态变更为：已提交
+     * 由 @DeclareProcess 注解自动触发流程
+     *
+     * @param id 备案ID
+     */
+    void submitFiling(Long id);
+
+    /**
+     * 撤回备案
+     * 状态变更为：草稿
+     *
+     * @param id 备案ID
+     */
+    void withdrawFiling(Long id);
+
+    /**
+     * 重新提交备案
+     * 状态变更为：已提交
+     *
+     * @param id 备案ID
+     */
+    void resubmitFiling(Long id);
+
 }

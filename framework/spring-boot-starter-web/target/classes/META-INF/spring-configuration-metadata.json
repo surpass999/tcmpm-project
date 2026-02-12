@@ -18,17 +18,20 @@
     {
       "name": "base.web.admin-api",
       "type": "cn.gemrun.base.framework.web.config.WebProperties$Api",
-      "sourceType": "cn.gemrun.base.framework.web.config.WebProperties"
+      "sourceType": "cn.gemrun.base.framework.web.config.WebProperties",
+      "sourceMethod": "public cn.gemrun.base.framework.web.config.WebProperties.Api getAdminApi() "
     },
     {
       "name": "base.web.admin-ui",
       "type": "cn.gemrun.base.framework.web.config.WebProperties$Ui",
-      "sourceType": "cn.gemrun.base.framework.web.config.WebProperties"
+      "sourceType": "cn.gemrun.base.framework.web.config.WebProperties",
+      "sourceMethod": "public cn.gemrun.base.framework.web.config.WebProperties.Ui getAdminUi() "
     },
     {
       "name": "base.web.app-api",
       "type": "cn.gemrun.base.framework.web.config.WebProperties$Api",
-      "sourceType": "cn.gemrun.base.framework.web.config.WebProperties"
+      "sourceType": "cn.gemrun.base.framework.web.config.WebProperties",
+      "sourceMethod": "public cn.gemrun.base.framework.web.config.WebProperties.Api getAppApi() "
     },
     {
       "name": "base.xss",
@@ -53,8 +56,7 @@
       "name": "base.api-encrypt.header",
       "type": "java.lang.String",
       "description": "请求头（响应头）名称 1. 如果该请求头非空，则表示请求参数已被「前端」加密，「后端」需要解密 2. 如果该响应头非空，则表示响应结果已被「后端」加密，「前端」需要解密",
-      "sourceType": "cn.gemrun.base.framework.encrypt.config.ApiEncryptProperties",
-      "defaultValue": "X-Api-Encrypt"
+      "sourceType": "cn.gemrun.base.framework.encrypt.config.ApiEncryptProperties"
     },
     {
       "name": "base.api-encrypt.request-key",
@@ -150,8 +152,7 @@
       "name": "base.xss.enable",
       "type": "java.lang.Boolean",
       "description": "是否开启，默认为 true",
-      "sourceType": "cn.gemrun.base.framework.xss.config.XssProperties",
-      "defaultValue": true
+      "sourceType": "cn.gemrun.base.framework.xss.config.XssProperties"
     },
     {
       "name": "base.xss.exclude-urls",

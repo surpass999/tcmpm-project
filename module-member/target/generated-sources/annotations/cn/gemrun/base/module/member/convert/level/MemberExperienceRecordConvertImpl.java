@@ -10,8 +10,8 @@ import javax.annotation.Generated;
 
 @Generated(
     value = "org.mapstruct.ap.MappingProcessor",
-    date = "2026-02-09T17:50:52+0800",
-    comments = "version: 1.6.3, compiler: javac, environment: Java 1.8.0_371 (Oracle Corporation)"
+    date = "2026-02-12T21:04:58+0800",
+    comments = "version: 1.6.3, compiler: Eclipse JDT (IDE) 3.45.0.v20260128-0750, environment: Java 21.0.9 (Eclipse Adoptium)"
 )
 public class MemberExperienceRecordConvertImpl implements MemberExperienceRecordConvert {
 
@@ -23,15 +23,15 @@ public class MemberExperienceRecordConvertImpl implements MemberExperienceRecord
 
         MemberExperienceRecordRespVO memberExperienceRecordRespVO = new MemberExperienceRecordRespVO();
 
-        memberExperienceRecordRespVO.setUserId( bean.getUserId() );
         memberExperienceRecordRespVO.setBizId( bean.getBizId() );
         memberExperienceRecordRespVO.setBizType( bean.getBizType() );
-        memberExperienceRecordRespVO.setTitle( bean.getTitle() );
-        memberExperienceRecordRespVO.setExperience( bean.getExperience() );
-        memberExperienceRecordRespVO.setTotalExperience( bean.getTotalExperience() );
         memberExperienceRecordRespVO.setDescription( bean.getDescription() );
-        memberExperienceRecordRespVO.setId( bean.getId() );
+        memberExperienceRecordRespVO.setExperience( bean.getExperience() );
+        memberExperienceRecordRespVO.setTitle( bean.getTitle() );
+        memberExperienceRecordRespVO.setTotalExperience( bean.getTotalExperience() );
+        memberExperienceRecordRespVO.setUserId( bean.getUserId() );
         memberExperienceRecordRespVO.setCreateTime( bean.getCreateTime() );
+        memberExperienceRecordRespVO.setId( bean.getId() );
 
         return memberExperienceRecordRespVO;
     }
@@ -104,10 +104,10 @@ public class MemberExperienceRecordConvertImpl implements MemberExperienceRecord
 
         AppMemberExperienceRecordRespVO appMemberExperienceRecordRespVO = new AppMemberExperienceRecordRespVO();
 
-        appMemberExperienceRecordRespVO.setTitle( memberExperienceRecordDO.getTitle() );
-        appMemberExperienceRecordRespVO.setExperience( memberExperienceRecordDO.getExperience() );
-        appMemberExperienceRecordRespVO.setDescription( memberExperienceRecordDO.getDescription() );
         appMemberExperienceRecordRespVO.setCreateTime( memberExperienceRecordDO.getCreateTime() );
+        appMemberExperienceRecordRespVO.setDescription( memberExperienceRecordDO.getDescription() );
+        appMemberExperienceRecordRespVO.setExperience( memberExperienceRecordDO.getExperience() );
+        appMemberExperienceRecordRespVO.setTitle( memberExperienceRecordDO.getTitle() );
 
         return appMemberExperienceRecordRespVO;
     }
