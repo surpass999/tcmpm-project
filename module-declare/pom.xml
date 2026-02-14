@@ -27,6 +27,17 @@
             <artifactId>module-infra</artifactId>
             <version>${revision}</version>
         </dependency>
+        <dependency>
+            <groupId>cn.gemrun</groupId>
+            <artifactId>module-bpm</artifactId>
+            <version>${revision}</version>
+        </dependency>
+
+        <!-- Web 相关 -->
+        <dependency>
+            <groupId>cn.gemrun</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
 
         <!-- 根据需要增加常用依赖 -->
         <dependency>

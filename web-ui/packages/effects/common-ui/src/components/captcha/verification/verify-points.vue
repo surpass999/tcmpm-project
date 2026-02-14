@@ -152,8 +152,9 @@ function canvasClick(e: any) {
         token: backToken.value,
       };
       checkCaptchaApi?.value?.(data).then((response: any) => {
-        const res = response.data;
-        if (res.repCode === '0000') {
+        // 从 CommonResult 中提取验证码校验结果
+        const res = response.data?.data;
+        if (res?.repCode === '0000' || res?.code === 0) {
           barAreaColor.value = '#4cae4c';
           barAreaBorderColor.value = '#5cb85c';
           text.value = $t('ui.captcha.sliderSuccessText');
@@ -188,14 +189,21 @@ async function getPictrue() {
   };
   const res = await getCaptchaApi?.value?.(data);
 
-  if (res?.data?.repCode === '0000') {
-    pointBackImgBase.value = `data:image/png;base64,${res?.data?.repData?.originalImageBase64}`;
-    backToken.value = res.data.repData.token;
-    secretKey.value = res.data.repData.secretKey;
-    poinTextList.value = res.data.repData.wordList;
+  // 从 CommonResult 中提取验证码数据
+  // 响应格式：{ code: 0, msg: "", data: { repCode: "0000", repData: {...} } }
+  // res.data = CommonResult的响应体 = { code: 0, msg: "", data: {...} }
+  // res.data.data = CommonResult的data字段 = anji-captcha的响应 = { repCode: "0000", repData: {...} }
+  const captchaResponse = res?.data?.data;
+
+  if (captchaResponse?.repCode === '0000' || captchaResponse?.code === 0) {
+    const captchaData = captchaResponse?.repData || captchaResponse?.data;
+    pointBackImgBase.value = `data:image/png;base64,${captchaData?.originalImageBase64}`;
+    backToken.value = captchaData?.token;
+    secretKey.value = captchaData?.secretKey;
+    poinTextList.value = captchaData?.wordList;
     text.value = `${$t('ui.captcha.clickInOrder')}【${poinTextList.value.join(',')}】`;
   } else {
-    text.value = res?.data?.repMsg;
+    text.value = captchaResponse?.repMsg || captchaResponse?.msg;
   }
 }
 defineExpose({

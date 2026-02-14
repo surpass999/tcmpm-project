@@ -1,7 +1,9 @@
 package cn.gemrun.base.module.declare.dal.mysql.process;
 
+import cn.gemrun.base.framework.mybatis.core.mapper.BaseMapperX;
 import cn.gemrun.base.module.declare.dal.dataobject.process.DeclareBusinessProcessDO;
 import org.apache.ibatis.annotations.*;
+import org.apache.ibatis.annotations.Mapper;
 import java.util.*;
 
 /**
@@ -9,7 +11,8 @@ import java.util.*;
  *
  * @author Gemini
  */
-public interface DeclareBusinessProcessMapper {
+@Mapper
+public interface DeclareBusinessProcessMapper extends BaseMapperX<DeclareBusinessProcessDO> {
 
     /**
      * 根据业务类型和业务ID查询

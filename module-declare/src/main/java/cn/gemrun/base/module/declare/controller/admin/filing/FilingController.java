@@ -13,6 +13,8 @@ import javax.validation.*;
 import java.util.*;
 
 import cn.gemrun.base.framework.common.pojo.CommonResult;
+import cn.gemrun.base.framework.common.pojo.PageResult;
+import cn.gemrun.base.framework.common.util.object.BeanUtils;
 import static cn.gemrun.base.framework.common.pojo.CommonResult.success;
 
 import cn.gemrun.base.module.declare.controller.admin.filing.vo.*;

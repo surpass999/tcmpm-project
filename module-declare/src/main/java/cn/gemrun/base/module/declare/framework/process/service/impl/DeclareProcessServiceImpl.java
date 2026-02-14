@@ -1,25 +1,28 @@
 package cn.gemrun.base.module.declare.framework.process.service.impl;
 
-import cn.gemrun.base.framework.flowable.core.util.FlowableUtils;
+import cn.gemrun.base.module.bpm.framework.flowable.core.util.FlowableUtils;
 import cn.gemrun.base.module.declare.dal.dataobject.process.DeclareBusinessProcessDO;
 import cn.gemrun.base.module.declare.dal.dataobject.process.DeclareBusinessTypeDO;
 import cn.gemrun.base.module.declare.dal.mysql.process.DeclareBusinessProcessMapper;
 import cn.gemrun.base.module.declare.dal.mysql.process.DeclareBusinessTypeMapper;
 import cn.gemrun.base.module.declare.framework.process.service.DeclareProcessService;
-import cn.gemrun.base.module.bpm.enums.ErrorCodeConstants;
+import cn.gemrun.base.module.declare.enums.ErrorCodeConstants;
 import cn.gemrun.base.module.bpm.service.definition.BpmProcessDefinitionService;
-import cn.gemrun.base.framework.core.util.WebFrameworkUtils;
+import cn.gemrun.base.framework.web.core.util.WebFrameworkUtils;
+import cn.gemrun.base.framework.common.exception.util.ServiceExceptionUtil;
 import cn.hutool.core.util.*;
 import lombok.extern.slf4j.*;
 import org.flowable.engine.*;
 import org.flowable.engine.runtime.ProcessInstance;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.*;
+import org.springframework.util.Assert;
 
 import javax.annotation.Resource;
 import java.time.LocalDateTime;
 import java.util.*;
+
+import static cn.gemrun.base.framework.common.exception.util.ServiceExceptionUtil.exception;
 
 /**
  * 流程配置服务实现
@@ -44,7 +47,7 @@ public class DeclareProcessServiceImpl implements DeclareProcessService {
 
     @Override
     public DeclareBusinessTypeDO getProcessConfig(String businessType) {
-        Assert.notBlank(businessType, "businessType 不能为空");
+        Assert.notNull(businessType, "businessType 不能为空");
         return businessTypeMapper.selectByBusinessType(businessType);
     }
 
@@ -110,7 +113,7 @@ public class DeclareProcessServiceImpl implements DeclareProcessService {
     public String startProcess(String businessType, Long businessId, Long userId) {
         DeclareBusinessTypeDO config = getProcessConfig(businessType);
         if (config == null || config.getEnabled() != 1) {
-            throw exception(ErrorCodeConstants.PROCESS_CONFIG_NOT_FOUND, businessType);
+            throw ServiceExceptionUtil.exception(ErrorCodeConstants.PROCESS_CONFIG_NOT_FOUND);
         }
         return startProcessIfConfigured(businessType, businessId, userId);
     }
@@ -208,13 +211,6 @@ public class DeclareProcessServiceImpl implements DeclareProcessService {
         businessProcess.setStartTime(LocalDateTime.now());
         businessProcess.setCurrentStatus("STARTED");
         businessProcessMapper.insert(businessProcess);
-    }
-
-    /**
-     * 抛出业务异常
-     */
-    private RuntimeException exception(ErrorCodeConstants code, Object... args) {
-        return new RuntimeException(String.format(code.getMsg(), args));
     }
 
 }

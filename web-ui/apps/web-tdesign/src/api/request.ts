@@ -128,9 +128,9 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
   // 处理返回的响应数据格式
   client.addResponseInterceptor(
     defaultResponseInterceptor({
-      codeField: 'code',
-      dataField: 'data',
-      successCode: 0,
+      codeField: 'repCode',
+      dataField: 'repData',
+      successCode: '0000',
     }),
   );
 
@@ -184,3 +184,12 @@ baseRequestClient.addRequestInterceptor({
     return config;
   },
 });
+
+// baseRequestClient 也需要配置响应拦截器
+baseRequestClient.addResponseInterceptor(
+  defaultResponseInterceptor({
+    codeField: 'repCode',
+    dataField: 'repData',
+    successCode: '0000',
+  }),
+);

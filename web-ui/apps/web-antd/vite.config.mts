@@ -16,6 +16,10 @@ export default defineConfig(async () => {
           },
         },
       },
+      define: {
+        // 禁用租户功能（后端已删除租户模块）
+        'import.meta.env.VITE_APP_TENANT_ENABLE': 'false',
+      },
     },
   };
 });

@@ -1,6 +1,0 @@
-cn/gemrun/base/framework/redis/config/BaseCacheProperties.class
-cn/gemrun/base/framework/redis/package-info.class
-META-INF/spring-configuration-metadata.json
-cn/gemrun/base/framework/redis/config/BaseRedisAutoConfiguration.class
-cn/gemrun/base/framework/redis/core/TimeoutRedisCacheManager.class
-cn/gemrun/base/framework/redis/config/BaseCacheAutoConfiguration.class

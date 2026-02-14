@@ -1,5 +1,6 @@
 package cn.gemrun.base.module.system.controller.admin.captcha;
 
+import cn.gemrun.base.framework.common.pojo.CommonResult;
 import cn.hutool.core.util.StrUtil;
 import cn.gemrun.base.framework.common.util.servlet.ServletUtils;
 import com.anji.captcha.model.common.ResponseModel;
@@ -27,18 +28,20 @@ public class CaptchaController {
     @PostMapping({"/get"})
     @Operation(summary = "获得验证码")
     @PermitAll
-    public ResponseModel get(@RequestBody CaptchaVO data, HttpServletRequest request) {
+    public CommonResult<ResponseModel> get(@RequestBody CaptchaVO data, HttpServletRequest request) {
         assert request.getRemoteHost() != null;
         data.setBrowserInfo(getRemoteId(request));
-        return captchaService.get(data);
+        ResponseModel response = captchaService.get(data);
+        return CommonResult.success(response);
     }
 
     @PostMapping("/check")
     @Operation(summary = "校验验证码")
     @PermitAll
-    public ResponseModel check(@RequestBody CaptchaVO data, HttpServletRequest request) {
+    public CommonResult<ResponseModel> check(@RequestBody CaptchaVO data, HttpServletRequest request) {
         data.setBrowserInfo(getRemoteId(request));
-        return captchaService.check(data);
+        ResponseModel response = captchaService.check(data);
+        return CommonResult.success(response);
     }
 
     public static String getRemoteId(HttpServletRequest request) {

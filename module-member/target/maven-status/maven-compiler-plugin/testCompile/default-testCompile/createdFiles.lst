@@ -1,6 +1,0 @@
-cn/gemrun/base/module/member/service/auth/MemberAuthServiceTest.class
-cn/gemrun/base/module/member/service/address/MemberAddressServiceImplTest.class
-cn/gemrun/base/module/member/service/tag/MemberTagServiceImplTest.class
-cn/gemrun/base/module/member/service/level/MemberLevelServiceImplTest.class
-cn/gemrun/base/module/member/service/group/MemberGroupServiceImplTest.class
-cn/gemrun/base/module/member/service/user/MemberUserServiceImplTest.class

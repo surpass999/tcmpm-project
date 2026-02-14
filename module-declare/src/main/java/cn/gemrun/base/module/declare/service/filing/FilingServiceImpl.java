@@ -66,10 +66,12 @@ public class FilingServiceImpl implements FilingService {
         }
 
 
-    private void validateFilingExists(Long id) {
-        if (filingMapper.selectById(id) == null) {
+    private FilingDO validateFilingExists(Long id) {
+        FilingDO filing = filingMapper.selectById(id);
+        if (filing == null) {
             throw exception(FILING_NOT_EXISTS);
         }
+        return filing;
     }
 
     @Override

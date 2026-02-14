@@ -4,6 +4,7 @@
 import type { RequestClientOptions } from '@vben/request';
 
 import { isTenantEnable, useAppConfig } from '@vben/hooks';
+import { LOGIN_PATH } from '@vben/constants';
 import { preferences } from '@vben/preferences';
 import {
   authenticateResponseInterceptor,
@@ -15,6 +16,7 @@ import { useAccessStore } from '@vben/stores';
 import { createApiEncrypt } from '@vben/utils';
 
 import { message } from 'ant-design-vue';
+import { useRoute } from 'vue-router';
 
 import { useAuthStore } from '#/store';
 
@@ -35,6 +37,14 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
    */
   async function doReAuthenticate() {
     console.warn('Access token or refresh token is invalid or expired. ');
+
+    // 判断当前是否在登录页面，如果在登录页面则不需要跳转
+    const route = useRoute();
+    if (route.path === LOGIN_PATH || route.path.startsWith('/auth/login')) {
+      console.warn('Already on login page, skip redirect.');
+      return;
+    }
+
     const accessStore = useAccessStore();
     const authStore = useAuthStore();
     accessStore.setAccessToken(null);
@@ -185,3 +195,12 @@ baseRequestClient.addRequestInterceptor({
     return config;
   },
 });
+
+// baseRequestClient 也需要配置响应拦截器，用于处理验证码等接口的响应格式
+baseRequestClient.addResponseInterceptor(
+  defaultResponseInterceptor({
+    codeField: 'code',
+    dataField: 'data',
+    successCode: 0,
+  }),
+);

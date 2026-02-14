@@ -1,6 +1,0 @@
-/www/wwwroot/tcmpm/framework/spring-boot-starter-biz-data-permission/src/test/java/cn/gemrun/base/framework/datapermission/core/aop/DataPermissionAnnotationInterceptorTest.java
-/www/wwwroot/tcmpm/framework/spring-boot-starter-biz-data-permission/src/test/java/cn/gemrun/base/framework/datapermission/core/aop/DataPermissionContextHolderTest.java
-/www/wwwroot/tcmpm/framework/spring-boot-starter-biz-data-permission/src/test/java/cn/gemrun/base/framework/datapermission/core/db/DataPermissionRuleHandlerTest.java
-/www/wwwroot/tcmpm/framework/spring-boot-starter-biz-data-permission/src/test/java/cn/gemrun/base/framework/datapermission/core/rule/DataPermissionRuleFactoryImplTest.java
-/www/wwwroot/tcmpm/framework/spring-boot-starter-biz-data-permission/src/test/java/cn/gemrun/base/framework/datapermission/core/rule/dept/DeptDataPermissionRuleTest.java
-/www/wwwroot/tcmpm/framework/spring-boot-starter-biz-data-permission/src/test/java/cn/gemrun/base/framework/datapermission/core/util/DataPermissionUtilsTest.java

@@ -78,8 +78,8 @@
       <scope>compile</scope>
       <exclusions>
         <exclusion>
-          <groupId>de.codecentric</groupId>
           <artifactId>spring-boot-admin-server-cloud</artifactId>
+          <groupId>de.codecentric</groupId>
         </exclusion>
       </exclusions>
       <optional>true</optional>

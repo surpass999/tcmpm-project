@@ -2,7 +2,7 @@
 set -e
 
 # 配置
-PROJECT_PATH=/www/wwwroot/tcmpm
+PROJECT_PATH=/home/dion/code/java/tcmpm-project
 SERVER_PATH=$PROJECT_PATH/server
 MODULE_NAME=module-declare
 PORT=48080

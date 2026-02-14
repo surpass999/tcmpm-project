@@ -54,8 +54,8 @@
       <scope>compile</scope>
       <exclusions>
         <exclusion>
-          <groupId>org.springframework.boot</groupId>
           <artifactId>spring-boot-starter</artifactId>
+          <groupId>org.springframework.boot</groupId>
         </exclusion>
       </exclusions>
     </dependency>

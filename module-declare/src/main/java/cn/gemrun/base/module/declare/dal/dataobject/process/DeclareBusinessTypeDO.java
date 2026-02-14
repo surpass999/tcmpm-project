@@ -1,6 +1,7 @@
 package cn.gemrun.base.module.declare.dal.dataobject.process;
 
 import com.baomidou.mybatisplus.annotation.*;
+import cn.gemrun.base.framework.mybatis.core.dataobject.BaseDO;
 import lombok.*;
 
 import java.io.*;

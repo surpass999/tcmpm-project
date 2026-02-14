@@ -89,8 +89,8 @@
       <scope>compile</scope>
       <exclusions>
         <exclusion>
-          <groupId>cn.hutool</groupId>
           <artifactId>hutool-core</artifactId>
+          <groupId>cn.hutool</groupId>
         </exclusion>
       </exclusions>
     </dependency>
