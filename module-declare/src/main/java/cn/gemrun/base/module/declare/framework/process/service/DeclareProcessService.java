@@ -1,7 +1,7 @@
 package cn.gemrun.base.module.declare.framework.process.service;
 
+import cn.gemrun.base.module.bpm.api.dto.BpmBusinessTypeRespDTO;
 import cn.gemrun.base.module.declare.dal.dataobject.process.DeclareBusinessProcessDO;
-import cn.gemrun.base.module.declare.dal.dataobject.process.DeclareBusinessTypeDO;
 
 import java.util.*;
 
@@ -18,7 +18,7 @@ public interface DeclareProcessService {
      * @param businessType 业务类型
      * @return 流程配置，如果未配置则返回 null
      */
-    DeclareBusinessTypeDO getProcessConfig(String businessType);
+    BpmBusinessTypeRespDTO getProcessConfig(String businessType);
 
     /**
      * 检查是否配置了流程

@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import type { Component } from 'vue';
 
-import { ref, watch } from 'vue';
+import { markRaw, ref, watch } from 'vue';
 
 import { CustomConfigMap } from './data';
 
@@ -40,9 +40,11 @@ watch(
           props.businessObject.eventDefinitions[0]?.$type.split(':')[1] || '';
       }
       // @ts-ignore
-      customConfigComponent.value = (
+      const component = (
         CustomConfigMap as Record<string, { component: Component }>
       )[val]?.component;
+      // 使用 markRaw 避免 Vue 将组件标记为响应式对象
+      customConfigComponent.value = component ? markRaw(component) : null;
     }
   },
   { immediate: true },
@@ -51,7 +53,7 @@ watch(
 
 <template>
   <div class="panel-tab__content">
-    <component :is="customConfigComponent" v-bind="$props" />
+    <component :is="customConfigComponent" v-bind="$props" :key="props.id" />
   </div>
 </template>
 

@@ -143,4 +143,9 @@ public interface BpmnModelConstants {
      */
     String NODE_TYPE = "nodeType";
 
+    /**
+     * DSL 配置扩展元素
+     */
+    String DSL_CONFIG = "DslConfig";
+
 }

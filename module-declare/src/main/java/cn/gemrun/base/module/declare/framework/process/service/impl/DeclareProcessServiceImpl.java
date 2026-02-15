@@ -1,13 +1,13 @@
 package cn.gemrun.base.module.declare.framework.process.service.impl;
 
+import cn.gemrun.base.module.bpm.api.BpmBusinessTypeApi;
+import cn.gemrun.base.module.bpm.api.dto.BpmBusinessTypeRespDTO;
 import cn.gemrun.base.module.bpm.framework.flowable.core.util.FlowableUtils;
+import cn.gemrun.base.module.bpm.service.definition.BpmProcessDefinitionService;
 import cn.gemrun.base.module.declare.dal.dataobject.process.DeclareBusinessProcessDO;
-import cn.gemrun.base.module.declare.dal.dataobject.process.DeclareBusinessTypeDO;
 import cn.gemrun.base.module.declare.dal.mysql.process.DeclareBusinessProcessMapper;
-import cn.gemrun.base.module.declare.dal.mysql.process.DeclareBusinessTypeMapper;
 import cn.gemrun.base.module.declare.framework.process.service.DeclareProcessService;
 import cn.gemrun.base.module.declare.enums.ErrorCodeConstants;
-import cn.gemrun.base.module.bpm.service.definition.BpmProcessDefinitionService;
 import cn.gemrun.base.framework.web.core.util.WebFrameworkUtils;
 import cn.gemrun.base.framework.common.exception.util.ServiceExceptionUtil;
 import cn.hutool.core.util.*;
@@ -34,7 +34,7 @@ import static cn.gemrun.base.framework.common.exception.util.ServiceExceptionUti
 public class DeclareProcessServiceImpl implements DeclareProcessService {
 
     @Resource
-    private DeclareBusinessTypeMapper businessTypeMapper;
+    private BpmBusinessTypeApi bpmBusinessTypeApi;
 
     @Resource
     private DeclareBusinessProcessMapper businessProcessMapper;
@@ -46,31 +46,30 @@ public class DeclareProcessServiceImpl implements DeclareProcessService {
     private BpmProcessDefinitionService processDefinitionService;
 
     @Override
-    public DeclareBusinessTypeDO getProcessConfig(String businessType) {
+    public BpmBusinessTypeRespDTO getProcessConfig(String businessType) {
         Assert.notNull(businessType, "businessType 不能为空");
-        return businessTypeMapper.selectByBusinessType(businessType);
+        cn.gemrun.base.module.bpm.api.dto.BpmBusinessTypeGetReqDTO reqDTO = new cn.gemrun.base.module.bpm.api.dto.BpmBusinessTypeGetReqDTO();
+        reqDTO.setBusinessType(businessType);
+        return bpmBusinessTypeApi.getProcessConfig(reqDTO);
     }
 
     @Override
     public boolean hasProcessConfig(String businessType) {
-        DeclareBusinessTypeDO config = getProcessConfig(businessType);
+        BpmBusinessTypeRespDTO config = getProcessConfig(businessType);
         return config != null && config.getEnabled() == 1;
     }
 
     @Override
     public String getProcessDefinitionKey(String businessType) {
-        DeclareBusinessTypeDO config = getProcessConfig(businessType);
-        if (config == null) {
-            return null;
-        }
-        return config.getProcessDefinitionKey();
+        // 通过 API 获取
+        return bpmBusinessTypeApi.getProcessDefinitionKey(businessType);
     }
 
     @Override
     @Transactional
     public String startProcessIfConfigured(String businessType, Long businessId, Long userId) {
-        // 1. 查询流程配置
-        DeclareBusinessTypeDO config = getProcessConfig(businessType);
+        // 1. 查询流程配置（通过 API）
+        BpmBusinessTypeRespDTO config = getProcessConfig(businessType);
         if (config == null || config.getEnabled() != 1) {
             log.info("未配置流程，跳过: businessType={}", businessType);
             return null;
@@ -111,7 +110,7 @@ public class DeclareProcessServiceImpl implements DeclareProcessService {
     @Override
     @Transactional
     public String startProcess(String businessType, Long businessId, Long userId) {
-        DeclareBusinessTypeDO config = getProcessConfig(businessType);
+        BpmBusinessTypeRespDTO config = getProcessConfig(businessType);
         if (config == null || config.getEnabled() != 1) {
             throw ServiceExceptionUtil.exception(ErrorCodeConstants.PROCESS_CONFIG_NOT_FOUND);
         }
@@ -157,25 +156,20 @@ public class DeclareProcessServiceImpl implements DeclareProcessService {
     @Override
     public String parseBusinessType(String methodName, String className) {
         // 解析模块名：取包名第二部分
-        // 例如：cn.gemrun.base.module.declare.controller.filing.FilingController -> declare
         String[] packageParts = className.split("\\.");
         String moduleName = packageParts.length > 1 ? packageParts[1] : "declare";
 
         // 解析业务名：取类名，去掉 Controller 后缀
-        // 例如：FilingController -> filing
         String simpleClassName = className.substring(className.lastIndexOf(".") + 1);
         if (simpleClassName.endsWith("Controller")) {
             simpleClassName = simpleClassName.substring(0, simpleClassName.length() - 10);
         } else if (simpleClassName.endsWith("DO")) {
             simpleClassName = simpleClassName.substring(0, simpleClassName.length() - 2);
         }
-        // 转换为首字母小写
         String tableName = StrUtil.lowerFirst(simpleClassName);
 
-        // 解析动作名：取方法名，转换驼峰为下划线
-        // 例如：submitFiling -> submit
+        // 解析动作名
         String actionName = methodName;
-        // 去掉常见前缀后缀
         if (actionName.startsWith("submit")) {
             actionName = "submit";
         } else if (actionName.startsWith("start")) {

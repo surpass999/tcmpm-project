@@ -67,18 +67,33 @@ public class BpmTaskCandidateInvoker {
                     BpmUserTaskApproveTypeEnum.AUTO_REJECT.getType())) {
                 return;
             }
+
+            // 解析 DSL 配置
+            String dslConfig = BpmnModelUtils.parseDslConfig(userTask);
+            log.info("[validateBpmnConfig] 节点: {}, DSL配置: {}", userTask.getName(), dslConfig);
+
             // 1.2 非空校验
             Integer strategy = BpmnModelUtils.parseCandidateStrategy(userTask);
             String param = BpmnModelUtils.parseCandidateParam(userTask);
-            if (strategy == null) {
+
+            log.info("[validateBpmnConfig] 节点: {}, 传统策略: {}, 参数: {}", userTask.getName(), strategy, param);
+
+            // 如果 BPMN 没有配置审批人策略，检查 DSL 是否配置了 assign
+            boolean hasDslAssign = BpmnModelUtils.hasDslAssign(userTask);
+            log.info("[validateBpmnConfig] 节点: {}, hasDslAssign: {}", userTask.getName(), hasDslAssign);
+
+            if (strategy == null && !hasDslAssign) {
                 throw exception(MODEL_DEPLOY_FAIL_TASK_CANDIDATE_NOT_CONFIG, userTask.getName());
             }
-            BpmTaskCandidateStrategy candidateStrategy = getCandidateStrategy(strategy);
-            if (candidateStrategy.isParamRequired() && StrUtil.isBlank(param)) {
-                throw exception(MODEL_DEPLOY_FAIL_TASK_CANDIDATE_NOT_CONFIG, userTask.getName());
+            // 如果策略存在且需要参数，但参数为空且 DSL 也没有配置 assign
+            if (strategy != null) {
+                BpmTaskCandidateStrategy candidateStrategy = getCandidateStrategy(strategy);
+                if (candidateStrategy.isParamRequired() && StrUtil.isBlank(param) && !hasDslAssign) {
+                    throw exception(MODEL_DEPLOY_FAIL_TASK_CANDIDATE_NOT_CONFIG, userTask.getName());
+                }
+                // 2. 具体策略校验
+                getCandidateStrategy(strategy).validateParam(param);
             }
-            // 2. 具体策略校验
-            getCandidateStrategy(strategy).validateParam(param);
         });
     }
 

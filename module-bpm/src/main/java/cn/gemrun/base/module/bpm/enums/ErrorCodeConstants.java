@@ -88,4 +88,17 @@ public interface ErrorCodeConstants {
     // ========== BPM 流程表达式 1-009-014-000 ==========
     ErrorCode PROCESS_EXPRESSION_NOT_EXISTS = new ErrorCode(1_009_014_000, "流程表达式不存在");
 
+    // ========== DSL 流程节点配置 1-009-015-000 ==========
+    ErrorCode DSL_NOT_EXISTS = new ErrorCode(1_009_015_000, "DSL配置不存在");
+    ErrorCode DSL_CONFIG_IS_EMPTY = new ErrorCode(1_009_015_001, "DSL配置不能为空");
+    ErrorCode DSL_CONFIG_INVALID = new ErrorCode(1_009_015_002, "DSL配置JSON格式无效");
+    ErrorCode DSL_CONFIG_NODE_KEY_EMPTY = new ErrorCode(1_009_015_003, "DSL配置缺少nodeKey字段");
+    ErrorCode DSL_CONFIG_CAP_EMPTY = new ErrorCode(1_009_015_004, "DSL配置缺少cap字段");
+    ErrorCode DSL_NODE_KEY_EXISTS = new ErrorCode(1_009_015_005, "该流程定义Key+节点Key的配置已存在");
+
+    // ========== 业务类型配置 1-009-016-000 ==========
+    ErrorCode BUSINESS_TYPE_NOT_EXISTS = new ErrorCode(1_009_016_000, "业务类型不存在");
+    ErrorCode BUSINESS_TYPE_EXISTS = new ErrorCode(1_009_016_001, "业务类型标识已存在");
+    ErrorCode PROCESS_DEFINITION_KEY_EMPTY = new ErrorCode(1_009_016_002, "流程定义Key不能为空");
+
 }

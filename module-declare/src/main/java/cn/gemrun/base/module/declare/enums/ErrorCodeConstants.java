@@ -25,4 +25,12 @@ public interface ErrorCodeConstants {
 
     ErrorCode PROCESS_CONFIG_DISABLED = new ErrorCode(1_010_001_002, "流程配置已禁用");
 
+    // ========== 指标体系模块 1-010-002-000 ==========
+
+    ErrorCode INDICATOR_NOT_EXISTS = new ErrorCode(1_010_002_001, "指标不存在");
+
+    ErrorCode INDICATOR_CODE_EXISTS = new ErrorCode(1_010_002_002, "指标代号已存在: {0}");
+
+    ErrorCode INDICATOR_VALUE_OPTIONS_REQUIRED = new ErrorCode(1_010_002_003, "单选或多选类型必须配置选项定义");
+
 }

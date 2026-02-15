@@ -177,6 +177,8 @@ const IOT_DICT = {
 const DECLARE_DICT = {
   DECLARE_FILING_STATUS: 'declare_filing_status', // 备案状态
   DECLARE_PROJECT_TYPE: 'declare_project_type', // 项目类型
+  DECLARE_INDICATOR_CATEGORY: 'declare_indicator_category', // 指标分类
+  DECLARE_INDICATOR_VALUE_TYPE: 'declare_indicator_value_type', // 值类型
 } as const;
 
 

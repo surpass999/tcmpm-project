@@ -1,12 +1,6 @@
 package cn.gemrun.base.module.declare.dal.dataobject.filing;
 
 import lombok.*;
-import java.util.*;
-import java.time.LocalDateTime;
-import java.time.LocalDateTime;
-import java.time.LocalDateTime;
-import java.time.LocalDateTime;
-import java.time.LocalDateTime;
 import java.time.LocalDateTime;
 import com.baomidou.mybatisplus.annotation.*;
 import cn.gemrun.base.framework.mybatis.core.dataobject.BaseDO;
@@ -64,6 +58,10 @@ public class FilingDO extends BaseDO {
      */
     private Integer filingStatus;
     /**
+     * 状态原因
+     */
+    private String statusReason;
+    /**
      * 省级审核意见
      */
     private String provinceReviewOpinion;
@@ -76,6 +74,26 @@ public class FilingDO extends BaseDO {
      */
     private Long provinceReviewerId;
     /**
+     * 省级审核结果：0=待审核，1=通过，2=拒绝
+     */
+    private Integer provinceReviewResult;
+    /**
+     * 国家局审核意见
+     */
+    private String nationalReviewOpinion;
+    /**
+     * 国家局审核时间
+     */
+    private LocalDateTime nationalReviewTime;
+    /**
+     * 国家局审核人ID（关联system_users.id）
+     */
+    private Long nationalReviewerId;
+    /**
+     * 国家局审核结果：0=待审核，1=通过，2=拒绝
+     */
+    private Integer nationalReviewResult;
+    /**
      * 专家论证意见
      */
     private String expertReviewOpinion;
@@ -87,6 +105,10 @@ public class FilingDO extends BaseDO {
      * 备案归档时间
      */
     private LocalDateTime filingArchiveTime;
+    /**
+     * 关联项目ID（关联project_project.id）
+     */
+    private Long projectId;
 
 
 }

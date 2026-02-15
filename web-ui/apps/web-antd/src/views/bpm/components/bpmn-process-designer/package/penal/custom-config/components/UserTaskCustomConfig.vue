@@ -153,14 +153,173 @@ const signEnable = ref({ value: false });
 // 审批意见
 const reasonRequire = ref({ value: false });
 
+// ========== DSL 配置 ==========
+const dslConfigEl = ref<any>();
+const dslConfig = ref<string>('');
+
+// DSL 配置选项
+const dslCapOptions = [
+  { label: '单人审批 (AUDIT)', value: 'AUDIT' },
+  { label: '会签 (COUNTERSIGN)', value: 'COUNTERSIGN' },
+  { label: '选择专家 (EXPERT_SELECT)', value: 'EXPERT_SELECT' },
+  { label: '填报 (FILL)', value: 'FILL' },
+  { label: '补正 (MODIFY)', value: 'MODIFY' },
+  { label: '确认 (CONFIRM)', value: 'CONFIRM' },
+  { label: '归档 (ARCHIVE)', value: 'ARCHIVE' },
+  { label: '发布 (PUBLISH)', value: 'PUBLISH' },
+];
+
+const dslActionOptions = [
+  { label: '提交 (submit)', value: 'submit' },
+  { label: '通过 (agree)', value: 'agree' },
+  { label: '拒绝 (reject)', value: 'reject' },
+  { label: '退回 (back)', value: 'back' },
+  { label: '撤回 (cancel)', value: 'cancel' },
+  { label: '转办 (transfer)', value: 'transfer' },
+  { label: '委派 (delegate)', value: 'delegate' },
+  { label: '加签 (addSign)', value: 'addSign' },
+  { label: '减签 (reduceSign)', value: 'reduceSign' },
+  { label: '补正 (modify)', value: 'modify' },
+];
+
+const dslAssignTypeOptions = [
+  { label: '固定角色 (STATIC_ROLE)', value: 'STATIC_ROLE' },
+  { label: '发起人 (START_USER)', value: 'START_USER' },
+  { label: '动态用户 (DYNAMIC_USER)', value: 'DYNAMIC_USER' },
+  { label: '用户组 (GROUP)', value: 'GROUP' },
+];
+
+const dslAssignSourceOptions = [
+  // 固定角色
+  { label: '省局角色 (provinceRole)', value: 'provinceRole' },
+  { label: '国家局角色 (nationalRole)', value: 'nationalRole' },
+  { label: '专家角色 (expertRole)', value: 'expertRole' },
+  { label: '医院角色 (hospitalRole)', value: 'hospitalRole' },
+  // 发起人
+  { label: '发起人 (startUser)', value: 'startUser' },
+  { label: '发起人部门负责人 (startUserDeptLeader)', value: 'startUserDeptLeader' },
+  { label: '发起人部门成员 (startUserDeptMembers)', value: 'startUserDeptMembers' },
+  // 动态用户
+  { label: '专家用户 (expertUsers)', value: 'expertUsers' },
+  { label: '用户组 (userGroups)', value: 'userGroups' },
+];
+
+const dslSignRuleOptions = [
+  { label: '全部通过 (ALL)', value: 'ALL' },
+  { label: '任一通过 (ANY)', value: 'ANY' },
+  { label: '多数通过 (MAJORITY)', value: 'MAJORITY' },
+];
+
+const dslBackStrategyOptions = [
+  { label: '不可退回 (NONE)', value: 'NONE' },
+  { label: '退回起点 (TO_START)', value: 'TO_START' },
+  { label: '退回上一节点 (TO_PREV)', value: 'TO_PREV' },
+  { label: '退回任意节点 (TO_ANY)', value: 'TO_ANY' },
+  { label: '退回指定角色 (TO_ROLE)', value: 'TO_ROLE' },
+];
+
+const dslRoleOptions = [
+  { label: '省局 (PROVINCE)', value: 'PROVINCE' },
+  { label: '国家局 (NATION)', value: 'NATION' },
+  { label: '专家 (EXPERT)', value: 'EXPERT' },
+  { label: '医院 (HOSPITAL)', value: 'HOSPITAL' },
+];
+
+// DSL 配置表单数据
+const dslFormData = ref({
+  cap: 'AUDIT',
+  actions: ['agree', 'reject'] as string[],
+  roles: [] as string[],
+  assignType: 'STATIC_ROLE',
+  assignSource: '',
+  signRule: 'MAJORITY',
+  backStrategy: 'TO_START',
+  bizStatus: '',
+  enable: true,
+  // 扩展字段
+  expertMin: undefined as number | undefined,
+  expertMax: undefined as number | undefined,
+  modifyFields: [] as string[],
+});
+
+// 解析 DSL JSON
+function parseDslJson(jsonStr: string) {
+  if (!jsonStr) return;
+  try {
+    const config = JSON.parse(jsonStr);
+    // actions 可能是字符串或数组，统一转为数组供表单使用
+    let actionsArr: string[] = [];
+    if (Array.isArray(config.actions)) {
+      actionsArr = config.actions;
+    } else if (typeof config.actions === 'string') {
+      actionsArr = config.actions.split(',').filter((a: string) => a.trim());
+    }
+    dslFormData.value = {
+      cap: config.cap || 'AUDIT',
+      actions: actionsArr,
+      roles: config.roles || [],
+      assignType: config.assign?.type || 'STATIC_ROLE',
+      assignSource: config.assign?.source || '',
+      signRule: config.signRule || 'MAJORITY',
+      backStrategy: config.backStrategy || 'TO_START',
+      bizStatus: config.bizStatus || '',
+      enable: config.enable !== false,
+      // 扩展字段
+      expertMin: config.expertMin,
+      expertMax: config.expertMax,
+      modifyFields: config.vars?.modifyFields || [],
+    };
+  } catch (e) {
+    console.error('解析 DSL 配置失败', e);
+  }
+}
+
+// 构建 DSL JSON
+function buildDslJson(): string {
+  const { cap, actions, roles, assignType, assignSource, signRule, backStrategy, bizStatus, enable, expertMin, expertMax, modifyFields } = dslFormData.value;
+
+  // actions 必须是逗号分隔的字符串，不能是数组
+  const actionsStr = Array.isArray(actions) ? actions.join(',') : actions;
+
+  // 构建 vars 对象
+  const vars: Record<string, any> = {};
+  if (expertMin !== undefined) vars.expertMin = expertMin;
+  if (expertMax !== undefined) vars.expertMax = expertMax;
+  if (modifyFields && modifyFields.length > 0) vars.modifyFields = modifyFields;
+
+  return JSON.stringify({
+    nodeKey: props.id,
+    cap,
+    actions: actionsStr,
+    roles,
+    assign: assignSource ? { type: assignType, source: assignSource } : undefined,
+    signRule: cap === 'COUNTERSIGN' ? signRule : undefined,
+    backStrategy: cap !== 'FILL' ? backStrategy : 'NONE',
+    bizStatus,
+    enable,
+    ...(Object.keys(vars).length > 0 ? { vars } : {}),
+  });
+}
+
 const elExtensionElements = ref<any>();
 const otherExtensions = ref<any>();
 const bpmnElement = ref<any>();
 const bpmnInstances = () => (window as any)?.bpmnInstances;
 
 const resetCustomConfigList = () => {
+  // 确保 BPMN 实例已准备好
+  if (!bpmnInstances() || !bpmnInstances().bpmnElement) {
+    console.log('[DSL] BPMN 实例未准备好，等待...');
+    setTimeout(() => resetCustomConfigList(), 100);
+    return;
+  }
+  
   bpmnElement.value = bpmnInstances().bpmnElement;
 
+  // 获取当前节点ID，优先使用 props.id（更可靠）
+  const currentNodeId = props.id || bpmnElement.value?.id;
+  console.log('[DSL] resetCustomConfigList:', currentNodeId, 'props.id:', props.id);
+  
   // 获取可回退的列表
   returnTaskList.value = findAllPredecessorsExcludingStart(
     bpmnElement.value.id,
@@ -279,6 +438,52 @@ const resetCustomConfigList = () => {
     ) ||
     bpmnInstances().moddle.create(`${prefix}:ReasonRequire`, { value: false });
 
+  // DSL 配置 - 直接读取现有配置，不创建新对象
+  const foundDslConfig = elExtensionElements.value.values?.find(
+    (ex: any) => ex.$type === `${prefix}:DslConfig`,
+  );
+  
+  console.log('[resetCustomConfigList] foundDslConfig:', foundDslConfig);
+  console.log('[resetCustomConfigList] elExtensionElements:', elExtensionElements.value);
+  
+  if (foundDslConfig) {
+    dslConfigEl.value = foundDslConfig;
+  } else {
+    // 如果没有找到 DSL 配置，创建新的
+    dslConfigEl.value = bpmnInstances().moddle.create(`${prefix}:DslConfig`, { value: '' });
+    // 添加到扩展元素中
+    elExtensionElements.value.values.push(dslConfigEl.value);
+    console.log('[resetCustomConfigList] created new DslConfig');
+  }
+  
+  // 直接读取 DSL 配置值
+  const existingDslValue = dslConfigEl.value?.value || '';
+  console.log('[DSL] 读取配置, nodeId:', currentNodeId, 'value:', existingDslValue);
+  
+  // 加载已保存的配置或使用默认值
+  if (existingDslValue && existingDslValue.trim()) {
+    console.log('[DSL] 加载已有配置:', currentNodeId);
+    dslConfig.value = existingDslValue;
+    parseDslJson(existingDslValue);
+  } else {
+    console.log('[DSL] 使用默认配置:', currentNodeId);
+    dslConfig.value = '';
+    dslFormData.value = {
+      cap: 'AUDIT',
+      actions: ['agree', 'reject'],
+      roles: [],
+      assignType: 'STATIC_ROLE',
+      assignSource: '',
+      signRule: 'MAJORITY',
+      backStrategy: 'TO_START',
+      bizStatus: '',
+      enable: false,
+      expertMin: undefined,
+      expertMax: undefined,
+      modifyFields: [],
+    };
+  }
+
   // 保留剩余扩展元素，便于后面更新该元素对应属性
   otherExtensions.value =
     elExtensionElements.value.values?.filter(
@@ -292,7 +497,8 @@ const resetCustomConfigList = () => {
         ex.$type !== `${prefix}:FieldsPermission` &&
         ex.$type !== `${prefix}:ApproveType` &&
         ex.$type !== `${prefix}:SignEnable` &&
-        ex.$type !== `${prefix}:ReasonRequire`,
+        ex.$type !== `${prefix}:ReasonRequire` &&
+        ex.$type !== `${prefix}:DslConfig`,
     ) ?? [];
 
   // 更新元素扩展属性，避免后续报错
@@ -333,6 +539,14 @@ const updateAssignEmptyUserIds = () => {
 };
 
 const updateElementExtensions = () => {
+  // 更新 DSL 配置的值
+  if (!dslConfigEl.value) {
+    console.error('[updateElementExtensions] dslConfigEl is undefined!');
+    return;
+  }
+  dslConfigEl.value.value = buildDslJson();
+  console.log('[updateElementExtensions] dslConfig value:', dslConfigEl.value.value);
+
   const extensions = bpmnInstances().moddle.create('bpmn:ExtensionElements', {
     values: [
       ...otherExtensions.value,
@@ -346,6 +560,7 @@ const updateElementExtensions = () => {
       ...fieldsPermissionEl.value,
       signEnable.value,
       reasonRequire.value,
+      dslConfigEl.value,
     ],
   });
   bpmnInstances().modeling.updateProperties(toRaw(bpmnElement.value), {
@@ -355,12 +570,22 @@ const updateElementExtensions = () => {
 
 watch(
   () => props.id,
-  (val) => {
-    val &&
-      val.length > 0 &&
+  (val, oldVal) => {
+    if (val && val.length > 0 && val !== oldVal) {
+      console.log('[Config] 节点切换:', oldVal, '->', val);
+      // 强制等待 DOM 更新后再加载新节点数据
+      nextTick(() => {
+        // 短暂延迟确保组件完全重建
+        setTimeout(() => {
+          resetCustomConfigList();
+        }, 50);
+      });
+    } else if (val && val.length > 0) {
+      // 首次加载
       nextTick(() => {
         resetCustomConfigList();
       });
+    }
   },
   { immediate: true },
 );
@@ -447,7 +672,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div>
+  <div :key="props.id">
     <Divider orientation="left">审批类型</Divider>
     <Form.Item name="approveType" label="审批类型">
       <RadioGroup v-model:value="approveType.value">
@@ -695,5 +920,190 @@ onMounted(async () => {
         @change="updateElementExtensions"
       />
     </Form.Item>
+
+    <!-- ========== DSL 配置 ========== -->
+    <Divider orientation="left">DSL 配置</Divider>
+    <Form.Item name="dslEnable" label="启用DSL">
+      <Switch
+        v-model:checked="dslFormData.enable"
+        checked-children="启用"
+        un-checked-children="禁用"
+        @change="updateElementExtensions"
+      />
+    </Form.Item>
+
+    <template v-if="dslFormData.enable">
+      <!-- 节点能力 -->
+      <Form.Item label="节点能力 (cap)">
+        <Select
+          v-model:value="dslFormData.cap"
+          :options="dslCapOptions"
+          placeholder="请选择节点能力"
+          @change="updateElementExtensions"
+        />
+      </Form.Item>
+
+      <!-- 可用动作 -->
+      <Form.Item label="可用动作">
+        <Select
+          v-model:value="dslFormData.actions"
+          mode="tags"
+          :options="dslActionOptions"
+          placeholder="输入动作后回车确认"
+          @change="updateElementExtensions"
+        />
+        <div class="form-help-text">多个动作用逗号分隔</div>
+      </Form.Item>
+
+      <!-- 角色限制 -->
+      <Form.Item label="角色限制">
+        <Select
+          v-model:value="dslFormData.roles"
+          mode="multiple"
+          :options="dslRoleOptions"
+          placeholder="选择允许操作的角色"
+          @change="updateElementExtensions"
+        />
+      </Form.Item>
+
+      <!-- 任务分配 -->
+      <Form.Item label="任务分配">
+        <a-row :gutter="8">
+          <a-col :span="12">
+            <Select
+              v-model:value="dslFormData.assignType"
+              :options="dslAssignTypeOptions"
+              placeholder="分配类型"
+              @change="updateElementExtensions"
+            />
+          </a-col>
+          <a-col :span="12">
+            <Select
+              v-model:value="dslFormData.assignSource"
+              :options="dslAssignSourceOptions"
+              placeholder="分配来源"
+              allowClear
+              @change="updateElementExtensions"
+            />
+          </a-col>
+        </a-row>
+      </Form.Item>
+
+      <!-- 会签规则（当 cap 为 COUNTERSIGN 时显示） -->
+      <template v-if="dslFormData.cap === 'COUNTERSIGN'">
+        <Form.Item label="会签规则">
+          <Select
+            v-model:value="dslFormData.signRule"
+            :options="dslSignRuleOptions"
+            @change="updateElementExtensions"
+          />
+        </Form.Item>
+        <!-- 专家数量范围 -->
+        <Form.Item label="专家数量">
+          <a-row :gutter="8">
+            <a-col :span="12">
+              <a-input-number
+                v-model:value="dslFormData.expertMin"
+                :min="1"
+                placeholder="最少"
+                style="width: 100%"
+                @change="updateElementExtensions"
+              />
+            </a-col>
+            <a-col :span="12">
+              <a-input-number
+                v-model:value="dslFormData.expertMax"
+                :min="1"
+                placeholder="最多"
+                style="width: 100%"
+                @change="updateElementExtensions"
+              />
+            </a-col>
+          </a-row>
+        </Form.Item>
+      </template>
+
+      <!-- 选择专家（当 cap 为 EXPERT_SELECT 时显示） -->
+      <template v-if="dslFormData.cap === 'EXPERT_SELECT'">
+        <Form.Item label="专家数量">
+          <a-row :gutter="8">
+            <a-col :span="12">
+              <a-input-number
+                v-model:value="dslFormData.expertMin"
+                :min="1"
+                placeholder="最少"
+                style="width: 100%"
+                @change="updateElementExtensions"
+              />
+            </a-col>
+            <a-col :span="12">
+              <a-input-number
+                v-model:value="dslFormData.expertMax"
+                :min="1"
+                placeholder="最多"
+                style="width: 100%"
+                @change="updateElementExtensions"
+              />
+            </a-col>
+          </a-row>
+        </Form.Item>
+      </template>
+
+      <!-- 补正可修改字段（当 cap 为 MODIFY 或 FILL 时显示） -->
+      <template v-if="dslFormData.cap === 'MODIFY' || dslFormData.cap === 'FILL'">
+        <Form.Item label="可修改字段">
+          <Select
+            v-model:value="dslFormData.modifyFields"
+            mode="tags"
+            placeholder="输入字段名后回车确认"
+            @change="updateElementExtensions"
+          />
+          <div class="form-help-text">允许用户修改的字段列表</div>
+        </Form.Item>
+      </template>
+
+      <!-- 退回策略（首节点 FILL 不需要退回） -->
+      <Form.Item v-if="dslFormData.cap !== 'FILL'" label="退回策略">
+        <Select
+          v-model:value="dslFormData.backStrategy"
+          :options="dslBackStrategyOptions"
+          @change="updateElementExtensions"
+        />
+      </Form.Item>
+
+      <!-- 业务状态 -->
+      <Form.Item label="业务状态">
+        <Input
+          v-model:value="dslFormData.bizStatus"
+          placeholder="审批通过后更新的状态值"
+          @change="updateElementExtensions"
+        />
+        <div class="form-help-text">如：PRO_AUDIT, NATION_AUDIT</div>
+      </Form.Item>
+
+      <!-- DSL JSON 预览 -->
+      <Form.Item label="DSL预览">
+        <Input.TextArea
+          :value="buildDslJson()"
+          :rows="6"
+          readonly
+          class="dsl-json-preview"
+        />
+      </Form.Item>
+    </template>
   </div>
 </template>
+
+<style lang="scss" scoped>
+.form-help-text {
+  font-size: 12px;
+  color: #999;
+  margin-top: 4px;
+}
+
+.dsl-json-preview {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu', 'Consolas', monospace;
+  font-size: 11px;
+  background: #f5f5f5;
+}
+</style>

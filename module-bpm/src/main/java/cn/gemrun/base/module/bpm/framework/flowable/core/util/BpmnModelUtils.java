@@ -148,6 +148,66 @@ public class BpmnModelUtils {
     }
 
     /**
+     * 解析 DSL 配置
+     *
+     * @param flowElement 流程节点
+     * @return DSL 配置 JSON 字符串，如果不存在则返回 null
+     */
+    public static String parseDslConfig(FlowElement flowElement) {
+        if (flowElement == null) {
+            return null;
+        }
+        // 打印所有扩展元素用于调试
+        if (flowElement.getExtensionElements() != null) {
+            log.info("[parseDslConfig] 节点: {}, 扩展元素 keys: {}", flowElement.getId(), flowElement.getExtensionElements().keySet());
+            for (String key : flowElement.getExtensionElements().keySet()) {
+                List<ExtensionElement> elements = flowElement.getExtensionElements().get(key);
+                if (elements != null && !elements.isEmpty()) {
+                    for (ExtensionElement el : elements) {
+                        log.info("[parseDslConfig] 节点: {}, 扩展元素: {} = {}", flowElement.getId(), key, el.getElementText());
+                    }
+                }
+            }
+        }
+
+        // 尝试使用带命名空间前缀的 key
+        ExtensionElement element = CollUtil.getFirst(flowElement.getExtensionElements().get(BpmnModelConstants.DSL_CONFIG));
+        String dslConfig = element != null ? element.getElementText() : null;
+
+        // 如果没找到，尝试使用不带命名空间前缀的 key
+        if (dslConfig == null) {
+            element = CollUtil.getFirst(flowElement.getExtensionElements().get("dslConfig"));
+            dslConfig = element != null ? element.getElementText() : null;
+        }
+
+        log.info("[parseDslConfig] 节点: {}, DSL配置: {}", flowElement.getId(), dslConfig);
+        return dslConfig;
+    }
+
+    /**
+     * 检查 DSL 配置中是否包含审批人分配信息
+     *
+     * @param flowElement 流程节点
+     * @return 是否包含分配信息
+     */
+    public static boolean hasDslAssign(FlowElement flowElement) {
+        String dslConfig = parseDslConfig(flowElement);
+        if (StrUtil.isBlank(dslConfig)) {
+            log.info("[hasDslAssign] 节点: {}, DSL配置为空", flowElement.getId());
+            return false;
+        }
+        try {
+            // 简单检查 JSON 中是否包含 assign 字段
+            boolean result = dslConfig.contains("\"assign\"");
+            log.info("[hasDslAssign] 节点: {}, 包含assign: {}, dslConfig: {}", flowElement.getId(), result, dslConfig);
+            return result;
+        } catch (Exception e) {
+            log.info("[hasDslAssign] 节点: {}, 解析异常", flowElement.getId());
+            return false;
+        }
+    }
+
+    /**
      * 解析审批类型
      *
      * @see BpmUserTaskApproveTypeEnum

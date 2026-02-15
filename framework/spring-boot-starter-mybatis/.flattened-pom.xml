@@ -28,8 +28,8 @@
       <scope>compile</scope>
       <exclusions>
         <exclusion>
-          <artifactId>protobuf-java</artifactId>
           <groupId>com.google.protobuf</groupId>
+          <artifactId>protobuf-java</artifactId>
         </exclusion>
       </exclusions>
     </dependency>
@@ -119,12 +119,12 @@
       <scope>compile</scope>
       <exclusions>
         <exclusion>
-          <artifactId>spring-context</artifactId>
           <groupId>org.springframework</groupId>
+          <artifactId>spring-context</artifactId>
         </exclusion>
         <exclusion>
-          <artifactId>spring-cloud-commons</artifactId>
           <groupId>org.springframework.cloud</groupId>
+          <artifactId>spring-cloud-commons</artifactId>
         </exclusion>
       </exclusions>
     </dependency>
