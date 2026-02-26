@@ -1,6 +1,5 @@
 package cn.gemrun.base.module.declare.service.indicator;
 
-import cn.gemrun.base.framework.common.util.json.JsonUtils;
 import cn.gemrun.base.module.declare.dal.dataobject.indicator.DeclareIndicatorValueDO;
 import cn.gemrun.base.module.declare.dal.mysql.indicator.DeclareIndicatorValueMapper;
 import lombok.extern.slf4j.Slf4j;

@@ -4,7 +4,9 @@ import cn.gemrun.base.framework.common.pojo.CommonResult;
 import cn.gemrun.base.framework.common.pojo.PageResult;
 import cn.gemrun.base.framework.common.util.object.BeanUtils;
 import cn.gemrun.base.module.declare.controller.admin.indicator.vo.*;
+import cn.gemrun.base.module.declare.dal.dataobject.indicator.DeclareIndicatorCaliberDO;
 import cn.gemrun.base.module.declare.dal.dataobject.indicator.DeclareIndicatorDO;
+import cn.gemrun.base.module.declare.service.indicator.DeclareIndicatorCaliberService;
 import cn.gemrun.base.module.declare.service.indicator.DeclareIndicatorService;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -18,7 +20,6 @@ import static cn.gemrun.base.framework.common.pojo.CommonResult.success;
 /**
  * 指标管理 Controller
  *
- * @author Gemini
  */
 @Validated
 @RestController
@@ -27,6 +28,9 @@ public class DeclareIndicatorController {
 
     @Resource
     private DeclareIndicatorService indicatorService;
+
+    @Resource
+    private DeclareIndicatorCaliberService caliberService;
 
     /**
      * 创建指标
@@ -60,7 +64,20 @@ public class DeclareIndicatorController {
     @GetMapping("/get")
     public CommonResult<DeclareIndicatorRespVO> getIndicator(@RequestParam("id") Long id) {
         DeclareIndicatorDO indicator = indicatorService.getIndicator(id);
-        return success(BeanUtils.toBean(indicator, DeclareIndicatorRespVO.class));
+        DeclareIndicatorRespVO vo = BeanUtils.toBean(indicator, DeclareIndicatorRespVO.class);
+        // 填充口径数据 - 通过 indicatorId 直接查询
+        if (vo != null) {
+            DeclareIndicatorCaliberDO caliber = caliberService.getCaliberByIndicatorId(vo.getId());
+            if (caliber != null) {
+                vo.setCaliberId(caliber.getId());
+                vo.setDefinition(caliber.getDefinition());
+                vo.setStatisticScope(caliber.getStatisticScope());
+                vo.setDataSource(caliber.getDataSource());
+                vo.setFillRequire(caliber.getFillRequire());
+                vo.setCalculationExample(caliber.getCalculationExample());
+            }
+        }
+        return success(vo);
     }
 
     /**
@@ -69,7 +86,12 @@ public class DeclareIndicatorController {
     @GetMapping("/page")
     public CommonResult<PageResult<DeclareIndicatorRespVO>> getIndicatorPage(@Valid DeclareIndicatorPageReqVO pageReqVO) {
         PageResult<DeclareIndicatorDO> page = indicatorService.getIndicatorPage(pageReqVO);
-        return success(BeanUtils.toBean(page, DeclareIndicatorRespVO.class));
+        PageResult<DeclareIndicatorRespVO> voPage = BeanUtils.toBean(page, DeclareIndicatorRespVO.class);
+        // 填充口径数据
+        if (voPage != null && voPage.getList() != null) {
+            fillCaliberData(voPage.getList());
+        }
+        return success(voPage);
     }
 
     /**
@@ -80,7 +102,10 @@ public class DeclareIndicatorController {
             @RequestParam("projectType") Integer projectType,
             @RequestParam("businessType") String businessType) {
         List<DeclareIndicatorDO> list = indicatorService.getIndicatorsByProjectType(projectType, businessType);
-        return success(BeanUtils.toBean(list, DeclareIndicatorRespVO.class));
+        List<DeclareIndicatorRespVO> voList = BeanUtils.toBean(list, DeclareIndicatorRespVO.class);
+        // 填充口径数据
+        fillCaliberData(voList);
+        return success(voList);
     }
 
     /**
@@ -89,7 +114,32 @@ public class DeclareIndicatorController {
     @GetMapping("/list-by-business-type")
     public CommonResult<List<DeclareIndicatorRespVO>> getIndicatorsByBusinessType(@RequestParam("businessType") String businessType) {
         List<DeclareIndicatorDO> list = indicatorService.getIndicatorsByBusinessType(businessType);
-        return success(BeanUtils.toBean(list, DeclareIndicatorRespVO.class));
+        List<DeclareIndicatorRespVO> voList = BeanUtils.toBean(list, DeclareIndicatorRespVO.class);
+        // 填充口径数据
+        fillCaliberData(voList);
+        return success(voList);
+    }
+
+    /**
+     * 填充指标口径数据
+     * 优化：通过 indicatorId 直接查询口径，不再依赖 caliberId
+     */
+    private void fillCaliberData(List<DeclareIndicatorRespVO> voList) {
+        if (voList == null || voList.isEmpty()) {
+            return;
+        }
+        for (DeclareIndicatorRespVO vo : voList) {
+            // 通过指标ID直接查询口径数据
+            DeclareIndicatorCaliberDO caliber = caliberService.getCaliberByIndicatorId(vo.getId());
+            if (caliber != null) {
+                vo.setCaliberId(caliber.getId());
+                vo.setDefinition(caliber.getDefinition());
+                vo.setStatisticScope(caliber.getStatisticScope());
+                vo.setDataSource(caliber.getDataSource());
+                vo.setFillRequire(caliber.getFillRequire());
+                vo.setCalculationExample(caliber.getCalculationExample());
+            }
+        }
     }
 
 }

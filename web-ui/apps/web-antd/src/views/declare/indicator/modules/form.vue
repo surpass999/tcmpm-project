@@ -28,9 +28,9 @@ const formRef = ref<any>();
 // 当前值类型，用于控制选项定义的显示
 const currentValueType = ref<number>(1);
 
-// 是否显示选项定义（单选或多选时显示）
+// 是否显示选项定义（单选、多选、单选下拉、多选下拉时显示）
 const showValueOptions = computed(() => {
-  return currentValueType.value === 6 || currentValueType.value === 7 || currentValueType.value === 10;
+  return [6, 7, 10, 11].includes(currentValueType.value);
 });
 
 // 处理值类型变化
@@ -109,8 +109,10 @@ const formLayout = {
 
 const [Modal, modalApi] = useVbenModal({
   async onConfirm() {
-    const { valid } = await formRef.value?.validate();
-    if (!valid) {
+    try {
+      await formRef.value?.validate();
+    } catch (error) {
+      message.error('请完善表单信息');
       return;
     }
     modalApi.lock();
@@ -151,6 +153,7 @@ const [Modal, modalApi] = useVbenModal({
         logicRule: '',
         calculationRule: '',
         childrenIndicatorCodes: '',
+        projectType: 0,
       };
       // 初始化值类型
       currentValueType.value = 1;
@@ -175,8 +178,8 @@ const [Modal, modalApi] = useVbenModal({
 watch(
   () => currentValueType.value,
   (newVal) => {
-    // 清空选项（当值类型不是单选或多选时）
-    if (newVal !== 6 && newVal !== 7) {
+    // 清空选项（当值类型不是单选/多选/单选下拉/多选下拉时）
+    if (![6, 7, 10, 11].includes(newVal)) {
       optionsList.length = 0;
     }
   },
@@ -296,8 +299,8 @@ watch(
         <a-select
           v-model:value="formData.projectType"
           placeholder="请选择适用项目类型"
-          allow-clear
         >
+          <a-select-option :value="0">全部项目</a-select-option>
           <a-select-option
             v-for="item in getDictOptions(DICT_TYPE.DECLARE_PROJECT_TYPE, 'number')"
             :key="item.value"
@@ -323,7 +326,7 @@ watch(
       <a-form-item label="计算公式" name="calculationRule">
         <a-input
           v-model:value="formData.calculationRule"
-          placeholder="如：401=系统覆盖名老中医工作室数"
+          placeholder="如：202 / 201 * 100、20201 / 200 * 100"
         />
       </a-form-item>
       <a-form-item label="列表显示" name="showInList">

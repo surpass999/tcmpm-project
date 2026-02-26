@@ -23,7 +23,9 @@ import Form from './modules/form.vue';
 const [FormModal, formModalApi] = useVbenModal({
   connectedComponent: Form,
   destroyOnClose: true,
-  class: '!min-w-[80%]',
+  // fullscreen: true,
+  class: '!min-w-[90%] !min-h-[80vh]',
+  // contentClass: '!min-w-[90%] !min-h-[80vh]'
 });
 
 /** 刷新表格 */

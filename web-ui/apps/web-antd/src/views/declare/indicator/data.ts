@@ -2,7 +2,7 @@ import type { VbenFormSchema } from '#/adapter/form';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 
 import { DICT_TYPE } from '@vben/constants';
-import { getDictOptions } from '@vben/hooks';
+import { getDictObj, getDictOptions } from '@vben/hooks';
 
 /** 列表的搜索表单 */
 export function useGridFormSchema(): VbenFormSchema[] {
@@ -42,7 +42,10 @@ export function useGridFormSchema(): VbenFormSchema[] {
       componentProps: {
         placeholder: '请选择项目类型',
         allowClear: true,
-        options: getDictOptions(DICT_TYPE.DECLARE_PROJECT_TYPE, 'number'),
+        options: [
+          { label: '通用类型', value: 0 },
+          ...getDictOptions(DICT_TYPE.DECLARE_PROJECT_TYPE, 'number'),
+        ],
       },
     },
     {
@@ -59,16 +62,27 @@ export function useGridFormSchema(): VbenFormSchema[] {
 
 /** 列表的字段 */
 export function useGridColumns(): VxeTableGridOptions['columns'] {
+  // 项目类型格式化函数（0显示为"通用类型"）
+  const projectTypeFormatter = ({ cellValue }: { cellValue: any }) => {
+    if (cellValue === 0 || cellValue === '0') {
+      return '通用类型';
+    }
+    const dict = getDictObj(DICT_TYPE.DECLARE_PROJECT_TYPE, String(cellValue));
+    return dict?.label || cellValue;
+  };
+
   return [
     {
       field: 'id',
       title: '编号',
       minWidth: 80,
+      sortable: true,
     },
     {
       field: 'indicatorCode',
       title: '指标代号',
       minWidth: 120,
+      sortable: true,
     },
     {
       field: 'indicatorName',
@@ -84,17 +98,10 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       field: 'category',
       title: '分类',
       minWidth: 100,
+      sortable: true,
       cellRender: {
-        map: [
-          { label: '基本情况', value: 1 },
-          { label: '项目管理', value: 2 },
-          { label: '系统功能', value: 3 },
-          { label: '建设成效', value: 4 },
-          { label: '数据集建设', value: 5 },
-          { label: '数据交易', value: 6 },
-          { label: '信息安全', value: 7 },
-        ],
-        name: 'CellTag',
+        name: 'CellDict',
+        props: { type: DICT_TYPE.DECLARE_INDICATOR_CATEGORY },
       },
     },
     {
@@ -102,18 +109,8 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       title: '值类型',
       minWidth: 100,
       cellRender: {
-        map: [
-          { label: '数字', value: 1 },
-          { label: '字符串', value: 2 },
-          { label: '布尔', value: 3 },
-          { label: '日期', value: 4 },
-          { label: '长文本', value: 5 },
-          { label: '单选', value: 6 },
-          { label: '多选', value: 7 },
-          { label: '日期区间', value: 8 },
-          { label: '文件上传', value: 9 },
-        ],
-        name: 'CellTag',
+        name: 'CellDict',
+        props: { type: DICT_TYPE.DECLARE_INDICATOR_VALUE_TYPE },
       },
     },
     {
@@ -121,29 +118,20 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       title: '必填',
       minWidth: 80,
       cellRender: {
-        map: [
-          { label: '是', value: true, color: 'red' },
-          { label: '否', value: false, color: 'green' },
-        ],
         name: 'CellTag',
+        props: {
+          map: [
+            { label: '是', value: true, color: 'red' },
+            { label: '否', value: false, color: 'green' },
+          ],
+        },
       },
     },
     {
       field: 'projectType',
       title: '项目类型',
       minWidth: 100,
-      cellRender: {
-        map: [
-          { label: '全部', value: 0 },
-          { label: '综合型', value: 1 },
-          { label: '中医电子病历型', value: 2 },
-          { label: '智慧中药房型', value: 3 },
-          { label: '名老中医传承型', value: 4 },
-          { label: '中医临床科研型', value: 5 },
-          { label: '中医智慧医共体型', value: 6 },
-        ],
-        name: 'CellTag',
-      },
+      formatter: projectTypeFormatter,
     },
     {
       field: 'businessType',

@@ -33,4 +33,8 @@ public interface ErrorCodeConstants {
 
     ErrorCode INDICATOR_VALUE_OPTIONS_REQUIRED = new ErrorCode(1_010_002_003, "单选或多选类型必须配置选项定义");
 
+    ErrorCode CALIBER_NOT_EXISTS = new ErrorCode(1_010_002_010, "指标口径不存在");
+
+    ErrorCode JOINT_RULE_NOT_EXISTS = new ErrorCode(1_010_002_011, "指标联合规则不存在");
+
 }

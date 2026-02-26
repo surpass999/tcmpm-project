@@ -17,7 +17,6 @@ import java.util.List;
 /**
  * 指标体系 Service 实现
  *
- * @author Gemini
  */
 @Slf4j
 @Service

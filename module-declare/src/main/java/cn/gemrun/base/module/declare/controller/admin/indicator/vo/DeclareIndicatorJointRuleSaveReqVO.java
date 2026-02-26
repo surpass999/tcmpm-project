@@ -1,30 +1,26 @@
-package cn.gemrun.base.module.declare.dal.dataobject.indicator;
+package cn.gemrun.base.module.declare.controller.admin.indicator.vo;
 
-import cn.gemrun.base.framework.mybatis.core.dataobject.BaseDO;
-import com.baomidou.mybatisplus.annotation.TableId;
-import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
-import lombok.EqualsAndHashCode;
+
+import javax.validation.constraints.NotNull;
 
 /**
- * 多指标联合验证规则 DO
+ * 指标联合规则保存请求 VO
  *
  * @author Gemini
  */
 @Data
-@EqualsAndHashCode(callSuper = true)
-@TableName("declare_indicator_joint_rule")
-public class DeclareIndicatorJointRuleDO extends BaseDO {
+public class DeclareIndicatorJointRuleSaveReqVO {
 
     /**
-     * 规则主键（自增）
+     * 规则主键
      */
-    @TableId
     private Long id;
 
     /**
      * 规则名称
      */
+    @NotNull(message = "规则名称不能为空")
     private String ruleName;
 
     /**

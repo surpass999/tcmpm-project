@@ -40,11 +40,6 @@ public class DeclareIndicatorSaveReqVO {
     private Integer category;
 
     /**
-     * 关联指标口径ID
-     */
-    private Long caliberId;
-
-    /**
      * 逻辑校验关系
      */
     private String logicRule;

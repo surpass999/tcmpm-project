@@ -41,6 +41,31 @@ public class DeclareIndicatorRespVO {
     private Long caliberId;
 
     /**
+     * 指标解释（Hover显示）
+     */
+    private String definition;
+
+    /**
+     * 统计范围
+     */
+    private String statisticScope;
+
+    /**
+     * 数据来源
+     */
+    private String dataSource;
+
+    /**
+     * 填报要求
+     */
+    private String fillRequire;
+
+    /**
+     * 计算示例
+     */
+    private String calculationExample;
+
+    /**
      * 逻辑校验关系
      */
     private String logicRule;

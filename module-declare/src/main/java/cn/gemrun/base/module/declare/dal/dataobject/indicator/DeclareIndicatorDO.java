@@ -43,11 +43,6 @@ public class DeclareIndicatorDO extends BaseDO {
     private Integer category;
 
     /**
-     * 关联指标口径ID
-     */
-    private Long caliberId;
-
-    /**
      * 逻辑校验关系（如201>=20101、802>=80201+80202）
      */
     private String logicRule;

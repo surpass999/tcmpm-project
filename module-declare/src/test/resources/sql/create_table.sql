@@ -774,3 +774,29 @@ CREATE TABLE `declare_indicator_value`  (
   INDEX `idx_indicator_id`(`indicator_id`) USING BTREE COMMENT '关联指标ID索引',
   CONSTRAINT `fk_indicator_value_indicator` FOREIGN KEY (`indicator_id`) REFERENCES `declare_indicator` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '指标值存储表' ROW_FORMAT = Dynamic;
+
+-- ----------------------------
+-- 31. declare_indicator_joint_rule（指标联合规则表）
+-- ----------------------------
+DROP TABLE IF EXISTS `declare_indicator_joint_rule`;
+CREATE TABLE `declare_indicator_joint_rule`  (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '规则主键（自增）',
+  `rule_name` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '规则名称',
+  `project_type` tinyint(4) DEFAULT 0 COMMENT '适用项目类型：0=全部，1=综合型，2=中医电子病历型，3=智慧中药房型，4=名老中医传承型，5=中医临床科研型，6=中医智慧医共体型',
+  `trigger_timing` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '触发时机：FILL=填报时，PROCESS_SUBMIT=流程提交时',
+  `process_node` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '适用流程节点',
+  `rule_config` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci COMMENT '规则配置（JSON格式）',
+  `status` tinyint(4) NOT NULL DEFAULT 1 COMMENT '规则状态：1=启用，0=禁用',
+  `creator` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '创建者',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updater` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '更新者',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除（0=否，1=是）',
+  `tenant_id` bigint(20) NOT NULL DEFAULT 0 COMMENT '租户编号（默认0）',
+  PRIMARY KEY (`id`) USING BTREE,
+  INDEX `idx_project_type`(`project_type`) USING BTREE COMMENT '项目类型索引',
+  INDEX `idx_trigger_timing`(`trigger_timing`) USING BTREE COMMENT '触发时机索引',
+  INDEX `idx_status`(`status`) USING BTREE COMMENT '状态索引'
+) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '指标联合验证规则表' ROW_FORMAT = Dynamic;
+
+SET FOREIGN_KEY_CHECKS = 1;

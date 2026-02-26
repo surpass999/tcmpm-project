@@ -24,6 +24,18 @@ export namespace DeclareIndicatorApi {
     projectType?: number;
     businessType: string;
     createTime?: string;
+
+    // ========== 口径字段 ==========
+    /** 指标解释（Hover显示） */
+    definition?: string;
+    /** 统计范围 */
+    statisticScope?: string;
+    /** 数据来源 */
+    dataSource?: string;
+    /** 填报要求 */
+    fillRequire?: string;
+    /** 计算示例 */
+    calculationExample?: string;
   }
 
   /** 指标保存请求 */

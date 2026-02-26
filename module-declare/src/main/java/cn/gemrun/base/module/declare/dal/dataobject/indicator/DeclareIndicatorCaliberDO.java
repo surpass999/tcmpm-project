@@ -1,6 +1,7 @@
 package cn.gemrun.base.module.declare.dal.dataobject.indicator;
 
 import cn.gemrun.base.framework.mybatis.core.dataobject.BaseDO;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
@@ -48,8 +49,15 @@ public class DeclareIndicatorCaliberDO extends BaseDO {
     private String fillRequire;
 
     /**
-     * 计算示例
+     * 计算公式
      */
+    @TableField("calculation_example")
     private String calculationExample;
+
+    /**
+     * 指标名称（冗余字段，不存储数据库）
+     */
+    @TableField(exist = false)
+    private String indicatorName;
 
 }

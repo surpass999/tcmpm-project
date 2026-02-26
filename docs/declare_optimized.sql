@@ -378,8 +378,6 @@ CREATE TABLE `declare_indicator`  (
   -- 指标分类：1=基本情况，2=项目管理，3=系统功能，4=建设成效，5=数据集建设，6=数据交易，7=信息安全
   `category` tinyint(4) NOT NULL COMMENT '指标分类：1=基本情况，2=项目管理，3=系统功能，4=建设成效，5=数据集建设，6=数据交易，7=信息安全',
 
-  -- 口径关联
-  `caliber_id` bigint(20) DEFAULT NULL COMMENT '关联指标口径ID',
   `logic_rule` varchar(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '逻辑校验关系（如201>=20101、802>=80201+80202）',
   `calculation_rule` varchar(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '计算公式（如401=系统覆盖名老中医工作室数）',
 
@@ -389,7 +387,7 @@ CREATE TABLE `declare_indicator`  (
   `value_options` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '选项定义（JSON格式）：[{value:1,label:"选项1"},...]，适用于单选/多选/下拉',
 
   -- 约束信息
-  `is_required` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否必填',
+  `is_required` bit(1) NOT NULL DEFAULT '0' COMMENT '是否必填',
   `min_value` decimal(18, 4) DEFAULT NULL COMMENT '最小值',
   `max_value` decimal(18, 4) DEFAULT NULL COMMENT '最大值',
 
@@ -457,15 +455,13 @@ CREATE TABLE `declare_indicator_caliber`  (
 -- 8. declare_indicator_joint_rule（多指标联合验证规则表）
 -- ----------------------------
 -- 说明：存储多指标交叉验证规则，支持与业务流程联动，适配填报实时验证、半年报/中期评估等流程提交验证场景
--- 核心逻辑：通过 process_type 绑定流程、trigger_timing 绑定触发时机，实现"在正确流程节点执行正确验证"
+-- 核心逻辑：通过 trigger_timing 绑定触发时机，实现"在正确流程节点执行正确验证"
 -- ----------------------------
 DROP TABLE IF EXISTS `declare_indicator_joint_rule`;
 CREATE TABLE `declare_indicator_joint_rule`  (
   `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '规则主键（自增）',
   `rule_name` varchar(128) NOT NULL COMMENT '规则名称（需直观描述验证场景，如：中央转移支付金额校验、等保系统数求和验证）',
   `project_type` tinyint(4) DEFAULT 0 COMMENT '适用项目类型：0=全部项目，1=综合型，2=中医电子病历型，3=智慧中药房型，4=名老中医传承型，5=中医临床科研型，6=中医智慧医共体型（与 declare_project.project_type 枚举一致）',
-  `business_type` varchar(64) NOT NULL COMMENT '适用业务类型：filing=备案，project=立项，process=过程记录（含半年报/年度总结/中期评估），achievement=成果，transaction=流通交易（需与 declare_indicator.business_type 对应）',
-  `process_type` tinyint(4) NOT NULL DEFAULT 0 COMMENT '适用流程类型：0=无流程关联（仅填报实时验证），1=建设过程，2=年度总结（含半年报），3=中期评估，4=整改记录，5=验收申请（与 declare_project_process.process_type 枚举完全一致）',
   `trigger_timing` varchar(32) NOT NULL DEFAULT 'FILL' COMMENT '触发时机：FILL=填报时实时验证（用户录入指标值后即时校验），PROCESS_SUBMIT=流程提交时强制验证（提交流程记录时触发）',
   `process_node` varchar(64) DEFAULT '' COMMENT '适用流程节点（可选，适配多节点流程）：对应 Flowable 流程的 task_definition_key（如 province_audit=省级审核、national_audit=国家局审核），空值表示该流程所有节点均触发',
   `rule_config` text NOT NULL COMMENT '规则配置（JSON格式，结构化存储验证逻辑），支持4类核心场景：
@@ -477,7 +473,11 @@ CREATE TABLE `declare_indicator_joint_rule`  (
      {"type":"REQUIRED_BY_PROJECT","projectType":3,"requiredIndicators":["301"],"errorMsg":"智慧中药房型项目必须填写中药房系统功能覆盖率"}
   4. 逻辑互斥验证（如：未通过成果认定则交易金额必须为0）：
      {"type":"EXCLUDE","conditionIndicator":"audit_status","conditionValue":"3","targetIndicators":["604"],"targetValue":0,"errorMsg":"未通过成果认定的项目，交易金额必须为0"}',
+  `rule_level` tinyint(4) NOT NULL DEFAULT 1 COMMENT '规则级别，1=强校验（不通过禁止提交/流程流转），2=弱校验（仅提示不拦截）',
+  `rule_type` tinyint(4) NOT NULL DEFAULT 1 COMMENT '1=求和验证，2=数值比较，3=项目类型必填，4=逻辑互斥',
   `status` tinyint(4) NOT NULL DEFAULT 1 COMMENT '规则状态：1=启用（生效执行验证），0=禁用（暂不执行验证）',
+  `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除（0=否，1=是）',
+  `sort` int(11) NOT NULL DEFAULT 0 COMMENT '排序',
   `version` int(11) NOT NULL DEFAULT 0 COMMENT '乐观锁版本号：解决高并发场景下规则配置修改冲突',
   `delete_reason` varchar(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '删除原因：软删除时记录删除背景（如：规则过期、业务调整）',
   `creator` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '创建者（关联 system_users.id）',
@@ -486,11 +486,9 @@ CREATE TABLE `declare_indicator_joint_rule`  (
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间（规则最后修改时间）',
 
   PRIMARY KEY (`id`) USING BTREE,
-  -- 核心索引：优化"按业务类型+项目类型查询规则"场景（如：查询立项业务、综合型项目的所有规则）
-  INDEX `idx_business_project`(`business_type`, `project_type`) USING BTREE COMMENT '业务类型+项目类型联合索引',
-  -- 核心索引：优化"按流程类型+触发时机查询规则"场景（如：查询年度总结流程、提交时触发的规则）
-  INDEX `idx_process_trigger`(`process_type`, `trigger_timing`) USING BTREE COMMENT '流程类型+触发时机联合索引',
-  -- 辅助索引：优化"按流程节点查询规则"场景（如：查询省级审核节点触发的规则）
+  -- 核心索引：优化"按触发时机查询规则"场景
+  INDEX `idx_trigger`(`trigger_timing`) USING BTREE COMMENT '触发时机索引',
+  -- 辅助索引：优化"按流程节点查询规则"场景
   INDEX `idx_process_node`(`process_node`) USING BTREE COMMENT '流程节点索引'
 ) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '多指标联合验证规则表（支持填报实时验证、流程提交验证，与业务流程强联动）' ROW_FORMAT = Dynamic;
 
