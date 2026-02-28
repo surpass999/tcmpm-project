@@ -28,7 +28,7 @@ const [Modal, modalApi] = useVbenModal({
       const data = modalApi.getData<DeclareIndicatorJointRuleApi.JointRule>();
       console.log('[form.vue] onOpenChange, data:', data);
       
-        if (data?.id) {
+      if (data?.id) {
         // 编辑模式
         modalApi.lock();
         try {

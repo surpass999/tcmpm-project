@@ -8,14 +8,85 @@
  * - 支持多流程节点验证
  */
 
-import type {
-  JointRule,
-  IndicatorValuesMap,
-  ValidationResult,
-  ValidatorOptions,
-  RuleConfig,
-  FormulaItem,
-} from './indicatorValidator';
+// ==================== 类型定义 ====================
+
+// 验证规则（从后端获取）
+export interface JointRule {
+  id: number;
+  ruleName: string;
+  projectType: number;
+  triggerTiming: 'FILL' | 'PROCESS_SUBMIT';
+  processNode?: string;
+  ruleConfig: string;
+  status: number;
+  createTime?: string;
+}
+
+// 指标值Map: key 为 indicatorId，value 为指标值
+export type IndicatorValuesMap = Record<number, any>;
+
+// 验证结果
+export interface ValidationResult {
+  valid: boolean;
+  ruleId: number;
+  ruleName: string;
+  message: string;
+  indicatorId?: number;
+  indicatorCode?: string;
+  // 新增：涉及的所有指标ID
+  involvedIndicatorIds?: number[];
+  involvedIndicatorCodes?: string[];
+}
+
+// 验证引擎选项
+export interface ValidatorOptions {
+  triggerTiming?: 'FILL' | 'PROCESS_SUBMIT';
+  processNode?: string;
+  changedIndicatorId?: number;
+}
+
+// 规则配置中的公式项
+export interface FormulaItem {
+  valueType: 'indicator' | 'fixed';
+  indicatorId?: number;
+  indicatorCode?: string;
+  indicatorName?: string;
+  mathOp?: '+' | '-' | '*' | '/';
+  value?: number;
+}
+
+// 规则配置中的动作
+export interface RuleAction {
+  type: 'formula' | 'condition';
+  level?: number;
+  message: string;
+  operator: string;
+  compareType?: 'indicator' | 'fixed';
+  compareValue?: number;
+  compareIndicatorId?: number;
+  compareIndicatorName?: string;
+  formula?: FormulaItem[];
+}
+
+// 单条规则配置
+export interface RuleConfigItem {
+  name: string;
+  ruleType: number;
+  condition?: {
+    indicatorName?: string;
+    operator?: string;
+  };
+  action: RuleAction;
+}
+
+// 规则配置（解析后的JSON）
+export interface RuleConfig {
+  groupName?: string;
+  priority?: number;
+  rules: RuleConfigItem[];
+}
+
+// ==================== 验证实现 ====================
 
 /**
  * 执行验证
@@ -105,6 +176,23 @@ function validateRule(
       // 执行比较
       const operator = action.operator;
       if (!compareValues(currentValue, operator, compareValue)) {
+        // 收集所有涉及的指标ID
+        const involvedIndicatorIds: number[] = [];
+        const involvedIndicatorCodes: string[] = [];
+        
+        // 添加公式中的所有指标
+        (action.formula || []).forEach((f) => {
+          if (f.indicatorId) {
+            involvedIndicatorIds.push(f.indicatorId);
+            if (f.indicatorCode) involvedIndicatorCodes.push(f.indicatorCode);
+          }
+        });
+        // 添加被比较的指标
+        if (action.compareIndicatorId) {
+          involvedIndicatorIds.push(action.compareIndicatorId);
+          if (action.compareIndicatorName) involvedIndicatorCodes.push(action.compareIndicatorName);
+        }
+
         return {
           valid: false,
           ruleId: rule.id,
@@ -112,6 +200,8 @@ function validateRule(
           message: action.message || '验证失败',
           indicatorId: action.formula?.[0]?.indicatorId,
           indicatorCode: action.formula?.[0]?.indicatorCode,
+          involvedIndicatorIds,
+          involvedIndicatorCodes,
         };
       }
     }

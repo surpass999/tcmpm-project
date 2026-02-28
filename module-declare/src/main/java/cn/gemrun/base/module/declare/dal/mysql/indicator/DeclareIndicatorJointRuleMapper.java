@@ -28,7 +28,7 @@ public interface DeclareIndicatorJointRuleMapper extends BaseMapperX<DeclareIndi
         // 项目类型过滤：查询指定类型或通用类型(0)
         if (projectType != null) {
             wrapper.and(w -> w
-                    .eq(DeclareIndicatorJointRuleDO::getProjectType, projectType)
+                .eq(DeclareIndicatorJointRuleDO::getProjectType, projectType)
                     .or()
                     .eq(DeclareIndicatorJointRuleDO::getProjectType, 0));
         }

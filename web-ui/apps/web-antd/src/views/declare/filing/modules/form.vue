@@ -9,6 +9,8 @@ import { IconifyIcon } from '@vben/icons';
 import { useVbenModal } from '@vben/common-ui';
 
 import { message } from 'ant-design-vue';
+import type { FileType } from 'ant-design-vue/es/upload/interface';
+import { Upload } from 'ant-design-vue';
 import {
   getIndicatorsByProjectType,
 } from '#/api/declare/indicator';
@@ -24,6 +26,7 @@ import {
 import {
   getEnabledJointRules,
 } from '#/api/declare/jointRule';
+import { uploadFile } from '#/api/infra/file';
 import { validate } from '#/utils/indicatorValidator';
 import { DICT_TYPE } from '@vben/constants';
 import { getDictOptions } from '@vben/hooks';
@@ -56,6 +59,16 @@ const jointRules = ref<DeclareIndicatorJointRuleApi.JointRule[]>([]);
 
 // 指标值存储 - 使用 reactive 对象
 const indicatorValuesMap = reactive<Record<number, any>>({});
+
+// 指标验证错误状态: key 为指标ID, value 为错误消息
+const indicatorErrors = reactive<Record<number, string>>({});
+
+// 获取有验证错误的指标ID列表
+const errorIndicatorIds = computed(() => {
+  return Object.keys(indicatorErrors)
+    .filter((key) => indicatorErrors[Number(key)])
+    .map(Number);
+});
 
 // 折叠面板展开的key
 const activeCollapseKeys = ref<(string | number)[]>([]);
@@ -93,18 +106,147 @@ function getCategoryName(category: number) {
   return found?.label || `分类${category}`;
 }
 
-// 指标值变化时触发验证
+// 指标值变化时触发验证（实时验证）
 function onIndicatorChange(indicatorId: number) {
-  // 执行 FILL 类型规则的实时验证
-  const errors = validate(jointRules.value, indicatorValuesMap, {
-    triggerTiming: 'FILL',
-    changedIndicatorId: indicatorId,
+  // 先清除所有指标的旧错误
+  Object.keys(indicatorErrors).forEach((key) => {
+    delete indicatorErrors[Number(key)];
   });
 
-  if (errors.length > 0) {
-    // 显示第一个错误消息
-    message.warning(errors[0].message);
+  // 执行 FILL 类型规则的实时验证
+  const errors = validate(
+    jointRules.value.filter((r) => r.id) as any,
+    indicatorValuesMap,
+    { triggerTiming: 'FILL', changedIndicatorId: indicatorId }
+  );
+
+  // 遍历所有错误，为每个涉及的指标设置错误状态和消息
+  errors.forEach((error) => {
+    // 收集所有涉及的指标ID
+    const involvedIds = (error.involvedIndicatorIds || [error.indicatorId].filter(Boolean)) as number[];
+    
+    // 每个涉及的指标都显示错误消息
+    involvedIds.forEach((id) => {
+      if (id) {
+        indicatorErrors[id] = error.message;
+      }
+    });
+  });
+}
+
+// 文件上传处理
+interface UploadFileItem {
+  name: string;
+  url: string;
+  uid?: string;
+}
+
+const fileListMap = reactive<Record<number, UploadFileItem[]>>({});
+
+function getFileList(indicatorId: number): UploadFileItem[] {
+  return fileListMap[indicatorId] || [];
+}
+
+// 获取文件上传最大数量（使用 maxValue 字段，默认5个）
+function getMaxFileCount(indicator: DeclareIndicatorApi.Indicator): number {
+  return indicator.maxValue ? Number(indicator.maxValue) : 5;
+}
+
+// 解析存储的文件列表
+function parseStoredFileList(value: string | undefined): UploadFileItem[] {
+  if (!value) return [];
+  try {
+    // 尝试解析 JSON 数组
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) {
+      return parsed;
+    }
+  } catch {
+    // 兼容单个URL格式
+    if (value.includes(',')) {
+      // 多个URL用逗号分隔
+      return value.split(',').map((url) => ({
+        name: url.split('/').pop() || url,
+        url: url.trim(),
+      }));
+    }
+    // 单个URL
+    return [{
+      name: value.split('/').pop() || value,
+      url: value,
+    }];
   }
+  return [];
+}
+
+// 初始化文件列表（加载已有数据时调用）
+function initFileList(indicatorId: number, value: string | undefined) {
+  fileListMap[indicatorId] = parseStoredFileList(value);
+}
+
+async function handleFileUpload(file: FileType, indicator: DeclareIndicatorApi.Indicator) {
+  const indicatorId = indicator.id!;
+  const maxCount = getMaxFileCount(indicator);
+  
+  try {
+    const result = await uploadFile({
+      file: file as any,
+      directory: 'declare/indicator',
+    });
+
+    const fileUrl = result.url || result;
+    const fileName = file.name;
+    
+    // 获取当前文件列表
+    const currentList = fileListMap[indicatorId] || [];
+    
+    // 检查是否已上传过同名文件
+    if (currentList.some(f => f.name === fileName)) {
+      message.warning('文件已存在');
+      return false;
+    }
+    
+    // 检查文件数量限制
+    if (currentList.length >= maxCount) {
+      message.warning(`最多上传${maxCount}个文件`);
+      return false;
+    }
+    
+    // 添加新文件
+    const newFile: UploadFileItem = {
+      name: fileName,
+      url: fileUrl,
+      uid: Date.now().toString(),
+    };
+    
+    fileListMap[indicatorId] = [...currentList, newFile];
+    
+    // 更新存储值（JSON 数组）
+    indicatorValuesMap[indicatorId] = JSON.stringify(fileListMap[indicatorId]);
+    
+    // 触发验证
+    onIndicatorChange(indicatorId);
+    message.success('文件上传成功');
+  } catch (error) {
+    console.error('文件上传错误:', error);
+    message.error('文件上传失败');
+  }
+  
+  // 阻止默认上传行为
+  return false;
+}
+
+// 删除文件
+function handleFileRemove(file: UploadFileItem, indicatorId: number) {
+  const currentList = fileListMap[indicatorId] || [];
+  fileListMap[indicatorId] = currentList.filter(f => f.uid !== file.uid && f.name !== file.name);
+  
+  // 更新存储值
+  indicatorValuesMap[indicatorId] = JSON.stringify(fileListMap[indicatorId]);
+  
+  // 触发验证
+  onIndicatorChange(indicatorId);
+  message.success('文件已删除');
 }
 
 // 项目类型改变时加载指标
@@ -193,6 +335,13 @@ async function loadIndicatorValues() {
           // 日期区间需要特殊处理
           if (v.valueDateStart || v.valueDateEnd) {
             value = [v.valueDateStart, v.valueDateEnd];
+          }
+          break;
+        case 9: // 文件上传
+          value = v.valueStr || undefined;
+          // 初始化文件列表
+          if (value && v.indicatorId) {
+            initFileList(v.indicatorId, value);
           }
           break;
         default:
@@ -303,6 +452,7 @@ function buildIndicatorValues(
         case 7: // 多选
         case 10: // 单选下拉
         case 11: // 多选下拉
+        case 9: // 文件上传
           item.valueStr = String(value);
           break;
         case 3: // 布尔
@@ -349,9 +499,11 @@ async function handleSubmit() {
   }
 
   // 验证联合规则
-  const validationErrors = validate(jointRules.value, indicatorValuesMap, {
-    triggerTiming: 'FILL',
-  });
+  const validationErrors = validate(
+    jointRules.value.filter((r) => r.id) as any,
+    indicatorValuesMap,
+    { triggerTiming: 'FILL' }
+  );
   if (validationErrors.length > 0) {
     message.error('验证失败：' + validationErrors.map((e) => e.message).join('；'));
     return;
@@ -643,7 +795,7 @@ const [Modal, modalApi] = useVbenModal({
                         <div class="space-y-3">
                           <!-- 指标定义 -->
                           <div v-if="indicator.definition">
-                            <h4 class="font-medium text-gray-900 text-sm mb-1">📌 指标定义</h4>
+                            <h4 class="font-medium text-gray-900 text-sm mb-1">📌 {{ indicator.indicatorCode}} - 指标定义</h4>
                             <p class="text-gray-600 text-xs">{{ indicator.definition }}</p>
                           </div>
 
@@ -687,6 +839,7 @@ const [Modal, modalApi] = useVbenModal({
                   v-if="indicator.valueType === 1"
                   v-model:value="indicatorValuesMap[indicator.id!]"
                   class="w-full"
+                  :status="errorIndicatorIds.includes(indicator.id!) ? 'error' : ''"
                   :placeholder="`请输入${indicator.indicatorName}`"
                   :min="indicator.minValue"
                   :max="indicator.maxValue"
@@ -701,6 +854,7 @@ const [Modal, modalApi] = useVbenModal({
                 <a-input
                   v-else-if="indicator.valueType === 2"
                   v-model:value="indicatorValuesMap[indicator.id!]"
+                  :status="errorIndicatorIds.includes(indicator.id!) ? 'error' : ''"
                   :placeholder="`请输入${indicator.indicatorName}`"
                   @change="onIndicatorChange(indicator.id!)"
                 />
@@ -721,6 +875,7 @@ const [Modal, modalApi] = useVbenModal({
                   show-time
                   format="YYYY-MM-DD"
                   class="w-full"
+                  :status="errorIndicatorIds.includes(indicator.id!) ? 'error' : ''"
                   @change="onIndicatorChange(indicator.id!)"
                 />
 
@@ -728,6 +883,7 @@ const [Modal, modalApi] = useVbenModal({
                 <a-textarea
                   v-else-if="indicator.valueType === 5"
                   v-model:value="indicatorValuesMap[indicator.id!]"
+                  :status="errorIndicatorIds.includes(indicator.id!) ? 'error' : ''"
                   :placeholder="`请输入${indicator.indicatorName}`"
                   :rows="2"
                   @change="onIndicatorChange(indicator.id!)"
@@ -737,6 +893,7 @@ const [Modal, modalApi] = useVbenModal({
                 <a-radio-group
                   v-else-if="indicator.valueType === 6"
                   v-model:value="indicatorValuesMap[indicator.id!]"
+                  :class="{ 'ant-radio-group-error': errorIndicatorIds.includes(indicator.id!) }"
                   @change="onIndicatorChange(indicator.id!)"
                 >
                   <a-radio
@@ -752,6 +909,7 @@ const [Modal, modalApi] = useVbenModal({
                 <a-checkbox-group
                   v-else-if="indicator.valueType === 7"
                   v-model:value="indicatorValuesMap[indicator.id!]"
+                  :class="{ 'ant-checkbox-group-error': errorIndicatorIds.includes(indicator.id!) }"
                   @change="onIndicatorChange(indicator.id!)"
                 >
                   <a-checkbox
@@ -769,7 +927,9 @@ const [Modal, modalApi] = useVbenModal({
                   v-model:value="indicatorValuesMap[indicator.id!]"
                   :placeholder="`请选择${indicator.indicatorName}`"
                   class="w-full"
+                  :status="errorIndicatorIds.includes(indicator.id!) ? 'error' : ''"
                   allow-clear
+                  @change="onIndicatorChange(indicator.id!)"
                 >
                   <a-select-option
                     v-for="opt in parseOptions(indicator.valueOptions)"
@@ -787,7 +947,9 @@ const [Modal, modalApi] = useVbenModal({
                   :placeholder="`请选择${indicator.indicatorName}`"
                   mode="multiple"
                   class="w-full"
+                  :status="errorIndicatorIds.includes(indicator.id!) ? 'error' : ''"
                   allow-clear
+                  @change="onIndicatorChange(indicator.id!)"
                 >
                   <a-select-option
                     v-for="opt in parseOptions(indicator.valueOptions)"
@@ -806,6 +968,54 @@ const [Modal, modalApi] = useVbenModal({
                   format="YYYY-MM-DD"
                   class="w-full"
                 />
+
+                <!-- 文件上传类型（多文件） -->
+                <div v-else-if="indicator.valueType === 9" class="w-full">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <!-- 已上传文件列表（显示在上传按钮左侧） -->
+                    <div v-if="getFileList(indicator.id!).length > 0" class="flex flex-wrap gap-2">
+                      <div
+                        v-for="(file, index) in getFileList(indicator.id!)"
+                        :key="index"
+                        class="relative flex flex-col items-center justify-center w-24 h-24 border-2 border-dashed border-blue-400 rounded-lg bg-blue-50 group hover:border-red-400 transition-colors"
+                      >
+                        <IconifyIcon icon="lucide:file-text" class="text-xl text-blue-500" />
+                        <div class="mt-1 text-xs text-gray-600 truncate w-20 text-center" :title="file.name">
+                          {{ file.name }}
+                        </div>
+                        <button
+                          type="button"
+                          class="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                          @click.stop="handleFileRemove(file, indicator.id!)"
+                        >
+                          <IconifyIcon icon="lucide:x" class="text-xs" />
+                        </button>
+                      </div>
+                    </div>
+                    
+                    <!-- 上传按钮 -->
+                    <Upload
+                      :before-upload="(file: FileType) => handleFileUpload(file, indicator)"
+                      :show-upload-list="false"
+                      :disabled="getFileList(indicator.id!).length >= getMaxFileCount(indicator)"
+                      multiple
+                    >
+                      <div
+                        class="flex flex-col items-center justify-center w-24 h-24 border-2 border-dashed rounded-lg cursor-pointer hover:border-blue-400 transition-colors"
+                        :class="getFileList(indicator.id!).length >= getMaxFileCount(indicator) ? 'opacity-50 cursor-not-allowed' : ''"
+                      >
+                        <IconifyIcon icon="lucide:plus" class="text-2xl text-gray-400" />
+                        <div class="mt-1 text-xs text-gray-400">点击上传</div>
+                        <div class="text-xs text-gray-300">最多{{ getMaxFileCount(indicator) }}个</div>
+                      </div>
+                    </Upload>
+                  </div>
+                </div>
+
+                <!-- 统一的错误提示：每个指标只显示一次 -->
+                <div v-if="indicatorErrors[indicator.id!]" class="text-red-500 text-xs mt-1">
+                  {{ indicatorErrors[indicator.id!] }}
+                </div>
               </a-form-item>
             </div>
           </a-collapse-panel>
