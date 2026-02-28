@@ -1,8 +1,9 @@
 <script lang="ts" setup>
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { DeclareFilingApi } from '#/api/declare/filing';
+import type { DeclareIndicatorApi } from '#/api/declare/indicator';
 
-import { ref } from 'vue';
+import { computed, nextTick, onMounted, ref, shallowRef } from 'vue';
 
 import { confirm, Page, useVbenModal } from '@vben/common-ui';
 import { downloadFileFromBlobPart, isEmpty } from '@vben/utils';
@@ -15,10 +16,68 @@ import {
   exportFiling,
   getFilingPage,
 } from '#/api/declare/filing';
+import { getIndicatorsForListDisplay } from '#/api/declare/indicator';
 import { $t } from '#/locales';
 
 import { useGridColumns, useGridFormSchema } from './data';
 import Form from './modules/form.vue';
+
+// 业务类型：1=备案
+const BUSINESS_TYPE = 'filing';
+
+// 需要在列表显示的指标
+const listDisplayIndicators = shallowRef<DeclareIndicatorApi.Indicator[]>([]);
+
+// 基础列配置
+const baseColumns = useGridColumns() || [];
+
+// 计算所有列（包含动态指标列）
+const allColumns = computed(() => {
+  const cols = baseColumns as any[];
+  const indicatorColumns = getDynamicColumns();
+  if (indicatorColumns.length === 0) {
+    return cols;
+  }
+  return [...cols.slice(0, -1), ...indicatorColumns, cols[cols.length - 1]];
+});
+
+// 加载列表显示指标
+async function loadListDisplayIndicators() {
+  try {
+    const data = await getIndicatorsForListDisplay(BUSINESS_TYPE);
+    listDisplayIndicators.value = data || [];
+    // 更新表格列配置
+    const cols = allColumns.value;
+    // 使用 setGridOptions 更新列配置
+    nextTick(async () => {
+      if (gridApi?.setGridOptions) {
+        await gridApi.setGridOptions({ columns: cols });
+      }
+      // 刷新表格数据
+      await gridApi?.query();
+    });
+  } catch (error) {
+    console.error('加载列表显示指标失败:', error);
+    listDisplayIndicators.value = [];
+  }
+}
+
+// 获取动态列
+function getDynamicColumns() {
+  // 如果还没有加载指标，返回空数组
+  if (!listDisplayIndicators.value || listDisplayIndicators.value.length === 0) {
+    return [];
+  }
+
+  const indicatorColumns = listDisplayIndicators.value.map((indicator) => ({
+    field: `indicator_${indicator.indicatorCode}`, // 使用唯一字段名
+    title: indicator.indicatorName,
+    minWidth: 120,
+    slots: { default: 'indicator_value' },
+    params: { indicatorCode: indicator.indicatorCode },
+  }));
+  return indicatorColumns;
+}
 
 const [FormModal, formModalApi] = useVbenModal({
   connectedComponent: Form,
@@ -84,11 +143,34 @@ function handleRowCheckboxChange({
   checkedIds.value = records.map((item) => item.id!);
 }
 
+// 格式化指标值显示
+function formatIndicatorValue(row: DeclareFilingApi.Filing, indicatorCode: string) {
+  const indicatorValues = row.indicatorValues || {};
+  const value = indicatorValues[indicatorCode];
+  if (value === null || value === undefined || value === '') {
+    return '无';
+  }
+  // 处理日期区间
+  if (typeof value === 'object' && value !== null && 'start' in value && 'end' in value) {
+    return `${value.start} ~ ${value.end}`;
+  }
+  // 处理布尔值
+  if (typeof value === 'boolean') {
+    return value ? '是' : '否';
+  }
+  return String(value);
+}
+
 /** 导出表格 */
 async function handleExport() {
   const data = await exportFiling(await gridApi.formApi.getValues());
   downloadFileFromBlobPart({ fileName: '项目备案核心信息.xls', source: data });
 }
+
+// 页面加载时获取列表显示指标
+onMounted(() => {
+  loadListDisplayIndicators();
+});
 
 const [Grid, gridApi] = useVbenVxeGrid({
   formOptions: {
@@ -96,7 +178,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
   },
   showSearchForm: false,
   gridOptions: {
-    columns: useGridColumns(),
+    columns: allColumns.value,
     height: 'auto',
     keepSource: true,
     proxyConfig: {
@@ -159,6 +241,10 @@ const [Grid, gridApi] = useVbenVxeGrid({
             },
           ]"
         />
+      </template>
+      <!-- 指标值插槽 -->
+      <template #indicator_value="{ row, column }">
+        {{ formatIndicatorValue(row, column.params?.indicatorCode) }}
       </template>
       <template #actions="{ row }">
         <TableAction

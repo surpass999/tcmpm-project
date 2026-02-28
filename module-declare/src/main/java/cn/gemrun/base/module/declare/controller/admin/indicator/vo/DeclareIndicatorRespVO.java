@@ -126,6 +126,11 @@ public class DeclareIndicatorRespVO {
     private String businessType;
 
     /**
+     * 扩展配置（JSON格式，各值类型不同）
+     */
+    private String extraConfig;
+
+    /**
      * 创建时间
      */
     private java.time.LocalDateTime createTime;

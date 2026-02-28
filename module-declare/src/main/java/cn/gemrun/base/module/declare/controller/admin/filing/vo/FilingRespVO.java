@@ -5,6 +5,7 @@ import lombok.*;
 import java.util.*;
 import org.springframework.format.annotation.DateTimeFormat;
 import java.time.LocalDateTime;
+import java.util.Map;
 import cn.idev.excel.annotation.*;
 
 @Schema(description = "管理后台 - 项目备案核心信息 Response VO")
@@ -75,5 +76,11 @@ public class FilingRespVO {
     @Schema(description = "创建时间", requiredMode = Schema.RequiredMode.REQUIRED)
     @ExcelProperty("创建时间")
     private LocalDateTime createTime;
+
+    /**
+     * 指标值 Map（key 为 indicatorCode，value 为指标值对象）
+     */
+    @Schema(description = "指标值 Map（key 为 indicatorCode，value 为指标值）")
+    private Map<String, Object> indicatorValues;
 
 }

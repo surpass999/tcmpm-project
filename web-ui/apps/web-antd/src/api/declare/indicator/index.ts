@@ -15,6 +15,7 @@ export namespace DeclareIndicatorApi {
     calculationRule: string;
     valueType: number;
     valueOptions: string;
+    extraConfig?: string;
     isRequired: boolean;
     minValue?: number;
     maxValue?: number;
@@ -50,6 +51,7 @@ export namespace DeclareIndicatorApi {
     calculationRule: string;
     valueType: number;
     valueOptions: string;
+    extraConfig?: string;
     isRequired: boolean;
     minValue?: number;
     maxValue?: number;
@@ -109,4 +111,11 @@ export async function updateIndicator(data: DeclareIndicatorApi.IndicatorSavePar
 /** 删除指标 */
 export async function deleteIndicator(id: number) {
   return requestClient.delete(`/declare/indicator/delete?id=${id}`);
+}
+
+/** 获取需要在列表显示的指标（showInList=true） */
+export async function getIndicatorsForListDisplay(businessType: string) {
+  return requestClient.get<DeclareIndicatorApi.Indicator[]>(
+    `/declare/indicator/list-for-list-display?businessType=${businessType}`
+  );
 }

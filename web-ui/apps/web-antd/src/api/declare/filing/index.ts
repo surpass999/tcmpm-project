@@ -21,6 +21,8 @@ export namespace DeclareFilingApi {
     expertReviewOpinion: string; // 专家论证意见
     expertReviewerIds: string; // 论证专家
     filingArchiveTime: string | Dayjs; // 归档时间
+    /** 指标值 Map（key 为 indicatorCode，value 为指标值） */
+    indicatorValues?: Record<string, any>;
   }
 }
 

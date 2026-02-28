@@ -102,4 +102,9 @@ public class DeclareIndicatorDO extends BaseDO {
      */
     private String businessType;
 
+    /**
+     * 扩展配置（JSON格式，各值类型不同）
+     */
+    private String extraConfig;
+
 }

@@ -9,11 +9,13 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.*;
 import cn.gemrun.base.module.declare.controller.admin.filing.vo.*;
 import cn.gemrun.base.module.declare.dal.dataobject.filing.FilingDO;
+import cn.gemrun.base.module.declare.dal.dataobject.indicator.DeclareIndicatorValueDO;
 import cn.gemrun.base.framework.common.pojo.PageResult;
 import cn.gemrun.base.framework.common.pojo.PageParam;
 import cn.gemrun.base.framework.common.util.object.BeanUtils;
 
 import cn.gemrun.base.module.declare.dal.mysql.filing.FilingMapper;
+import cn.gemrun.base.module.declare.service.indicator.DeclareIndicatorValueService;
 
 import static cn.gemrun.base.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.gemrun.base.framework.common.util.collection.CollectionUtils.convertList;
@@ -31,6 +33,12 @@ public class FilingServiceImpl implements FilingService {
 
     @Resource
     private FilingMapper filingMapper;
+
+    @Resource
+    private DeclareIndicatorValueService indicatorValueService;
+
+    // 业务类型：1=备案
+    private static final Integer BUSINESS_TYPE_FILING = 1;
 
     @Override
     public Long createFiling(FilingSaveReqVO createReqVO) {

@@ -19,7 +19,9 @@ import static cn.gemrun.base.framework.common.pojo.CommonResult.success;
 
 import cn.gemrun.base.module.declare.controller.admin.filing.vo.*;
 import cn.gemrun.base.module.declare.dal.dataobject.filing.FilingDO;
+import cn.gemrun.base.module.declare.dal.dataobject.indicator.DeclareIndicatorValueDO;
 import cn.gemrun.base.module.declare.service.filing.FilingService;
+import cn.gemrun.base.module.declare.service.indicator.DeclareIndicatorValueService;
 import cn.gemrun.base.module.declare.framework.process.annotation.DeclareProcess;
 
 /**
@@ -41,6 +43,12 @@ public class FilingController {
 
     @Resource
     private FilingService filingService;
+
+    @Resource
+    private DeclareIndicatorValueService indicatorValueService;
+
+    // 业务类型：1=备案
+    private static final Integer BUSINESS_TYPE_FILING = 1;
 
     // ========== 基础操作（不触发流程）==========
 
@@ -121,7 +129,63 @@ public class FilingController {
     @PreAuthorize("@ss.hasPermission('declare:filing:query')")
     public CommonResult<PageResult<FilingRespVO>> getFilingPage(@Valid FilingPageReqVO pageReqVO) {
         PageResult<FilingDO> pageResult = filingService.getFilingPage(pageReqVO);
-        return success(BeanUtils.toBean(pageResult, FilingRespVO.class));
+
+        // 转换并填充指标值
+        List<FilingRespVO> voList = new ArrayList<>();
+        for (FilingDO filing : pageResult.getList()) {
+            FilingRespVO respVO = BeanUtils.toBean(filing, FilingRespVO.class);
+
+            // 查询指标值
+            Map<String, DeclareIndicatorValueDO> indicatorValueMap =
+                indicatorValueService.getIndicatorValueMap(BUSINESS_TYPE_FILING, filing.getId());
+            // 转换为显示值 Map（key: indicatorCode, value: 显示值）
+            Map<String, Object> displayValues = new HashMap<>();
+            for (Map.Entry<String, DeclareIndicatorValueDO> entry : indicatorValueMap.entrySet()) {
+                displayValues.put(entry.getKey(), getDisplayValue(entry.getValue()));
+            }
+            respVO.setIndicatorValues(displayValues);
+
+            voList.add(respVO);
+        }
+
+        return success(new PageResult<>(voList, pageResult.getTotal()));
+    }
+
+    /**
+     * 获取指标值的显示值
+     */
+    private Object getDisplayValue(DeclareIndicatorValueDO indicatorValue) {
+        if (indicatorValue == null) {
+            return null;
+        }
+        Integer valueType = indicatorValue.getValueType();
+        // 值类型：1=数字，2=字符串，3=布尔，4=日期，5=长文本，6=单选，7=多选，8=日期区间，9=文件上传
+        switch (valueType) {
+            case 1: // 数字
+                return indicatorValue.getValueNum();
+            case 2: // 字符串
+            case 6: // 单选
+            case 7: // 多选
+            case 9: // 文件上传
+                return indicatorValue.getValueStr();
+            case 3: // 布尔
+                return indicatorValue.getValueBool();
+            case 4: // 日期
+                return indicatorValue.getValueDate();
+            case 5: // 长文本
+                return indicatorValue.getValueText();
+            case 8: // 日期区间
+                Map<String, Object> dateRange = new HashMap<>();
+                if (indicatorValue.getValueDateStart() != null) {
+                    dateRange.put("start", indicatorValue.getValueDateStart().toString());
+                }
+                if (indicatorValue.getValueDateEnd() != null) {
+                    dateRange.put("end", indicatorValue.getValueDateEnd().toString());
+                }
+                return dateRange.isEmpty() ? null : dateRange.toString();
+            default:
+                return null;
+        }
     }
 
     // ========== 删除操作 ==========

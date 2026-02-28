@@ -121,6 +121,25 @@ public class DeclareIndicatorController {
     }
 
     /**
+     * 获取需要在列表显示的指标（showInList=true）
+     */
+    @GetMapping("/list-for-list-display")
+    public CommonResult<List<DeclareIndicatorRespVO>> getIndicatorsForListDisplay(@RequestParam("businessType") String businessType) {
+        List<DeclareIndicatorDO> list = indicatorService.getIndicatorsByBusinessType(businessType);
+        // 过滤 showInList=true 的指标
+        List<DeclareIndicatorDO> listDisplayIndicators = new java.util.ArrayList<>();
+        for (DeclareIndicatorDO indicator : list) {
+            if (Boolean.TRUE.equals(indicator.getShowInList())) {
+                listDisplayIndicators.add(indicator);
+            }
+        }
+        List<DeclareIndicatorRespVO> voList = BeanUtils.toBean(listDisplayIndicators, DeclareIndicatorRespVO.class);
+        // 填充口径数据
+        fillCaliberData(voList);
+        return success(voList);
+    }
+
+    /**
      * 填充指标口径数据
      * 优化：通过 indicatorId 直接查询口径，不再依赖 caliberId
      */

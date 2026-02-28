@@ -382,10 +382,10 @@ CREATE TABLE `declare_indicator`  (
   `calculation_rule` varchar(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '计算公式（如401=系统覆盖名老中医工作室数）',
 
   -- 值类型
-  -- | 1=数字 | 2=字符串 | 3=布尔 | 4=日期 | 5=长文本 | 6=单选 | 7=多选 | 8=日期区间 | 9=文件上传 |
-  `value_type` tinyint(4) NOT NULL DEFAULT 1 COMMENT '值类型：1=数字，2=字符串，3=布尔，4=日期，5=长文本，6=单选，7=多选，8=日期区间，9=文件上传',
+  -- | 1=数字 | 2=字符串 | 3=布尔 | 4=日期 | 5=长文本 | 6=单选 | 7=多选 | 8=日期区间 | 9=文件上传 | 10=单选下拉 | 11=多选下拉 |
+  `value_type` tinyint(4) NOT NULL DEFAULT 1 COMMENT '值类型：1=数字，2=字符串，3=布尔，4=日期，5=长文本，6=单选，7=多选，8=日期区间，9=文件上传，10=单选下拉，11=多选下拉',
   `value_options` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '选项定义（JSON格式）：[{value:1,label:"选项1"},...]，适用于单选/多选/下拉',
-
+  `extra_config` json DEFAULT NULL COMMENT '扩展配置（JSON格式，各值类型不同）',
   -- 约束信息
   `is_required` bit(1) NOT NULL DEFAULT '0' COMMENT '是否必填',
   `min_value` decimal(18, 4) DEFAULT NULL COMMENT '最小值',
