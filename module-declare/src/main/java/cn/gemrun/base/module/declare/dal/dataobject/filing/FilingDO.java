@@ -109,6 +109,11 @@ public class FilingDO extends BaseDO {
      * 关联项目ID（关联project_project.id）
      */
     private Long projectId;
+    /**
+     * 所属部门ID（用于数据权限控制）
+     */
+    @TableField("dept_id")
+    private Long deptId;
 
 
 }

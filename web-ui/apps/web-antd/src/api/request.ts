@@ -32,29 +32,47 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
     baseURL,
   });
 
+  // 标记是否正在进行登出处理
+  let isLoggingOut = false;
+
   /**
    * 重新认证逻辑
    */
   async function doReAuthenticate() {
-    console.warn('Access token or refresh token is invalid or expired. ');
-
-    // 判断当前是否在登录页面，如果在登录页面则不需要跳转
-    const route = useRoute();
-    if (route.path === LOGIN_PATH || route.path.startsWith('/auth/login')) {
-      console.warn('Already on login page, skip redirect.');
+    // 防止重复调用
+    if (isLoggingOut) {
+      console.warn('Already logging out, skip.');
       return;
     }
+    isLoggingOut = true;
 
-    const accessStore = useAccessStore();
-    const authStore = useAuthStore();
-    accessStore.setAccessToken(null);
-    if (
-      preferences.app.loginExpiredMode === 'modal' &&
-      accessStore.isAccessChecked
-    ) {
-      accessStore.setLoginExpired(true);
-    } else {
-      await authStore.logout();
+    try {
+      console.warn('Access token or refresh token is invalid or expired. ');
+
+      // 直接检查 accessStore 是否有 token
+      const accessStore = useAccessStore();
+      const authStore = useAuthStore();
+
+      // 清除 token
+      accessStore.setAccessToken(null);
+      accessStore.setRefreshToken(null);
+
+      // 如果已经有登录过期标记，直接返回
+      if (accessStore.loginExpired) {
+        return;
+      }
+
+      if (
+        preferences.app.loginExpiredMode === 'modal' &&
+        accessStore.isAccessChecked
+      ) {
+        accessStore.setLoginExpired(true);
+      } else {
+        // 调用登出并跳转登录页
+        await authStore.logout();
+      }
+    } finally {
+      isLoggingOut = false;
     }
   }
 
@@ -68,6 +86,15 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
       throw new Error('Refresh token is null!');
     }
     const resp = await refreshTokenApi(refreshToken);
+    
+    // 检查响应中是否有特定的刷新令牌过期错误
+    // 后端返回: { code: 401, msg: "刷新令牌已过期" }
+    if (resp?.data?.code === 401 && 
+        (resp?.data?.msg?.includes('刷新令牌') || resp?.data?.message?.includes('刷新令牌'))) {
+      // 刷新令牌已过期，抛出特定错误让 interceptor 处理
+      throw new Error('REFRESH_TOKEN_EXPIRED');
+    }
+    
     const newToken = resp?.data?.data?.accessToken;
     // add by 芋艿：这里一定要抛出 resp.data，从而触发 authenticateResponseInterceptor 中，刷新令牌失败！！！
     if (!newToken) {

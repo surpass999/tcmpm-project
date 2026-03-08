@@ -324,6 +324,13 @@ export function useGridColumns(
       minWidth: 120,
     },
     {
+      field: 'expertBind',
+      title: '是否专家',
+      minWidth: 100,
+      align: 'center',
+      slots: { default: 'expert' },
+    },
+    {
       field: 'status',
       title: '状态',
       minWidth: 100,

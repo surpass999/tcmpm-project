@@ -1,6 +1,7 @@
 package cn.gemrun.base.module.system.api.permission;
 
 import java.util.Collection;
+import java.util.Set;
 
 /**
  * 角色 API 接口
@@ -17,5 +18,13 @@ public interface RoleApi {
      * @param ids 角色编号数组
      */
     void validRoleList(Collection<Long> ids);
+
+    /**
+     * 根据角色编码集合获取角色 ID 集合
+     *
+     * @param codes 角色编码集合，如 ["PROVINCE", "NATION"]
+     * @return 角色 ID 集合
+     */
+    Set<Long> getRoleIdsByCodes(Collection<String> codes);
 
 }

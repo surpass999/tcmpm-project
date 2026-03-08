@@ -4,7 +4,7 @@ set -e
 # 配置
 PROJECT_PATH=/www/wwwroot/tcmpm
 SERVER_PATH=$PROJECT_PATH/server
-MODULE_NAME=module-declare
+MODULE_NAME="module-bpm,module-declare"
 PORT=48080
 PROFILE=dev
 

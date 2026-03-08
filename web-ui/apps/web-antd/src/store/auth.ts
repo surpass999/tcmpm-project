@@ -110,11 +110,12 @@ export const useAuthStore = defineStore('auth', () => {
   async function logout(redirect: boolean = true) {
     try {
       const accessToken = accessStore.accessToken as string;
-      if (accessToken) {
+      // 只有在 token 存在且不是明显过期的情况下才调用登出接口
+      if (accessToken && !accessToken.startsWith('expired_')) {
         await logoutApi(accessToken);
       }
     } catch {
-      // 不做任何处理
+      // 登出接口调用失败不做任何处理（token 已过期的情况）
     }
     resetAllStores();
     accessStore.setLoginExpired(false);

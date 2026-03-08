@@ -36,6 +36,9 @@ ALTER TABLE `declare_filing` ADD COLUMN `project_id` bigint(20) DEFAULT NULL COM
 ALTER TABLE `declare_filing` ADD COLUMN `version` int(11) NOT NULL DEFAULT 0 COMMENT '乐观锁版本号' AFTER `project_id`;
 ALTER TABLE `declare_filing` ADD COLUMN `delete_reason` varchar(512) DEFAULT '' COMMENT '删除原因' AFTER `version`;
 
+-- 数据权限字段
+ALTER TABLE `declare_filing` ADD COLUMN `dept_id` bigint(20) DEFAULT NULL COMMENT '所属部门ID（用于数据权限控制）' AFTER `delete_reason`;
+
 -- 1.2 修改字段注释或类型（如需要）
 ALTER TABLE `declare_filing` MODIFY COLUMN `filing_status` tinyint(4) NOT NULL DEFAULT 0 COMMENT '备案状态：0=草稿，1=已提交，2=省级审核中，3=已通过，4=退回，5=已归档';
 
@@ -47,7 +50,7 @@ ALTER TABLE `declare_filing` MODIFY COLUMN `filing_status` tinyint(4) NOT NULL D
 -- =====================================================
 
 -- 2.1 业务类型与流程关联配置表
-CREATE TABLE IF NOT EXISTS `declare_business_type` (
+CREATE TABLE IF NOT EXISTS `bpm_business_type` (
   `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键',
   `business_type` varchar(128) NOT NULL COMMENT '业务类型（declare:filing:submit）',
   `business_name` varchar(64) NOT NULL COMMENT '业务名称',
@@ -67,8 +70,8 @@ CREATE TABLE IF NOT EXISTS `declare_business_type` (
   INDEX `idx_enabled`(`enabled`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='业务类型与流程关联配置表';
 
--- 2.2 业务与流程实例关联表
-CREATE TABLE IF NOT EXISTS `declare_business_process` (
+-- 2.2 业务与流程实例关联表（通用表，所有业务模块共用）
+CREATE TABLE IF NOT EXISTS `bpm_business_process` (
   `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键',
   `business_type` varchar(128) NOT NULL COMMENT '业务类型',
   `business_id` bigint(20) NOT NULL COMMENT '业务ID',
@@ -91,11 +94,16 @@ CREATE TABLE IF NOT EXISTS `declare_business_process` (
   INDEX `idx_current_node`(`current_node_key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='业务与流程实例关联表';
 
+-- 2.3 如果表已存在，添加新字段
+ALTER TABLE `bpm_business_process` ADD COLUMN `initiator_ids` text COMMENT '参与者ID列表（逗号分隔）' AFTER `initiator_id`;
+ALTER TABLE `bpm_business_process` ADD COLUMN `current_assign_type` varchar(32) DEFAULT '' COMMENT '当前任务分配类型' AFTER `initiator_ids`;
+ALTER TABLE `bpm_business_process` ADD COLUMN `current_assign_source` varchar(256) DEFAULT '' COMMENT '当前任务分配来源' AFTER `current_assign_type`;
+
 -- =====================================================
 -- 3. 初始化流程配置数据
 -- =====================================================
 
-INSERT INTO `declare_business_type` (`business_type`, `business_name`, `process_definition_key`, `process_category`, `description`, `enabled`, `sort`) VALUES
+INSERT INTO `bpm_business_type` (`business_type`, `business_name`, `process_definition_key`, `process_category`, `description`, `enabled`, `sort`) VALUES
 -- 备案相关流程
 ('declare:filing:submit', '备案提交', 'proc_filing', 'declare_filing', '医院提交备案申请', 1, 1),
 ('declare:filing:audit', '备案审核', 'proc_filing_audit', 'declare_filing', '省局审核备案', 1, 2),
@@ -126,8 +134,8 @@ ON DUPLICATE KEY UPDATE `updater` = VALUES(`updater`), `update_time` = CURRENT_T
 
 -- 查看表结构
 -- DESCRIBE declare_filing;
--- DESCRIBE declare_business_type;
+-- DESCRIBE bpm_business_type;
 -- DESCRIBE declare_business_process;
 
 -- 查看配置数据
--- SELECT * FROM declare_business_type;
+-- SELECT * FROM bpm_business_type;

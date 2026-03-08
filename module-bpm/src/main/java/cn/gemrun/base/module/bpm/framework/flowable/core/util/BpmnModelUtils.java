@@ -125,8 +125,17 @@ public class BpmnModelUtils {
                 BpmnModelConstants.NAMESPACE, BpmnModelConstants.USER_TASK_CANDIDATE_STRATEGY));
         // TODO @芋艿 尝试从 ExtensionElement 取. 后续相关扩展是否都可以 存 extensionElement。 如表单权限。 按钮权限
         if (candidateStrategy == null) {
-            ExtensionElement element = CollUtil.getFirst(userTask.getExtensionElements().get(BpmnModelConstants.USER_TASK_CANDIDATE_STRATEGY));
-            candidateStrategy = element != null ? NumberUtils.parseInt(element.getElementText()) : null;
+            // BPMN 中同一 key 可能有多个扩展元素（部分为空值），遍历取第一个有效值
+            List<ExtensionElement> elements = userTask.getExtensionElements().get(BpmnModelConstants.USER_TASK_CANDIDATE_STRATEGY);
+            if (elements != null) {
+                for (ExtensionElement el : elements) {
+                    Integer parsed = NumberUtils.parseInt(el.getElementText());
+                    if (parsed != null) {
+                        candidateStrategy = parsed;
+                        break;
+                    }
+                }
+            }
         }
         return candidateStrategy;
     }
@@ -157,31 +166,95 @@ public class BpmnModelUtils {
         if (flowElement == null) {
             return null;
         }
-        // 打印所有扩展元素用于调试
-        if (flowElement.getExtensionElements() != null) {
-            log.info("[parseDslConfig] 节点: {}, 扩展元素 keys: {}", flowElement.getId(), flowElement.getExtensionElements().keySet());
-            for (String key : flowElement.getExtensionElements().keySet()) {
-                List<ExtensionElement> elements = flowElement.getExtensionElements().get(key);
-                if (elements != null && !elements.isEmpty()) {
-                    for (ExtensionElement el : elements) {
-                        log.info("[parseDslConfig] 节点: {}, 扩展元素: {} = {}", flowElement.getId(), key, el.getElementText());
-                    }
-                }
+        // 前端以 moddle.create(`${prefix}:DslConfig`, { value: '...' }) 方式存储，
+        // 序列化为 <flowable:DslConfig value='...'/>，需读 value 属性而非元素文本
+        ExtensionElement element = CollUtil.getFirst(flowElement.getExtensionElements().get(BpmnModelConstants.DSL_CONFIG));
+        String dslConfig = readExtensionElementValue(element);
+
+        // 兜底：尝试小写 key（部分旧 BPMN 以文本形式存储）
+        if (StrUtil.isBlank(dslConfig)) {
+            element = CollUtil.getFirst(flowElement.getExtensionElements().get("dslConfig"));
+            dslConfig = readExtensionElementValue(element);
+        }
+
+        return StrUtil.isBlank(dslConfig) ? null : dslConfig;
+    }
+
+    /**
+     * 读取扩展元素的值：优先读取 value 属性，如为空则读取元素文本
+     */
+    private static String readExtensionElementValue(ExtensionElement element) {
+        if (element == null) {
+            return null;
+        }
+        // 尝试 value 属性（前端以 { value: '...' } 方式序列化）
+        List<ExtensionAttribute> valueAttrs = element.getAttributes().get("value");
+        if (CollUtil.isNotEmpty(valueAttrs)) {
+            String attrValue = valueAttrs.get(0).getValue();
+            if (StrUtil.isNotBlank(attrValue)) {
+                return attrValue;
+            }
+        }
+        // 兜底读元素文本内容
+        return element.getElementText();
+    }
+
+    /**
+     * 从原始 BPMN XML 字符串中直接提取指定节点的 dslConfig
+     * <p>
+     * 绕过 Flowable StAX 解析器对长文本的截断问题：当 JSON 较长时，StAX 的 CHARACTERS 事件
+     * 会被拆分为多个，而 Flowable 的实现用 setElementText 覆盖写，导致只保留最后一段。
+     * 本方法直接从 XML 字节流提取，保证完整性。
+     *
+     * @param bpmnXml       原始 BPMN XML 字符串
+     * @param flowElementId 节点 ID（如 Activity_1ftwrrv）
+     * @return dslConfig JSON，未找到则返回 null
+     */
+    public static String parseDslConfigFromXml(String bpmnXml, String flowElementId) {
+        if (StrUtil.isBlank(bpmnXml) || StrUtil.isBlank(flowElementId)) {
+            return null;
+        }
+        // 找到对应节点在 XML 中的起始位置
+        int nodeStart = bpmnXml.indexOf(flowElementId);
+        if (nodeStart < 0) {
+            return null;
+        }
+        // 找到该节点的结束位置（下一个同级标签或父级关闭标签）
+        int nodeEnd = bpmnXml.indexOf("</" , nodeStart + flowElementId.length());
+        // 截取节点所在的 extensionElements 区域（宽松取 10000 字符）
+        String nodeSection = bpmnXml.substring(nodeStart, Math.min(nodeStart + 10000, bpmnXml.length()));
+
+        // 1. 先尝试 value 属性格式：<flowable:DslConfig value="{...}" />（大写 D/C）
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("<[^:]+:[Dd]sl[Cc]onfig[^>]+value=[\"']([^\"']+)[\"']")
+                .matcher(nodeSection);
+        if (m.find()) {
+            String v = m.group(1).trim();
+            if (StrUtil.isNotBlank(v)) {
+                return v;
             }
         }
 
-        // 尝试使用带命名空间前缀的 key
-        ExtensionElement element = CollUtil.getFirst(flowElement.getExtensionElements().get(BpmnModelConstants.DSL_CONFIG));
-        String dslConfig = element != null ? element.getElementText() : null;
-
-        // 如果没找到，尝试使用不带命名空间前缀的 key
-        if (dslConfig == null) {
-            element = CollUtil.getFirst(flowElement.getExtensionElements().get("dslConfig"));
-            dslConfig = element != null ? element.getElementText() : null;
+        // 2. 再尝试文本内容格式：<flowable:dslConfig>JSON</flowable:dslConfig>（小写）
+        // 使用 indexOf 定位，避免 regex 对大文本的性能问题
+        String openTag1 = ":dslConfig>";
+        String openTag2 = ":DslConfig>";
+        int dslStart = nodeSection.indexOf(openTag1);
+        if (dslStart < 0) {
+            dslStart = nodeSection.indexOf(openTag2);
         }
-
-        log.info("[parseDslConfig] 节点: {}, DSL配置: {}", flowElement.getId(), dslConfig);
-        return dslConfig;
+        if (dslStart >= 0) {
+            int contentStart = dslStart + (nodeSection.indexOf(openTag1) >= 0 ? openTag1.length() : openTag2.length());
+            // 找对应的关闭标签
+            int closeIdx = nodeSection.indexOf("</", contentStart);
+            if (closeIdx > contentStart) {
+                String content = nodeSection.substring(contentStart, closeIdx).trim();
+                if (StrUtil.isNotBlank(content) && content.startsWith("{")) {
+                    return content;
+                }
+            }
+        }
+        return null;
     }
 
     /**
@@ -193,18 +266,9 @@ public class BpmnModelUtils {
     public static boolean hasDslAssign(FlowElement flowElement) {
         String dslConfig = parseDslConfig(flowElement);
         if (StrUtil.isBlank(dslConfig)) {
-            log.info("[hasDslAssign] 节点: {}, DSL配置为空", flowElement.getId());
             return false;
         }
-        try {
-            // 简单检查 JSON 中是否包含 assign 字段
-            boolean result = dslConfig.contains("\"assign\"");
-            log.info("[hasDslAssign] 节点: {}, 包含assign: {}, dslConfig: {}", flowElement.getId(), result, dslConfig);
-            return result;
-        } catch (Exception e) {
-            log.info("[hasDslAssign] 节点: {}, 解析异常", flowElement.getId());
-            return false;
-        }
+        return dslConfig.contains("\"assign\"");
     }
 
     /**

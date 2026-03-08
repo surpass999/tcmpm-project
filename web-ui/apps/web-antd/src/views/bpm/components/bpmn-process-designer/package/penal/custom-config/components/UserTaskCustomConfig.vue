@@ -19,6 +19,7 @@ import { IconifyIcon } from '@vben/icons';
 
 import {
   Button,
+  Collapse,
   Divider,
   Form,
   Input,
@@ -30,12 +31,16 @@ import {
 } from 'ant-design-vue';
 
 import { getSimpleUserList } from '#/api/system/user';
+import { getSimplePostList } from '#/api/system/post';
+import { getSimpleRoleList } from '#/api/system/role';
+import { getBpmActionList } from '#/api/bpm/action';
 import {
   APPROVE_TYPE,
   ApproveType,
   ASSIGN_EMPTY_HANDLER_TYPES,
   ASSIGN_START_USER_HANDLER_TYPES,
   AssignEmptyHandlerType,
+  CandidateStrategy,
   DEFAULT_BUTTON_SETTING,
   FieldPermissionType,
   OPERATION_BUTTON_NAME,
@@ -75,6 +80,10 @@ const assignEmptyHandlerTypeEl = ref<any>();
 const assignEmptyHandlerType = ref<any>();
 const assignEmptyUserIdsEl = ref<any>();
 const assignEmptyUserIds = ref<any>();
+
+// 任务分配（CandidateStrategy + CandidateParam）
+const candidateStrategyEl = ref<any>();
+const candidateParamEl = ref<any>();
 
 // 操作按钮
 // const buttonsSettingEl = ref<any>();
@@ -169,25 +178,65 @@ const dslCapOptions = [
   { label: '发布 (PUBLISH)', value: 'PUBLISH' },
 ];
 
-const dslActionOptions = [
-  { label: '提交 (submit)', value: 'submit' },
-  { label: '通过 (agree)', value: 'agree' },
-  { label: '拒绝 (reject)', value: 'reject' },
-  { label: '退回 (back)', value: 'back' },
-  { label: '撤回 (cancel)', value: 'cancel' },
-  { label: '转办 (transfer)', value: 'transfer' },
-  { label: '委派 (delegate)', value: 'delegate' },
-  { label: '加签 (addSign)', value: 'addSign' },
-  { label: '减签 (reduceSign)', value: 'reduceSign' },
-  { label: '补正 (modify)', value: 'modify' },
-];
+const dslActionOptions = ref<{ label: string; value: string }[]>([]);
+
+// 按钮说明列表（从接口获取）
+const bpmActionDescriptions = ref<{ key: string; label: string; bizStatus?: string; bizStatusLabel?: string; bpmAction?: string }[]>([]);
+
+// 新增动作时选择的 key
+const newActionKey = ref<string>('');
+
+// 折叠面板展开的 key
+const activeActionKeys = ref<string[]>([]);
+
+// 处理添加动作
+function handleAddAction(value: string) {
+  if (!value) return;
+  // 检查是否已存在
+  const exists = dslFormData.value.actions.some((a) => a.key === value);
+  if (exists) {
+    console.warn('动作已存在:', value);
+    newActionKey.value = '';
+    return;
+  }
+  // 从 bpmActionDescriptions 中获取默认的 label、bizStatus、bizStatusLabel 和 bpmAction
+  const actionDesc = bpmActionDescriptions.value.find((a) => a.key === value);
+  const newIndex = dslFormData.value.actions.length;
+  dslFormData.value.actions.push({
+    key: value,
+    label: actionDesc?.label || value,
+    bizStatus: actionDesc?.bizStatus || value,
+    bizStatusLabel: actionDesc?.bizStatusLabel || actionDesc?.bizStatus || '',
+    bpmAction: actionDesc?.bpmAction || '',
+  });
+  newActionKey.value = '';
+  // 自动展开新添加的动作
+  activeActionKeys.value = [String(newIndex)];
+  updateElementExtensions();
+}
+
+// 处理删除动作
+function handleRemoveAction(index: number) {
+  dslFormData.value.actions.splice(index, 1);
+  updateElementExtensions();
+}
+
+// 按钮选项加载状态
+const bpmActionOptionsLoaded = ref(false);
 
 const dslAssignTypeOptions = [
-  { label: '固定角色 (STATIC_ROLE)', value: 'STATIC_ROLE' },
+  { label: '本部门岗位 (DEPT_POST)', value: 'DEPT_POST' },
+  { label: '部门负责人 (DEPT_LEADER)', value: 'DEPT_LEADER' },
   { label: '发起人 (START_USER)', value: 'START_USER' },
-  { label: '动态用户 (DYNAMIC_USER)', value: 'DYNAMIC_USER' },
-  { label: '用户组 (GROUP)', value: 'GROUP' },
+  { label: '发起人自选 (START_USER_SELECT)', value: 'START_USER_SELECT' },
+  { label: '指定用户 (USER)', value: 'USER' },
 ];
+
+// 岗位列表（用于 DEPT_POST 类型）
+const postOptions = ref<{ label: string; value: string }[]>([]);
+
+// 角色列表（用于角色限制）
+const roleOptions = ref<{ label: string; value: string }[]>([]);
 
 const dslAssignSourceOptions = [
   // 固定角色
@@ -218,23 +267,17 @@ const dslBackStrategyOptions = [
   { label: '退回指定角色 (TO_ROLE)', value: 'TO_ROLE' },
 ];
 
-const dslRoleOptions = [
-  { label: '省局 (PROVINCE)', value: 'PROVINCE' },
-  { label: '国家局 (NATION)', value: 'NATION' },
-  { label: '专家 (EXPERT)', value: 'EXPERT' },
-  { label: '医院 (HOSPITAL)', value: 'HOSPITAL' },
-];
+// 角色列表从系统接口获取，见 onMounted
 
 // DSL 配置表单数据
 const dslFormData = ref({
   cap: 'AUDIT',
-  actions: ['agree', 'reject'] as string[],
+  actions: [{ key: 'agree', label: '同意', bizStatus: 'agree', bizStatusLabel: '已同意', bpmAction: 'AGREE' }, { key: 'reject', label: '驳回', bizStatus: 'rejected', bizStatusLabel: '已驳回', bpmAction: 'REJECT' }] as Array<{ key: string; label?: string; bizStatus?: string; bizStatusLabel?: string; bpmAction?: string }>,
   roles: [] as string[],
-  assignType: 'STATIC_ROLE',
+  assignType: 'DEPT_POST',
   assignSource: '',
   signRule: 'MAJORITY',
   backStrategy: 'TO_START',
-  bizStatus: '',
   enable: true,
   // 扩展字段
   expertMin: undefined as number | undefined,
@@ -247,26 +290,77 @@ function parseDslJson(jsonStr: string) {
   if (!jsonStr) return;
   try {
     const config = JSON.parse(jsonStr);
-    // actions 可能是字符串或数组，统一转为数组供表单使用
-    let actionsArr: string[] = [];
+    // actions 可能是字符串、简单数组或对象数组，统一转为对象数组供表单使用
+    let actionsArr: Array<{ key: string; label?: string; bizStatus?: string; bizStatusLabel?: string; bpmAction?: string }> = [];
     if (Array.isArray(config.actions)) {
-      actionsArr = config.actions;
+      // 检查是否是对象数组（新格式）
+      if (config.actions.length > 0 && typeof config.actions[0] === 'object' && config.actions[0].key) {
+        // 兼容旧数据：如果没有 label 和 bizStatusLabel，从 bpmActionDescriptions 补充
+        actionsArr = config.actions.map((action: any) => {
+          const actionDesc = bpmActionDescriptions.value.find((a) => a.key === action.key);
+          return {
+            key: action.key,
+            label: action.label || actionDesc?.label || action.key,
+            bizStatus: action.bizStatus || actionDesc?.bizStatus || '',
+            bizStatusLabel: action.bizStatusLabel || actionDesc?.bizStatusLabel || actionDesc?.bizStatus || '',
+            bpmAction: action.bpmAction || actionDesc?.bpmAction || '',
+          };
+        });
+      } else {
+        // 简单字符串数组（旧格式），转换为对象数组
+        actionsArr = (config.actions as string[]).map((key: string) => {
+          // 尝试从 bpmActionDescriptions 中查找对应的 label、bizStatus、bizStatusLabel 和 bpmAction
+          const actionDesc = bpmActionDescriptions.value.find((a) => a.key === key);
+          return {
+            key,
+            label: actionDesc?.label || key,
+            bizStatus: actionDesc?.bizStatus || '',
+            bizStatusLabel: actionDesc?.bizStatusLabel || actionDesc?.bizStatus || '',
+            bpmAction: actionDesc?.bpmAction || '',
+          };
+        });
+      }
     } else if (typeof config.actions === 'string') {
-      actionsArr = config.actions.split(',').filter((a: string) => a.trim());
+      // 逗号分隔的字符串（旧格式）
+      const actionKeys = config.actions.split(',').filter((a: string) => a.trim());
+      actionsArr = actionKeys.map((key: string) => {
+        const actionDesc = bpmActionDescriptions.value.find((a) => a.key === key);
+        return {
+          key,
+          label: actionDesc?.label || key,
+          bizStatus: actionDesc?.bizStatus || '',
+          bizStatusLabel: actionDesc?.bizStatusLabel || actionDesc?.bizStatus || '',
+          bpmAction: actionDesc?.bpmAction || '',
+        };
+      });
     }
+
+    // 根据类型获取不同的 source
+    const assignType = config.assign?.type || 'DEPT_POST';
+    let assignSource = '';
+    if (assignType === 'DEPT_POST') {
+      // 兼容旧数据：优先使用 source，其次使用 postCode
+      assignSource = config.assign?.source || config.assign?.postCode || '';
+    } else if (assignType === 'USER') {
+      assignSource = config.assign?.userIds || config.assign?.source || '';
+    } else if (assignType === 'START_USER_SELECT') {
+      assignSource = config.assign?.userSource || config.assign?.source || '';
+    } else {
+      assignSource = config.assign?.source || '';
+    }
+
     dslFormData.value = {
       cap: config.cap || 'AUDIT',
       actions: actionsArr,
       roles: config.roles || [],
-      assignType: config.assign?.type || 'STATIC_ROLE',
-      assignSource: config.assign?.source || '',
+      assignType,
+      assignSource,
       signRule: config.signRule || 'MAJORITY',
       backStrategy: config.backStrategy || 'TO_START',
-      bizStatus: config.bizStatus || '',
       enable: config.enable !== false,
       // 扩展字段
-      expertMin: config.expertMin,
-      expertMax: config.expertMax,
+      expertMin: config.vars?.expertMin,
+      expertMax: config.vars?.expertMax,
       modifyFields: config.vars?.modifyFields || [],
     };
   } catch (e) {
@@ -274,12 +368,38 @@ function parseDslJson(jsonStr: string) {
   }
 }
 
+// 切换分配类型时清空二级下拉
+function handleAssignTypeChange() {
+  dslFormData.value.assignSource = '';
+  updateElementExtensions();
+}
+
 // 构建 DSL JSON
 function buildDslJson(): string {
-  const { cap, actions, roles, assignType, assignSource, signRule, backStrategy, bizStatus, enable, expertMin, expertMax, modifyFields } = dslFormData.value;
+  const { cap, actions, roles, assignType, assignSource, signRule, backStrategy, enable, expertMin, expertMax, modifyFields } = dslFormData.value;
 
-  // actions 必须是逗号分隔的字符串，不能是数组
-  const actionsStr = Array.isArray(actions) ? actions.join(',') : actions;
+  // actions 转换为带 label、bizStatus、bizStatusLabel 和 bpmAction 的对象数组
+  const actionsWithMeta = actions.map((action) => {
+    if (typeof action === 'string') {
+      // 兼容字符串格式
+      const actionDesc = bpmActionDescriptions.value.find((a) => a.key === action);
+      return {
+        key: action,
+        label: actionDesc?.label || action,
+        bizStatus: actionDesc?.bizStatus || '',
+        bizStatusLabel: actionDesc?.bizStatusLabel || actionDesc?.bizStatus || '',
+        bpmAction: actionDesc?.bpmAction || '',
+      };
+    }
+    // 已有 label、bizStatus、bizStatusLabel、bpmAction 的对象
+    return {
+      key: action.key,
+      label: action.label,
+      bizStatus: action.bizStatus,
+      bizStatusLabel: action.bizStatusLabel,
+      bpmAction: action.bpmAction,
+    };
+  });
 
   // 构建 vars 对象
   const vars: Record<string, any> = {};
@@ -287,15 +407,28 @@ function buildDslJson(): string {
   if (expertMax !== undefined) vars.expertMax = expertMax;
   if (modifyFields && modifyFields.length > 0) vars.modifyFields = modifyFields;
 
+  // 构建 assign 对象
+  let assign: any = undefined;
+  if (assignType === 'DEPT_POST' && assignSource) {
+    // DEPT_POST: source 就是岗位ID，后端通过 parent_id 自动查找上级部门
+    assign = { type: assignType, source: assignSource };
+  } else if (assignType === 'USER' && assignSource) {
+    assign = { type: assignType, userIds: assignSource, source: assignSource };
+  } else if (assignType === 'START_USER_SELECT' && assignSource) {
+    assign = { type: assignType, userSource: assignSource, source: assignSource };
+  } else if (assignType) {
+    // DEPT_LEADER, START_USER 等无参数的类型
+    assign = { type: assignType };
+  }
+
   return JSON.stringify({
     nodeKey: props.id,
     cap,
-    actions: actionsStr,
+    actions: actionsWithMeta,
     roles,
-    assign: assignSource ? { type: assignType, source: assignSource } : undefined,
+    assign,
     signRule: cap === 'COUNTERSIGN' ? signRule : undefined,
     backStrategy: cap !== 'FILL' ? backStrategy : 'NONE',
-    bizStatus,
     enable,
     ...(Object.keys(vars).length > 0 ? { vars } : {}),
   });
@@ -391,6 +524,22 @@ const resetCustomConfigList = () => {
         : num;
     });
 
+  // 任务分配（CandidateStrategy + CandidateParam，用于后端计算候选人）
+  candidateStrategyEl.value =
+    elExtensionElements.value.values?.find(
+      (ex: any) => ex.$type === `${prefix}:CandidateStrategy`,
+    )?.[0] ||
+    bpmnInstances().moddle.create(`${prefix}:CandidateStrategy`, {
+      value: undefined,
+    });
+  candidateParamEl.value =
+    elExtensionElements.value.values?.find(
+      (ex: any) => ex.$type === `${prefix}:CandidateParam`,
+    )?.[0] ||
+    bpmnInstances().moddle.create(`${prefix}:CandidateParam`, {
+      value: '',
+    });
+
   // 操作按钮
   buttonsSetting.value = elExtensionElements.value.values?.filter(
     (ex: any) => ex.$type === `${prefix}:ButtonsSetting`,
@@ -470,13 +619,15 @@ const resetCustomConfigList = () => {
     dslConfig.value = '';
     dslFormData.value = {
       cap: 'AUDIT',
-      actions: ['agree', 'reject'],
+      actions: [
+        { key: 'agree', label: '同意', bizStatus: 'agree', bizStatusLabel: '已同意', bpmAction: 'AGREE' },
+        { key: 'reject', label: '驳回', bizStatus: 'rejected', bizStatusLabel: '已驳回', bpmAction: 'REJECT' },
+      ],
       roles: [],
-      assignType: 'STATIC_ROLE',
+      assignType: 'DEPT_POST',
       assignSource: '',
       signRule: 'MAJORITY',
       backStrategy: 'TO_START',
-      bizStatus: '',
       enable: false,
       expertMin: undefined,
       expertMax: undefined,
@@ -547,6 +698,35 @@ const updateElementExtensions = () => {
   dslConfigEl.value.value = buildDslJson();
   console.log('[updateElementExtensions] dslConfig value:', dslConfigEl.value.value);
 
+  // 更新候选人策略：根据 DSL assignType 设置 CandidateStrategy 和 CandidateParam
+  const { assignType, assignSource } = dslFormData.value;
+  let strategyValue: number | undefined;
+  let paramValue = '';
+
+  if (assignType === 'DEPT_POST' && assignSource) {
+    // DEPT_POST: 策略值为 24，参数为岗位ID
+    strategyValue = CandidateStrategy.DEPT_POST; // 24
+    paramValue = assignSource; // 岗位ID
+  } else if (assignType === 'DEPT_LEADER') {
+    strategyValue = CandidateStrategy.DEPT_LEADER; // 21
+  } else if (assignType === 'START_USER') {
+    strategyValue = CandidateStrategy.START_USER; // 36
+  } else if (assignType === 'USER') {
+    strategyValue = CandidateStrategy.USER; // 30
+    paramValue = assignSource; // 用户ID
+  }
+
+  // 更新 CandidateStrategy
+  if (candidateStrategyEl.value) {
+    candidateStrategyEl.value.value = strategyValue;
+  }
+  // 更新 CandidateParam
+  if (candidateParamEl.value) {
+    candidateParamEl.value.value = paramValue;
+  }
+
+  console.log('[updateElementExtensions] candidateStrategy:', strategyValue, 'candidateParam:', paramValue);
+
   const extensions = bpmnInstances().moddle.create('bpmn:ExtensionElements', {
     values: [
       ...otherExtensions.value,
@@ -556,6 +736,8 @@ const updateElementExtensions = () => {
       assignEmptyHandlerTypeEl.value,
       assignEmptyUserIdsEl.value,
       approveType.value,
+      candidateStrategyEl.value,
+      candidateParamEl.value,
       ...buttonsSetting.value,
       ...fieldsPermissionEl.value,
       signEnable.value,
@@ -668,6 +850,32 @@ const userOptions = ref<SystemUserApi.User[]>([]); // 用户列表
 onMounted(async () => {
   // 获得用户列表
   userOptions.value = await getSimpleUserList();
+  // 获得岗位列表（用于 DEPT_POST 类型）
+  const postList = await getSimplePostList();
+  postOptions.value = postList.map((post: any) => ({
+    // 固定使用 id 作为值
+    label: `${post.name}${post.code ? ` (${post.code})` : ''}`,
+    value: post.id?.toString(),
+  }));
+  // 获得角色列表（用于角色限制）
+  const roleList = await getSimpleRoleList();
+  roleOptions.value = roleList.map((role: any) => ({
+    label: role.name,
+    value: role.code,
+  }));
+
+  // 加载按钮选项（从接口获取）
+  try {
+    const actionList = await getBpmActionList();
+    bpmActionDescriptions.value = actionList;
+    dslActionOptions.value = actionList.map((action: any) => ({
+      label: `${action.label} (${action.key})`,
+      value: action.key,
+    }));
+    bpmActionOptionsLoaded.value = true;
+  } catch (error) {
+    console.error('加载按钮选项失败:', error);
+  }
 });
 </script>
 
@@ -944,23 +1152,132 @@ onMounted(async () => {
       </Form.Item>
 
       <!-- 可用动作 -->
-      <Form.Item label="可用动作">
-        <Select
-          v-model:value="dslFormData.actions"
-          mode="tags"
-          :options="dslActionOptions"
-          placeholder="输入动作后回车确认"
-          @change="updateElementExtensions"
-        />
-        <div class="form-help-text">多个动作用逗号分隔</div>
-      </Form.Item>
+      <div class="mb-3">
+        <div class="ant-form-item-label" style="margin-bottom: 10px;">
+          <label class="ant-form-item-required">可用动作</label>
+        </div>
+        <!-- 添加动作按钮 -->
+        <div class="mb-2">
+          <Select
+            v-model:value="newActionKey"
+            :options="dslActionOptions"
+            placeholder="选择动作添加"
+            style="width: 200px"
+            @change="handleAddAction"
+          >
+            <template #suffixIcon><span class="text-blue-500 cursor-pointer">+ 添加</span></template>
+          </Select>
+        </div>
+
+        <!-- 动作列表折叠面板 -->
+        <div v-if="dslFormData.actions && dslFormData.actions.length > 0" class="mb-3">
+          <Collapse v-model:activeKey="activeActionKeys" :bordered="false" class="action-collapse">
+            <Collapse.Panel
+              v-for="(action, index) in dslFormData.actions"
+              :key="index"
+              :header="`${action.label || action.key} (${action.key})`"
+            >
+              <template #extra>
+                <Button
+                  type="link"
+                  danger
+                  size="small"
+                  @click.stop="handleRemoveAction(index)"
+                >
+                  删除
+                </Button>
+              </template>
+
+              <!-- 动作配置表单 -->
+              <div class="space-y-3">
+                <!-- 动作显示名称 -->
+                <div class="flex items-center">
+                  <span class="w-24 text-xs text-gray-500">动作显示名称</span>
+                  <Input
+                    v-model:value="action.label"
+                    placeholder="如: 同意"
+                    size="small"
+                    @change="updateElementExtensions"
+                  />
+                </div>
+
+                <!-- 业务状态 (值 + 显示名) -->
+                <div class="flex items-center">
+                  <span class="w-24 text-xs text-gray-500">业务状态</span>
+                  <div class="flex items-center gap-2">
+                    <Input
+                      v-model:value="action.bizStatus"
+                      placeholder="值 如: agree"
+                      size="small"
+                      style="width: 120px"
+                      @change="updateElementExtensions"
+                    />
+                    <Input
+                      v-model:value="action.bizStatusLabel"
+                      placeholder="显示名 如: 已同意"
+                      size="small"
+                      style="width: 120px"
+                      @change="updateElementExtensions"
+                    />
+                  </div>
+                </div>
+
+                <!-- BPM 操作 -->
+                <div class="flex items-center">
+                  <span class="w-24 text-xs text-gray-500">BPM 操作</span>
+                  <Input
+                    v-model:value="action.bpmAction"
+                    placeholder="如: AGREE"
+                    size="small"
+                    @change="updateElementExtensions"
+                  />
+                </div>
+              </div>
+            </Collapse.Panel>
+          </Collapse>
+        </div>
+        <div v-else class="text-gray-400 text-xs py-2">请添加动作</div>
+      </div>
+
+      <!-- 按钮说明 -->
+      <div v-if="bpmActionDescriptions.length > 0" class="mb-4">
+        <div class="mb-2 text-xs font-medium text-gray-500">按钮说明</div>
+        <div class="max-h-48 overflow-y-auto rounded border border-gray-200">
+          <table class="w-full text-xs">
+            <thead class="bg-gray-50">
+              <tr>
+                <th class="px-2 py-1 text-left font-medium text-gray-600">按钮</th>
+                <th class="px-2 py-1 text-left font-medium text-gray-600">业务状态</th>
+                <th class="px-2 py-1 text-left font-medium text-gray-600">BPM操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="action in bpmActionDescriptions" :key="action.key" class="border-t border-gray-100 hover:bg-gray-50">
+                <td class="px-2 py-1">{{ action.label }} ({{ action.key }})</td>
+                <td class="px-2 py-1">
+                  <span v-if="action.bizStatus" class="text-green-600">
+                    {{ action.bizStatusLabel || action.bizStatus }}({{ action.bizStatus }})
+                  </span>
+                  <span v-else class="text-gray-400">-</span>
+                </td>
+                <td class="px-2 py-1">
+                  <span v-if="action.bpmAction" class="text-blue-600">
+                    {{ action.bpmAction }}
+                  </span>
+                  <span v-else class="text-gray-400">-</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
 
       <!-- 角色限制 -->
       <Form.Item label="角色限制">
         <Select
           v-model:value="dslFormData.roles"
           mode="multiple"
-          :options="dslRoleOptions"
+          :options="roleOptions"
           placeholder="选择允许操作的角色"
           @change="updateElementExtensions"
         />
@@ -968,17 +1285,55 @@ onMounted(async () => {
 
       <!-- 任务分配 -->
       <Form.Item label="任务分配">
+        <!-- 第一级：分配类型 -->
         <a-row :gutter="8">
           <a-col :span="12">
             <Select
               v-model:value="dslFormData.assignType"
               :options="dslAssignTypeOptions"
               placeholder="分配类型"
-              @change="updateElementExtensions"
+              @change="handleAssignTypeChange"
             />
           </a-col>
+          <!-- 第二级：根据类型显示不同选项 -->
           <a-col :span="12">
+            <!-- DEPT_POST: 显示岗位列表 -->
             <Select
+              v-if="dslFormData.assignType === 'DEPT_POST'"
+              v-model:value="dslFormData.assignSource"
+              :options="postOptions"
+              placeholder="选择岗位"
+              allowClear
+              @change="updateElementExtensions"
+            />
+            <!-- USER: 显示用户列表 -->
+            <Select
+              v-else-if="dslFormData.assignType === 'USER'"
+              v-model:value="dslFormData.assignSource"
+              :options="userOptions"
+              placeholder="选择用户"
+              allowClear
+              @change="updateElementExtensions"
+            />
+            <!-- START_USER_SELECT: 显示用户来源 -->
+            <Select
+              v-else-if="dslFormData.assignType === 'START_USER_SELECT'"
+              v-model:value="dslFormData.assignSource"
+              :options="dslAssignSourceOptions.filter(o => o.value === 'startUser' || o.value === 'startUserDeptLeader' || o.value === 'expertUsers')"
+              placeholder="选择用户来源"
+              allowClear
+              @change="updateElementExtensions"
+            />
+            <!-- DEPT_LEADER, START_USER 无需选择 -->
+            <Select
+              v-else-if="dslFormData.assignType === 'DEPT_LEADER' || dslFormData.assignType === 'START_USER'"
+              :value="dslFormData.assignSource"
+              disabled
+              placeholder="无需配置"
+            />
+            <!-- 其他类型 -->
+            <Select
+              v-else-if="dslFormData.assignType"
               v-model:value="dslFormData.assignSource"
               :options="dslAssignSourceOptions"
               placeholder="分配来源"
@@ -997,29 +1352,6 @@ onMounted(async () => {
             :options="dslSignRuleOptions"
             @change="updateElementExtensions"
           />
-        </Form.Item>
-        <!-- 专家数量范围 -->
-        <Form.Item label="专家数量">
-          <a-row :gutter="8">
-            <a-col :span="12">
-              <a-input-number
-                v-model:value="dslFormData.expertMin"
-                :min="1"
-                placeholder="最少"
-                style="width: 100%"
-                @change="updateElementExtensions"
-              />
-            </a-col>
-            <a-col :span="12">
-              <a-input-number
-                v-model:value="dslFormData.expertMax"
-                :min="1"
-                placeholder="最多"
-                style="width: 100%"
-                @change="updateElementExtensions"
-              />
-            </a-col>
-          </a-row>
         </Form.Item>
       </template>
 
@@ -1071,16 +1403,6 @@ onMounted(async () => {
         />
       </Form.Item>
 
-      <!-- 业务状态 -->
-      <Form.Item label="业务状态">
-        <Input
-          v-model:value="dslFormData.bizStatus"
-          placeholder="审批通过后更新的状态值"
-          @change="updateElementExtensions"
-        />
-        <div class="form-help-text">如：PRO_AUDIT, NATION_AUDIT</div>
-      </Form.Item>
-
       <!-- DSL JSON 预览 -->
       <Form.Item label="DSL预览">
         <Input.TextArea
@@ -1105,5 +1427,29 @@ onMounted(async () => {
   font-family: 'Monaco', 'Menlo', 'Ubuntu', 'Consolas', monospace;
   font-size: 11px;
   background: #f5f5f5;
+}
+
+// 动作折叠面板样式
+.action-collapse {
+  :deep(.ant-collapse-header) {
+    padding: 8px 12px !important;
+  }
+
+  :deep(.ant-collapse-content-box) {
+    padding: 12px !important;
+  }
+
+  :deep(.ant-collapse-expand-icon) {
+    order: -1;
+    margin-right: 8px;
+  }
+
+  :deep(.ant-collapse-header-text) {
+    flex: 1;
+  }
+
+  :deep(.ant-collapse-extra) {
+    margin-left: auto;
+  }
 }
 </style>

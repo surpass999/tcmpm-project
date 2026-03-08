@@ -40,6 +40,21 @@ public class BpmProcessInstanceStatusEvent extends ApplicationEvent {
      */
     private String businessKey;
 
+    /**
+     * 业务状态值（从 DSL actions 中获取，用于更新业务表状态）
+     */
+    private String bizStatus;
+
+    /**
+     * 业务状态显示名称（用于前端显示）
+     */
+    private String bizStatusLabel;
+
+    /**
+     * 按钮标识（从 DSL actions 中获取）
+     */
+    private String actionKey;
+
     public BpmProcessInstanceStatusEvent(Object source) {
         super(source);
     }

@@ -41,6 +41,7 @@ import org.springframework.validation.annotation.Validated;
 
 import javax.annotation.Resource;
 import javax.validation.Valid;
+import java.io.InputStream;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -325,6 +326,26 @@ public class BpmModelServiceImpl implements BpmModelService {
     @Override
     public BpmnModel getBpmnModelByDefinitionId(String processDefinitionId) {
         return repositoryService.getBpmnModel(processDefinitionId);
+    }
+
+    @Override
+    public String getBpmnXmlByDefinitionId(String processDefinitionId) {
+        ProcessDefinition pd = repositoryService.createProcessDefinitionQuery()
+                .processDefinitionId(processDefinitionId)
+                .singleResult();
+        if (pd == null) {
+            return null;
+        }
+        try (InputStream is = repositoryService.getResourceAsStream(pd.getDeploymentId(), pd.getResourceName())) {
+            if (is == null) {
+                return null;
+            }
+            return cn.hutool.core.io.IoUtil.readUtf8(is);
+        } catch (Exception e) {
+            log.warn("[getBpmnXmlByDefinitionId] 读取 BPMN XML 失败: processDefinitionId={}, error={}",
+                    processDefinitionId, e.getMessage());
+            return null;
+        }
     }
 
     @Override

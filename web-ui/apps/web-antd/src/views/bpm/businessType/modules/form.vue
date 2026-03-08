@@ -47,6 +47,10 @@ const [Modal, modalApi] = useVbenModal({
     modalApi.lock();
     // 提交表单
     const data = (await formApi.getValues()) as BpmBusinessTypeApi.BusinessTypeSaveParams;
+    // 确保更新时传递 id
+    if (formData.value?.id) {
+      data.id = formData.value.id;
+    }
     try {
       await (formData.value?.id ? updateBusinessType(data) : createBusinessType(data));
       // 关闭并提示

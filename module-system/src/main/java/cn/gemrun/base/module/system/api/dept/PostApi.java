@@ -36,4 +36,12 @@ public interface PostApi {
         return CollectionUtils.convertMap(list, PostRespDTO::getId);
     }
 
+    /**
+     * 通过岗位ID获取岗位信息
+     *
+     * @param id 岗位ID
+     * @return 岗位信息
+     */
+    PostRespDTO getPost(Long id);
+
 }

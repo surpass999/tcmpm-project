@@ -515,8 +515,11 @@ watch(
       <a-form-item label="计算公式" name="calculationRule">
         <a-input
           v-model:value="formData.calculationRule"
-          placeholder="如：202 / 201 * 100、20201 / 200 * 100"
+          placeholder="如：[202] / [201] * 100、[202] * 0.5 + [301] * 0.5"
         />
+        <div class="text-gray-400 text-xs mt-1">
+          使用 [指标CODE] 格式引用其他指标，如 [202] 表示指标代码为202的值
+        </div>
       </a-form-item>
       <a-form-item label="列表显示" name="showInList">
         <a-radio-group v-model:value="formData.showInList">

@@ -3,6 +3,7 @@ import type { DeclareFilingApi } from '#/api/declare/filing';
 import type { DeclareIndicatorApi } from '#/api/declare/indicator';
 import type { DeclareIndicatorJointRuleApi } from '#/api/declare/jointRule';
 
+import dayjs from 'dayjs';
 import { computed, reactive, ref } from 'vue';
 
 import { IconifyIcon } from '@vben/icons';
@@ -21,7 +22,6 @@ import {
 } from '#/api/declare/filing';
 import {
   getIndicatorValues,
-  saveIndicatorValues,
 } from '#/api/declare/indicatorValue';
 import {
   getEnabledJointRules,
@@ -147,6 +147,9 @@ function onIndicatorChange(_indicatorId: number, indicator?: DeclareIndicatorApi
   if (indicator) {
     validateRequired(indicator);
   }
+  
+  // 重新计算所有计算指标
+  recalculateAllComputedIndicators();
 }
 
 // 验证必填项
@@ -523,10 +526,25 @@ async function loadIndicatorValues() {
           break;
         case 2: // 字符串
         case 6: // 单选
+          // 单选直接使用字符串值
+          value = v.valueStr || undefined;
+          break;
         case 7: // 多选
+          // 多选需要将逗号分隔的字符串转换为数组
+          if (v.valueStr) {
+            value = v.valueStr.split(',');
+          } else {
+            value = undefined;
+          }
+          break;
         case 10: // 单选下拉
         case 11: // 多选下拉
-          value = v.valueStr || undefined;
+          // 多选下拉也需要将逗号分隔的字符串转换为数组
+          if (v.valueStr && v.valueType === 11) {
+            value = v.valueStr.split(',');
+          } else {
+            value = v.valueStr || undefined;
+          }
           break;
         case 3: // 布尔
           value = v.valueBool;
@@ -580,6 +598,106 @@ function parseExtraConfig(extraConfig: string | undefined): Record<string, any> 
   }
 }
 
+// 判断指标是否为计算指标（有计算公式）
+function isComputedIndicator(indicator: DeclareIndicatorApi.Indicator): boolean {
+  return !!(indicator.calculationRule && indicator.calculationRule.trim());
+}
+
+// 获取指标值（支持通过 indicatorCode 获取）
+function getIndicatorValue(indicatorCodeOrId: string | number): number | undefined {
+  // 先通过 ID 查找
+  if (typeof indicatorCodeOrId === 'number') {
+    return indicatorValuesMap[indicatorCodeOrId];
+  }
+  
+  // 通过 code 查找
+  let value: number | undefined;
+  indicatorGroups.value.forEach((group) => {
+    group.indicators.forEach((indicator) => {
+      if (indicator.indicatorCode === indicatorCodeOrId) {
+        const val = indicatorValuesMap[indicator.id!];
+        if (val !== undefined && val !== null && val !== '') {
+          value = Number(val);
+        }
+      }
+    });
+  });
+  return value;
+}
+
+// 计算指标值
+function calculateIndicatorValue(indicator: DeclareIndicatorApi.Indicator): number | undefined {
+  if (!indicator.calculationRule) return undefined;
+  
+  try {
+    // 替换公式中的指标 CODE 为实际值
+    // 使用 [CODE] 格式来标识指标引用，避免与数字混淆
+    let formula = indicator.calculationRule;
+    
+    // 匹配 [CODE] 格式的指标引用
+    const indicatorMatches = formula.match(/\[[^\]]+\]/g) || [];
+    
+    // 尝试将每个匹配的指标替换为对应的值
+    let hasAllValues = true;
+    let processedFormula = formula;
+    
+    for (const match of indicatorMatches) {
+      // 提取 CODE
+      const code = match.replace(/[\[\]]/g, '');
+      const value = getIndicatorValue(code);
+      
+      if (value === undefined) {
+        console.log(`指标 ${indicator.indicatorCode} 计算公式缺少依赖指标: ${code}`);
+        hasAllValues = false;
+        break;
+      }
+      // 替换所有出现的该指标引用
+      processedFormula = processedFormula.replace(match, String(value));
+    }
+    
+    if (!hasAllValues) {
+      return undefined;
+    }
+    
+    // 安全地计算表达式（只允许数字和基本运算符）
+    // 移除所有非数字、非运算符、非括号的字符
+    const safeFormula = processedFormula.replace(/[^0-9+\-*/.()%]/g, '');
+    
+    if (!safeFormula || safeFormula.trim() === '') {
+      console.log(`指标 ${indicator.indicatorCode} 计算公式无效: ${indicator.calculationRule}`);
+      return undefined;
+    }
+    
+    // 使用 Function 计算结果（比 eval 更安全，但仍需注意）
+    const result = new Function(`return ${safeFormula}`)();
+    
+    if (isNaN(result) || !isFinite(result)) {
+      console.log(`指标 ${indicator.indicatorCode} 计算结果无效: ${result}`);
+      return undefined;
+    }
+    
+    console.log(`指标 ${indicator.indicatorCode} 计算成功: ${formula} = ${processedFormula} = ${result}`);
+    return result;
+  } catch (error) {
+    console.error(`指标 ${indicator.indicatorCode} 计算失败:`, error);
+    return undefined;
+  }
+}
+
+// 重新计算所有计算指标
+function recalculateAllComputedIndicators() {
+  indicatorGroups.value.forEach((group) => {
+    group.indicators.forEach((indicator) => {
+      if (isComputedIndicator(indicator)) {
+        const calculatedValue = calculateIndicatorValue(indicator);
+        if (calculatedValue !== undefined) {
+          indicatorValuesMap[indicator.id!] = calculatedValue;
+        }
+      }
+    });
+  });
+}
+
 // 初始化表单数据
 const step1FormData = ref({
   socialCreditCode: '',
@@ -628,9 +746,7 @@ async function validateStep1() {
 }
 
 // 构建指标值数据
-function buildIndicatorValues(
-  _businessId: number
-): Array<{
+function buildIndicatorValues(): Array<{
   indicatorId: number;
   indicatorCode: string;
   valueType: number;
@@ -664,10 +780,30 @@ function buildIndicatorValues(
           item.valueNum = String(value);
           break;
         case 2: // 字符串
+          item.valueStr = String(value);
+          break;
         case 6: // 单选
+          item.valueStr = String(value);
+          break;
         case 7: // 多选
+          // 需要将数组转换为逗号分隔的字符串
+          if (Array.isArray(value)) {
+            item.valueStr = value.join(',');
+          } else {
+            item.valueStr = String(value);
+          }
+          break;
         case 10: // 单选下拉
+          item.valueStr = String(value);
+          break;
         case 11: // 多选下拉
+          // 需要将数组转换为逗号分隔的字符串
+          if (Array.isArray(value)) {
+            item.valueStr = value.join(',');
+          } else {
+            item.valueStr = String(value);
+          }
+          break;
         case 9: // 文件上传
           item.valueStr = String(value);
           break;
@@ -742,15 +878,39 @@ async function handleSubmit() {
   modalApi.lock();
 
   try {
-    // 1. 先保存备案基本信息
+    // 格式化日期函数：将 dayjs 对象转换为后端需要的时间戳格式
+    const formatDate = (date: any): number | undefined => {
+      if (!date) return undefined;
+      // 如果是数字（时间戳），直接返回
+      if (typeof date === 'number') return date;
+      // 如果是字符串，尝试解析
+      if (typeof date === 'string') {
+        const parsed = dayjs(date);
+        if (parsed.isValid()) {
+          return parsed.valueOf();
+        }
+        return undefined;
+      }
+      // 如果是 dayjs 对象，转换为时间戳
+      if (date && typeof date.valueOf === 'function') {
+        const result = date.valueOf();
+        console.log('格式化日期(时间戳):', date.format('YYYY-MM-DD HH:mm:ss'), '->', result);
+        return result;
+      }
+      console.log('未知日期格式:', date);
+      return undefined;
+    };
+
+    // 1. 构建备案数据（包含指标值）
+    const indicatorValues = buildIndicatorValues();
     const filingData: DeclareFilingApi.Filing = {
       id: formData.value?.id || 0,
       socialCreditCode: step1FormData.value.socialCreditCode || '',
       medicalLicenseNo: step1FormData.value.medicalLicenseNo || '',
       orgName: step1FormData.value.orgName || '',
       projectType: step1FormData.value.projectType || 1,
-      validStartTime: step1FormData.value.validStartTime as any,
-      validEndTime: step1FormData.value.validEndTime as any,
+      validStartTime: formatDate(step1FormData.value.validStartTime),
+      validEndTime: formatDate(step1FormData.value.validEndTime),
       constructionContent: step1FormData.value.constructionContent || '',
       filingStatus: 0,
       provinceReviewOpinion: '',
@@ -759,30 +919,22 @@ async function handleSubmit() {
       expertReviewOpinion: '',
       expertReviewerIds: '',
       filingArchiveTime: '' as any,
+      // 包含指标值
+      indicatorValues,
     };
+    console.log('提交数据:', JSON.stringify(filingData));
 
-    let filingId: number;
+    // 2. 一次性提交备案信息和指标值
     if (formData.value?.id) {
       await updateFiling(filingData);
-      filingId = formData.value.id;
     } else {
-      filingId = await createFiling(filingData);
+      await createFiling(filingData);
     }
+    console.log('保存成功，备案ID:', filingData.id);
 
-    // 2. 保存指标值到后端
-    const indicatorValues = buildIndicatorValues(filingId);
-    if (indicatorValues.length > 0) {
-      await saveIndicatorValues({
-        businessType: BUSINESS_TYPE.FILING,
-        businessId: filingId,
-        values: indicatorValues,
-      });
-    }
-    console.log('保存成功，备案ID:', filingId, '指标值:', indicatorValuesMap);
-
+    message.success('保存成功');
     await modalApi.close();
     emit('success');
-    message.success($t('ui.actionMessage.operationSuccess'));
   } catch (error) {
     console.error('保存失败:', error);
     message.error('保存失败');
@@ -834,9 +986,10 @@ const [Modal, modalApi] = useVbenModal({
         confirmText: '下一步',
         cancelText: '取消',
       });
-      return false; // 阻止关闭
+      return;
     }
-    // 取消关闭
+    // 第一步点击取消，直接关闭
+    modalApi.close();
   },
   async onOpenChange(isOpen: boolean) {
     if (!isOpen) {
@@ -871,15 +1024,18 @@ const [Modal, modalApi] = useVbenModal({
       const filing = formData.value!;
 
       // 填充基本信息
+      console.log('加载到的日期:', filing.validStartTime, filing.validEndTime);
       step1FormData.value = {
         socialCreditCode: filing.socialCreditCode || '',
         medicalLicenseNo: filing.medicalLicenseNo || '',
         orgName: filing.orgName || '',
         projectType: filing.projectType,
-        validStartTime: filing.validStartTime,
-        validEndTime: filing.validEndTime,
+        // 处理日期类型：将后端返回的字符串转换为 dayjs 对象
+        validStartTime: filing.validStartTime ? dayjs(filing.validStartTime) : undefined,
+        validEndTime: filing.validEndTime ? dayjs(filing.validEndTime) : undefined,
         constructionContent: filing.constructionContent || '',
       };
+      console.log('转换后的日期:', step1FormData.value.validStartTime, step1FormData.value.validEndTime);
 
       // 加载指标数据
       await loadIndicators(step1FormData.value.projectType!);
@@ -1012,8 +1168,14 @@ const [Modal, modalApi] = useVbenModal({
               >
                 <!-- 指标名称 + 问号图标 -->
                 <template #label>
-                  <div class="flex items-center">
-                    {{ indicator.indicatorName }}
+                  <div class="flex items-center justify-end max-w-full" style="max-width: 90%;">
+                    <span class="truncate" :title="indicator.indicatorName" >
+                      {{ indicator.indicatorName }}
+                    </span>
+                    <!-- 计算指标显示计算公式提示 -->
+                    <a-tag v-if="isComputedIndicator(indicator)" color="orange" class="ml-1 text-xs flex-shrink-1">
+                      自动计算
+                    </a-tag>
                     <!-- 仅当有口径时才显示问号图标 -->
                     <a-popover
                       v-if="hasIndicatorSpec(indicator)"
@@ -1058,7 +1220,7 @@ const [Modal, modalApi] = useVbenModal({
                       </template>
                       <IconifyIcon
                         icon="lucide:help-circle"
-                        class="ml-1 cursor-pointer text-blue-500 hover:text-blue-600"
+                        class="ml-1 cursor-pointer text-blue-500 hover:text-blue-600 flex-shrink-0"
                         style="width: 14px; height: 14px;"
                       />
                     </a-popover>
@@ -1069,8 +1231,9 @@ const [Modal, modalApi] = useVbenModal({
                   v-if="indicator.valueType === 1"
                   v-model:value="indicatorValuesMap[indicator.id!]"
                   class="w-full"
+                  :disabled="isComputedIndicator(indicator)"
                   :status="errorIndicatorIds.includes(indicator.id!) ? 'error' : ''"
-                  :placeholder="`请输入${indicator.indicatorName}`"
+                  :placeholder="isComputedIndicator(indicator) ? '自动计算' : `请输入${indicator.indicatorName}`"
                   :min="indicator.minValue"
                   :max="indicator.maxValue"
                   :precision="getNumberPrecision(indicator)"

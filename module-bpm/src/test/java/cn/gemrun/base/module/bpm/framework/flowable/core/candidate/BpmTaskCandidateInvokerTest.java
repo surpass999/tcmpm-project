@@ -49,6 +49,10 @@ public class BpmTaskCandidateInvokerTest extends BaseMockitoUnitTest {
 
     @Mock
     private AdminUserApi adminUserApi;
+    @Mock
+    private cn.gemrun.base.module.system.api.permission.RoleApi roleApi;
+    @Mock
+    private cn.gemrun.base.module.system.api.permission.PermissionApi permissionApi;
 
     @Mock
     private BpmProcessInstanceService processInstanceService;
@@ -66,7 +70,7 @@ public class BpmTaskCandidateInvokerTest extends BaseMockitoUnitTest {
         userStrategy = new BpmTaskCandidateUserStrategy(); // 创建 strategy 实例
         when(emptyStrategy.getStrategy()).thenReturn(BpmTaskCandidateStrategyEnum.ASSIGN_EMPTY);
         strategyList = ListUtil.of(userStrategy, emptyStrategy); // 创建 strategyList
-        taskCandidateInvoker = new BpmTaskCandidateInvoker(strategyList, adminUserApi);
+        taskCandidateInvoker = new BpmTaskCandidateInvoker(strategyList, adminUserApi, roleApi, permissionApi);
     }
 
     /**

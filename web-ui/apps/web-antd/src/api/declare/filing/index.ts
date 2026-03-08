@@ -11,18 +11,32 @@ export namespace DeclareFilingApi {
     medicalLicenseNo?: string; // 执业许可证号
     orgName?: string; // 机构名称
     projectType?: number; // 项目类型
-    validStartTime?: string | Dayjs; // 有效期开始时间
-    validEndTime?: string | Dayjs; // 有效期结束时间
+    validStartTime?: number | string | Dayjs; // 有效期开始时间（时间戳或字符串）
+    validEndTime?: number | string | Dayjs; // 有效期结束时间（时间戳或字符串）
     constructionContent?: string; // 建设内容
     filingStatus?: number; // 备案状态
     provinceReviewOpinion: string; // 省审核意见
-    provinceReviewTime: string | Dayjs; // 省审核时间
+    provinceReviewTime: string | number | Dayjs; // 省审核时间
     provinceReviewerId: number; // 省级审核人
     expertReviewOpinion: string; // 专家论证意见
     expertReviewerIds: string; // 论证专家
-    filingArchiveTime: string | Dayjs; // 归档时间
-    /** 指标值 Map（key 为 indicatorCode，value 为指标值） */
-    indicatorValues?: Record<string, any>;
+    filingArchiveTime: string | number | Dayjs; // 归档时间
+    /** 指标值列表（用于提交时包含指标值） */
+    indicatorValues?: IndicatorValueItem[];
+  }
+
+  /** 指标值项 */
+  export interface IndicatorValueItem {
+    indicatorId: number;
+    indicatorCode: string;
+    valueType: number;
+    valueNum?: string;
+    valueStr?: string;
+    valueBool?: boolean;
+    valueDate?: string;
+    valueDateStart?: string;
+    valueDateEnd?: string;
+    valueText?: string;
   }
 }
 

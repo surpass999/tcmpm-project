@@ -16,4 +16,8 @@ public class PostSimpleRespVO {
     @ExcelProperty("岗位名称")
     private String name;
 
+    @Schema(description = "岗位编码", requiredMode = Schema.RequiredMode.REQUIRED, example = "PROJECT_MANAGER")
+    @ExcelProperty("岗位编码")
+    private String code;
+
 }

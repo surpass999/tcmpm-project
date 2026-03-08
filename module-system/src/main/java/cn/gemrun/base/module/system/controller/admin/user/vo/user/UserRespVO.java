@@ -72,4 +72,7 @@ public class UserRespVO{
     @Schema(description = "创建时间", requiredMode = Schema.RequiredMode.REQUIRED, example = "时间戳格式")
     private LocalDateTime createTime;
 
+    @Schema(description = "是否绑定专家，true=是", example = "false")
+    private Boolean expertBind;
+
 }

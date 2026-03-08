@@ -8,7 +8,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.Operation;
 
-import javax.validation.constraints.*;
 import javax.validation.*;
 import java.util.*;
 
@@ -22,13 +21,14 @@ import cn.gemrun.base.module.declare.dal.dataobject.filing.FilingDO;
 import cn.gemrun.base.module.declare.dal.dataobject.indicator.DeclareIndicatorValueDO;
 import cn.gemrun.base.module.declare.service.filing.FilingService;
 import cn.gemrun.base.module.declare.service.indicator.DeclareIndicatorValueService;
-import cn.gemrun.base.module.declare.framework.process.annotation.DeclareProcess;
+import cn.gemrun.base.module.bpm.framework.process.annotation.BpmProcess;
+import cn.gemrun.base.module.bpm.framework.process.annotation.BpmProcessQuery;
 
 /**
  * 项目备案核心信息 Controller（流程配置化示例）
  *
  * 使用说明：
- * 1. 在需要触发流程的方法上添加 @DeclareProcess 注解
+ * 1. 在需要触发流程的方法上添加 @BpmProcess 注解
  * 2. businessType 自动解析为：{模块名}:{业务名}:{动作}
  *    例如：submitFiling -> declare:filing:submit
  * 3. 流程由 AOP 自动启动，无需手动调用
@@ -50,11 +50,12 @@ public class FilingController {
     // 业务类型：1=备案
     private static final Integer BUSINESS_TYPE_FILING = 1;
 
-    // ========== 基础操作（不触发流程）==========
+    // ========== 基础操作（启动流程）==========
 
     @PostMapping("/create")
     @Operation(summary = "创建项目备案核心信息")
     @PreAuthorize("@ss.hasPermission('declare:filing:create')")
+    @BpmProcess
     public CommonResult<Long> createFiling(@Valid @RequestBody FilingSaveReqVO createReqVO) {
         return success(filingService.createFiling(createReqVO));
     }
@@ -69,49 +70,9 @@ public class FilingController {
 
     // ========== 触发流程的操作 ==========
 
-    /**
-     * 提交备案
-     * 自动解析 businessType = "declare:filing:submit"
-     * 如果 declare_business_type 表中有配置，则自动启动流程
-     *
-     * 配置示例：
-     * business_type: declare:filing:submit
-     * process_definition_key: proc_filing
-     */
-    @PostMapping("/submit")
-    @Operation(summary = "提交备案申请")
-    @PreAuthorize("@ss.hasPermission('declare:filing:submit')")
-    @DeclareProcess  // 自动解析 businessType
-    public CommonResult<Boolean> submitFiling(@RequestParam("id") Long id) {
-        filingService.submitFiling(id);
-        return success(true);
-    }
-
-    /**
-     * 撤回备案
-     * 自动解析 businessType = "declare:filing:withdraw"
-     */
-    @PostMapping("/withdraw")
-    @Operation(summary = "撤回备案申请")
-    @PreAuthorize("@ss.hasPermission('declare:filing:withdraw')")
-    @DeclareProcess(required = false)  // 可选流程
-    public CommonResult<Boolean> withdrawFiling(@RequestParam("id") Long id) {
-        filingService.withdrawFiling(id);
-        return success(true);
-    }
-
-    /**
-     * 重新提交备案
-     * 手动指定 businessType
-     */
-    @PostMapping("/resubmit")
-    @Operation(summary = "重新提交备案")
-    @PreAuthorize("@ss.hasPermission('declare:filing:resubmit')")
-    @DeclareProcess(businessType = "declare:filing:resubmit")
-    public CommonResult<Boolean> resubmitFiling(@RequestParam("id") Long id) {
-        filingService.resubmitFiling(id);
-        return success(true);
-    }
+    // 注意：流程相关操作（submit/withdraw/resubmit）不在此 Controller 中实现
+    // 而是统一由 BpmProcessAspect AOP 拦截 @BpmProcess 注解的方法自动触发流程
+    // 业务模块只需要在 Service 层添加 @BpmProcess 注解的方法即可
 
     // ========== 查询操作 ==========
 
@@ -119,6 +80,7 @@ public class FilingController {
     @Operation(summary = "获得项目备案核心信息")
     @Parameter(name = "id", description = "编号", required = true, example = "1024")
     @PreAuthorize("@ss.hasPermission('declare:filing:query')")
+    @BpmProcessQuery
     public CommonResult<FilingRespVO> getFiling(@RequestParam("id") Long id) {
         FilingDO filing = filingService.getFiling(id);
         return success(BeanUtils.toBean(filing, FilingRespVO.class));
@@ -127,6 +89,7 @@ public class FilingController {
     @GetMapping("/page")
     @Operation(summary = "获得项目备案核心信息分页")
     @PreAuthorize("@ss.hasPermission('declare:filing:query')")
+    @BpmProcessQuery
     public CommonResult<PageResult<FilingRespVO>> getFilingPage(@Valid FilingPageReqVO pageReqVO) {
         PageResult<FilingDO> pageResult = filingService.getFilingPage(pageReqVO);
 
@@ -159,13 +122,15 @@ public class FilingController {
             return null;
         }
         Integer valueType = indicatorValue.getValueType();
-        // 值类型：1=数字，2=字符串，3=布尔，4=日期，5=长文本，6=单选，7=多选，8=日期区间，9=文件上传
+        // 值类型：1=数字，2=字符串，3=布尔，4=日期，5=长文本，6=单选，7=多选，8=日期区间，9=文件上传 10=下拉单选 11=下拉多选   
         switch (valueType) {
             case 1: // 数字
                 return indicatorValue.getValueNum();
             case 2: // 字符串
             case 6: // 单选
             case 7: // 多选
+            case 10: // 下拉单选
+            case 11: // 下拉多选
             case 9: // 文件上传
                 return indicatorValue.getValueStr();
             case 3: // 布尔

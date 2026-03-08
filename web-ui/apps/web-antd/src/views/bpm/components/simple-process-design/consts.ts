@@ -290,6 +290,10 @@ export enum CandidateStrategy {
    */
   DEPT_MEMBER = 20,
   /**
+   * 本部门岗位（通过 parent_id 递归查找上级部门，再查找岗位用户）
+   */
+  DEPT_POST = 24,
+  /**
    * 流程表达式
    */
   EXPRESSION = 60,

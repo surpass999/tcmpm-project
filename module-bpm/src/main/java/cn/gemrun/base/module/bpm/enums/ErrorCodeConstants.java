@@ -87,6 +87,7 @@ public interface ErrorCodeConstants {
 
     // ========== BPM 流程表达式 1-009-014-000 ==========
     ErrorCode PROCESS_EXPRESSION_NOT_EXISTS = new ErrorCode(1_009_014_000, "流程表达式不存在");
+    ErrorCode ACTION_STATUS_NOT_EXISTS = new ErrorCode(1_009_014_001, "按钮状态不存在");
 
     // ========== DSL 流程节点配置 1-009-015-000 ==========
     ErrorCode DSL_NOT_EXISTS = new ErrorCode(1_009_015_000, "DSL配置不存在");

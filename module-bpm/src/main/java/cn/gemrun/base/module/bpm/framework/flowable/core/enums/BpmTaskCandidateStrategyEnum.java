@@ -23,6 +23,7 @@ public enum BpmTaskCandidateStrategyEnum implements ArrayValuable<Integer> {
     DEPT_LEADER(21, "部门的负责人"),
     MULTI_DEPT_LEADER_MULTI(23, "连续多级部门的负责人"),
     POST(22, "岗位"),
+    DEPT_POST(24, "本部门岗位"), // 通过 parent_id 递归查找上级部门，再查找岗位用户
     USER(30, "用户"),
     APPROVE_USER_SELECT(34, "审批人自身"), // 当前审批人，可在审批时，选择下一个节点的审批人
     START_USER_SELECT(35, "发起人自选"), // 申请人自己，可在提交申请时，选择此节点的审批人

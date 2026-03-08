@@ -37,4 +37,12 @@ public interface ErrorCodeConstants {
 
     ErrorCode JOINT_RULE_NOT_EXISTS = new ErrorCode(1_010_002_011, "指标联合规则不存在");
 
+    // ========== 专家管理模块 1-010-003-000 ==========
+
+    ErrorCode EXPERT_NOT_EXISTS = new ErrorCode(1_010_003_001, "专家不存在");
+
+    ErrorCode EXPERT_USER_ALREADY_EXISTS = new ErrorCode(1_010_003_002, "该用户已存在专家记录");
+
+    ErrorCode EXPERT_STATUS_ERROR = new ErrorCode(1_010_003_003, "专家状态不正确");
+
 }

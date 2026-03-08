@@ -276,7 +276,7 @@ watch(() => props.businessObject, syncFromBusinessObject, { deep: true });
 <template>
   <div
     class="process-panel__container"
-    :style="{ width: `${width}px`, maxHeight: '600px' }"
+    :style="{ width: `${width}px`, maxHeight: '650px' }"
   >
     <Collapse v-model:active-key="activeTab" v-if="isReady">
       <CollapsePanel key="base" header="常规">

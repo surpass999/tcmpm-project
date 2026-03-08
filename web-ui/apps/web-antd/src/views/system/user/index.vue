@@ -20,6 +20,7 @@ import {
   getUserPage,
   updateUserStatus,
 } from '#/api/system/user';
+import { getExpertUserIds } from '#/api/declare/expert';
 import { $t } from '#/locales';
 
 import { useGridColumns, useGridFormSchema } from './data';
@@ -28,6 +29,18 @@ import DeptTree from './modules/dept-tree.vue';
 import Form from './modules/form.vue';
 import ImportForm from './modules/import-form.vue';
 import ResetPasswordForm from './modules/reset-password-form.vue';
+
+/** 专家用户ID列表 */
+const expertUserIds = ref<number[]>([]);
+
+/** 刷新专家用户ID列表 */
+async function refreshExpertUserIds() {
+  try {
+    expertUserIds.value = await getExpertUserIds();
+  } catch (e) {
+    console.error('获取专家用户ID失败:', e);
+  }
+}
 
 const [FormModal, formModalApi] = useVbenModal({
   connectedComponent: Form,
@@ -166,6 +179,8 @@ const [Grid, gridApi] = useVbenVxeGrid({
     proxyConfig: {
       ajax: {
         query: async ({ page }, formValues) => {
+          // 同时获取专家用户ID列表
+          await refreshExpertUserIds();
           return await getUserPage({
             pageNo: page.currentPage,
             pageSize: page.pageSize,
@@ -288,6 +303,9 @@ const [Grid, gridApi] = useVbenVxeGrid({
                 },
               ]"
             />
+          </template>
+          <template #expert="{ row }">
+            <a-tag v-if="row.id && expertUserIds.includes(row.id)" color="green">专家</a-tag>
           </template>
         </Grid>
       </div>

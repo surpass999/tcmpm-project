@@ -3,6 +3,8 @@ package cn.gemrun.base.module.bpm.api;
 import cn.gemrun.base.module.bpm.api.dto.BpmBusinessTypeGetReqDTO;
 import cn.gemrun.base.module.bpm.api.dto.BpmBusinessTypeRespDTO;
 
+import javax.validation.Valid;
+
 /**
  * BPM 业务类型 Api 接口
  *
@@ -34,6 +36,6 @@ public interface BpmBusinessTypeApi {
      * @param reqDTO 请求参数
      * @return 流程配置信息
      */
-    BpmBusinessTypeRespDTO getProcessConfig(BpmBusinessTypeGetReqDTO reqDTO);
+    BpmBusinessTypeRespDTO getProcessConfig(@Valid BpmBusinessTypeGetReqDTO reqDTO);
 
 }

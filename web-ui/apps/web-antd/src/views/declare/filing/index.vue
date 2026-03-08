@@ -17,16 +17,23 @@ import {
   getFilingPage,
 } from '#/api/declare/filing';
 import { getIndicatorsForListDisplay } from '#/api/declare/indicator';
+import { getAvailableActions, getAvailableActionsBatch, submitBpmAction } from '#/api/bpm/action';
 import { $t } from '#/locales';
 
 import { useGridColumns, useGridFormSchema } from './data';
 import Form from './modules/form.vue';
 
-// 业务类型：1=备案
-const BUSINESS_TYPE = 'filing';
+// 业务类型
+const BUSINESS_TYPE_KEY = 'declare:filing:create';
+
+// 每行的可用操作缓存 { [id]: BpmAction[] }
+const rowAvailableActions = ref<Record<number, any[]>>({});
 
 // 需要在列表显示的指标
 const listDisplayIndicators = shallowRef<DeclareIndicatorApi.Indicator[]>([]);
+
+// 指标列表业务类型（用于加载列表显示指标）
+const BUSINESS_TYPE = 'filing';
 
 // 基础列配置
 const baseColumns = useGridColumns() || [];
@@ -84,8 +91,113 @@ const [FormModal, formModalApi] = useVbenModal({
   destroyOnClose: true,
   // fullscreen: true,
   class: '!min-w-[90%] !min-h-[80vh]',
+  closeOnClickModal: false, // 点击遮罩不关闭弹窗
   // contentClass: '!min-w-[90%] !min-h-[80vh]'
 });
+
+/** 加载一批备案行的可用操作按钮（批量请求优化） */
+async function loadRowAvailableActions(rows: DeclareFilingApi.Filing[]) {
+  const results: Record<number, any[]> = { ...rowAvailableActions.value };
+  const ids = rows.filter((row) => row.id).map((row) => row.id!);
+
+  if (ids.length === 0) {
+    return;
+  }
+
+  try {
+    // 一次批量请求获取所有行的可用操作
+    const actionsMap = await getAvailableActionsBatch(BUSINESS_TYPE_KEY, ids);
+    console.log('[BPM] batch actions result:', actionsMap);
+
+    // 按 businessId 分配结果
+    ids.forEach((id) => {
+      results[id] = actionsMap[id] || [];
+    });
+  } catch (e) {
+    console.error('[BPM] 批量加载操作失败:', e);
+    // 失败时设为空
+    ids.forEach((id) => {
+      results[id] = [];
+    });
+  }
+
+  console.log('[BPM] rowAvailableActions updated:', results);
+  rowAvailableActions.value = { ...results };
+}
+
+/** 提交弹窗状态 */
+const submitModalVisible = ref(false);
+const submitLoading = ref(false);
+const currentSubmitRow = ref<DeclareFilingApi.Filing | null>(null);
+const currentSubmitAction = ref<any>(null);
+const submitForm = ref({
+  reason: '',
+});
+
+/** 执行 DSL 按钮操作 */
+async function handleBpmAction(row: DeclareFilingApi.Filing, action: any) {
+  // 如果是 submit 类型，显示弹窗让用户填写审批意见
+  if (action.key === 'submit') {
+    currentSubmitRow.value = row;
+    currentSubmitAction.value = action;
+    submitForm.value.reason = '';
+    submitModalVisible.value = true;
+    return;
+  }
+
+  // 其他操作直接执行
+  await executeBpmAction(row, action);
+}
+
+/** 执行 BPM 实际操作 */
+async function executeBpmAction(row: DeclareFilingApi.Filing, action: any) {
+  try {
+    await submitBpmAction({
+      businessType: BUSINESS_TYPE_KEY,
+      businessId: row.id!,
+      actionKey: action.key,
+      reason: '',
+    });
+    message.success(`操作 "${action.label}" 执行成功`);
+    // 刷新表格
+    handleRefresh();
+    // 重新加载该行的可用操作
+    loadRowAvailableActions([row]);
+  } catch (error: any) {
+    console.error('[BPM] 执行操作失败:', error);
+    message.error(error.message || '操作失败');
+  }
+}
+
+/** 确认提交 */
+async function handleSubmitConfirm() {
+  if (!currentSubmitRow.value || !currentSubmitAction.value) {
+    return;
+  }
+
+  submitLoading.value = true;
+  try {
+    await submitBpmAction({
+      businessType: BUSINESS_TYPE_KEY,
+      businessId: currentSubmitRow.value.id!,
+      actionKey: currentSubmitAction.value.key,
+      reason: submitForm.value.reason,
+    });
+    message.success('提交成功');
+
+    submitModalVisible.value = false;
+
+    // 刷新表格
+    handleRefresh();
+    // 重新加载该行的可用操作
+    loadRowAvailableActions([currentSubmitRow.value]);
+  } catch (error: any) {
+    console.error('[BPM] 提交失败:', error);
+    message.error(error.message || '提交失败');
+  } finally {
+    submitLoading.value = false;
+  }
+}
 
 /** 刷新表格 */
 function handleRefresh() {
@@ -150,14 +262,60 @@ function formatIndicatorValue(row: DeclareFilingApi.Filing, indicatorCode: strin
   if (value === null || value === undefined || value === '') {
     return '无';
   }
+
+  // 查找对应的指标配置
+  const indicator = listDisplayIndicators.value.find(
+    (ind) => ind.indicatorCode === indicatorCode,
+  );
+
   // 处理日期区间
   if (typeof value === 'object' && value !== null && 'start' in value && 'end' in value) {
     return `${value.start} ~ ${value.end}`;
   }
+
   // 处理布尔值
   if (typeof value === 'boolean') {
     return value ? '是' : '否';
   }
+
+  // 处理单选(6)和多选(7)类型，需要将值转换为标签
+  if (indicator && (indicator.valueType === 6 || indicator.valueType === 7)) {
+    const valueOptions = indicator.valueOptions;
+    if (valueOptions) {
+      try {
+        // 解析 valueOptions：可能是 JSON 字符串或对象
+        let options: Array<{ value: string; label: string }> = [];
+        if (typeof valueOptions === 'string') {
+          options = JSON.parse(valueOptions);
+        } else if (Array.isArray(valueOptions)) {
+          options = valueOptions;
+        }
+
+        // 创建值到标签的映射
+        const valueToLabelMap = new Map<string, string>();
+        options.forEach((opt) => {
+          valueToLabelMap.set(String(opt.value), opt.label);
+        });
+
+        // 单选类型：直接转换单个值
+        if (indicator.valueType === 6) {
+          return valueToLabelMap.get(String(value)) || String(value);
+        }
+
+        // 多选类型：转换逗号分隔的多个值
+        if (indicator.valueType === 7) {
+          const valueArray = String(value).split(',');
+          const labels = valueArray
+            .map((v) => valueToLabelMap.get(v.trim()) || v.trim())
+            .join(', ');
+          return labels || String(value);
+        }
+      } catch (e) {
+        console.error('解析 valueOptions 失败:', e);
+      }
+    }
+  }
+
   return String(value);
 }
 
@@ -182,15 +340,20 @@ const [Grid, gridApi] = useVbenVxeGrid({
     height: 'auto',
     keepSource: true,
     proxyConfig: {
-      ajax: {
-        query: async ({ page }, formValues) => {
-          return await getFilingPage({
-            pageNo: page.currentPage,
-            pageSize: page.pageSize,
-            ...formValues,
-          });
+        ajax: {
+          query: async ({ page }, formValues) => {
+            const result = await getFilingPage({
+              pageNo: page.currentPage,
+              pageSize: page.pageSize,
+              ...formValues,
+            });
+            // 异步加载每行的可用操作按钮，不阻塞列表渲染
+            if (result?.list?.length) {
+              loadRowAvailableActions(result.list);
+            }
+            return result;
+          },
         },
-      },
     },
     rowConfig: {
       keyField: 'id',
@@ -249,6 +412,12 @@ const [Grid, gridApi] = useVbenVxeGrid({
       <template #actions="{ row }">
         <TableAction
           :actions="[
+            // DSL 定义的流程操作按钮（如：提交、通过、退回等）
+            ...(rowAvailableActions[row.id] || []).map((action) => ({
+              label: action.label,
+              type: 'link' as const,
+              onClick: () => handleBpmAction(row, action),
+            })),
             {
               label: $t('common.edit'),
               type: 'link',
@@ -271,5 +440,23 @@ const [Grid, gridApi] = useVbenVxeGrid({
         />
       </template>
     </Grid>
+
+    <!-- 提交审核弹窗 -->
+    <a-modal
+      v-model:open="submitModalVisible"
+      title="提交审核"
+      :confirm-loading="submitLoading"
+      @ok="handleSubmitConfirm"
+    >
+      <a-form layout="vertical">
+        <a-form-item label="审批意见">
+          <a-textarea
+            v-model:value="submitForm.reason"
+            placeholder="请输入审批意见（可选）"
+            :rows="4"
+          />
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </Page>
 </template>

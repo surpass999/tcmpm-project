@@ -179,6 +179,9 @@ const DECLARE_DICT = {
   DECLARE_PROJECT_TYPE: 'declare_project_type', // 项目类型
   DECLARE_INDICATOR_CATEGORY: 'declare_indicator_category', // 指标分类
   DECLARE_INDICATOR_VALUE_TYPE: 'declare_indicator_value_type', // 值类型
+  DECLARE_BIZ_STATUS: 'declare_biz_status', // 业务状态
+  DECLARE_EXPERT_STATUS: 'declare_expert_status', // 专家状态
+  DECLARE_EXPERT_TYPE: 'declare_expert_type', // 专家类型
 } as const;
 
 

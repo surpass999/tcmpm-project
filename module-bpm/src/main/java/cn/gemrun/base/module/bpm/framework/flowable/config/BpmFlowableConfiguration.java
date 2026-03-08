@@ -5,6 +5,8 @@ import cn.gemrun.base.module.bpm.framework.flowable.core.behavior.BpmActivityBeh
 import cn.gemrun.base.module.bpm.framework.flowable.core.candidate.BpmTaskCandidateInvoker;
 import cn.gemrun.base.module.bpm.framework.flowable.core.candidate.BpmTaskCandidateStrategy;
 import cn.gemrun.base.module.bpm.framework.flowable.core.event.BpmProcessInstanceEventPublisher;
+import cn.gemrun.base.module.system.api.permission.PermissionApi;
+import cn.gemrun.base.module.system.api.permission.RoleApi;
 import cn.gemrun.base.module.system.api.user.AdminUserApi;
 import org.flowable.common.engine.api.delegate.FlowableFunctionDelegate;
 import org.flowable.common.engine.api.delegate.event.FlowableEventListener;
@@ -79,10 +81,12 @@ public class BpmFlowableConfiguration {
     }
 
     @Bean
-    @SuppressWarnings("SpringJavaInjectionPointsAutowiringInspection") // adminUserApi 可以注入成功
+    @SuppressWarnings("SpringJavaInjectionPointsAutowiringInspection") // adminUserApi / roleApi / permissionApi 可以注入成功
     public BpmTaskCandidateInvoker bpmTaskCandidateInvoker(List<BpmTaskCandidateStrategy> strategyList,
-                                                           AdminUserApi adminUserApi) {
-        return new BpmTaskCandidateInvoker(strategyList, adminUserApi);
+                                                           AdminUserApi adminUserApi,
+                                                           RoleApi roleApi,
+                                                           PermissionApi permissionApi) {
+        return new BpmTaskCandidateInvoker(strategyList, adminUserApi, roleApi, permissionApi);
     }
 
     // =========== 自己拓展的 Bean ==========

@@ -5,6 +5,9 @@ import cn.hutool.core.lang.Assert;
 import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.extra.spring.SpringUtil;
+import cn.hutool.json.JSONArray;
+import cn.hutool.json.JSONObject;
+import cn.hutool.json.JSONUtil;
 import cn.gemrun.base.framework.common.enums.CommonStatusEnum;
 import cn.gemrun.base.framework.common.util.object.ObjectUtils;
 import cn.gemrun.base.framework.datapermission.core.annotation.DataPermission;
@@ -14,6 +17,8 @@ import cn.gemrun.base.module.bpm.framework.flowable.core.enums.BpmTaskCandidateS
 import cn.gemrun.base.module.bpm.framework.flowable.core.util.BpmnModelUtils;
 import cn.gemrun.base.module.bpm.framework.flowable.core.util.FlowableUtils;
 import cn.gemrun.base.module.bpm.service.task.BpmProcessInstanceService;
+import cn.gemrun.base.module.system.api.permission.PermissionApi;
+import cn.gemrun.base.module.system.api.permission.RoleApi;
 import cn.gemrun.base.module.system.api.user.AdminUserApi;
 import cn.gemrun.base.module.system.api.user.dto.AdminUserRespDTO;
 import com.google.common.annotations.VisibleForTesting;
@@ -38,14 +43,20 @@ public class BpmTaskCandidateInvoker {
     private final Map<BpmTaskCandidateStrategyEnum, BpmTaskCandidateStrategy> strategyMap = new HashMap<>();
 
     private final AdminUserApi adminUserApi;
+    private final RoleApi roleApi;
+    private final PermissionApi permissionApi;
 
     public BpmTaskCandidateInvoker(List<BpmTaskCandidateStrategy> strategyList,
-                                   AdminUserApi adminUserApi) {
+                                   AdminUserApi adminUserApi,
+                                   RoleApi roleApi,
+                                   PermissionApi permissionApi) {
         strategyList.forEach(strategy -> {
             BpmTaskCandidateStrategy oldStrategy = strategyMap.put(strategy.getStrategy(), strategy);
             Assert.isNull(oldStrategy, "策略(%s) 重复", strategy.getStrategy());
         });
         this.adminUserApi = adminUserApi;
+        this.roleApi = roleApi;
+        this.permissionApi = permissionApi;
     }
 
     /**
@@ -68,31 +79,28 @@ public class BpmTaskCandidateInvoker {
                 return;
             }
 
-            // 解析 DSL 配置
-            String dslConfig = BpmnModelUtils.parseDslConfig(userTask);
-            log.info("[validateBpmnConfig] 节点: {}, DSL配置: {}", userTask.getName(), dslConfig);
-
             // 1.2 非空校验
             Integer strategy = BpmnModelUtils.parseCandidateStrategy(userTask);
             String param = BpmnModelUtils.parseCandidateParam(userTask);
 
-            log.info("[validateBpmnConfig] 节点: {}, 传统策略: {}, 参数: {}", userTask.getName(), strategy, param);
-
             // 如果 BPMN 没有配置审批人策略，检查 DSL 是否配置了 assign
             boolean hasDslAssign = BpmnModelUtils.hasDslAssign(userTask);
-            log.info("[validateBpmnConfig] 节点: {}, hasDslAssign: {}", userTask.getName(), hasDslAssign);
 
             if (strategy == null && !hasDslAssign) {
                 throw exception(MODEL_DEPLOY_FAIL_TASK_CANDIDATE_NOT_CONFIG, userTask.getName());
             }
-            // 如果策略存在且需要参数，但参数为空且 DSL 也没有配置 assign
+            // 如果策略存在且需要参数，但参数为空
             if (strategy != null) {
                 BpmTaskCandidateStrategy candidateStrategy = getCandidateStrategy(strategy);
+                // 如果 DSL 有 assign 配置，则跳过参数校验（因为 DSL assign 会覆盖 BPMN 策略）
                 if (candidateStrategy.isParamRequired() && StrUtil.isBlank(param) && !hasDslAssign) {
                     throw exception(MODEL_DEPLOY_FAIL_TASK_CANDIDATE_NOT_CONFIG, userTask.getName());
                 }
-                // 2. 具体策略校验
-                getCandidateStrategy(strategy).validateParam(param);
+                // DSL 有 assign 时，不需要校验 BPMN 策略的参数
+                if (!hasDslAssign) {
+                    // 2. 具体策略校验（仅当 DSL 没有 assign 配置时）
+                    getCandidateStrategy(strategy).validateParam(param);
+                }
             }
         });
     }
@@ -120,7 +128,14 @@ public class BpmTaskCandidateInvoker {
             // 1.1 计算任务的候选人
             Integer strategy = BpmnModelUtils.parseCandidateStrategy(flowElement);
             String param = BpmnModelUtils.parseCandidateParam(flowElement);
-            Set<Long> userIds = getCandidateStrategy(strategy).calculateUsersByTask(execution, param);
+            Set<Long> userIds;
+            if (strategy != null) {
+                userIds = getCandidateStrategy(strategy).calculateUsersByTask(execution, param);
+            } else {
+                // 传统策略未配置时，尝试 DSL assign
+                String dslConfig = BpmnModelUtils.parseDslConfig(flowElement);
+                userIds = calculateUsersByDslAssign(execution, dslConfig);
+            }
             // 1.2 移除被禁用的用户
             removeDisableUsers(userIds);
 
@@ -159,8 +174,13 @@ public class BpmTaskCandidateInvoker {
         // 1.1 计算任务的候选人
         Integer strategy = BpmnModelUtils.parseCandidateStrategy(flowElement);
         String param = BpmnModelUtils.parseCandidateParam(flowElement);
-        Set<Long> userIds = getCandidateStrategy(strategy).calculateUsersByActivity(bpmnModel, activityId, param,
-                startUserId, processDefinitionId, processVariables);
+        Set<Long> userIds;
+        if (strategy != null) {
+            userIds = getCandidateStrategy(strategy).calculateUsersByActivity(bpmnModel, activityId, param,
+                    startUserId, processDefinitionId, processVariables);
+        } else {
+            userIds = new HashSet<>();
+        }
         // 1.2 移除被禁用的用户
         removeDisableUsers(userIds);
 
@@ -211,10 +231,71 @@ public class BpmTaskCandidateInvoker {
 
     private BpmTaskCandidateStrategy getCandidateStrategy(Integer strategy) {
         BpmTaskCandidateStrategyEnum strategyEnum = BpmTaskCandidateStrategyEnum.valueOf(strategy);
-        Assert.notNull(strategyEnum, "策略(%s) 不存在", strategy);
+        Assert.notNull(strategyEnum, "策略({}) 不存在", strategy);
         BpmTaskCandidateStrategy strategyObj = strategyMap.get(strategyEnum);
-        Assert.notNull(strategyObj, "策略(%s) 不存在", strategy);
+        Assert.notNull(strategyObj, "策略({}) 不存在", strategy);
         return strategyObj;
+    }
+
+    /**
+     * 根据 DSL assign 配置计算候选人（当 BPMN 未配置传统候选策略时使用）
+     *
+     * DSL assign type 说明：
+     * - START_USER：发起人自己
+     * - STATIC_ROLE：固定角色，通过 DSL 顶层 roles 字段获取角色编码列表
+     */
+    private Set<Long> calculateUsersByDslAssign(DelegateExecution execution, String dslConfig) {
+        if (StrUtil.isBlank(dslConfig)) {
+            log.warn("[calculateUsersByDslAssign] DSL配置为空，无法计算候选人");
+            return new HashSet<>();
+        }
+        try {
+            JSONObject dslJson = JSONUtil.parseObj(dslConfig);
+            JSONObject assignJson = dslJson.getJSONObject("assign");
+            if (assignJson == null) {
+                log.warn("[calculateUsersByDslAssign] DSL中无assign配置: {}", dslConfig);
+                return new HashSet<>();
+            }
+            String type = assignJson.getStr("type");
+            log.info("[calculateUsersByDslAssign] DSL assign type={}", type);
+
+            if ("START_USER".equals(type)) {
+                BpmTaskCandidateStrategy strategy = strategyMap.get(BpmTaskCandidateStrategyEnum.START_USER);
+                if (strategy != null) {
+                    return strategy.calculateUsersByTask(execution, null);
+                }
+            } else if ("STATIC_ROLE".equals(type)) {
+                // 从 DSL 顶层 roles 字段获取角色编码（如 ["PROVINCE", "NATION"]）
+                JSONArray rolesArray = dslJson.getJSONArray("roles");
+                if (rolesArray != null && !rolesArray.isEmpty()) {
+                    Set<String> roleCodes = new HashSet<>(rolesArray.toList(String.class));
+                    Set<Long> roleIds = roleApi.getRoleIdsByCodes(roleCodes);
+                    log.info("[calculateUsersByDslAssign] STATIC_ROLE roleCodes={}, roleIds={}", roleCodes, roleIds);
+                    if (!roleIds.isEmpty()) {
+                        return permissionApi.getUserRoleIdListByRoleIds(roleIds);
+                    }
+                }
+            } else if ("DEPT_POST".equals(type)) {
+                // DEPT_POST: 本部门岗位
+                // source 是岗位ID（如 "2"），level 是部门层级（默认1）
+                String source = assignJson.getStr("source");
+                Integer level = assignJson.getInt("level", 1);
+                log.info("[calculateUsersByDslAssign] DEPT_POST source={}, level={}", source, level);
+
+                if (StrUtil.isNotBlank(source)) {
+                    BpmTaskCandidateStrategy strategy = strategyMap.get(BpmTaskCandidateStrategyEnum.DEPT_POST);
+                    if (strategy != null) {
+                        // source 作为参数传递
+                        return strategy.calculateUsersByTask(execution, source);
+                    }
+                }
+            } else {
+                log.warn("[calculateUsersByDslAssign] 未支持的DSL assign type={}", type);
+            }
+        } catch (Exception e) {
+            log.warn("[calculateUsersByDslAssign] DSL解析失败: {}", e.getMessage());
+        }
+        return new HashSet<>();
     }
 
 }

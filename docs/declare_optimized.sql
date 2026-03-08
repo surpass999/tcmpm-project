@@ -28,7 +28,7 @@
 -- ----------------------------------------------------------------
 -- | 值 | 枚举名       | 说明         | 对应DSL bizStatus        |
 -- ----------------------------------------------------------------
--- | 0  | FILING       | 立项中       | PRO_FILING               |
+-- | 0  | FILING       | 立项中       | PRO_FILING              |
 -- | 1  | CONSTRUCTION | 建设中       | PRO_CONSTRUCTION        |
 -- | 2  | MIDTERM      | 中期评估     | PRO_MIDTERM             |
 -- | 3  | RECTIFICATION| 整改中       | PRO_RECTIFICATION       |
@@ -1202,6 +1202,66 @@ CREATE TABLE `declare_notice_receipt`  (
   INDEX `idx_read_time`(`read_time`) USING BTREE COMMENT '阅读时间索引',
   CONSTRAINT `fk_notice_receipt_policy` FOREIGN KEY (`policy_id`) REFERENCES `declare_policy` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '政策通知回执表' ROW_FORMAT = Dynamic;
+
+-- ----------------------------
+-- 25. declare_business_process（业务与流程实例关联表）
+-- ----------------------------
+-- 说明：记录业务与流程实例关联信息
+-- ----------------------------
+DROP TABLE IF EXISTS `bpm_business_process`;
+CREATE TABLE `bpm_business_process` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `business_type` varchar(128) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '业务类型',
+  `business_id` bigint(20) NOT NULL COMMENT '业务ID',
+  `process_instance_id` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '流程实例ID',
+  `process_definition_key` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '流程定义Key',
+  `current_node_key` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '当前节点Key',
+  `current_status` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '当前流程状态',
+  `current_assign_type` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '当前任务分配类型',
+  `current_assign_source` varchar(256) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '当前任务分配来源',
+  `initiator_id` bigint(20) DEFAULT NULL COMMENT '发起人ID',
+  `initiator_ids` text COLLATE utf8mb4_unicode_ci COMMENT '参与者ID列表，逗号分隔',
+  `start_time` datetime NOT NULL COMMENT '流程开始时间',
+  `end_time` datetime DEFAULT NULL COMMENT '流程结束时间',
+  `result` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '流程结果',
+  `creator` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '创建者',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updater` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '更新者',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` tinyint(4) NOT NULL DEFAULT '0' COMMENT '是否删除',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `idx_business` (`business_type`,`business_id`),
+  KEY `idx_process_instance` (`process_instance_id`),
+  KEY `idx_current_node` (`current_node_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='业务与流程实例关联表';
+
+-- ----------------------------
+-- 26. bpm_business_type（业务类型与流程关联配置表）
+-- ----------------------------
+-- 说明：记录业务类型与流程关联配置信息
+-- ----------------------------
+DROP TABLE IF EXISTS `bpm_business_type`;
+CREATE TABLE IF NOT EXISTS `bpm_business_type` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `business_type` varchar(128) NOT NULL COMMENT '业务类型（declare:filing:submit）',
+  `business_name` varchar(64) NOT NULL COMMENT '业务名称',
+  `process_definition_key` varchar(64) NOT NULL COMMENT '流程定义Key',
+  `process_category` varchar(32) NOT NULL COMMENT '流程分类',
+  `description` varchar(512) DEFAULT '' COMMENT '描述',
+  `enabled` tinyint(4) NOT NULL DEFAULT 1 COMMENT '是否启用（0=禁用，1=启用）',
+  `sort` int(11) NOT NULL DEFAULT 0 COMMENT '排序',
+  `creator` varchar(64) DEFAULT '' COMMENT '创建者',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updater` varchar(64) DEFAULT '' COMMENT '更新者',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` tinyint(4) NOT NULL DEFAULT 0 COMMENT '是否删除',
+  PRIMARY KEY (`id`),
+  UNIQUE INDEX `idx_business_type`(`business_type`),
+  INDEX `idx_process_key`(`process_definition_key`),
+  INDEX `idx_enabled`(`enabled`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='业务类型与流程关联配置表';
+
+
 
 
 -- =====================================================

@@ -1,11 +1,11 @@
 package cn.gemrun.base.module.declare.controller.admin.filing.vo;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.*;
-import java.util.*;
 import javax.validation.constraints.*;
-import org.springframework.format.annotation.DateTimeFormat;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Schema(description = "管理后台 - 项目备案核心信息新增/修改 Request VO")
 @Data
@@ -32,10 +32,12 @@ public class FilingSaveReqVO {
 
     @Schema(description = "有效期限开始时间", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotNull(message = "有效期限开始时间不能为空")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime validStartTime;
 
     @Schema(description = "有效期限结束时间", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotNull(message = "有效期限结束时间不能为空")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime validEndTime;
 
     @Schema(description = "建设内容（备案方案核心）", requiredMode = Schema.RequiredMode.REQUIRED)
@@ -50,6 +52,7 @@ public class FilingSaveReqVO {
     private String provinceReviewOpinion;
 
     @Schema(description = "省级审核时间")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime provinceReviewTime;
 
     @Schema(description = "省级审核人ID（关联system_users.id）", example = "11954")
@@ -62,6 +65,52 @@ public class FilingSaveReqVO {
     private String expertReviewerIds;
 
     @Schema(description = "备案归档时间")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime filingArchiveTime;
+
+    /**
+     * 指标值列表（新增备案时包含指标值）
+     */
+    @Schema(description = "指标值列表")
+    private List<IndicatorValueItem> indicatorValues;
+
+    @Schema(description = "单个指标值")
+    @Data
+    public static class IndicatorValueItem {
+
+        @Schema(description = "指标ID")
+        @NotNull(message = "指标ID不能为空")
+        private Long indicatorId;
+
+        @Schema(description = "指标代号")
+        @NotNull(message = "指标代号不能为空")
+        private String indicatorCode;
+
+        @Schema(description = "值类型：1=数字，2=字符串，3=布尔，4=日期，5=长文本，6=单选，7=多选，8=日期区间")
+        @NotNull(message = "值类型不能为空")
+        private Integer valueType;
+
+        @Schema(description = "数字型值")
+        private String valueNum;
+
+        @Schema(description = "字符串型值（单选/多选值以逗号分隔）")
+        private String valueStr;
+
+        @Schema(description = "布尔型值")
+        private Boolean valueBool;
+
+        @Schema(description = "日期型值（格式：yyyy-MM-dd HH:mm:ss）")
+        private String valueDate;
+
+        @Schema(description = "日期区间-开始")
+        private String valueDateStart;
+
+        @Schema(description = "日期区间-结束")
+        private String valueDateEnd;
+
+        @Schema(description = "长文本型值")
+        private String valueText;
+
+    }
 
 }
