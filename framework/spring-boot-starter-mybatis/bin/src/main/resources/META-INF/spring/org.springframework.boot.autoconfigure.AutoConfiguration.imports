@@ -1,0 +1,3 @@
+cn.gemrun.base.framework.datasource.config.BaseDataSourceAutoConfiguration
+cn.gemrun.base.framework.mybatis.config.BaseMybatisAutoConfiguration
+cn.gemrun.base.framework.translate.config.BaseTranslateAutoConfiguration

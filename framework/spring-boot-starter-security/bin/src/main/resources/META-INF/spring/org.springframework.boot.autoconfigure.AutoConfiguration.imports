@@ -1,0 +1,3 @@
+cn.gemrun.base.framework.security.config.BaseSecurityAutoConfiguration
+cn.gemrun.base.framework.security.config.BaseWebSecurityConfigurerAdapter
+cn.gemrun.base.framework.operatelog.config.BaseOperateLogConfiguration

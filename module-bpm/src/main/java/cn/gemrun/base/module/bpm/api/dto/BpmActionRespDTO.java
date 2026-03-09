@@ -2,6 +2,8 @@ package cn.gemrun.base.module.bpm.api.dto;
 
 import lombok.Data;
 
+import java.util.Map;
+
 /**
  * BPM 按钮定义 Response DTO
  *
@@ -41,5 +43,10 @@ public class BpmActionRespDTO {
      * 当前任务ID（getAvailableActions 时填充，前端执行操作时需要）
      */
     private String taskId;
+
+    /**
+     * 动作参数（从 DSL action.vars 中读取，如专家数量、可修改字段等）
+     */
+    private Map<String, Object> vars;
 
 }

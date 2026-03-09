@@ -1,0 +1,3 @@
+cn.gemrun.base.framework.mq.redis.config.BaseRedisMQProducerAutoConfiguration
+cn.gemrun.base.framework.mq.redis.config.BaseRedisMQConsumerAutoConfiguration
+cn.gemrun.base.framework.mq.rabbitmq.config.BaseRabbitMQAutoConfiguration

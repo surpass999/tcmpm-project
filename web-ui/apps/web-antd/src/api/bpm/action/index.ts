@@ -55,6 +55,8 @@ export interface SubmitActionParams {
   actionKey: string;
   /** 审批意见 */
   reason?: string;
+  /** 选择的专家用户ID列表（选择专家操作时使用） */
+  expertUserIds?: number[];
 }
 
 /** 提交操作（完成任务，推进流程） */

@@ -1219,6 +1219,7 @@ CREATE TABLE `bpm_business_process` (
   `current_status` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '当前流程状态',
   `current_assign_type` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '当前任务分配类型',
   `current_assign_source` varchar(256) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '当前任务分配来源',
+  `dsl_json` json DEFAULT NULL COMMENT '当前节点DSL配置JSON',
   `initiator_id` bigint(20) DEFAULT NULL COMMENT '发起人ID',
   `initiator_ids` text COLLATE utf8mb4_unicode_ci COMMENT '参与者ID列表，逗号分隔',
   `start_time` datetime NOT NULL COMMENT '流程开始时间',
@@ -1310,5 +1311,8 @@ CREATE TABLE IF NOT EXISTS `bpm_business_type` (
 
 -- 政策通知回执关联
 -- ALTER TABLE `declare_notice_receipt` ADD CONSTRAINT `fk_notice_receipt_policy` FOREIGN KEY (`policy_id`) REFERENCES `declare_policy` (`id`) ON DELETE CASCADE;
+
+-- 业务流程表添加 DSL JSON 字段
+ALTER TABLE `bpm_business_process` ADD COLUMN `dsl_json` json DEFAULT NULL COMMENT '当前节点DSL配置JSON' AFTER `current_assign_source`;
 
 SET FOREIGN_KEY_CHECKS = 1;

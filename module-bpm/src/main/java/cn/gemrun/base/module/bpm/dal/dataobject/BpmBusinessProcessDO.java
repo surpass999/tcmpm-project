@@ -87,6 +87,12 @@ public class BpmBusinessProcessDO extends BaseDO implements Serializable {
     private String currentAssignSource;
 
     /**
+     * 当前节点 DSL 配置 JSON
+     * 包含节点的所有配置信息，如 actions、roles、assign、vars 等
+     */
+    private String dslJson;
+
+    /**
      * 流程开始时间
      */
     private LocalDateTime startTime;

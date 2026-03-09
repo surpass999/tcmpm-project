@@ -1,0 +1,2 @@
+cn.gemrun.base.framework.redis.config.BaseRedisAutoConfiguration
+cn.gemrun.base.framework.redis.config.BaseCacheAutoConfiguration

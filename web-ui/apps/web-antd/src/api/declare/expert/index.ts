@@ -33,6 +33,7 @@ export namespace DeclareExpertApi {
     statusRemark?: string; // 状态说明
     remark?: string; // 备注
     createTime?: string; // 创建时间
+    isAvoid?: boolean; // 是否需要回避
   }
 
   /** 专家列表请求 */
@@ -41,6 +42,11 @@ export namespace DeclareExpertApi {
     expertType?: number;
     status?: number;
     workUnit?: string;
+  }
+
+  /** 专家分页请求 */
+  export interface ExpertPageReq extends PageParam, Partial<ExpertListReq> {
+    currentDeptId?: number; // 当前部门ID（用于判断回避）
   }
 }
 
@@ -92,6 +98,14 @@ export function getExpertList(params: DeclareExpertApi.ExpertListReq) {
 /** 获取专家简单列表（下拉选择用） */
 export function getExpertSimpleList() {
   return requestClient.get<DeclareExpertApi.Expert[]>('/declare/expert/simple-list');
+}
+
+/** 获取专家选择列表（用于流程选择专家） */
+export function getExpertSelectList(params: DeclareExpertApi.ExpertPageReq) {
+  return requestClient.get<PageResult<DeclareExpertApi.Expert>>(
+    '/declare/expert/select-list',
+    { params },
+  );
 }
 
 /** 修改专家状态 */

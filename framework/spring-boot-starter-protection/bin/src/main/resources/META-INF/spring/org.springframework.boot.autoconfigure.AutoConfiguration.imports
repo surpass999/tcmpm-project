@@ -1,0 +1,4 @@
+cn.gemrun.base.framework.idempotent.config.BaseIdempotentConfiguration
+cn.gemrun.base.framework.lock4j.config.BaseLock4jConfiguration
+cn.gemrun.base.framework.ratelimiter.config.BaseRateLimiterConfiguration
+cn.gemrun.base.framework.signature.config.BaseApiSignatureAutoConfiguration

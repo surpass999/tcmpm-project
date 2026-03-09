@@ -1,7 +1,7 @@
 <!-- gitnexus:start -->
 # GitNexus MCP
 
-This project is indexed by GitNexus as **tcmpm** (42739 symbols, 117601 relationships, 300 execution flows).
+This project is indexed by GitNexus as **tcmpm** (42748 symbols, 117628 relationships, 300 execution flows).
 
 GitNexus provides a knowledge graph over this codebase — call chains, blast radius, execution flows, and semantic search.
 

@@ -272,17 +272,16 @@ const dslBackStrategyOptions = [
 // DSL 配置表单数据
 const dslFormData = ref({
   cap: 'AUDIT',
-  actions: [{ key: 'agree', label: '同意', bizStatus: 'agree', bizStatusLabel: '已同意', bpmAction: 'AGREE' }, { key: 'reject', label: '驳回', bizStatus: 'rejected', bizStatusLabel: '已驳回', bpmAction: 'REJECT' }] as Array<{ key: string; label?: string; bizStatus?: string; bizStatusLabel?: string; bpmAction?: string }>,
+  actions: [
+    { key: 'agree', label: '同意', bizStatus: 'agree', bizStatusLabel: '已同意', bpmAction: 'AGREE', vars: {} },
+    { key: 'reject', label: '驳回', bizStatus: 'rejected', bizStatusLabel: '已驳回', bpmAction: 'REJECT', vars: {} }
+  ] as Array<{ key: string; label?: string; bizStatus?: string; bizStatusLabel?: string; bpmAction?: string; vars?: Record<string, any> }>,
   roles: [] as string[],
   assignType: 'DEPT_POST',
   assignSource: '',
   signRule: 'MAJORITY',
   backStrategy: 'TO_START',
   enable: true,
-  // 扩展字段
-  expertMin: undefined as number | undefined,
-  expertMax: undefined as number | undefined,
-  modifyFields: [] as string[],
 });
 
 // 解析 DSL JSON
@@ -291,19 +290,26 @@ function parseDslJson(jsonStr: string) {
   try {
     const config = JSON.parse(jsonStr);
     // actions 可能是字符串、简单数组或对象数组，统一转为对象数组供表单使用
-    let actionsArr: Array<{ key: string; label?: string; bizStatus?: string; bizStatusLabel?: string; bpmAction?: string }> = [];
+    let actionsArr: Array<{ key: string; label?: string; bizStatus?: string; bizStatusLabel?: string; bpmAction?: string; vars?: Record<string, any> }> = [];
     if (Array.isArray(config.actions)) {
       // 检查是否是对象数组（新格式）
       if (config.actions.length > 0 && typeof config.actions[0] === 'object' && config.actions[0].key) {
         // 兼容旧数据：如果没有 label 和 bizStatusLabel，从 bpmActionDescriptions 补充
         actionsArr = config.actions.map((action: any) => {
           const actionDesc = bpmActionDescriptions.value.find((a) => a.key === action.key);
+          // 新格式：vars 在 action 对象内部
+          // 兼容旧格式：vars 在顶层，先检查 action.vars，没有则用顶层的
+          const vars = action.vars || config.vars || {};
           return {
             key: action.key,
             label: action.label || actionDesc?.label || action.key,
             bizStatus: action.bizStatus || actionDesc?.bizStatus || '',
             bizStatusLabel: action.bizStatusLabel || actionDesc?.bizStatusLabel || actionDesc?.bizStatus || '',
             bpmAction: action.bpmAction || actionDesc?.bpmAction || '',
+            // 提取 vars 中的特殊字段到顶层供表单使用
+            expertMin: vars.expertMin,
+            expertMax: vars.expertMax,
+            modifyFields: vars.modifyFields || [],
           };
         });
       } else {
@@ -317,6 +323,7 @@ function parseDslJson(jsonStr: string) {
             bizStatus: actionDesc?.bizStatus || '',
             bizStatusLabel: actionDesc?.bizStatusLabel || actionDesc?.bizStatus || '',
             bpmAction: actionDesc?.bpmAction || '',
+            vars: {},
           };
         });
       }
@@ -331,6 +338,7 @@ function parseDslJson(jsonStr: string) {
           bizStatus: actionDesc?.bizStatus || '',
           bizStatusLabel: actionDesc?.bizStatusLabel || actionDesc?.bizStatus || '',
           bpmAction: actionDesc?.bpmAction || '',
+          vars: {},
         };
       });
     }
@@ -358,10 +366,6 @@ function parseDslJson(jsonStr: string) {
       signRule: config.signRule || 'MAJORITY',
       backStrategy: config.backStrategy || 'TO_START',
       enable: config.enable !== false,
-      // 扩展字段
-      expertMin: config.vars?.expertMin,
-      expertMax: config.vars?.expertMax,
-      modifyFields: config.vars?.modifyFields || [],
     };
   } catch (e) {
     console.error('解析 DSL 配置失败', e);
@@ -376,9 +380,9 @@ function handleAssignTypeChange() {
 
 // 构建 DSL JSON
 function buildDslJson(): string {
-  const { cap, actions, roles, assignType, assignSource, signRule, backStrategy, enable, expertMin, expertMax, modifyFields } = dslFormData.value;
+  const { cap, actions, roles, assignType, assignSource, signRule, backStrategy, enable } = dslFormData.value;
 
-  // actions 转换为带 label、bizStatus、bizStatusLabel 和 bpmAction 的对象数组
+  // actions 转换为带 label、bizStatus、bizStatusLabel、bpmAction 和 vars 的对象数组
   const actionsWithMeta = actions.map((action) => {
     if (typeof action === 'string') {
       // 兼容字符串格式
@@ -389,23 +393,22 @@ function buildDslJson(): string {
         bizStatus: actionDesc?.bizStatus || '',
         bizStatusLabel: actionDesc?.bizStatusLabel || actionDesc?.bizStatus || '',
         bpmAction: actionDesc?.bpmAction || '',
+        vars: {},
       };
     }
-    // 已有 label、bizStatus、bizStatusLabel、bpmAction 的对象
+    // 已有 label、bizStatus、bizStatusLabel、bpmAction、vars 的对象
+    // vars 单独提取处理
+    const { expertMin, expertMax, modifyFields, ...actionBasic } = action as any;
+    const vars: Record<string, any> = {};
+    if (expertMin !== undefined) vars.expertMin = expertMin;
+    if (expertMax !== undefined) vars.expertMax = expertMax;
+    if (modifyFields && modifyFields.length > 0) vars.modifyFields = modifyFields;
+
     return {
-      key: action.key,
-      label: action.label,
-      bizStatus: action.bizStatus,
-      bizStatusLabel: action.bizStatusLabel,
-      bpmAction: action.bpmAction,
+      ...actionBasic,
+      vars: Object.keys(vars).length > 0 ? vars : undefined,
     };
   });
-
-  // 构建 vars 对象
-  const vars: Record<string, any> = {};
-  if (expertMin !== undefined) vars.expertMin = expertMin;
-  if (expertMax !== undefined) vars.expertMax = expertMax;
-  if (modifyFields && modifyFields.length > 0) vars.modifyFields = modifyFields;
 
   // 构建 assign 对象
   let assign: any = undefined;
@@ -430,7 +433,6 @@ function buildDslJson(): string {
     signRule: cap === 'COUNTERSIGN' ? signRule : undefined,
     backStrategy: cap !== 'FILL' ? backStrategy : 'NONE',
     enable,
-    ...(Object.keys(vars).length > 0 ? { vars } : {}),
   });
 }
 
@@ -620,8 +622,8 @@ const resetCustomConfigList = () => {
     dslFormData.value = {
       cap: 'AUDIT',
       actions: [
-        { key: 'agree', label: '同意', bizStatus: 'agree', bizStatusLabel: '已同意', bpmAction: 'AGREE' },
-        { key: 'reject', label: '驳回', bizStatus: 'rejected', bizStatusLabel: '已驳回', bpmAction: 'REJECT' },
+        { key: 'agree', label: '同意', bizStatus: 'agree', bizStatusLabel: '已同意', bpmAction: 'AGREE', vars: {} },
+        { key: 'reject', label: '驳回', bizStatus: 'rejected', bizStatusLabel: '已驳回', bpmAction: 'REJECT', vars: {} },
       ],
       roles: [],
       assignType: 'DEPT_POST',
@@ -629,9 +631,6 @@ const resetCustomConfigList = () => {
       signRule: 'MAJORITY',
       backStrategy: 'TO_START',
       enable: false,
-      expertMin: undefined,
-      expertMax: undefined,
-      modifyFields: [],
     };
   }
 
@@ -697,6 +696,7 @@ const updateElementExtensions = () => {
   }
   dslConfigEl.value.value = buildDslJson();
   console.log('[updateElementExtensions] dslConfig value:', dslConfigEl.value.value);
+  console.log('[updateElementExtensions] 当前节点 dslFormData:', JSON.stringify(dslFormData.value));
 
   // 更新候选人策略：根据 DSL assignType 设置 CandidateStrategy 和 CandidateParam
   const { assignType, assignSource } = dslFormData.value;
@@ -1232,6 +1232,49 @@ onMounted(async () => {
                     @change="updateElementExtensions"
                   />
                 </div>
+
+                <!-- action.vars 配置区域 -->
+                <!-- 选择专家 (selectExpert) 需要配置专家数量 -->
+                <template v-if="action.key === 'selectExpert'">
+                  <div class="border border-gray-200 rounded p-2 mt-2">
+                    <div class="text-xs font-medium text-gray-600 mb-2">专家数量配置</div>
+                    <div class="flex items-center gap-2">
+                      <span class="text-xs text-gray-500 w-16">最少:</span>
+                      <a-input-number
+                        v-model:value="action.expertMin"
+                        :min="1"
+                        placeholder="最少"
+                        size="small"
+                        style="width: 80px"
+                        @change="updateElementExtensions"
+                      />
+                      <span class="text-xs text-gray-500 w-16 ml-2">最多:</span>
+                      <a-input-number
+                        v-model:value="action.expertMax"
+                        :min="1"
+                        placeholder="最多"
+                        size="small"
+                        style="width: 80px"
+                        @change="updateElementExtensions"
+                      />
+                    </div>
+                  </div>
+                </template>
+
+                <!-- 补正/填报 (modify/fill) 需要配置可修改字段 -->
+                <template v-if="action.key === 'modify' || action.key === 'fill'">
+                  <div class="border border-gray-200 rounded p-2 mt-2">
+                    <div class="text-xs font-medium text-gray-600 mb-2">可修改字段</div>
+                    <Select
+                      v-model:value="action.modifyFields"
+                      mode="tags"
+                      placeholder="输入字段名后回车确认"
+                      size="small"
+                      @change="updateElementExtensions"
+                    />
+                    <div class="text-xs text-gray-400 mt-1">允许用户修改的字段列表</div>
+                  </div>
+                </template>
               </div>
             </Collapse.Panel>
           </Collapse>
@@ -1352,45 +1395,6 @@ onMounted(async () => {
             :options="dslSignRuleOptions"
             @change="updateElementExtensions"
           />
-        </Form.Item>
-      </template>
-
-      <!-- 选择专家（当 cap 为 EXPERT_SELECT 时显示） -->
-      <template v-if="dslFormData.cap === 'EXPERT_SELECT'">
-        <Form.Item label="专家数量">
-          <a-row :gutter="8">
-            <a-col :span="12">
-              <a-input-number
-                v-model:value="dslFormData.expertMin"
-                :min="1"
-                placeholder="最少"
-                style="width: 100%"
-                @change="updateElementExtensions"
-              />
-            </a-col>
-            <a-col :span="12">
-              <a-input-number
-                v-model:value="dslFormData.expertMax"
-                :min="1"
-                placeholder="最多"
-                style="width: 100%"
-                @change="updateElementExtensions"
-              />
-            </a-col>
-          </a-row>
-        </Form.Item>
-      </template>
-
-      <!-- 补正可修改字段（当 cap 为 MODIFY 或 FILL 时显示） -->
-      <template v-if="dslFormData.cap === 'MODIFY' || dslFormData.cap === 'FILL'">
-        <Form.Item label="可修改字段">
-          <Select
-            v-model:value="dslFormData.modifyFields"
-            mode="tags"
-            placeholder="输入字段名后回车确认"
-            @change="updateElementExtensions"
-          />
-          <div class="form-help-text">允许用户修改的字段列表</div>
         </Form.Item>
       </template>
 

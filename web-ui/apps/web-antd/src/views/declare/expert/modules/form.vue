@@ -11,6 +11,8 @@ import { getDictOptions } from '@vben/hooks';
 
 import { message } from 'ant-design-vue';
 
+import dayjs from 'dayjs';
+
 import { getSimpleDeptList } from '#/api/system/dept';
 import { getSimpleUserList } from '#/api/system/user';
 
@@ -148,7 +150,15 @@ const [Modal, modalApi] = useVbenModal({
       modalApi.lock();
       try {
         const result = await getExpert(data.id);
-        formData.value = result || {};
+        if (result) {
+          // 转换日期字段为 dayjs 对象
+          if (result.birthDate) {
+            result.birthDate = dayjs(result.birthDate);
+          }
+          formData.value = result;
+        } else {
+          formData.value = {};
+        }
       } finally {
         modalApi.unlock();
       }
@@ -209,7 +219,7 @@ const [Modal, modalApi] = useVbenModal({
           <a-form-item label="出生日期" name="birthDate">
             <a-date-picker
               v-model:value="formData.birthDate"
-              value-format="YYYY-MM-DD"
+              format="YYYY-MM-DD"
               style="width: 100%"
               placeholder="请选择出生日期"
             />

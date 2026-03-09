@@ -1,0 +1,7 @@
+cn.gemrun.base.framework.apilog.config.BaseApiLogAutoConfiguration
+cn.gemrun.base.framework.jackson.config.BaseJacksonAutoConfiguration
+cn.gemrun.base.framework.swagger.config.BaseSwaggerAutoConfiguration
+cn.gemrun.base.framework.web.config.BaseWebAutoConfiguration
+cn.gemrun.base.framework.xss.config.BaseXssAutoConfiguration
+cn.gemrun.base.framework.banner.config.BaseBannerAutoConfiguration
+cn.gemrun.base.framework.encrypt.config.BaseApiEncryptAutoConfiguration

@@ -118,7 +118,7 @@ public class BpmActionController {
     public CommonResult<Boolean> submitAction(@Validated @RequestBody BpmActionSubmitReqVO reqVO) {
         Long userId = SecurityFrameworkUtils.getLoginUserId();
         bpmProcessService.submitAction(reqVO.getBusinessType(), reqVO.getBusinessId(),
-                reqVO.getActionKey(), userId, reqVO.getReason());
+                reqVO.getActionKey(), userId, reqVO.getReason(), reqVO.getExpertUserIds());
         return success(true);
     }
 

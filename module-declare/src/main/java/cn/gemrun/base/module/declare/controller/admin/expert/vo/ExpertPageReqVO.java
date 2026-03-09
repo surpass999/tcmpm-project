@@ -31,6 +31,9 @@ public class ExpertPageReqVO extends PageParam {
     @Schema(description = "关联系统用户ID", example = "1")
     private Long userId;
 
+    @Schema(description = "当前部门ID（用于判断回避）", example = "1")
+    private Long currentDeptId;
+
     @DateTimeFormat(pattern = FORMAT_YEAR_MONTH_DAY_HOUR_MINUTE_SECOND)
     @Schema(description = "创建时间")
     private LocalDateTime[] createTime;

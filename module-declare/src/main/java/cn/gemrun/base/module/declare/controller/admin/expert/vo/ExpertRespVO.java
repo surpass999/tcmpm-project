@@ -96,4 +96,7 @@ public class ExpertRespVO {
     @Schema(description = "创建时间")
     private LocalDateTime createTime;
 
+    @Schema(description = "是否需要回避：true=是，false=否（当传入currentDeptId时有效）")
+    private Boolean isAvoid;
+
 }

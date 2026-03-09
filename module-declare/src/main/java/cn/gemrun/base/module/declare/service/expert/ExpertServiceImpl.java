@@ -150,6 +150,12 @@ public class ExpertServiceImpl implements ExpertService {
                 .collect(java.util.stream.Collectors.toList());
     }
 
+    @Override
+    public PageResult<ExpertDO> getExpertSelectList(ExpertPageReqVO pageReqVO) {
+        // 直接调用 getExpertPage，回避逻辑在 Controller 层处理
+        return getExpertPage(pageReqVO);
+    }
+
     /**
      * 校验专家是否存在
      */

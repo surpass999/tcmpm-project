@@ -2,6 +2,7 @@
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { DeclareFilingApi } from '#/api/declare/filing';
 import type { DeclareIndicatorApi } from '#/api/declare/indicator';
+import type { DeclareExpertApi } from '#/api/declare/expert';
 
 import { computed, nextTick, onMounted, ref, shallowRef } from 'vue';
 
@@ -17,8 +18,10 @@ import {
   getFilingPage,
 } from '#/api/declare/filing';
 import { getIndicatorsForListDisplay } from '#/api/declare/indicator';
-import { getAvailableActions, getAvailableActionsBatch, submitBpmAction } from '#/api/bpm/action';
+import { getAvailableActionsBatch, submitBpmAction } from '#/api/bpm/action';
 import { $t } from '#/locales';
+
+import ExpertSelectModalCmp from '#/components/bpm/ExpertSelectModal.vue';
 
 import { useGridColumns, useGridFormSchema } from './data';
 import Form from './modules/form.vue';
@@ -145,8 +148,70 @@ async function handleBpmAction(row: DeclareFilingApi.Filing, action: any) {
     return;
   }
 
+  // 如果是 selectExpert（选择专家）类型，显示专家选择弹窗
+  if (action.key === 'selectExpert') {
+    currentSubmitRow.value = row;
+    currentSubmitAction.value = action;
+    expertSelectModalApi.open();
+    return;
+  }
+
   // 其他操作直接执行
   await executeBpmAction(row, action);
+}
+
+/** 专家选择弹窗引用 */
+const [ExpertSelectModal, expertSelectModalApi] = useVbenModal({
+  connectedComponent: ExpertSelectModalCmp,
+  destroyOnClose: true,
+  onOpenChange: async (isOpen: boolean) => {
+    if (isOpen && currentSubmitRow.value) {
+      // 获取已选择的专家数量并传递给弹窗
+      const selectedCount = currentSubmitRow.value.expertReviewerIds
+        ? currentSubmitRow.value.expertReviewerIds.split(',').filter(Boolean).length
+        : 0;
+      expertSelectModalApi.setData({ processSelectedCount: selectedCount });
+    }
+  },
+});
+
+/** 处理专家选择确认 */
+async function handleExpertSelectConfirm(experts: DeclareExpertApi.Expert[]) {
+  if (!currentSubmitRow.value || !currentSubmitAction.value) {
+    return;
+  }
+
+  // 提取专家关联的系统用户ID
+  const expertUserIds = experts
+    .map((e) => e.userId)
+    .filter((userId): userId is number => userId !== undefined && userId !== null);
+
+  if (expertUserIds.length === 0) {
+    message.error('所选专家未关联系统用户，无法提交');
+    return;
+  }
+
+  submitLoading.value = true;
+  try {
+    await submitBpmAction({
+      businessType: BUSINESS_TYPE_KEY,
+      businessId: currentSubmitRow.value.id!,
+      actionKey: currentSubmitAction.value.key,
+      reason: '',
+      expertUserIds,
+    });
+    message.success('选择专家成功');
+
+    // 刷新表格
+    handleRefresh();
+    // 重新加载该行的可用操作
+    loadRowAvailableActions([currentSubmitRow.value]);
+  } catch (error: any) {
+    console.error('[BPM] 选择专家失败:', error);
+    message.error(error.message || '选择专家失败');
+  } finally {
+    submitLoading.value = false;
+  }
 }
 
 /** 执行 BPM 实际操作 */
@@ -458,5 +523,8 @@ const [Grid, gridApi] = useVbenVxeGrid({
         </a-form-item>
       </a-form>
     </a-modal>
+
+    <!-- 选择专家弹窗 -->
+    <ExpertSelectModal @confirm="handleExpertSelectConfirm" />
   </Page>
 </template>

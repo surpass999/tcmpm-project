@@ -5,8 +5,10 @@ import cn.gemrun.base.module.bpm.api.dto.BpmActionRespDTO;
 import cn.gemrun.base.module.bpm.api.dto.BpmBusinessTypeGetReqDTO;
 import cn.gemrun.base.module.bpm.api.dto.BpmBusinessTypeRespDTO;
 import cn.gemrun.base.module.bpm.dal.dataobject.BpmBusinessProcessDO;
+import cn.gemrun.base.module.bpm.dal.dataobject.definition.BpmProcessDefinitionInfoDO;
 import cn.gemrun.base.module.bpm.dal.mysql.process.BpmBusinessProcessMapper;
 import cn.gemrun.base.module.bpm.enums.BpmActionDef;
+import cn.gemrun.base.module.bpm.framework.flowable.core.enums.BpmTaskCandidateStrategyEnum;
 import cn.gemrun.base.module.bpm.framework.flowable.core.util.BpmnModelUtils;
 import cn.gemrun.base.module.bpm.framework.process.service.BpmProcessService;
 import cn.gemrun.base.module.bpm.service.definition.BpmModelService;
@@ -115,6 +117,13 @@ public class BpmProcessServiceImpl implements BpmProcessService {
             return null;
         }
 
+        // 打印获取到的流程定义详细信息
+        log.info("[startProcessIfConfigured] ====== 流程定义详细信息 ======");
+        log.info("[startProcessIfConfigured] processDefinitionId={}, processDefinitionKey={}, version={}, deploymentId={}, name={}",
+                processDefinition.getId(), processDefinition.getKey(),
+                processDefinition.getVersion(), processDefinition.getDeploymentId(),
+                processDefinition.getName());
+
         // 3. 构建流程变量
         Map<String, Object> variables = new HashMap<>();
         variables.put("businessType", businessType);
@@ -129,8 +138,18 @@ public class BpmProcessServiceImpl implements BpmProcessService {
         );
 
         String processInstanceId = processInstance.getId();
-        log.info("流程已启动: businessType={}, businessId={}, processInstanceId={}",
-                businessType, businessId, processInstanceId);
+        log.info("流程已启动: businessType={}, businessId={}, processInstanceId={}", businessType, businessId, processInstanceId);
+        // 打印流程实例关联的流程定义信息
+        log.info("[startProcessIfConfigured] ====== 流程实例详细信息 ======");
+        log.info("[startProcessIfConfigured] processInstanceId={}, processDefinitionId={}, processDefinitionKey={}",
+                processInstance.getId(), processInstance.getProcessDefinitionId(), processInstance.getProcessDefinitionKey());
+        // 重点：对比 processDefinition.getId() 和 processInstance.getProcessDefinitionId() 是否一致
+        if (!processDefinition.getId().equals(processInstance.getProcessDefinitionId())) {
+            log.error("[startProcessIfConfigured] ⚠️ 版本不一致问题！processDefinition.getId()={}, processInstance.getProcessDefinitionId()={}",
+                    processDefinition.getId(), processInstance.getProcessDefinitionId());
+        } else {
+            log.info("[startProcessIfConfigured] ✓ 版本一致");
+        }
 
         // 5. 获取第一个任务节点信息
         String firstNodeKey = getFirstTaskNodeKey(processInstanceId);
@@ -139,29 +158,79 @@ public class BpmProcessServiceImpl implements BpmProcessService {
         // 6. 解析第一个节点的 assign 配置
         String assignType = null;
         String assignSource = null;
+        String firstNodeDslJson = null;
         if (firstNodeKey != null) {
+            // 直接从已部署流程定义的 XML 获取完整 DSL
+            String dslConfig = null;
             try {
-                org.flowable.bpmn.model.BpmnModel bpmnModel = modelService.getBpmnModelByDefinitionId(
-                        processInstance.getProcessDefinitionId());
-                if (bpmnModel != null) {
-                    FlowElement firstElement = bpmnModel.getFlowElement(firstNodeKey);
-                    if (firstElement != null) {
-                        String dslConfig = BpmnModelUtils.parseDslConfig(firstElement);
-                        if (StrUtil.isNotBlank(dslConfig)) {
-                            Map<String, String> assignInfo = parseAssignFromDsl(dslConfig);
-                            assignType = assignInfo.get("type");
-                            assignSource = assignInfo.get("source");
-                        }
+                String bpmnXml = modelService.getBpmnXmlByDefinitionId(processInstance.getProcessDefinitionId());
+                log.info("[startProcessIfConfigured] ====== 开始解析 DSL ====== processDefinitionId={}, nodeKey={}, bpmnXml长度={}",
+                        processInstance.getProcessDefinitionId(), firstNodeKey,
+                        bpmnXml != null ? bpmnXml.length() : 0);
+
+                // 打印 BPMN XML 中所有的 userTask 节点 ID
+                if (StrUtil.isNotBlank(bpmnXml)) {
+                    log.info("[startProcessIfConfigured] ====== BPMN XML 中所有 userTask 节点 ======");
+                    // 使用正则表达式提取所有 userTask 的 id
+                    java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("<userTask[^>]*id=\"([^\"]+)\"[^>]*>");
+                    java.util.regex.Matcher matcher = pattern.matcher(bpmnXml);
+                    java.util.List<String> userTaskIds = new java.util.ArrayList<>();
+                    while (matcher.find()) {
+                        userTaskIds.add(matcher.group(1));
+                    }
+                    log.info("[startProcessIfConfigured] 找到 {} 个 userTask 节点: {}", userTaskIds.size(), userTaskIds);
+                    log.info("[startProcessIfConfigured] ====== BPMN XML 节点列表结束 ======");
+
+                    dslConfig = BpmnModelUtils.parseDslConfigFromXml(bpmnXml, firstNodeKey);
+                    log.info("[startProcessIfConfigured] 从已部署流程定义获取 DSL, processDefinitionId={}, nodeKey={}, dsl长度={}",
+                            processInstance.getProcessDefinitionId(), firstNodeKey,
+                            dslConfig != null ? dslConfig.length() : 0);
+                    // 打印完整的 DSL 内容
+                    if (dslConfig != null) {
+                        log.info("[startProcessIfConfigured] DSL 完整内容 START:\n{}\nDSL 完整内容 END", dslConfig);
                     }
                 }
             } catch (Exception e) {
-                log.warn("解析第一个节点 assign 配置失败: {}", e.getMessage());
+                log.warn("[startProcessIfConfigured] 获取已部署流程 XML 失败: {}", e.getMessage(), e);
+            }
+            // 兜底：从 BpmnModel 获取
+            if (StrUtil.isBlank(dslConfig)) {
+                try {
+                    org.flowable.bpmn.model.BpmnModel bpmnModel = modelService.getBpmnModelByDefinitionId(
+                            processInstance.getProcessDefinitionId());
+                    if (bpmnModel != null) {
+                        FlowElement firstElement = bpmnModel.getFlowElement(firstNodeKey);
+                        if (firstElement != null) {
+                            dslConfig = BpmnModelUtils.parseDslConfig(firstElement);
+                            log.info("[startProcessIfConfigured] 兜底从 BpmnModel 获取 DSL, nodeKey={}, dsl长度={}",
+                                    firstNodeKey, dslConfig != null ? dslConfig.length() : 0);
+                            // 打印完整的 DSL 内容
+                            if (dslConfig != null) {
+                                log.info("[startProcessIfConfigured] 兜底 DSL 完整内容 START:\n{}\nDSL 完整内容 END", dslConfig);
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    log.warn("[startProcessIfConfigured] 获取 BpmnModel 失败: {}", e.getMessage(), e);
+                }
+            }
+            log.info("[startProcessIfConfigured] 解析 DSL 结果: dslConfig={}",
+                    dslConfig != null ? dslConfig.substring(0, Math.min(200, dslConfig.length())) + "..." : "null");
+            // 仅保存合法 JSON（以 { 开头），否则 MySQL JSON 列报错
+            firstNodeDslJson = isValidDslJson(dslConfig) ? dslConfig : null;
+            log.info("[startProcessIfConfigured] DSL 校验结果: isValid={}, firstNodeDslJson长度={}",
+                    isValidDslJson(dslConfig), firstNodeDslJson != null ? firstNodeDslJson.length() : 0);
+            if (isValidDslJson(dslConfig)) {
+                Map<String, String> assignInfo = parseAssignFromDsl(dslConfig);
+                assignType = assignInfo.get("type");
+                assignSource = assignInfo.get("source");
+                log.info("[startProcessIfConfigured] 解析 assign 信息: type={}, source={}", assignType, assignSource);
             }
         }
 
         // 7. 创建业务流程关联记录
         createBusinessProcess(businessType, businessId, processInstanceId, processKey, userId, firstNodeKey,
-                assignType, assignSource);
+                assignType, assignSource, firstNodeDslJson);
 
         return processInstanceId;
     }
@@ -259,7 +328,7 @@ public class BpmProcessServiceImpl implements BpmProcessService {
 
     @Override
     public List<BpmActionRespDTO> getAvailableActions(String businessType, Long businessId, Long userId) {
-        log.info("[getAvailableActions] 开始查询: userId={}, businessType={}, businessId={}", userId, businessType, businessId);
+        log.info("[getAvailableActions] ====== 开始查询可用操作 ====== userId={}, businessType={}, businessId={}", userId, businessType, businessId);
 
         // 1. 查询业务流程关联
         BpmBusinessProcessDO businessProcess = businessProcessMapper.selectByBusiness(businessType, businessId);
@@ -267,27 +336,47 @@ public class BpmProcessServiceImpl implements BpmProcessService {
             log.info("[getAvailableActions] 未找到业务流程记录: businessType={}, businessId={}", businessType, businessId);
             return Collections.emptyList();
         }
-        if (!"STARTED".equals(businessProcess.getCurrentStatus())) {
-            log.info("[getAvailableActions] 流程状态不是 STARTED, 当前状态={}, processInstanceId={}",
-                    businessProcess.getCurrentStatus(), businessProcess.getProcessInstanceId());
-            return Collections.emptyList();
+
+        // 打印业务表中的关键信息
+        log.info("[getAvailableActions] 业务表记录信息: id={}, processInstanceId={}, processDefinitionKey={}, currentNodeKey={}, currentStatus={}",
+                businessProcess.getId(), businessProcess.getProcessInstanceId(),
+                businessProcess.getProcessDefinitionKey(), businessProcess.getCurrentNodeKey(),
+                businessProcess.getCurrentStatus());
+        log.info("[getAvailableActions] 业务表中存储的 DSL: dslJson长度={}",
+                businessProcess.getDslJson() != null ? businessProcess.getDslJson().length() : 0);
+        if (businessProcess.getDslJson() != null) {
+            log.info("[getAvailableActions] 业务表中存储的 DSL 内容 START:\n{}\nDSL 内容 END", businessProcess.getDslJson());
         }
 
         // 2. 查询当前用户是否有待处理任务（assignee 或候选人）
+        // 检查流程状态是否为进行中（STARTED 或 SUBMITTED 等）
+        String currentStatus = businessProcess.getCurrentStatus();
+        if (!isProcessRunning(currentStatus)) {
+            log.info("[getAvailableActions] 流程状态不是进行中, 当前状态={}, processInstanceId={}",
+                    currentStatus, businessProcess.getProcessInstanceId());
+            return Collections.emptyList();
+        }
+
         String processInstanceId = businessProcess.getProcessInstanceId();
+        String currentNodeKey = businessProcess.getCurrentNodeKey();
+
+        // 查询当前节点的任务
         List<Task> tasks = taskService.createTaskQuery()
                 .processInstanceId(processInstanceId)
+                .taskDefinitionKey(currentNodeKey)
                 .taskAssignee(String.valueOf(userId))
                 .list();
-        log.info("[getAvailableActions] assignee查询结果: userId={}, processInstanceId={}, tasks.size={}",
-                userId, processInstanceId, tasks.size());
+        log.info("[getAvailableActions] assignee查询结果: userId={}, processInstanceId={}, currentNodeKey={}, tasks.size={}",
+                userId, processInstanceId, currentNodeKey, tasks.size());
         if (tasks.isEmpty()) {
             // 也尝试候选人查询
             tasks = taskService.createTaskQuery()
                     .processInstanceId(processInstanceId)
+                    .taskDefinitionKey(currentNodeKey)
                     .taskCandidateOrAssigned(String.valueOf(userId))
                     .list();
-            log.info("[getAvailableActions] candidateOrAssigned查询结果: userId={}, tasks.size={}", userId, tasks.size());
+            log.info("[getAvailableActions] candidateOrAssigned查询结果: userId={}, currentNodeKey={}, tasks.size={}",
+                    userId, currentNodeKey, tasks.size());
         }
         if (tasks.isEmpty()) {
             log.info("[getAvailableActions] 当前用户 {} 无待处理任务: processInstanceId={}", userId, processInstanceId);
@@ -303,31 +392,75 @@ public class BpmProcessServiceImpl implements BpmProcessService {
             log.info("[getAvailableActions] 流程实例不存在: processInstanceId={}", processInstanceId);
             return Collections.emptyList();
         }
+        log.info("[getAvailableActions] ====== 流程实例详细信息 ======");
+        log.info("[getAvailableActions] processInstanceId={}, processDefinitionId={}, processDefinitionKey={}",
+                processInstance.getId(), processInstance.getProcessDefinitionId(),
+                processInstance.getProcessDefinitionKey());
+
         org.flowable.bpmn.model.BpmnModel bpmnModel = modelService.getBpmnModelByDefinitionId(
                 processInstance.getProcessDefinitionId());
         if (bpmnModel == null) {
+            log.warn("[getAvailableActions] 获取 BpmnModel 失败: processDefinitionId={}", processInstance.getProcessDefinitionId());
             return Collections.emptyList();
         }
+        log.info("[getAvailableActions] BpmnModel 获取成功, processDefinitionId={}", processInstance.getProcessDefinitionId());
 
         // 4. 获取当前节点的 DSL 配置
-        // 直接从原始 BPMN XML 读取，避免 Flowable StAX 解析器对长文本的截断 bug
-        String bpmnXml = modelService.getBpmnXmlByDefinitionId(processInstance.getProcessDefinitionId());
-        String dslConfig = BpmnModelUtils.parseDslConfigFromXml(bpmnXml, currentTask.getTaskDefinitionKey());
+        // 优先从业务表存储的完整 DSL 获取，避免模型 XML 解析截断问题
+        // 注意：dsl_json 字段存储的是当前节点(current_node_key)的 DSL 配置
+        String dslConfig = businessProcess.getDslJson();
+        String dslSource = "business_table";  // DSL 来源标识
+        if (StrUtil.isNotBlank(dslConfig)) {
+            log.info("[getAvailableActions] 从业务表 dsl_json 获取 DSL, nodeKey={}, dsl长度={}",
+                    currentNodeKey, dslConfig.length());
+            log.info("[getAvailableActions] 业务表 DSL 完整内容 START:\n{}\nDSL 完整内容 END", dslConfig);
+        }
+        // 兜底：从已部署流程定义的 XML 获取（而不是从模型获取，模型可能已被修改）
         if (StrUtil.isBlank(dslConfig)) {
-            // 兜底：从解析后的 BpmnModel 读取（短 DSL 场景）
-            FlowElement flowElement = bpmnModel.getFlowElement(currentTask.getTaskDefinitionKey());
-            if (flowElement != null) {
-                dslConfig = BpmnModelUtils.parseDslConfig(flowElement);
+            dslSource = "bpmn_xml";
+            try {
+                String bpmnXml = modelService.getBpmnXmlByDefinitionId(processInstance.getProcessDefinitionId());
+                log.info("[getAvailableActions] 从已部署流程定义获取 BPMN XML, processDefinitionId={}, bpmnXml长度={}",
+                        processInstance.getProcessDefinitionId(), bpmnXml != null ? bpmnXml.length() : 0);
+                if (StrUtil.isNotBlank(bpmnXml)) {
+                    dslConfig = BpmnModelUtils.parseDslConfigFromXml(bpmnXml, currentTask.getTaskDefinitionKey());
+                    log.info("[getAvailableActions] 从已部署流程定义获取 DSL, processDefinitionId={}, nodeKey={}, dsl长度={}",
+                            processInstance.getProcessDefinitionId(), currentTask.getTaskDefinitionKey(),
+                            dslConfig != null ? dslConfig.length() : 0);
+                    if (dslConfig != null) {
+                        log.info("[getAvailableActions] BPMN XML DSL 完整内容 START:\n{}\nDSL 完整内容 END", dslConfig);
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("[getAvailableActions] 获取已部署流程 XML 失败: {}", e.getMessage(), e);
+            }
+            // 再次兜底：从已部署的 BpmnModel 获取（短 DSL 场景）
+            if (StrUtil.isBlank(dslConfig)) {
+                dslSource = "bpmn_model";
+                FlowElement flowElement = bpmnModel.getFlowElement(currentTask.getTaskDefinitionKey());
+                if (flowElement != null) {
+                    dslConfig = BpmnModelUtils.parseDslConfig(flowElement);
+                    log.info("[getAvailableActions] 从 BpmnModel 获取 DSL, nodeKey={}, dsl长度={}",
+                            currentTask.getTaskDefinitionKey(), dslConfig != null ? dslConfig.length() : 0);
+                    if (dslConfig != null) {
+                        log.info("[getAvailableActions] BpmnModel DSL 完整内容 START:\n{}\nDSL 完整内容 END", dslConfig);
+                    }
+                }
             }
         }
+        log.info("[getAvailableActions] 最终使用的 DSL 来源: {}, currentNodeKey={}, dsl长度={}",
+                dslSource, currentTask.getTaskDefinitionKey(), dslConfig != null ? dslConfig.length() : 0);
+
         if (StrUtil.isBlank(dslConfig)) {
             log.info("[getAvailableActions] 节点无 DSL 配置: nodeKey={}", currentTask.getTaskDefinitionKey());
             return Collections.emptyList();
         }
 
         // 5. 解析 DSL actions
-        log.info("[getAvailableActions] userId={}, businessType={}, businessId={}, taskId={}, nodeKey={}, dslConfig={}",
-                userId, businessType, businessId, currentTask.getId(), currentTask.getTaskDefinitionKey(), dslConfig);
+        log.info("[getAvailableActions] ====== 解析 DSL actions ======");
+        log.info("[getAvailableActions] userId={}, businessType={}, businessId={}, taskId={}, nodeKey={}",
+                userId, businessType, businessId, currentTask.getId(), currentTask.getTaskDefinitionKey());
+        log.info("[getAvailableActions] 即将解析的 DSL 内容 START:\n{}\nDSL 内容 END", dslConfig);
         try {
             JSONObject dslJson = JSONUtil.parseObj(dslConfig);
             JSONArray actionsJson = dslJson.getJSONArray("actions");
@@ -356,10 +489,18 @@ public class BpmProcessServiceImpl implements BpmProcessService {
                 dto.setBpmAction(actionJson.getStr("bpmAction",
                         actionDef != null && actionDef.getBpmAction() != null
                                 ? actionDef.getBpmAction().getValue() : null));
+                // 从 action.vars 中读取参数（专家数量、可修改字段等）
+                JSONObject varsJson = actionJson.getJSONObject("vars");
+                if (varsJson != null && !varsJson.isEmpty()) {
+                    Map<String, Object> varsMap = new HashMap<>();
+                    varsJson.forEach((k, v) -> varsMap.put(k, v));
+                    dto.setVars(varsMap);
+                }
                 // 附加 taskId，前端执行操作时需要
-                dto.setTaskId(currentTask.getId());
+                    dto.setTaskId(currentTask.getId());
                 result.add(dto);
             }
+            log.info("[getAvailableActions] 返回 actions: size={}, details={}", result.size(), result);
             return result;
         } catch (Exception e) {
             log.warn("[getAvailableActions] 解析 DSL actions 失败: processInstanceId={}, nodeKey={}, error={}",
@@ -379,9 +520,9 @@ public class BpmProcessServiceImpl implements BpmProcessService {
             return Collections.emptyMap();
         }
 
-        // 过滤出 STARTED 状态的流程
+        // 过滤出进行中状态的流程
         List<BpmBusinessProcessDO> startedProcesses = processes.stream()
-                .filter(p -> "STARTED".equals(p.getCurrentStatus()))
+                .filter(p -> isProcessRunning(p.getCurrentStatus()))
                 .collect(java.util.stream.Collectors.toList());
         if (startedProcesses.isEmpty()) {
             return Collections.emptyMap();
@@ -477,9 +618,9 @@ public class BpmProcessServiceImpl implements BpmProcessService {
 
     @Override
     @Transactional
-    public void submitAction(String businessType, Long businessId, String actionKey, Long userId, String reason) {
-        log.info("[submitAction] 开始提交操作: userId={}, businessType={}, businessId={}, actionKey={}",
-                userId, businessType, businessId, actionKey);
+    public void submitAction(String businessType, Long businessId, String actionKey, Long userId, String reason, List<Long> expertUserIds) {
+        log.info("[submitAction] 开始提交操作: userId={}, businessType={}, businessId={}, actionKey={}, expertUserIds={}",
+                userId, businessType, businessId, actionKey, expertUserIds);
 
         // 1. 查询业务流程关联记录
         BpmBusinessProcessDO businessProcess = businessProcessMapper.selectByBusiness(businessType, businessId);
@@ -521,6 +662,21 @@ public class BpmProcessServiceImpl implements BpmProcessService {
         if (StrUtil.isNotBlank(reason)) {
             variables.put("reason", reason);
         }
+
+        // 4.1 处理选择专家操作 - 将选中的专家用户ID存入流程变量
+        if ("selectExpert".equals(actionKey) && expertUserIds != null && !expertUserIds.isEmpty()) {
+            // 获取下一个节点ID
+            String nextNodeKeyForExpert = getNextTaskNodeKey(processInstanceId);
+            if (StrUtil.isNotBlank(nextNodeKeyForExpert)) {
+                // 设置审批人自选变量 APPROVE_USER_SELECT_ASSIGNEES
+                Map<String, List<Long>> approveUserSelectAssignees = new HashMap<>();
+                approveUserSelectAssignees.put(nextNodeKeyForExpert, expertUserIds);
+                variables.put("PROCESS_APPROVE_USER_SELECT_ASSIGNEES", approveUserSelectAssignees);
+                log.info("[submitAction] 设置选择专家变量: nextNodeKey={}, expertUserIds={}",
+                        nextNodeKeyForExpert, expertUserIds);
+            }
+        }
+
         taskService.complete(currentTask.getId(), variables);
 
         // 5. 更新业务流程关联记录
@@ -531,16 +687,10 @@ public class BpmProcessServiceImpl implements BpmProcessService {
         }
         // 更新参与者
         addParticipant(processInstanceId, userId);
-        // 获取下一个节点的分配信息并更新
-        Map<String, String> nextAssignConfig = getNextNodeAssignConfig(processInstanceId, nextNodeKey);
-        if (nextAssignConfig != null) {
-            businessProcess.setCurrentAssignType(nextAssignConfig.get("type"));
-            businessProcess.setCurrentAssignSource(nextAssignConfig.get("source"));
-            log.info("[submitAction] 更新分配信息: assignType={}, assignSource={}",
-                    nextAssignConfig.get("type"), nextAssignConfig.get("source"));
-        }
-        // 更新流程状态
-        businessProcess.setCurrentStatus("STARTED");
+        // 获取下一个节点的分配信息并更新 DSL JSON
+        updateNextNodeInfo(businessProcess, processInstanceId, nextNodeKey);
+        // 更新流程状态为当前提交的节点对应的业务状态
+        businessProcess.setCurrentStatus(bizStatus);
         businessProcessMapper.updateById(businessProcess);
 
         // 6. 检查流程是否结束，发布事件
@@ -571,6 +721,144 @@ public class BpmProcessServiceImpl implements BpmProcessService {
 
         log.info("[submitAction] 提交操作完成: userId={}, businessType={}, businessId={}, actionKey={}",
                 userId, businessType, businessId, actionKey);
+    }
+
+    /**
+     * 获取下一个节点的分配信息并更新业务进程记录
+     *
+     * @param businessProcess 业务进程记录
+     * @param processInstanceId 流程实例ID
+     * @param nextNodeKey 下一个节点Key（可为空，为空时从运行时任务列表中推断）
+     */
+    private void updateNextNodeInfo(BpmBusinessProcessDO businessProcess, String processInstanceId, String nextNodeKey) {
+        if (businessProcess == null || StrUtil.isBlank(processInstanceId)) {
+            return;
+        }
+        log.info("[updateNextNodeInfo] ====== 更新下一个节点信息 ======");
+        log.info("[updateNextNodeInfo] processInstanceId={}, nextNodeKey={}", processInstanceId, nextNodeKey);
+        log.info("[updateNextNodeInfo] 业务表原始信息: id={}, currentNodeKey={}, currentStatus={}, processDefinitionKey={}",
+                businessProcess.getId(), businessProcess.getCurrentNodeKey(),
+                businessProcess.getCurrentStatus(), businessProcess.getProcessDefinitionKey());
+        log.info("[updateNextNodeInfo] 业务表原 dslJson 长度={}",
+                businessProcess.getDslJson() != null ? businessProcess.getDslJson().length() : 0);
+        if (businessProcess.getDslJson() != null) {
+            log.info("[updateNextNodeInfo] 业务表原 dslJson 内容 START:\n{}\ndslJson 内容 END", businessProcess.getDslJson());
+        }
+
+        try {
+            // 获取流程实例
+            ProcessInstance processInstance = runtimeService.createProcessInstanceQuery()
+                    .processInstanceId(processInstanceId).singleResult();
+            if (processInstance == null) {
+                log.warn("[updateNextNodeInfo] 流程实例不存在: processInstanceId={}", processInstanceId);
+                return;
+            }
+            log.info("[updateNextNodeInfo] 流程实例信息: processInstanceId={}, processDefinitionId={}, processDefinitionKey={}",
+                    processInstance.getId(), processInstance.getProcessDefinitionId(),
+                    processInstance.getProcessDefinitionKey());
+
+            // 获取 BPMN 模型
+            org.flowable.bpmn.model.BpmnModel bpmnModel = modelService.getBpmnModelByDefinitionId(
+                    processInstance.getProcessDefinitionId());
+            if (bpmnModel == null) {
+                log.warn("[updateNextNodeInfo] 获取 BpmnModel 失败: processDefinitionId={}", processInstance.getProcessDefinitionId());
+                return;
+            }
+
+            // 1. 确定“下一个用户任务”节点：
+            //    - 优先使用调用方传入的 nextNodeKey（一般是刚完成任务后第一个待办任务的 definitionKey）
+            //    - 为空时，从运行时任务列表中取创建时间最早的一个
+            UserTask nextUserTask = null;
+            String targetNodeKey = nextNodeKey;
+            if (StrUtil.isBlank(targetNodeKey)) {
+                List<Task> nextTasks = taskService.createTaskQuery()
+                        .processInstanceId(processInstanceId)
+                        .orderByTaskCreateTime().asc()
+                        .list();
+                if (nextTasks != null && !nextTasks.isEmpty()) {
+                    targetNodeKey = nextTasks.get(0).getTaskDefinitionKey();
+                }
+            }
+            if (StrUtil.isNotBlank(targetNodeKey)) {
+                FlowElement element = bpmnModel.getFlowElement(targetNodeKey);
+                if (element instanceof UserTask) {
+                    nextUserTask = (UserTask) element;
+                }
+            }
+            if (nextUserTask == null) {
+                return;
+            }
+
+            // 如果通过运行时任务推断出了目标节点，则顺便刷新业务表中的 currentNodeKey，避免偏移
+            if (StrUtil.isNotBlank(targetNodeKey)) {
+                businessProcess.setCurrentNodeKey(targetNodeKey);
+            }
+
+            // 从已部署流程定义的 XML 获取完整 DSL，避免使用模型最新版本导致版本不一致问题
+            String dslConfig = null;
+            try {
+                // 从已部署的流程定义获取 XML（而不是从模型获取，模型可能已被修改）
+                String bpmnXml = modelService.getBpmnXmlByDefinitionId(processInstance.getProcessDefinitionId());
+                if (StrUtil.isNotBlank(bpmnXml)) {
+                    dslConfig = BpmnModelUtils.parseDslConfigFromXml(bpmnXml, nextUserTask.getId());
+                    log.info("[updateNextNodeInfo] 从已部署流程定义获取 DSL, processDefinitionId={}, nodeKey={}, dsl长度={}, dsl内容={}",
+                            processInstance.getProcessDefinitionId(), nextUserTask.getId(),
+                            dslConfig != null ? dslConfig.length() : 0,
+                            dslConfig != null ? dslConfig.substring(0, Math.min(100, dslConfig.length())) : "null");
+                }
+            } catch (Exception e) {
+                log.warn("[updateNextNodeInfo] 获取已部署流程 XML 失败: {}", e.getMessage());
+            }
+            // 兜底：从 BpmnModel 获取（通过 Flowable 解析后的对象）
+            if (StrUtil.isBlank(dslConfig) || !isValidDslJson(dslConfig)) {
+                String fallbackDsl = BpmnModelUtils.parseDslConfig(nextUserTask);
+                log.info("[updateNextNodeInfo] 兜底获取 DSL, nodeKey={}, dsl长度={}, isValid={}, dsl内容={}",
+                        nextUserTask.getId(), fallbackDsl != null ? fallbackDsl.length() : 0,
+                        isValidDslJson(fallbackDsl),
+                        fallbackDsl != null ? fallbackDsl.substring(0, Math.min(100, fallbackDsl.length())) : "null");
+                if (isValidDslJson(fallbackDsl)) {
+                    dslConfig = fallbackDsl;
+                } else {
+                    // DSL 无效或被截断，尝试从扩展属性重建完整 DSL
+                    String rebuiltDsl = rebuildDslFromExtension(nextUserTask);
+                    if (isValidDslJson(rebuiltDsl)) {
+                        dslConfig = rebuiltDsl;
+                        log.info("[updateNextNodeInfo] 从扩展属性重建 DSL 成功: nodeKey={}, dsl长度={}",
+                                nextUserTask.getId(), dslConfig.length());
+                    }
+                }
+            }
+            // 解析 assign 信息
+            Map<String, String> assignInfo = null;
+            if (isValidDslJson(dslConfig)) {
+                // DSL 有效，从 DSL 解析
+                assignInfo = parseAssignFromDsl(dslConfig);
+                businessProcess.setDslJson(dslConfig);
+                log.info("[updateNextNodeInfo] DSL有效，保存下一个节点的DSL: nodeKey={}, nodeKeyInDsl={}",
+                        nextUserTask.getId(), JSONUtil.parseObj(dslConfig).getStr("nodeKey"));
+            } else if (nextUserTask != null) {
+                // DSL 无效，从 Flowable 扩展属性读取（用于没有配置 DSL 的节点）
+                assignInfo = parseAssignFromExtension(nextUserTask);
+                // 清除无效的 DSL（下一个节点没有配置 DSL）
+                log.info("[updateNextNodeInfo] 下一个节点无DSL配置，清除DSL: nextNodeKey={}", nextUserTask.getId());
+                businessProcess.setDslJson(null);
+            }
+            // 更新业务进程记录
+            if (assignInfo != null) {
+                businessProcess.setCurrentAssignType(assignInfo.get("type"));
+                businessProcess.setCurrentAssignSource(assignInfo.get("source"));
+            }
+            log.info("[updateNextNodeInfo] 更新分配信息: assignType={}, assignSource={}",
+                    businessProcess.getCurrentAssignType(), businessProcess.getCurrentAssignSource());
+            log.info("[updateNextNodeInfo] 更新后的 dslJson 长度={}",
+                    businessProcess.getDslJson() != null ? businessProcess.getDslJson().length() : 0);
+            if (businessProcess.getDslJson() != null) {
+                log.info("[updateNextNodeInfo] 更新后的 dslJson 完整内容 START:\n{}\ndslJson 完整内容 END", businessProcess.getDslJson());
+            }
+        } catch (Exception e) {
+            log.warn("[updateNextNodeInfo] 更新下一个节点信息失败: processInstanceId={}, error={}",
+                    processInstanceId, e.getMessage(), e);
+        }
     }
 
     /**
@@ -656,12 +944,48 @@ public class BpmProcessServiceImpl implements BpmProcessService {
     }
 
     /**
+     * 判断是否为可写入 MySQL JSON 列的合法 JSON 字符串（必须以 { 开头）
+     */
+    private static boolean isValidDslJson(String s) {
+        if (StrUtil.isBlank(s)) {
+            return false;
+        }
+        String trimmed = s.trim();
+        return trimmed.startsWith("{") && trimmed.length() > 1;
+    }
+
+    /**
+     * 判断流程是否为进行中状态
+     * 进行中状态：STARTED、SUBMITTED、AUDITING 等
+     * 结束状态：COMPLETED、REJECTED、CANCELLED 等
+     */
+    private static boolean isProcessRunning(String status) {
+        if (StrUtil.isBlank(status)) {
+            return false;
+        }
+        // 进行中状态列表
+        return "STARTED".equals(status) || "SUBMITTED".equals(status)
+                || "AUDITING".equals(status) || "APPROVING".equals(status);
+    }
+
+    /**
      * 创建业务流程关联记录
      */
     private void createBusinessProcess(String businessType, Long businessId,
                                         String processInstanceId, String processDefinitionKey,
                                         Long userId, String firstNodeKey,
-                                        String assignType, String assignSource) {
+                                        String assignType, String assignSource,
+                                        String dslJson) {
+        log.info("[createBusinessProcess] ====== 创建业务流程记录 ======");
+        log.info("[createBusinessProcess] businessType={}, businessId={}, processInstanceId={}, processDefinitionKey={}",
+                businessType, businessId, processInstanceId, processDefinitionKey);
+        log.info("[createBusinessProcess] userId={}, firstNodeKey={}, assignType={}, assignSource={}",
+                userId, firstNodeKey, assignType, assignSource);
+        log.info("[createBusinessProcess] dslJson 长度={}", dslJson != null ? dslJson.length() : 0);
+        if (dslJson != null) {
+            log.info("[createBusinessProcess] dslJson 完整内容 START:\n{}\ndslJson 完整内容 END", dslJson);
+        }
+
         BpmBusinessProcessDO businessProcess = new BpmBusinessProcessDO();
         businessProcess.setBusinessType(businessType);
         businessProcess.setBusinessId(businessId);
@@ -670,12 +994,14 @@ public class BpmProcessServiceImpl implements BpmProcessService {
         businessProcess.setCurrentNodeKey(firstNodeKey);
         businessProcess.setCurrentAssignType(assignType);
         businessProcess.setCurrentAssignSource(assignSource);
+        businessProcess.setDslJson(isValidDslJson(dslJson) ? dslJson : null);
         businessProcess.setInitiatorId(userId);
         // 初始化参与者列表，包含发起人
         businessProcess.setInitiatorIds(String.valueOf(userId));
         businessProcess.setStartTime(LocalDateTime.now());
         businessProcess.setCurrentStatus("STARTED");
         businessProcessMapper.insert(businessProcess);
+        log.info("[createBusinessProcess] 业务流程记录创建成功, id={}", businessProcess.getId());
     }
 
     /**
@@ -841,6 +1167,137 @@ public class BpmProcessServiceImpl implements BpmProcessService {
         return result;
     }
 
+    /**
+     * 从 Flowable 扩展属性中解析 assign 类型和来源
+     * 用于没有配置 DSL 的节点，从 Flowable 原生扩展属性读取候选人策略
+     *
+     * @return 包含 type 和 source 的 Map，如果解析失败返回 null
+     */
+    private Map<String, String> parseAssignFromExtension(UserTask userTask) {
+        if (userTask == null) {
+            return null;
+        }
+        // 读取候选人策略（对应 assignType）
+        Integer candidateStrategy = BpmnModelUtils.parseCandidateStrategy(userTask);
+        if (candidateStrategy == null) {
+            return null;
+        }
+        // 读取候选人参数（对应 assignSource，如岗位ID）
+        String candidateParam = BpmnModelUtils.parseCandidateParam(userTask);
+
+        // 将数字策略转换成字符串名称（如 24 -> DEPT_POST）
+        String assignType = convertStrategyToString(candidateStrategy);
+
+        Map<String, String> result = new HashMap<>();
+        result.put("type", assignType);
+        if (StrUtil.isNotBlank(candidateParam)) {
+            result.put("source", candidateParam);
+        }
+        log.info("[parseAssignFromExtension] 从扩展属性解析: candidateStrategy={}, assignType={}, candidateParam={}",
+                candidateStrategy, assignType, candidateParam);
+        return result;
+    }
+
+    /**
+     * 将数字策略转换成字符串名称
+     */
+    private String convertStrategyToString(Integer strategy) {
+        if (strategy == null) {
+            return null;
+        }
+        for (BpmTaskCandidateStrategyEnum e : BpmTaskCandidateStrategyEnum.values()) {
+            if (e.getStrategy().equals(strategy)) {
+                return e.name(); // 返回枚举名称，如 DEPT_POST
+            }
+        }
+        // 如果找不到对应的枚举，返回数字字符串
+        return String.valueOf(strategy);
+    }
+
+    /**
+     * 从 Flowable 扩展属性重建完整的 DSL 配置
+     * 当 DSL 被 Flowable 截断或丢失时，使用扩展属性中的信息重建
+     *
+     * @param userTask 用户任务节点
+     * @return 重建的完整 DSL JSON 字符串，如果无法重建则返回 null
+     */
+    private String rebuildDslFromExtension(UserTask userTask) {
+        if (userTask == null) {
+            return null;
+        }
+        try {
+            // 读取扩展属性
+            Integer candidateStrategy = BpmnModelUtils.parseCandidateStrategy(userTask);
+            String candidateParam = BpmnModelUtils.parseCandidateParam(userTask);
+            if (candidateStrategy == null) {
+                return null;
+            }
+
+            // 构建基本 DSL 结构
+            JSONObject dsl = new JSONObject();
+            dsl.set("nodeKey", userTask.getId());
+            // 根据策略设置 cap 类型
+            String cap = "AUDIT"; // 默认
+            if (candidateStrategy == 34 || candidateStrategy == 35) {
+                cap = "EXPERT_SELECT"; // 审批人自选或发起人自选
+            }
+            dsl.set("cap", cap);
+
+            // 从 buttonsSetting 读取 actions
+            JSONArray actions = new JSONArray();
+            String buttonsSetting = BpmnModelUtils.parseExtensionElement(userTask, "buttonsSetting");
+            if (StrUtil.isNotBlank(buttonsSetting)) {
+                // 解析 buttonsSetting JSON
+                JSONArray buttons = JSONUtil.parseArray(buttonsSetting);
+                for (Object btn : buttons) {
+                    JSONObject button = (JSONObject) btn;
+                    JSONObject action = new JSONObject();
+                    action.set("key", button.getStr("id"));
+                    action.set("label", button.getStr("displayName"));
+                    action.set("bizStatus", button.getStr("bizStatus"));
+                    action.set("bizStatusLabel", button.getStr("bizStatusLabel"));
+                    action.set("bpmAction", button.getStr("bpmAction"));
+                    actions.add(action);
+                }
+            } else {
+                // 默认添加一个"通过"动作
+                JSONObject submitAction = new JSONObject();
+                submitAction.set("key", "submit");
+                submitAction.set("label", "提交");
+                submitAction.set("bizStatus", "SUBMITTED");
+                submitAction.set("bizStatusLabel", "待审核");
+                submitAction.set("bpmAction", "complete");
+                actions.add(submitAction);
+            }
+            dsl.set("actions", actions);
+
+            // 设置 roles（暂不设置，从扩展属性无法获取）
+            dsl.set("roles", new JSONArray());
+
+            // 设置 assign
+            JSONObject assign = new JSONObject();
+            assign.set("type", convertStrategyToString(candidateStrategy));
+            assign.set("source", candidateParam);
+            dsl.set("assign", assign);
+
+            // 设置 backStrategy
+            String rejectReturnTaskId = BpmnModelUtils.parseExtensionElement(userTask, "rejectReturnTaskId");
+            dsl.set("backStrategy", StrUtil.isNotBlank(rejectReturnTaskId) ? "TO_PREV" : "TO_START");
+
+            // 设置 enable
+            dsl.set("enable", true);
+
+            String rebuiltDsl = dsl.toString();
+            log.info("[rebuildDslFromExtension] 重建 DSL 成功: nodeKey={}, dsl长度={}",
+                    userTask.getId(), rebuiltDsl.length());
+            return rebuiltDsl;
+        } catch (Exception e) {
+            log.warn("[rebuildDslFromExtension] 重建 DSL 失败: nodeKey={}, error={}",
+                    userTask.getId(), e.getMessage());
+            return null;
+        }
+    }
+
     @Override
     @Transactional
     public void withdrawProcess(String businessType, Long businessId, Long userId) {
@@ -886,7 +1343,7 @@ public class BpmProcessServiceImpl implements BpmProcessService {
         businessProcess.setCurrentNodeKey(currentNodeKey);
         businessProcess.setCurrentStatus("STARTED");
 
-        // 重新解析当前节点的 assign 配置，刷新 current_assign_type/source
+        // 重新解析当前节点的 assign 配置，刷新 current_assign_type/source 和 dsl_json
         try {
             ProcessInstance processInstance = runtimeService.createProcessInstanceQuery()
                     .processInstanceId(processInstanceId)
@@ -898,7 +1355,9 @@ public class BpmProcessServiceImpl implements BpmProcessService {
                     FlowElement element = bpmnModel.getFlowElement(currentNodeKey);
                     if (element != null) {
                         String dslConfig = BpmnModelUtils.parseDslConfig(element);
-                        if (StrUtil.isNotBlank(dslConfig)) {
+                        // 仅持久化合法 JSON，避免 MySQL JSON 列报错
+                        businessProcess.setDslJson(isValidDslJson(dslConfig) ? dslConfig : null);
+                        if (isValidDslJson(dslConfig)) {
                             Map<String, String> assignInfo = parseAssignFromDsl(dslConfig);
                             businessProcess.setCurrentAssignType(assignInfo.get("type"));
                             businessProcess.setCurrentAssignSource(assignInfo.get("source"));

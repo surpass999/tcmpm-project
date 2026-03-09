@@ -91,4 +91,12 @@ public interface ExpertService {
      */
     List<Long> getExpertUserIds();
 
+    /**
+     * 获取专家选择列表（带回避判断）
+     *
+     * @param pageReqVO 分页查询参数（包含 currentDeptId 用于判断回避）
+     * @return 分页结果（带 isAvoid 字段）
+     */
+    PageResult<ExpertDO> getExpertSelectList(ExpertPageReqVO pageReqVO);
+
 }

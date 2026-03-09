@@ -1,0 +1,2 @@
+cn.gemrun.base.framework.tracer.config.BaseTracerAutoConfiguration
+cn.gemrun.base.framework.tracer.config.BaseMetricsAutoConfiguration

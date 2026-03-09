@@ -5,6 +5,7 @@ import lombok.Data;
 
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
+import java.util.List;
 
 @Schema(description = "管理后台 - 提交BPM操作 Request VO")
 @Data
@@ -24,5 +25,8 @@ public class BpmActionSubmitReqVO {
 
     @Schema(description = "审批意见", example = "提交审核")
     private String reason;
+
+    @Schema(description = "选择的专家用户ID列表（选择专家操作时使用）", example = "[1, 2, 3]")
+    private List<Long> expertUserIds;
 
 }

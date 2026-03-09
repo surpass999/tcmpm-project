@@ -219,6 +219,25 @@ public class BpmModelServiceImpl implements BpmModelService {
         BpmModelMetaInfoVO metaInfo = BpmModelConvert.INSTANCE.parseMetaInfo(model);
         // 1.2 校验流程图
         byte[] bpmnBytes = getModelBpmnXML(model.getId());
+
+        // 【调试】打印 BPMN XML 长度和关键内容
+        log.info("[deployModel] 模型 ID: {}, 获取的 BPMN XML 长度: {}", id, bpmnBytes != null ? bpmnBytes.length : 0);
+        if (bpmnBytes != null && bpmnBytes.length > 0) {
+            String bpmnXml = StrUtil.utf8Str(bpmnBytes);
+            // 检查第二个节点是否有 DSL 配置
+            int dslIndex = bpmnXml.indexOf("Activity_0isavu8");
+            if (dslIndex > 0) {
+                int dslConfigStart = bpmnXml.indexOf("<flowable:dslConfig>", dslIndex);
+                int dslConfigEnd = bpmnXml.indexOf("</flowable:dslConfig>", dslIndex);
+                if (dslConfigStart > 0 && dslConfigEnd > dslConfigStart) {
+                    String dslContent = bpmnXml.substring(dslConfigStart, Math.min(dslConfigEnd + 22, dslConfigStart + 500));
+                    log.info("[deployModel] 第二个节点 DSL 配置: {}", dslContent);
+                } else {
+                    log.warn("[deployModel] 第二个节点没有 DSL 配置！");
+                }
+            }
+        }
+
         validateBpmnXml(bpmnBytes, metaInfo.getType());
         // 1.3 校验表单已配
         BpmFormDO form = validateFormConfig(metaInfo);

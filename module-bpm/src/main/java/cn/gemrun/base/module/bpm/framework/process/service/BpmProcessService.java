@@ -174,8 +174,9 @@ public interface BpmProcessService {
      * @param actionKey   操作标识（如 submit, approve 等）
      * @param userId      当前用户ID
      * @param reason      审批意见
+     * @param expertUserIds 选择的专家用户ID列表（选择专家操作时使用）
      */
-    void submitAction(String businessType, Long businessId, String actionKey, Long userId, String reason);
+    void submitAction(String businessType, Long businessId, String actionKey, Long userId, String reason, List<Long> expertUserIds);
 
     // ========== 流程撤回/撤销 ==========
 

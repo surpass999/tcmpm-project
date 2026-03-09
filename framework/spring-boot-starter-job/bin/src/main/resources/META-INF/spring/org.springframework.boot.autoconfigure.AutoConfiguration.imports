@@ -1,0 +1,2 @@
+cn.gemrun.base.framework.quartz.config.BaseQuartzAutoConfiguration
+cn.gemrun.base.framework.quartz.config.BaseAsyncAutoConfiguration
