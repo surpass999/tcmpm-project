@@ -20,6 +20,10 @@ interface Props {
   expertType?: number;
   // 当前部门ID（用于判断回避）
   currentDeptId?: number;
+  // 最少选择专家数量
+  expertMin?: number;
+  // 最多选择专家数量
+  expertMax?: number;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -27,6 +31,8 @@ const props = withDefaults(defineProps<Props>(), {
   selectedIds: () => [],
   expertType: undefined,
   currentDeptId: undefined,
+  expertMin: undefined,
+  expertMax: undefined,
 });
 
 const emit = defineEmits<{
@@ -123,16 +129,6 @@ function handleSelectionChange(selected: DeclareExpertApi.Expert[]) {
   selectedExperts.value = selected;
 }
 
-// 确认选择
-function handleConfirm() {
-  if (selectedExperts.value.length === 0) {
-    message.warning('请至少选择一个专家');
-    return;
-  }
-  emit('confirm', selectedExperts.value);
-  modalApi.close();
-}
-
 // 分页变化
 function handlePageChange(page: number, size: number) {
   currentPage.value = page;
@@ -154,15 +150,45 @@ const [Modal, modalApi] = useVbenModal({
     }
     // 重置状态
     selectedExperts.value = [];
+    processSelectedCount.value = 0;
     currentPage.value = 1;
     searchKeyword.value = '';
-    await loadExpertList();
 
-    // 从 sharedData 获取流程中已选择的专家数量
-    const data = modalApi.getData<{ processSelectedCount?: number }>();
-    if (data?.processSelectedCount) {
-      displaySelectedCount.value = data.processSelectedCount;
+    // 获取传递的参数（专家数量限制和流程中已选择的数量）
+    const data = modalApi.getData<{
+      expertMin?: number;
+      expertMax?: number;
+      processSelectedCount?: number;
+    }>();
+    // 设置专家数量限制
+    expertMin.value = data?.expertMin;
+    expertMax.value = data?.expertMax;
+
+    // 设置流程中已选择的专家数量（即使为0也要设置）
+    processSelectedCount.value = data?.processSelectedCount || 0;
+
+    await loadExpertList();
+  },
+  onConfirm: async () => {
+    // 本次操作中，在弹窗内选择的专家数量
+    const selectedCount = selectedExperts.value.length;
+
+    // 验证专家数量限制
+    if (expertMin.value !== undefined && selectedCount < expertMin.value) {
+      message.warning(`请至少选择 ${expertMin.value} 位专家，当前已选 ${selectedCount} 位`);
+      return false;
     }
+    if (expertMax.value !== undefined && selectedCount > expertMax.value) {
+      message.warning(`最多只能选择 ${expertMax.value} 位专家，当前已选 ${selectedCount} 位`);
+      return false;
+    }
+
+    if (selectedCount === 0 && processSelectedCount.value === 0) {
+      message.warning('请至少选择一个专家');
+      return false;
+    }
+    emit('confirm', selectedExperts.value);
+    return true;
   },
 });
 
@@ -181,11 +207,11 @@ function getRowKey(record: DeclareExpertApi.Expert) {
   return record.id!;
 }
 
-// 计算显示的已选数量（当前选择 + 流程中已选择）
-const displaySelectedCount = ref(0);
-function updateDisplayCount() {
-  displaySelectedCount.value = selectedExperts.value.length;
-}
+// 流程中已选择的专家数量（来自后端记录）
+const processSelectedCount = ref(0);
+// 专家数量限制
+const expertMin = ref<number | undefined>(undefined);
+const expertMax = ref<number | undefined>(undefined);
 
 // 暴露打开弹窗的方法
 defineExpose({
@@ -198,14 +224,35 @@ defineExpose({
   <Modal
     :title="multiple ? '选择专家' : '选择专家（单选）'"
     :class="['w-[900px]', 'h-[600px]']"
-    @confirm="handleConfirm"
   >
     <template #prepend-footer>
       <span v-if="selectedExperts.length > 0" class="mr-4 text-sm text-gray-600">
         已选择 <span class="font-medium text-primary">{{ selectedExperts.length }}</span> 位专家
+        <span v-if="expertMin !== undefined || expertMax !== undefined" class="ml-2 text-orange-500">
+          （审批专家数
+          <template v-if="expertMin !== undefined && expertMax !== undefined">{{ expertMin }}-{{ expertMax }} 人</template>
+          <template v-else-if="expertMin !== undefined">{{ expertMin }}人起</template>
+          <template v-else-if="expertMax !== undefined">最多{{ expertMax }}人</template>
+          ）
+        </span>
       </span>
-      <span v-else-if="displaySelectedCount > 0" class="mr-4 text-sm text-gray-500">
-        流程中已选择 <span class="font-medium">{{ displaySelectedCount }}</span> 位专家
+      <span v-else-if="processSelectedCount > 0" class="mr-4 text-sm text-gray-500">
+        流程中已选择 <span class="font-medium">{{ processSelectedCount }}</span> 位专家
+        <span v-if="expertMin !== undefined || expertMax !== undefined" class="ml-2 text-orange-500">
+          （审批专家数
+          <template v-if="expertMin !== undefined && expertMax !== undefined">{{ expertMin }}-{{ expertMax }}人</template>
+          <template v-else-if="expertMin !== undefined">{{ expertMin }}人起</template>
+          <template v-else-if="expertMax !== undefined">最多{{ expertMax }}人</template>
+          ）
+        </span>
+      </span>
+      <span v-else-if="expertMin !== undefined || expertMax !== undefined" class="mr-4 text-sm text-gray-500">
+        审批专家数
+        <span class="font-medium text-orange-500">
+          <template v-if="expertMin !== undefined && expertMax !== undefined">{{ expertMin }}-{{ expertMax }} 人</template>
+          <template v-else-if="expertMin !== undefined">{{ expertMin }}人起</template>
+          <template v-else-if="expertMax !== undefined">最多{{ expertMax }}人</template>
+        </span>
       </span>
     </template>
     <div class="expert-select-container">
@@ -230,7 +277,8 @@ defineExpose({
         :row-key="getRowKey"
         :row-selection="{
           selectedRowKeys: selectedExperts.map((e) => e.id!),
-          onChange: (_, selectedRows) => { handleSelectionChange(multiple ? selectedRows : selectedRows.slice(0, 1)); updateDisplayCount(); },
+          onChange: (_, selectedRows) =>
+            handleSelectionChange(multiple ? selectedRows : selectedRows.slice(0, 1)),
         }"
         :pagination="{
           current: currentPage,

@@ -300,6 +300,24 @@ function parseDslJson(jsonStr: string) {
           // 新格式：vars 在 action 对象内部
           // 兼容旧格式：vars 在顶层，先检查 action.vars，没有则用顶层的
           const vars = action.vars || config.vars || {};
+
+          // reason 字段解析：reason 是标签名称，reasonRequired 表示是否必填
+          let reasonConfig: string = 'false';
+          let reasonLabel = '审核意见';
+          if (vars.reason) {
+            // 有 reason 字段说明要显示弹窗
+            reasonLabel = vars.reason;
+            // 判断是否必填：显式设置 reasonRequired=true，或者旧数据（字符串形式）默认为必填
+            if (vars.reasonRequired === true) {
+              reasonConfig = 'custom';
+            } else if (vars.reasonRequired === false) {
+              reasonConfig = 'true';
+            } else if (typeof vars.reason === 'string') {
+              // 兼容旧数据：字符串形式默认必填
+              reasonConfig = 'custom';
+            }
+          }
+
           return {
             key: action.key,
             label: action.label || actionDesc?.label || action.key,
@@ -307,6 +325,8 @@ function parseDslJson(jsonStr: string) {
             bizStatusLabel: action.bizStatusLabel || actionDesc?.bizStatusLabel || actionDesc?.bizStatus || '',
             bpmAction: action.bpmAction || actionDesc?.bpmAction || '',
             // 提取 vars 中的特殊字段到顶层供表单使用
+            reasonConfig,
+            reasonLabel,
             expertMin: vars.expertMin,
             expertMax: vars.expertMax,
             modifyFields: vars.modifyFields || [],
@@ -398,8 +418,19 @@ function buildDslJson(): string {
     }
     // 已有 label、bizStatus、bizStatusLabel、bpmAction、vars 的对象
     // vars 单独提取处理
-    const { expertMin, expertMax, modifyFields, ...actionBasic } = action as any;
+    const { expertMin, expertMax, modifyFields, reasonConfig, reasonLabel, ...actionBasic } = action as any;
     const vars: Record<string, any> = {};
+    // reason 配置：
+    // - reasonConfig === 'true': 可选填写，保存 reasonLabel（默认"审核意见"）+ reasonRequired=false
+    // - reasonConfig === 'custom': 必填，保存 reasonLabel + reasonRequired=true
+    // - reasonConfig === 'false': 不显示，不保存
+    if (reasonConfig === 'true') {
+      vars.reason = reasonLabel || '审核意见';
+      vars.reasonRequired = false;
+    } else if (reasonConfig === 'custom') {
+      vars.reason = reasonLabel || '审核意见';
+      vars.reasonRequired = true;
+    }
     if (expertMin !== undefined) vars.expertMin = expertMin;
     if (expertMax !== undefined) vars.expertMax = expertMax;
     if (modifyFields && modifyFields.length > 0) vars.modifyFields = modifyFields;
@@ -1233,48 +1264,71 @@ onMounted(async () => {
                   />
                 </div>
 
-                <!-- action.vars 配置区域 -->
-                <!-- 选择专家 (selectExpert) 需要配置专家数量 -->
-                <template v-if="action.key === 'selectExpert'">
-                  <div class="border border-gray-200 rounded p-2 mt-2">
-                    <div class="text-xs font-medium text-gray-600 mb-2">专家数量配置</div>
-                    <div class="flex items-center gap-2">
-                      <span class="text-xs text-gray-500 w-16">最少:</span>
-                      <a-input-number
-                        v-model:value="action.expertMin"
-                        :min="1"
-                        placeholder="最少"
-                        size="small"
-                        style="width: 80px"
-                        @change="updateElementExtensions"
-                      />
-                      <span class="text-xs text-gray-500 w-16 ml-2">最多:</span>
-                      <a-input-number
-                        v-model:value="action.expertMax"
-                        :min="1"
-                        placeholder="最多"
-                        size="small"
-                        style="width: 80px"
-                        @change="updateElementExtensions"
-                      />
-                    </div>
+                <!-- action.vars 配置区域 - 通用配置 -->
+                <!-- reason 配置：true=可选审核意见，字符串=必填该内容 -->
+                <div class="border border-gray-200 rounded p-2 mt-2">
+                  <div class="text-xs font-medium text-gray-600 mb-2">审批意见配置</div>
+                  <div class="flex items-center gap-2">
+                    <RadioGroup
+                      v-model:value="action.reasonConfig"
+                      size="small"
+                      @change="updateElementExtensions"
+                    >
+                      <Radio value="false">不显示</Radio>
+                      <Radio value="true">可选填写</Radio>
+                      <Radio value="custom">必填</Radio>
+                    </RadioGroup>
                   </div>
-                </template>
-
-                <!-- 补正/填报 (modify/fill) 需要配置可修改字段 -->
-                <template v-if="action.key === 'modify' || action.key === 'fill'">
-                  <div class="border border-gray-200 rounded p-2 mt-2">
-                    <div class="text-xs font-medium text-gray-600 mb-2">可修改字段</div>
-                    <Select
-                      v-model:value="action.modifyFields"
-                      mode="tags"
-                      placeholder="输入字段名后回车确认"
+                  <!-- 输入框标签：可选填写时默认"审核意见"，自定义时用用户输入的值 -->
+                  <div v-if="action.reasonConfig !== 'false'" class="mt-2">
+                    <div class="text-xs text-gray-500 mb-1">输入框名称</div>
+                    <a-input
+                      v-model:value="action.reasonLabel"
+                      :placeholder="action.reasonConfig === 'true' ? '审核意见' : '如：拒绝原因'"
                       size="small"
                       @change="updateElementExtensions"
                     />
-                    <div class="text-xs text-gray-400 mt-1">允许用户修改的字段列表</div>
                   </div>
-                </template>
+                </div>
+
+                <!-- 专家数量配置（只有 selectExpert 相关按钮显示） -->
+                <div v-if="action.key === 'selectExpert'" class="border border-gray-200 rounded p-2 mt-2">
+                  <div class="text-xs font-medium text-gray-600 mb-2">专家数量配置</div>
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs text-gray-500 w-16">最少:</span>
+                    <a-input-number
+                      v-model:value="action.expertMin"
+                      :min="1"
+                      placeholder="最少"
+                      size="small"
+                      style="width: 80px"
+                      @change="updateElementExtensions"
+                    />
+                    <span class="text-xs text-gray-500 w-16 ml-2">最多:</span>
+                    <a-input-number
+                      v-model:value="action.expertMax"
+                      :min="1"
+                      placeholder="最多"
+                      size="small"
+                      style="width: 80px"
+                      @change="updateElementExtensions"
+                    />
+                  </div>
+                </div>
+
+                <!-- 可修改字段配置 -->
+                <div class="border border-gray-200 rounded p-2 mt-2">
+                  <div class="text-xs font-medium text-gray-600 mb-2">可修改字段</div>
+                  <Select
+                    v-model:value="action.modifyFields"
+                    mode="tags"
+                    placeholder="输入字段名后回车确认"
+                    size="small"
+                    @change="updateElementExtensions"
+                    style="display:block;"
+                  />
+                  <div class="text-xs text-gray-400 mt-1">允许用户修改的字段列表</div>
+                </div>
               </div>
             </Collapse.Panel>
           </Collapse>

@@ -8,6 +8,7 @@ import cn.gemrun.base.module.bpm.dal.dataobject.BpmBusinessProcessDO;
 import cn.gemrun.base.module.bpm.dal.dataobject.definition.BpmProcessDefinitionInfoDO;
 import cn.gemrun.base.module.bpm.dal.mysql.process.BpmBusinessProcessMapper;
 import cn.gemrun.base.module.bpm.enums.BpmActionDef;
+import cn.gemrun.base.module.bpm.framework.flowable.core.enums.BpmnVariableConstants;
 import cn.gemrun.base.module.bpm.framework.flowable.core.enums.BpmTaskCandidateStrategyEnum;
 import cn.gemrun.base.module.bpm.framework.flowable.core.util.BpmnModelUtils;
 import cn.gemrun.base.module.bpm.framework.process.service.BpmProcessService;
@@ -660,7 +661,7 @@ public class BpmProcessServiceImpl implements BpmProcessService {
         // 设置审批意见到流程变量
         java.util.Map<String, Object> variables = new java.util.HashMap<>();
         if (StrUtil.isNotBlank(reason)) {
-            variables.put("reason", reason);
+            variables.put(BpmnVariableConstants.TASK_VARIABLE_REASON, reason);
         }
 
         // 4.1 处理选择专家操作 - 将选中的专家用户ID存入流程变量
@@ -1130,8 +1131,55 @@ public class BpmProcessServiceImpl implements BpmProcessService {
 
     /**
      * 从 DSL 配置中解析 assign 信息
+     * 使用 JSON 解析器方案，更稳固可靠
      */
     private Map<String, String> parseAssignFromDsl(String dslConfig) {
+        Map<String, String> result = new HashMap<>();
+        try {
+            if (StrUtil.isBlank(dslConfig)) {
+                return result;
+            }
+
+            // 使用 Hutool JSON 解析器解析整个 DSL
+            JSONObject dslJson = JSONUtil.parseObj(dslConfig);
+
+            // 获取 assign 对象
+            JSONObject assignJson = dslJson.getJSONObject("assign");
+            if (assignJson == null) {
+                return result;
+            }
+
+            // 安全获取 type 和 source
+            String type = assignJson.getStr("type");
+            String source = assignJson.getStr("source");
+
+            if (StrUtil.isNotBlank(type)) {
+                result.put("type", type);
+            }
+            if (StrUtil.isNotBlank(source)) {
+                result.put("source", source);
+            }
+
+            log.debug("[parseAssignFromDsl] 解析成功: type={}, source={}", type, source);
+
+        } catch (Exception e) {
+            log.error("[parseAssignFromDsl] JSON解析失败: {}", e.getMessage());
+        }
+        return result;
+    }
+
+    /*
+
+    // ========== 原 indexOf 方案（已废弃）==========
+
+    // 原始的 indexOf 字符串解析方案存在以下问题：
+    // 1. 无法处理嵌套JSON
+    // 2. 无法处理转义字符
+    // 3. 无法处理空白符
+    // 4. 无法处理数组
+    // 5. 鲁棒性差，任何格式变化都可能导致解析失败
+
+    private Map<String, String> parseAssignFromDsl_OLD(String dslConfig) {
         Map<String, String> result = new HashMap<>();
         try {
             // 简单字符串解析，实际应使用 JSON 解析
@@ -1166,6 +1214,8 @@ public class BpmProcessServiceImpl implements BpmProcessService {
         }
         return result;
     }
+
+    */
 
     /**
      * 从 Flowable 扩展属性中解析 assign 类型和来源

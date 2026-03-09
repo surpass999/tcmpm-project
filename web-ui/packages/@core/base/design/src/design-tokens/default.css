@@ -7,10 +7,10 @@
     'Segoe UI Symbol', 'Noto Color Emoji';
 
   /* Default background color of <body />...etc */
-  --background: 0 0% 100%;
+  --background: 220 33% 98%;
 
-  /* 主体区域背景色 */
-  --background-deep: 216 20.11% 95.47%;
+  /* 主体区域背景色（智慧中医平台设计：浅灰 #F7F8FC） */
+  --background-deep: 220 33% 97%;
   --foreground: 210 6% 21%;
 
   /* Background color for <Card /> */
@@ -29,9 +29,8 @@
   --muted: 240 4.8% 95.9%;
   --muted-foreground: 240 3.8% 46.1%;
 
-  /* 主题颜色 */
-
-  --primary: 212 100% 45%;
+  /* 主题颜色（智慧中医平台设计：主色为绿色 #4A8F72） */
+  --primary: 155 32% 43%;
   --primary-foreground: 0 0% 98%;
 
   /* Used for destructive actions such as <Button variant="destructive"> */
@@ -215,24 +214,25 @@
 }
 
 [data-theme='green'] {
-  /* --background: 0 0% 100%; */
+  /* 智慧中医平台绿色主题（主色 #4A8F72，区块标题浅绿 #E6F7EA） */
   --foreground: 240 10% 3.9%;
   --card: 0 0% 100%;
   --card-foreground: 240 10% 3.9%;
   --popover: 0 0% 100%;
   --popover-foreground: 240 10% 3.9%;
-  --primary-foreground: 355.7 100% 97.3%;
+  --primary: 155 32% 43%;
+  --primary-foreground: 0 0% 98%;
   --secondary: 240 4.8% 95.9%;
   --secondary-foreground: 240 5.9% 10%;
   --muted: 240 4.8% 95.9%;
   --muted-foreground: 240 3.8% 46.1%;
-  --accent: 240 4.8% 95.9%;
+  --accent: 140 50% 94%;
   --accent-foreground: 240 5.9% 10%;
   --destructive: 0 84.2% 60.2%;
   --destructive-foreground: 0 0% 98%;
   --border: 240 5.9% 90%;
   --input: 240 5.9% 90%;
-  --ring: 142.1 76.2% 36.3%;
+  --ring: 155 32% 43%;
 }
 
 [data-theme='deep-green'] {
@@ -380,4 +380,33 @@
   --border: 220 13% 91%;
   --input: 220 13% 91%;
   --ring: 224 71.4% 4.1%;
+}
+
+/* GemDesign 中医绿主题 */
+[data-theme='gemrun'] {
+  /* GemDesign 中医绿风格 - 主色 #2A5C45 */
+  --foreground: 213 15% 14%;
+  --card: 0 0% 100%;
+  --card-foreground: 213 15% 14%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 213 15% 14%;
+  --primary: 155 36% 29%;
+  --primary-foreground: 0 0% 98%;
+  --secondary: 150 20% 95%;
+  --secondary-foreground: 213 15% 14%;
+  --muted: 150 20% 96%;
+  --muted-foreground: 213 8% 45%;
+  --accent: 150 20% 93%;
+  --accent-foreground: 213 15% 14%;
+  --destructive: 0 63% 41%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 210 14% 83%;
+  --input: 210 14% 83%;
+  --ring: 155 36% 29%;
+  --success: 155 36% 36%;
+  --success-foreground: 0 0% 98%;
+  --warning: 38 75% 55%;
+  --warning-foreground: 213 15% 14%;
+  --info: 210 14% 96%;
+  --info-foreground: 213 8% 45%;
 }

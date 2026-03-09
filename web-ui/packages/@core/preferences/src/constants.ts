@@ -9,7 +9,7 @@ interface BuiltinThemePreset {
 
 const BUILT_IN_THEME_PRESETS: BuiltinThemePreset[] = [
   {
-    color: 'hsl(212 100% 45%)',
+    color: 'hsl(155 32% 43%)',
     type: 'default',
   },
   {
@@ -29,7 +29,7 @@ const BUILT_IN_THEME_PRESETS: BuiltinThemePreset[] = [
     type: 'sky-blue',
   },
   {
-    color: 'hsl(161 90% 43%)',
+    color: 'hsl(155 32% 43%)',
     type: 'green',
   },
   {
@@ -75,6 +75,13 @@ const BUILT_IN_THEME_PRESETS: BuiltinThemePreset[] = [
     primaryColor: 'hsl(240 5.9% 10%)',
     type: 'gray',
   },
+
+  // GemDesign 主题 - 中医绿风格
+  {
+    color: 'hsl(155 36% 29%)',
+    type: 'gemrun',
+  },
+
   {
     color: '',
     type: 'custom',

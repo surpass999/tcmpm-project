@@ -59,7 +59,7 @@ export function getTradeTrendChartOptions(
         name: '支出金额',
         type: 'line',
         smooth: true,
-        itemStyle: { color: '#52C41A' },
+        itemStyle: { color: '#4A8F72' },
       },
     ],
     toolbox: {

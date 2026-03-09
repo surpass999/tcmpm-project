@@ -177,11 +177,13 @@ public class BpmnModelUtils {
 
         ExtensionElement element = CollUtil.getFirst(flowElement.getExtensionElements().get(BpmnModelConstants.DSL_CONFIG));
         String dslConfig = readExtensionElementValue(element);
+        log.info("[parseDslConfig] 节点 {} 解析 DSL (大写): '{}'", flowElement.getId(), dslConfig);
 
         // 兜底：尝试小写 key（部分旧 BPMN 以文本形式存储）
         if (StrUtil.isBlank(dslConfig)) {
             element = CollUtil.getFirst(flowElement.getExtensionElements().get("dslConfig"));
             dslConfig = readExtensionElementValue(element);
+            log.info("[parseDslConfig] 节点 {} 解析 DSL (小写): '{}'", flowElement.getId(), dslConfig);
         }
 
         return StrUtil.isBlank(dslConfig) ? null : dslConfig;

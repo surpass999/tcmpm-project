@@ -11,6 +11,9 @@ import cn.gemrun.base.module.bpm.controller.admin.task.vo.instance.*;
 import cn.gemrun.base.module.bpm.convert.task.BpmProcessInstanceConvert;
 import cn.gemrun.base.module.bpm.dal.dataobject.definition.BpmCategoryDO;
 import cn.gemrun.base.module.bpm.dal.dataobject.definition.BpmProcessDefinitionInfoDO;
+import cn.gemrun.base.module.bpm.api.task.BpmProcessInstanceInnerApi;
+import cn.gemrun.base.module.bpm.api.task.dto.BpmApprovalDetailReqDTO;
+import cn.gemrun.base.module.bpm.api.task.dto.BpmApprovalDetailRespDTO;
 import cn.gemrun.base.module.bpm.service.definition.BpmCategoryService;
 import cn.gemrun.base.module.bpm.service.definition.BpmProcessDefinitionService;
 import cn.gemrun.base.module.bpm.service.task.BpmProcessInstanceService;
@@ -61,6 +64,8 @@ public class BpmProcessInstanceController {
     private AdminUserApi adminUserApi;
     @Resource
     private DeptApi deptApi;
+    @Resource
+    private BpmProcessInstanceInnerApi bpmProcessInstanceInnerApi;
 
     @GetMapping("/my-page")
     @Operation(summary = "获得我的实例分页列表", description = "在【我的流程】菜单中，进行调用")
@@ -220,6 +225,35 @@ public class BpmProcessInstanceController {
                 processDefinitionService.getProcessDefinitionInfo(historicProcessInstance.getProcessDefinitionId()),
                 tasks, userMap,
                 new UserSimpleBaseVO().setNickname(startUser.getNickname()).setDeptName(dept.getName())));
+    }
+
+    // ========== 内部接口（无需权限校验）==========
+    @GetMapping("/inner/get-approval-detail")
+    @Operation(summary = "获得审批详情（内部接口）")
+    @Parameter(name = "id", description = "流程实例的编号")
+    public CommonResult<BpmApprovalDetailRespVO> getApprovalDetailInner(@Valid BpmApprovalDetailReqVO reqVO) {
+        if (StrUtil.isNotEmpty(reqVO.getProcessVariablesStr())) {
+            reqVO.setProcessVariables(JsonUtils.parseObject(reqVO.getProcessVariablesStr(), Map.class));
+        }
+        // 使用内部 API 调用，支持 DSL
+        BpmApprovalDetailReqDTO reqDTO = new BpmApprovalDetailReqDTO();
+        reqDTO.setProcessInstanceId(reqVO.getProcessInstanceId());
+        reqDTO.setTaskId(reqVO.getTaskId());
+        reqDTO.setProcessVariables(reqVO.getProcessVariables());
+        BpmApprovalDetailRespDTO respDTO = bpmProcessInstanceInnerApi.getApprovalDetail(getLoginUserId(), reqDTO);
+        return success(convertToRespVO(respDTO));
+    }
+
+    /**
+     * 将 DTO 转换为 VO
+     */
+    private BpmApprovalDetailRespVO convertToRespVO(BpmApprovalDetailRespDTO dto) {
+        if (dto == null) {
+            return null;
+        }
+        BpmApprovalDetailRespVO vo = new BpmApprovalDetailRespVO();
+        cn.gemrun.base.framework.common.util.object.BeanUtils.copyProperties(dto, vo);
+        return vo;
     }
 
 }

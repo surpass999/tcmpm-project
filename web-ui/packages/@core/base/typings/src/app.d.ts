@@ -22,6 +22,7 @@ type BuiltinThemeType =
   | 'deep-blue'
   | 'deep-green'
   | 'default'
+  | 'gemrun'
   | 'gray'
   | 'green'
   | 'neutral'

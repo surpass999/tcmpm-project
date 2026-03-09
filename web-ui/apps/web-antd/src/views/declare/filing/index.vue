@@ -23,8 +23,12 @@ import { $t } from '#/locales';
 
 import ExpertSelectModalCmp from '#/components/bpm/ExpertSelectModal.vue';
 
+import { useBpmAction } from '#/composables/useBpmAction';
+
 import { useGridColumns, useGridFormSchema } from './data';
 import Form from './modules/form.vue';
+
+import ApprovalDetailCmp from '#/views/bpm/components/approval-detail.vue';
 
 // 业务类型
 const BUSINESS_TYPE_KEY = 'declare:filing:create';
@@ -128,51 +132,69 @@ async function loadRowAvailableActions(rows: DeclareFilingApi.Filing[]) {
   rowAvailableActions.value = { ...results };
 }
 
-/** 提交弹窗状态 */
-const submitModalVisible = ref(false);
-const submitLoading = ref(false);
+// 使用 BPM 操作 Hook
+const {
+  submitModalVisible,
+  submitLoading,
+  submitModalTitle,
+  submitReasonLabel,
+  submitReasonRequired,
+  submitForm,
+  handleBpmAction: handleBpmActionBase,
+  executeBpmAction,
+  handleSubmitConfirm: handleSubmitConfirmBase,
+} = useBpmAction({
+  businessType: BUSINESS_TYPE_KEY,
+  businessIdGetter: () => currentSubmitRow.value?.id,
+  onSuccess: () => {
+    handleRefresh();
+    if (currentSubmitRow.value) {
+      loadRowAvailableActions([currentSubmitRow.value]);
+    }
+  },
+});
+
+// 当前操作的行数据
 const currentSubmitRow = ref<DeclareFilingApi.Filing | null>(null);
 const currentSubmitAction = ref<any>(null);
-const submitForm = ref({
-  reason: '',
-});
 
 /** 执行 DSL 按钮操作 */
 async function handleBpmAction(row: DeclareFilingApi.Filing, action: any) {
-  // 如果是 submit 类型，显示弹窗让用户填写审批意见
-  if (action.key === 'submit') {
-    currentSubmitRow.value = row;
-    currentSubmitAction.value = action;
-    submitForm.value.reason = '';
-    submitModalVisible.value = true;
-    return;
-  }
+  currentSubmitRow.value = row;
+  currentSubmitAction.value = action;
+  const vars = action.vars || {};
 
-  // 如果是 selectExpert（选择专家）类型，显示专家选择弹窗
-  if (action.key === 'selectExpert') {
-    currentSubmitRow.value = row;
-    currentSubmitAction.value = action;
+  // 专家选择弹窗：先打开弹窗
+  if (vars.expertMin !== undefined || vars.expertMax !== undefined) {
+    const selectedCount = row.expertReviewerIds
+      ? row.expertReviewerIds.split(',').filter(Boolean).length
+      : 0;
+    expertSelectModalApi.setData({
+      expertMin: vars.expertMin,
+      expertMax: vars.expertMax,
+      processSelectedCount: selectedCount,
+    });
     expertSelectModalApi.open();
     return;
   }
 
-  // 其他操作直接执行
-  await executeBpmAction(row, action);
+  // 其他操作（reason 弹窗或直接执行）由 Hook 处理
+  await handleBpmActionBase(row, action);
 }
 
 /** 专家选择弹窗引用 */
 const [ExpertSelectModal, expertSelectModalApi] = useVbenModal({
   connectedComponent: ExpertSelectModalCmp,
   destroyOnClose: true,
-  onOpenChange: async (isOpen: boolean) => {
-    if (isOpen && currentSubmitRow.value) {
-      // 获取已选择的专家数量并传递给弹窗
-      const selectedCount = currentSubmitRow.value.expertReviewerIds
-        ? currentSubmitRow.value.expertReviewerIds.split(',').filter(Boolean).length
-        : 0;
-      expertSelectModalApi.setData({ processSelectedCount: selectedCount });
-    }
-  },
+});
+
+/** 审批详情弹窗引用 */
+const [ApprovalDetailModal, approvalDetailModalApi] = useVbenModal({
+  connectedComponent: ApprovalDetailCmp,
+  destroyOnClose: true,
+  class: '!min-w-[90%]',
+  contentClass: '!min-w-[90%] !min-h-[80vh]',
+  closeOnClickModal: false, // 点击遮罩不关闭弹窗
 });
 
 /** 处理专家选择确认 */
@@ -191,78 +213,14 @@ async function handleExpertSelectConfirm(experts: DeclareExpertApi.Expert[]) {
     return;
   }
 
-  submitLoading.value = true;
-  try {
-    await submitBpmAction({
-      businessType: BUSINESS_TYPE_KEY,
-      businessId: currentSubmitRow.value.id!,
-      actionKey: currentSubmitAction.value.key,
-      reason: '',
-      expertUserIds,
-    });
-    message.success('选择专家成功');
-
-    // 刷新表格
-    handleRefresh();
-    // 重新加载该行的可用操作
-    loadRowAvailableActions([currentSubmitRow.value]);
-  } catch (error: any) {
-    console.error('[BPM] 选择专家失败:', error);
-    message.error(error.message || '选择专家失败');
-  } finally {
-    submitLoading.value = false;
-  }
+  // 使用 Hook 的 executeBpmAction 方法提交
+  await executeBpmAction(currentSubmitRow.value, currentSubmitAction.value, {
+    expertUserIds,
+    reason: '',
+  });
 }
 
-/** 执行 BPM 实际操作 */
-async function executeBpmAction(row: DeclareFilingApi.Filing, action: any) {
-  try {
-    await submitBpmAction({
-      businessType: BUSINESS_TYPE_KEY,
-      businessId: row.id!,
-      actionKey: action.key,
-      reason: '',
-    });
-    message.success(`操作 "${action.label}" 执行成功`);
-    // 刷新表格
-    handleRefresh();
-    // 重新加载该行的可用操作
-    loadRowAvailableActions([row]);
-  } catch (error: any) {
-    console.error('[BPM] 执行操作失败:', error);
-    message.error(error.message || '操作失败');
-  }
-}
-
-/** 确认提交 */
-async function handleSubmitConfirm() {
-  if (!currentSubmitRow.value || !currentSubmitAction.value) {
-    return;
-  }
-
-  submitLoading.value = true;
-  try {
-    await submitBpmAction({
-      businessType: BUSINESS_TYPE_KEY,
-      businessId: currentSubmitRow.value.id!,
-      actionKey: currentSubmitAction.value.key,
-      reason: submitForm.value.reason,
-    });
-    message.success('提交成功');
-
-    submitModalVisible.value = false;
-
-    // 刷新表格
-    handleRefresh();
-    // 重新加载该行的可用操作
-    loadRowAvailableActions([currentSubmitRow.value]);
-  } catch (error: any) {
-    console.error('[BPM] 提交失败:', error);
-    message.error(error.message || '提交失败');
-  } finally {
-    submitLoading.value = false;
-  }
-}
+// executeBpmAction 已经在 Hook 中定义并导出，这里不需要再定义
 
 /** 刷新表格 */
 function handleRefresh() {
@@ -277,6 +235,14 @@ function handleCreate() {
 /** 编辑项目备案核心信息 */
 function handleEdit(row: DeclareFilingApi.Filing) {
   formModalApi.setData(row).open();
+}
+
+/** 查看审批详情 */
+function handleViewApprovalDetail(row: DeclareFilingApi.Filing) {
+  approvalDetailModalApi.setData({
+    businessId: row.id!,
+    businessType: BUSINESS_TYPE_KEY,
+  }).open();
 }
 
 /** 删除项目备案核心信息 */
@@ -484,6 +450,11 @@ const [Grid, gridApi] = useVbenVxeGrid({
               onClick: () => handleBpmAction(row, action),
             })),
             {
+              label: '审批详情',
+              type: 'link',
+              onClick: () => handleViewApprovalDetail(row),
+            },
+            {
               label: $t('common.edit'),
               type: 'link',
               icon: ACTION_ICON.EDIT,
@@ -509,15 +480,15 @@ const [Grid, gridApi] = useVbenVxeGrid({
     <!-- 提交审核弹窗 -->
     <a-modal
       v-model:open="submitModalVisible"
-      title="提交审核"
+      :title="submitModalTitle"
       :confirm-loading="submitLoading"
-      @ok="handleSubmitConfirm"
+      @ok="handleSubmitConfirmBase"
     >
       <a-form layout="vertical">
-        <a-form-item label="审批意见">
+        <a-form-item :label="submitReasonLabel" :required="submitReasonRequired">
           <a-textarea
             v-model:value="submitForm.reason"
-            placeholder="请输入审批意见（可选）"
+            :placeholder="submitReasonRequired ? `请输入${submitReasonLabel}` : `请输入${submitReasonLabel}（可选）`"
             :rows="4"
           />
         </a-form-item>
@@ -526,5 +497,8 @@ const [Grid, gridApi] = useVbenVxeGrid({
 
     <!-- 选择专家弹窗 -->
     <ExpertSelectModal @confirm="handleExpertSelectConfirm" />
+
+    <!-- 审批详情弹窗 -->
+    <ApprovalDetailModal @success="handleRefresh" />
   </Page>
 </template>

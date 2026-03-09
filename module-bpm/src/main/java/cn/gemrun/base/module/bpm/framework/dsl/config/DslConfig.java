@@ -3,6 +3,7 @@ package cn.gemrun.base.module.bpm.framework.dsl.config;
 import lombok.Data;
 
 import java.io.Serializable;
+import java.util.List;
 
 /**
  * DSL 配置根对象
@@ -22,6 +23,15 @@ import java.io.Serializable;
  *   "ui": {...}
  * }
  *
+ * 完整流程 DSL（用于审批详情）：
+ * {
+ *   "nodes": [
+ *     {"nodeKey": "start", "name": "发起人", "cap": "FILL", ...},
+ *     {"nodeKey": "province_audit", "name": "省审核", "cap": "AUDIT", ...},
+ *     {"nodeKey": "nation_audit", "name": "国家审核", "cap": "AUDIT", ...}
+ *   ]
+ * }
+ *
  * @author Gemini
  */
 @Data
@@ -33,6 +43,11 @@ public class DslConfig implements Serializable {
      * 节点Key（对应 Flowable 的 nodeId）
      */
     private String nodeKey;
+
+    /**
+     * 节点名称
+     */
+    private String name;
 
     /**
      * 节点能力
@@ -86,6 +101,11 @@ public class DslConfig implements Serializable {
     private String bizStatus;
 
     /**
+     * 是否启用该节点配置
+     */
+    private Boolean enable;
+
+    /**
      * 变量配置
      */
     private DslVars vars;
@@ -94,5 +114,18 @@ public class DslConfig implements Serializable {
      * UI 配置
      */
     private DslUi ui;
+
+    /**
+     * 完整流程节点列表（用于审批详情）
+     * 每个元素是单个节点的 DSL 配置
+     */
+    private List<DslConfig> nodes;
+
+    /**
+     * 判断是否为完整流程 DSL（包含 nodes 数组）
+     */
+    public boolean isFullFlowDsl() {
+        return nodes != null && !nodes.isEmpty();
+    }
 
 }
