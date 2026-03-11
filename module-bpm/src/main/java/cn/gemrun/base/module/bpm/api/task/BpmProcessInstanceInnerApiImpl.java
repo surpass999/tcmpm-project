@@ -5,20 +5,28 @@ import cn.gemrun.base.module.bpm.api.task.dto.BpmApprovalDetailReqDTO;
 import cn.gemrun.base.module.bpm.api.task.dto.BpmApprovalDetailRespDTO;
 import cn.gemrun.base.module.bpm.controller.admin.task.vo.instance.BpmApprovalDetailReqVO;
 import cn.gemrun.base.module.bpm.controller.admin.task.vo.instance.BpmApprovalDetailRespVO;
+import cn.gemrun.base.module.bpm.controller.admin.task.vo.instance.BpmProcessInstanceRespVO;
 import cn.gemrun.base.module.bpm.controller.admin.task.vo.task.BpmTaskRespVO;
+import cn.gemrun.base.module.bpm.controller.admin.base.user.UserSimpleBaseVO;
 import cn.gemrun.base.module.bpm.dal.dataobject.BpmBusinessProcessDO;
 import cn.gemrun.base.module.bpm.dal.mysql.process.BpmBusinessProcessMapper;
 import cn.gemrun.base.module.bpm.framework.dsl.DslApprovalDetailBuilder;
 import cn.gemrun.base.module.bpm.framework.dsl.config.DslConfig;
-import cn.gemrun.base.module.bpm.framework.flowable.core.util.BpmnModelUtils;
 import cn.gemrun.base.module.bpm.service.definition.BpmModelService;
 import cn.gemrun.base.module.bpm.service.task.BpmProcessInstanceService;
 import cn.gemrun.base.module.bpm.service.task.BpmTaskService;
+import cn.gemrun.base.module.system.api.user.AdminUserApi;
+import cn.gemrun.base.module.system.api.user.dto.AdminUserRespDTO;
+import cn.gemrun.base.module.system.api.dept.DeptApi;
+import cn.gemrun.base.module.system.api.dept.dto.DeptRespDTO;
 import cn.hutool.core.util.StrUtil;
-import com.fasterxml.jackson.core.type.TypeReference;
+import cn.hutool.json.JSONObject;
+import cn.hutool.json.JSONUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.flowable.bpmn.model.BpmnModel;
+import org.flowable.engine.HistoryService;
+import org.flowable.engine.history.HistoricProcessInstance;
 import org.flowable.engine.runtime.ProcessInstance;
 import org.flowable.task.api.Task;
 import org.flowable.task.api.history.HistoricTaskInstance;
@@ -29,6 +37,7 @@ import javax.annotation.Resource;
 import javax.validation.Valid;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -47,6 +56,8 @@ public class BpmProcessInstanceInnerApiImpl implements BpmProcessInstanceInnerAp
     @Resource
     private BpmTaskService taskService;
     @Resource
+    private HistoryService historyService;
+    @Resource
     private BpmBusinessProcessMapper businessProcessMapper;
     @Resource
     private BpmModelService modelService;
@@ -54,6 +65,10 @@ public class BpmProcessInstanceInnerApiImpl implements BpmProcessInstanceInnerAp
     private ObjectMapper objectMapper;
     @Resource
     private DslApprovalDetailBuilder dslApprovalDetailBuilder;
+    @Resource
+    private AdminUserApi adminUserApi;
+    @Resource
+    private DeptApi deptApi;
 
     @Override
     public BpmApprovalDetailRespDTO getApprovalDetail(Long userId, @Valid BpmApprovalDetailReqDTO reqDTO) {
@@ -100,15 +115,29 @@ public class BpmProcessInstanceInnerApiImpl implements BpmProcessInstanceInnerAp
         String processInstanceId = reqDTO.getProcessInstanceId();
 
         // 4.1 获取 BPMN 模型
+        // 优先从运行时获取，如果流程已结束则从历史中获取
         ProcessInstance processInstance = processInstanceService.getProcessInstance(processInstanceId);
-        if (processInstance == null) {
-            log.warn("[getApprovalDetail] 流程实例不存在: processInstanceId={}", processInstanceId);
-            return fallbackToOriginal(userId, reqDTO);
+        String processDefinitionId = null;
+
+        if (processInstance != null) {
+            // 流程仍在运行中
+            processDefinitionId = processInstance.getProcessDefinitionId();
+        } else {
+            // 流程已结束，从历史记录中获取流程定义ID
+            log.info("[getApprovalDetail] 流程实例已结束，从历史记录中获取: processInstanceId={}", processInstanceId);
+            HistoricProcessInstance historicProcessInstance = historyService.createHistoricProcessInstanceQuery()
+                    .processInstanceId(processInstanceId)
+                    .singleResult();
+            if (historicProcessInstance == null) {
+                log.warn("[getApprovalDetail] 流程实例不存在: processInstanceId={}", processInstanceId);
+                return fallbackToOriginal(userId, reqDTO);
+            }
+            processDefinitionId = historicProcessInstance.getProcessDefinitionId();
         }
 
-        BpmnModel bpmnModel = modelService.getBpmnModelByDefinitionId(processInstance.getProcessDefinitionId());
+        BpmnModel bpmnModel = modelService.getBpmnModelByDefinitionId(processDefinitionId);
         if (bpmnModel == null) {
-            log.warn("[getApprovalDetail] 获取 BpmnModel 失败: processDefinitionId={}", processInstance.getProcessDefinitionId());
+            log.warn("[getApprovalDetail] 获取 BpmnModel 失败: processDefinitionId={}", processDefinitionId);
             return fallbackToOriginal(userId, reqDTO);
         }
 
@@ -121,8 +150,114 @@ public class BpmProcessInstanceInnerApiImpl implements BpmProcessInstanceInnerAp
 
         // 4.3 获取历史任务列表
         List<HistoricTaskInstance> historicTasks = taskService.getTaskListByProcessInstanceId(processInstanceId, true);
+        log.info("[getApprovalDetail] 历史任务列表: processInstanceId={}, count={}", processInstanceId, historicTasks.size());
+        for (HistoricTaskInstance task : historicTasks) {
+            log.info("[getApprovalDetail] 历史任务: id={}, name={}, taskDefinitionKey={}, startTime={}, endTime={}",
+                    task.getId(), task.getName(), task.getTaskDefinitionKey(), task.getStartTime(), task.getEndTime());
+        }
         List<BpmApprovalDetailRespVO.ActivityNodeTask> historicTaskVos = BeanUtils.toBean(historicTasks,
                 BpmApprovalDetailRespVO.ActivityNodeTask.class);
+
+        // 4.3.1 从历史任务的本地变量中提取 reason、assigneeUser、ownerUser
+        for (int i = 0; i < historicTasks.size(); i++) {
+            HistoricTaskInstance historicTask = historicTasks.get(i);
+            BpmApprovalDetailRespVO.ActivityNodeTask taskVo = historicTaskVos.get(i);
+            if (taskVo != null && historicTask.getTaskLocalVariables() != null) {
+                // 提取 reason
+                Object reasonObj = historicTask.getTaskLocalVariables().get("reason");
+                if (reasonObj != null) {
+                    taskVo.setReason(String.valueOf(reasonObj));
+                }
+
+                // 从任务变量中提取 assigneeUser（JSON 格式）
+                Object assigneeUserObj = historicTask.getTaskLocalVariables().get("assigneeUser");
+                if (assigneeUserObj != null) {
+                    try {
+                        JSONObject assigneeUserJson = JSONUtil.parseObj(String.valueOf(assigneeUserObj));
+                        UserSimpleBaseVO assigneeUser = new UserSimpleBaseVO();
+                        assigneeUser.setId(assigneeUserJson.getLong("id"));
+                        assigneeUser.setNickname(assigneeUserJson.getStr("nickname"));
+                        assigneeUser.setAvatar(assigneeUserJson.getStr("avatar"));
+                        assigneeUser.setDeptId(assigneeUserJson.getLong("deptId"));
+                        taskVo.setAssigneeUser(assigneeUser);
+                        // 同时设置 assignee ID，方便后续处理
+                        if (assigneeUser.getId() != null) {
+                            taskVo.setAssignee(assigneeUser.getId());
+                        }
+                    } catch (Exception e) {
+                        log.warn("[getApprovalDetail] 解析 assigneeUser 失败: {}", e.getMessage());
+                    }
+                }
+
+                // 从任务变量中提取 ownerUser（JSON 格式）
+                Object ownerUserObj = historicTask.getTaskLocalVariables().get("ownerUser");
+                if (ownerUserObj != null) {
+                    try {
+                        JSONObject ownerUserJson = JSONUtil.parseObj(String.valueOf(ownerUserObj));
+                        UserSimpleBaseVO ownerUser = new UserSimpleBaseVO();
+                        ownerUser.setId(ownerUserJson.getLong("id"));
+                        ownerUser.setNickname(ownerUserJson.getStr("nickname"));
+                        ownerUser.setAvatar(ownerUserJson.getStr("avatar"));
+                        ownerUser.setDeptId(ownerUserJson.getLong("deptId"));
+                        taskVo.setOwnerUser(ownerUser);
+                        // 同时设置 owner ID，方便后续处理
+                        if (ownerUser.getId() != null) {
+                            taskVo.setOwner(ownerUser.getId());
+                        }
+                    } catch (Exception e) {
+                        log.warn("[getApprovalDetail] 解析 ownerUser 失败: {}", e.getMessage());
+                    }
+                }
+            }
+        }
+
+        // 4.3.2 查询用户信息，填充 ownerUser 和 assigneeUser（历史任务）
+        Set<Long> userIds = historicTasks.stream()
+                .filter(t -> t.getAssignee() != null)
+                .map(t -> Long.parseLong(t.getAssignee()))
+                .collect(Collectors.toSet());
+        userIds.addAll(historicTasks.stream()
+                .filter(t -> t.getOwner() != null)
+                .map(t -> Long.parseLong(t.getOwner()))
+                .collect(Collectors.toSet()));
+
+        Map<Long, AdminUserRespDTO> userMap = adminUserApi.getUserMap(userIds);
+        Map<Long, DeptRespDTO> deptMap = deptApi.getDeptMap(
+                userMap.values().stream()
+                        .map(AdminUserRespDTO::getDeptId)
+                        .collect(Collectors.toSet()));
+
+        // 填充历史任务的 ownerUser 和 assigneeUser
+        for (BpmApprovalDetailRespVO.ActivityNodeTask taskVo : historicTaskVos) {
+            if (taskVo.getAssignee() != null) {
+                AdminUserRespDTO user = userMap.get(taskVo.getAssignee());
+                if (user != null) {
+                    UserSimpleBaseVO userVo = new UserSimpleBaseVO();
+                    userVo.setId(user.getId());
+                    userVo.setNickname(user.getNickname());
+                    userVo.setAvatar(user.getAvatar());
+                    DeptRespDTO dept = deptMap.get(user.getDeptId());
+                    if (dept != null) {
+                        userVo.setDeptName(dept.getName());
+                    }
+                    taskVo.setAssigneeUser(userVo);
+                }
+            }
+            if (taskVo.getOwner() != null) {
+                AdminUserRespDTO user = userMap.get(taskVo.getOwner());
+                if (user != null) {
+                    UserSimpleBaseVO userVo = new UserSimpleBaseVO();
+                    userVo.setId(user.getId());
+                    userVo.setNickname(user.getNickname());
+                    userVo.setAvatar(user.getAvatar());
+                    DeptRespDTO dept = deptMap.get(user.getDeptId());
+                    if (dept != null) {
+                        userVo.setDeptName(dept.getName());
+                    }
+                    taskVo.setOwnerUser(userVo);
+                }
+            }
+        }
 
         // 4.4 获取当前用户的待办任务
         BpmApprovalDetailRespVO.ActivityNodeTask currentTaskVo = null;
@@ -132,6 +267,35 @@ public class BpmProcessInstanceInnerApiImpl implements BpmProcessInstanceInnerAp
             Task currentTask = taskService.getTask(reqDTO.getTaskId());
             if (currentTask != null) {
                 currentTaskVo = BeanUtils.toBean(currentTask, BpmApprovalDetailRespVO.ActivityNodeTask.class);
+                // 填充当前任务的 ownerUser 和 assigneeUser
+                if (currentTaskVo.getAssignee() != null) {
+                    AdminUserRespDTO user = adminUserApi.getUser(currentTaskVo.getAssignee());
+                    if (user != null) {
+                        UserSimpleBaseVO userVo = new UserSimpleBaseVO();
+                        userVo.setId(user.getId());
+                        userVo.setNickname(user.getNickname());
+                        userVo.setAvatar(user.getAvatar());
+                        DeptRespDTO dept = deptApi.getDept(user.getDeptId());
+                        if (dept != null) {
+                            userVo.setDeptName(dept.getName());
+                        }
+                        currentTaskVo.setAssigneeUser(userVo);
+                    }
+                }
+                if (currentTaskVo.getOwner() != null) {
+                    AdminUserRespDTO user = adminUserApi.getUser(currentTaskVo.getOwner());
+                    if (user != null) {
+                        UserSimpleBaseVO userVo = new UserSimpleBaseVO();
+                        userVo.setId(user.getId());
+                        userVo.setNickname(user.getNickname());
+                        userVo.setAvatar(user.getAvatar());
+                        DeptRespDTO dept = deptApi.getDept(user.getDeptId());
+                        if (dept != null) {
+                            userVo.setDeptName(dept.getName());
+                        }
+                        currentTaskVo.setOwnerUser(userVo);
+                    }
+                }
                 // 转换为 todoTask
                 todoTask = new BpmTaskRespVO();
                 todoTask.setId(currentTask.getId());
@@ -159,6 +323,11 @@ public class BpmProcessInstanceInnerApiImpl implements BpmProcessInstanceInnerAp
         respVO.setActivityNodes(activityNodes);
         respVO.setTodoTask(todoTask);
         respVO.setStatus(1); // 进行中
+
+        // 4.8 设置流程实例信息（供前端获取 processInstanceId 调用任务列表接口）
+        BpmProcessInstanceRespVO processInstanceVO = new BpmProcessInstanceRespVO();
+        processInstanceVO.setId(processInstanceId);
+        respVO.setProcessInstance(processInstanceVO);
 
         log.info("[getApprovalDetail] DSL 构建审批详情成功: processInstanceId={}, 节点数={}", processInstanceId, activityNodes.size());
 

@@ -126,8 +126,8 @@ CREATE TABLE `declare_filing`  (
   -- 备案内容
   `construction_content` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '建设内容（备案方案核心）',
 
-  -- 备案状态：0=草稿(DRAFT)，1=已提交(SUBMITTED)，2=省级审核中(AUDITING)，3=已通过(APPROVED)，4=退回(REJECTED)，5=已归档(ARCHIVED)
-  `filing_status` tinyint(4) NOT NULL DEFAULT 0 COMMENT '备案状态：0=草稿，1=已提交，2=省级审核中，3=已通过，4=退回，5=已归档',
+  -- 备案状态
+  `filing_status` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '0' COMMENT '备案状态：与流程状态对应定义',
   `status_reason` varchar(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '状态变更原因（退回原因等）',
 
   -- 省级审核信息

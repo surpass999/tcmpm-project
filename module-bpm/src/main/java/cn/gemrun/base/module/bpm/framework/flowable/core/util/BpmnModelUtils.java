@@ -150,8 +150,17 @@ public class BpmnModelUtils {
         String candidateParam = userTask.getAttributeValue(
                 BpmnModelConstants.NAMESPACE, BpmnModelConstants.USER_TASK_CANDIDATE_PARAM);
         if (candidateParam == null) {
-            ExtensionElement element = CollUtil.getFirst(userTask.getExtensionElements().get(BpmnModelConstants.USER_TASK_CANDIDATE_PARAM));
-            candidateParam = element != null ? element.getElementText() : null;
+            List<ExtensionElement> elements = userTask.getExtensionElements().get(BpmnModelConstants.USER_TASK_CANDIDATE_PARAM);
+            if (elements != null && !elements.isEmpty()) {
+                // 读取最后一个非空的参数值（因为可能存在多个重复元素，第一个可能是空的）
+                for (int i = elements.size() - 1; i >= 0; i--) {
+                    String text = elements.get(i).getElementText();
+                    if (StrUtil.isNotBlank(text)) {
+                        candidateParam = text;
+                        break;
+                    }
+                }
+            }
         }
         return candidateParam;
     }
@@ -331,6 +340,77 @@ public class BpmnModelUtils {
      */
     public static Integer parseApproveType(FlowElement userTask) {
         return NumberUtils.parseInt(parseExtensionElement(userTask, BpmnModelConstants.USER_TASK_APPROVE_TYPE));
+    }
+
+    /**
+     * 解析会签规则（signRule）
+     *
+     * @param flowElement 流程节点
+     * @return 会签规则：ALL（全部通过）、ANY（任一通过）、MAJORITY（多数通过），如果不存在则返回 null
+     */
+    public static String parseSignRule(FlowElement flowElement) {
+        String dslConfig = parseDslConfig(flowElement);
+        if (StrUtil.isBlank(dslConfig)) {
+            return null;
+        }
+        try {
+            cn.hutool.json.JSONObject dslJson = cn.hutool.json.JSONUtil.parseObj(dslConfig);
+            String signRule = dslJson.getStr("signRule");
+            log.info("[parseSignRule] 节点 {} 解析 signRule: {}", flowElement.getId(), signRule);
+            return signRule;
+        } catch (Exception e) {
+            log.warn("[parseSignRule] 解析 signRule 失败: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 根据会签规则生成 Flowable 的 completionCondition
+     *
+     * @param signRule 会签规则：ALL（全部通过）、ANY（任一通过）、MAJORITY（多数通过）
+     * @return Flowable 的 completionCondition 表达式
+     */
+    public static String buildSignRuleCompletionCondition(String signRule) {
+        if (StrUtil.isBlank(signRule)) {
+            return null;
+        }
+        switch (signRule.toUpperCase()) {
+            case "ALL":
+                // 全部同意：同意数量等于总数量
+                return "${ agreeCount != null && agreeCount >= nrOfInstances }";
+            case "ANY":
+                // 任一同意：同意数量大于0
+                return "${ agreeCount != null && agreeCount > 0 }";
+            case "MAJORITY":
+                // 多数同意：60%及以上同意
+                return "${ agreeCount != null && (agreeCount * 1.0 / nrOfInstances) >= 0.6 }";
+            default:
+                log.warn("[buildSignRuleCompletionCondition] 未知的会签规则: {}，使用默认 ALL 规则", signRule);
+                return "${ agreeCount != null && agreeCount >= nrOfInstances }";
+        }
+    }
+
+    /**
+     * 检查节点是否会签节点（COUNTERSIGN）
+     *
+     * @param flowElement 流程节点
+     * @return 是否会签节点
+     */
+    public static boolean isCountersignNode(FlowElement flowElement) {
+        String dslConfig = parseDslConfig(flowElement);
+        if (StrUtil.isBlank(dslConfig)) {
+            return false;
+        }
+        try {
+            cn.hutool.json.JSONObject dslJson = cn.hutool.json.JSONUtil.parseObj(dslConfig);
+            String cap = dslJson.getStr("cap");
+            boolean isCountersign = "COUNTERSIGN".equalsIgnoreCase(cap);
+            log.info("[isCountersignNode] 节点 {} cap={}, isCountersign={}", flowElement.getId(), cap, isCountersign);
+            return isCountersign;
+        } catch (Exception e) {
+            log.warn("[isCountersignNode] 判断会签节点失败: {}", e.getMessage());
+            return false;
+        }
     }
 
     /**

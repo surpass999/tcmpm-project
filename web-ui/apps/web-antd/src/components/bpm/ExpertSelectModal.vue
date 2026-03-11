@@ -215,7 +215,13 @@ const expertMax = ref<number | undefined>(undefined);
 
 // 暴露打开弹窗的方法
 defineExpose({
-  open: () => modalApi.open(),
+  open: (data?: { expertMin?: number; expertMax?: number; processSelectedCount?: number }) => {
+    // 先设置数据，再打开弹窗
+    if (data) {
+      modalApi.setData(data);
+    }
+    modalApi.open();
+  },
   close: () => modalApi.close(),
 });
 </script>

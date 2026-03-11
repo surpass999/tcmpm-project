@@ -7,8 +7,10 @@ import type { BpmTaskApi } from '#/api/bpm/task';
 import type { BpmActionApi } from '#/api/bpm/action';
 
 import { ref, shallowRef, computed } from 'vue';
+import { getDictObj } from '@vben/hooks';
+import { DICT_TYPE } from '@vben/constants';
 
-import { useVbenModal } from '@vben/common-ui';
+// 不再使用 useVbenModal，直接渲染内容
 
 import { Steps, Step, Tabs, TabPane, Tag, Button, Spin } from 'ant-design-vue';
 import { message } from 'ant-design-vue';
@@ -25,18 +27,19 @@ const BUSINESS_TYPE = 'declare:filing:create';
 // 指标业务类型（数字）
 const BUSINESS_TYPE_NUMBER = 1;
 
-// 使用 Vben Modal - 直接使用，不通过 connectedComponent
-const [Modal, modalApi] = useVbenModal({
-  destroyOnClose: true,
-  showCancelButton: false,
-  showConfirmButton: false,
-  onOpenChange: async (isOpen: boolean) => {
-    if (!isOpen) {
-      return;
-    }
-    await loadAllData();
-  },
-});
+// Props
+const props = defineProps<{
+  showActions?: boolean;
+}>();
+
+// Emits
+const emit = defineEmits<{
+  success: [];
+  action: [action: BpmActionApi.BpmAction & { taskId?: string }];
+}>();
+
+// 直接渲染内容，不创建 Modal
+// 当被外部 a-modal 包裹时，宽度由外部控制
 
 // 存储最终的businessId和businessType
 const finalBusinessId = ref<number>(0);
@@ -109,11 +112,25 @@ function getNodeStatus(node: BpmProcessInstanceApi.ApprovalNodeInfo): number {
   return 0; // 待处理
 }
 
-// 格式化日期
+// 格式化日期（完整格式）
 function formatDate(date: string | Date | undefined): string {
   if (!date) return '-';
   const d = new Date(date);
   return d.toLocaleString('zh-CN');
+}
+
+// 格式化日期（仅日期）
+function formatDateOnly(date: string | Date | undefined): string {
+  if (!date) return '-';
+  const d = new Date(date);
+  return d.toLocaleDateString('zh-CN');
+}
+
+// 获取项目类型显示文本
+function getProjectTypeText(value: number | undefined): string {
+  if (!value) return '-';
+  const dict = getDictObj(DICT_TYPE.DECLARE_PROJECT_TYPE, String(value));
+  return dict?.label || String(value);
 }
 
 // 获取状态样式类
@@ -124,10 +141,54 @@ function getStatusClass(status?: string): string {
 }
 
 // 获取状态显示文本
-function getStatusText(status?: string): string {
-  if (status === 'APPROVED' || status === '已完成') return '审核通过';
-  if (status === 'REJECTED' || status === '已退回') return '审核退回';
-  return '审核中';
+function getStatusText(status?: number): string {
+  if (status === undefined || status === null) return '未知';
+  // 备案状态: 0=草稿，1=已提交，2=省级审核通过，3=专家论证通过，4=已归档，5=退回修改，6=等待专家审核
+  switch (status) {
+    case 0:
+      return '待提交';
+    case 1:
+      return '审核中';
+    case 2:
+      return '省级审核通过';
+    case 3:
+      return '专家论证通过';
+    case 4:
+      return '已归档';
+    case 5:
+      return '退回修改';
+    case 6:
+      return '等待专家审核';
+    default:
+      return `状态${status}`;
+  }
+}
+
+// 获取流程状态显示文本（基于 approvalDetail.status）
+function getProcessStatusText(status?: number): string {
+  if (status === undefined || status === null) return '未知';
+  // 流程状态: -1=未开始，1=审批中，2=审批通过，3=审批不通过，4=已取消
+  switch (status) {
+    case -1:
+      return '未开始';
+    case 1:
+      return '审批中';
+    case 2:
+      return '审批通过';
+    case 3:
+      return '审批不通过';
+    case 4:
+      return '已取消';
+    default:
+      return `状态${status}`;
+  }
+}
+
+// 获取流程状态样式类
+function getProcessStatusClass(status?: number): string {
+  if (status === 2) return 'status-tag-success';
+  if (status === 3 || status === 4) return 'status-tag-error';
+  return 'status-tag-pending';
 }
 
 // 获取操作按钮类型
@@ -146,6 +207,12 @@ function handleActionClick(action: BpmActionApi.BpmAction & { taskId?: string })
   const vars = action.vars || {};
   if (vars.expertMin !== undefined || vars.expertMax !== undefined) {
     message.info('该操作需要选择专家，请联系管理员配置');
+    return;
+  }
+
+  // 如果外部需要处理操作点击，emit 事件
+  if (props.showActions === false) {
+    emit('action', action);
     return;
   }
 
@@ -197,14 +264,11 @@ async function handleActionConfirm() {
 
 // 加载所有数据
 async function loadAllData() {
-  // 从 modalApi 获取数据
-  const data = modalApi.getData<{
-    businessId?: number;
-    businessType?: string;
-  }>();
+  // 从 filingData.value 获取数据（外部传入）
+  const filing = filingData.value;
 
-  const id = data?.businessId;
-  const type = data?.businessType || BUSINESS_TYPE;
+  const id = filing?.id;
+  const type = BUSINESS_TYPE;
 
   // 存储到 ref 供其他方法使用
   finalBusinessId.value = id as number;
@@ -212,7 +276,7 @@ async function loadAllData() {
 
   // 参数验证
   if (!id) {
-    console.error('businessId 不能为空，data:', data);
+    console.error('businessId 不能为空，filing:', filing);
     message.error('参数错误：业务ID不能为空');
     loading.value = false;
     return;
@@ -246,9 +310,9 @@ async function loadAllData() {
         (a, b) => a.category - b.category
       );
 
-      // 默认展开第一个分类
+      // 默认展开所有分类（指标数据默认展开）
       if (indicatorGroups.value.length > 0) {
-        activeCollapseKeys.value = [indicatorGroups.value[0].category];
+        activeCollapseKeys.value = indicatorGroups.value.map((g) => g.category);
       }
 
       // 获取指标值
@@ -262,24 +326,56 @@ async function loadAllData() {
 
     // 3. 加载可用操作按钮（包含 taskId 信息）
     const actions = await getAvailableActions(type, id);
-    availableActions.value = actions;
+    // 过滤掉特殊标记：
+    // _PROCESS_RUNNING_: 流程进行中但无操作权限
+    // _PROCESS_FINISHED_: 流程已结束，用于获取流程实例信息
+    const filteredActions = (actions || []).filter(
+      (a: any) => a.key !== '_PROCESS_RUNNING_' && a.key !== '_PROCESS_FINISHED_'
+    );
+    availableActions.value = filteredActions;
 
     // 4. 尝试获取流程实例信息
     let taskId: string | undefined;
-    if (actions.length > 0 && actions[0].taskId) {
-      taskId = actions[0].taskId;
+    let processInstanceId: string | undefined;
+
+    // 优先从 actions 中获取 processInstanceId（新版逻辑）
+    if (actions.length > 0) {
+      // 优先使用 processInstanceId
+      const firstAction = actions[0] as any;
+      if (firstAction?.processInstanceId) {
+        processInstanceId = firstAction.processInstanceId;
+      }
+      // 其次使用 taskId
+      if (firstAction?.taskId) {
+        taskId = firstAction.taskId;
+      }
     }
 
-    // 5. 如果有 taskId，加载审批详情和审批历史
+    // 5. 如果有 taskId，通过 taskId 加载审批详情
     if (taskId) {
       approvalDetail.value = await getApprovalDetail({ taskId });
 
       if (approvalDetail.value?.processInstance) {
-        const processInstanceId = approvalDetail.value.processInstance.id;
-        const tasks = await getTaskListByProcessInstanceId(processInstanceId);
+        const procId = String(approvalDetail.value.processInstance.id);
+        const tasks = await getTaskListByProcessInstanceId(procId);
         approvalHistory.value = (tasks || []).reverse();
       }
+    } else if (processInstanceId) {
+      // 6. 没有待处理任务但有流程实例ID时，直接通过流程实例ID加载审批详情
+      try {
+        approvalDetail.value = await getApprovalDetail({ processInstanceId });
+
+        if (approvalDetail.value?.processInstance) {
+          const tasks = await getTaskListByProcessInstanceId(processInstanceId);
+          approvalHistory.value = (tasks || []).reverse();
+        }
+      } catch (error) {
+        console.warn('获取流程详情失败:', error);
+        approvalDetail.value = null;
+        approvalHistory.value = [];
+      }
     } else {
+      // 7. 没有任何流程信息
       approvalDetail.value = null;
       approvalHistory.value = [];
     }
@@ -354,6 +450,11 @@ function getOptionLabel(valueOptions: string, value: string): string {
   return option?.label || value;
 }
 
+// 获取选项数组
+function getOptions(valueOptions: string): Array<{ label: string; value: string }> {
+  return parseOptions(valueOptions);
+}
+
 // 解析文件列表
 function parseFileList(
   value: string | undefined
@@ -383,45 +484,66 @@ function parseFileList(
   return [];
 }
 
-// 定义 emits
-const emit = defineEmits<{
-  success: [];
-}>();
-
-// 暴露打开弹窗的方法
+// 暴露方法给外部调用
 defineExpose({
-  open: () => modalApi.open(),
-  close: () => modalApi.close(),
+  openWithData: async (row: DeclareFilingApi.Filing) => {
+    // 传递数据
+    filingData.value = row;
+    // 加载完整数据
+    await loadAllData();
+  },
+  // 暴露 availableActions 供外部使用
+  availableActions,
+  open: async (businessId: number, businessType: string) => {
+    filingData.value = null;
+    await loadAllData();
+  },
+  close: () => {
+    // 重置数据
+    filingData.value = null;
+    indicatorValuesMap.value = {};
+  },
 });
 </script>
 
 <template>
-  <Modal
-    :title="`审批详情 - ${filingData?.orgName || ''}`"
-    class="approval-detail-modal"
-    width="90%"
-    :footer="null"
-  >
-    <Spin v-if="loading" size="large" class="flex items-center justify-center py-12" />
+  <!-- 直接渲染内容，不使用 Modal 包装 -->
+  <!-- 外部已经有 a-modal 包裹 -->
+  <div class="approval-detail-wrapper">
+    <div v-if="loading" class="flex items-center justify-center py-12">
+      <Spin size="large" />
+    </div>
 
     <div v-else class="approval-detail-content">
-      <!-- 备案状态 -->
-      <div class="status-section">
-        <span
-          class="status-tag"
-          :class="getStatusClass(filingData?.filingStatus)"
-        >
-          {{ getStatusText(filingData?.filingStatus) }}
-        </span>
+      <!-- 备案状态标识区 -->
+      <div class="filing-status-section">
+        <div class="filing-status-tag" :class="getProcessStatusClass(approvalDetail?.status)">
+          {{ getProcessStatusText(approvalDetail?.status) }}
+        </div>
+        <h2 class="filing-title">
+          {{ filingData?.orgName || '项目备案' }}
+        </h2>
+        <div class="filing-meta">
+          <span v-if="filingData?.projectType">
+            <i class="fas fa-tag mr-1" />
+            备案类型：{{ getProjectTypeText(filingData?.projectType) }}
+          </span>
+          <span v-if="filingData?.createTime">
+            <i class="fas fa-clock mr-1" />
+            提交时间：{{ formatDate(filingData?.createTime) }}
+          </span>
+        </div>
       </div>
 
       <!-- 流程进度 -->
-      <div class="info-block">
-        <div class="info-block-header">
-          <i class="fas fa-project-diagram mr-2" />
-          流程进度
+      <div class="detail-card">
+        <div class="detail-card-header">
+          <h3 class="detail-card-title">
+            <i class="fas fa-project-diagram mr-2" />
+            流程进度
+          </h3>
         </div>
-        <div class="info-block-content">
+        <div class="detail-card-content">
           <Steps
             :current="processNodes.findIndex((n) => n.id === currentNodeId)"
             size="small"
@@ -442,97 +564,98 @@ defineExpose({
         </div>
       </div>
 
-      <!-- Tab切换：基本信息 | 指标数据 -->
-      <a-tabs default-active-key="form" class="mb-6">
-        <a-tab-pane key="form" tab="基本信息">
-          <!-- 基本信息区块 -->
-          <div class="info-block">
-            <div class="info-block-header">
-              <i class="fas fa-building mr-2" />
-              备案基础信息
-            </div>
-            <div class="info-block-content">
-              <div class="info-grid">
-                <div class="info-item">
-                  <label class="info-label">统一社会信用代码：</label>
-                  <span class="info-value">
-                    {{ filingData?.socialCreditCode || '-' }}
-                  </span>
-                </div>
-                <div class="info-item">
-                  <label class="info-label">执业许可证号：</label>
-                  <span class="info-value">
-                    {{ filingData?.medicalLicenseNo || '-' }}
-                  </span>
-                </div>
-                <div class="info-item">
-                  <label class="info-label">机构名称：</label>
-                  <span class="info-value font-medium">
-                    {{ filingData?.orgName || '-' }}
-                  </span>
-                </div>
-                <div class="info-item">
-                  <label class="info-label">项目类型：</label>
-                  <span class="info-value">
-                    {{ filingData?.projectType || '-' }}
-                  </span>
-                </div>
-                <div class="info-item">
-                  <label class="info-label">有效期开始时间：</label>
-                  <span class="info-value">
-                    {{ filingData?.validStartTime || '-' }}
-                  </span>
-                </div>
-                <div class="info-item">
-                  <label class="info-label">有效期结束时间：</label>
-                  <span class="info-value">
-                    {{ filingData?.validEndTime || '-' }}
-                  </span>
-                </div>
-                <div class="info-item col-span-2">
-                  <label class="info-label">建设内容：</label>
-                  <span class="info-value">
-                    {{ filingData?.constructionContent || '-' }}
-                  </span>
-                </div>
+      <!-- 填报信息区块 -->
+      <div class="detail-card">
+        <div class="detail-card-header">
+          <h3 class="detail-card-title">
+            <i class="fas fa-building mr-2" />
+            填报信息
+          </h3>
+        </div>
+        <div class="detail-card-content">
+          <!-- Filing 表基础信息 -->
+          <div class="info-section">
+            <div class="info-section-title">机构信息</div>
+            <div class="info-grid">
+              <div class="info-item">
+                <label class="info-label">统一社会信用代码：</label>
+                <span class="info-value">
+                  {{ filingData?.socialCreditCode || '-' }}
+                </span>
+              </div>
+              <div class="info-item">
+                <label class="info-label">执业许可证号：</label>
+                <span class="info-value">
+                  {{ filingData?.medicalLicenseNo || '-' }}
+                </span>
+              </div>
+              <div class="info-item">
+                <label class="info-label">机构名称：</label>
+                <span class="info-value font-medium">
+                  {{ filingData?.orgName || '-' }}
+                </span>
+              </div>
+              <div class="info-item">
+                <label class="info-label">项目类型：</label>
+                <span class="info-value">
+                  {{ getProjectTypeText(filingData?.projectType) }}
+                </span>
+              </div>
+              <div class="info-item">
+                <label class="info-label">有效期开始：</label>
+                <span class="info-value">
+                  {{ formatDateOnly(filingData?.validStartTime) || '-' }}
+                </span>
+              </div>
+              <div class="info-item">
+                <label class="info-label">有效期结束：</label>
+                <span class="info-value">
+                  {{ formatDateOnly(filingData?.validEndTime) || '-' }}
+                </span>
+              </div>
+              <div class="info-item col-span-2">
+                <label class="info-label">建设内容：</label>
+                <span class="info-value">
+                  {{ filingData?.constructionContent || '-' }}
+                </span>
               </div>
             </div>
           </div>
-        </a-tab-pane>
+        </div>
+      </div>
+    </div>
 
-        <!-- 指标数据Tab -->
-        <a-tab-pane key="indicators" tab="指标数据">
-          <a-collapse
-            v-if="indicatorGroups.length"
-            v-model:activeKey="activeCollapseKeys"
-          >
-            <a-collapse-panel
-              v-for="group in indicatorGroups"
-              :key="group.category"
-              :header="`${group.categoryName} (${group.indicators.length}个指标)`"
-            >
-              <div class="indicator-grid">
+      <!-- 指标分类信息 - 折叠面板 -->
+      <a-collapse
+        v-if="indicatorGroups.length"
+        v-model:activeKey="activeCollapseKeys"
+        class="indicator-collapse"
+      >
+        <a-collapse-panel
+          v-for="group in indicatorGroups"
+          :key="group.category"
+          :header="`${group.categoryName} (${group.indicators.length}个指标)`"
+        >
+          <div class="info-grid">
                 <div
                   v-for="indicator in group.indicators"
                   :key="indicator.id"
-                  class="indicator-item"
+                  class="info-item"
+                  :class="{ 'col-span-2': indicator.valueType === 5 }"
                 >
-                  <div class="indicator-label">
-                    {{ indicator.indicatorName }}
-                    <span v-if="indicator.isRequired" class="required-tag">必填</span>
-                  </div>
-                  <div class="indicator-value">
+                  <label class="info-label">{{ indicator.indicatorName }}：</label>
+                  <div class="info-value-wrap">
                     <!-- 数字类型 -->
                     <template v-if="indicator.valueType === 1">
-                      <span>{{ indicatorValuesMap[indicator.id] || '-' }}</span>
-                      <span v-if="indicator.unit" class="unit">
-                        {{ indicator.unit }}
+                      <span class="info-value">
+                        {{ indicatorValuesMap[indicator.id] || '-' }}
                       </span>
+                      <span v-if="indicator.unit" class="unit">{{ indicator.unit }}</span>
                     </template>
 
                     <!-- 字符串类型 -->
                     <template v-else-if="indicator.valueType === 2">
-                      {{ indicatorValuesMap[indicator.id] || '-' }}
+                      <span class="info-value">{{ indicatorValuesMap[indicator.id] || '-' }}</span>
                     </template>
 
                     <!-- 布尔类型 -->
@@ -551,134 +674,83 @@ defineExpose({
 
                     <!-- 日期类型 -->
                     <template v-else-if="indicator.valueType === 4">
-                      {{ indicatorValuesMap[indicator.id] || '-' }}
+                      <span class="info-value">{{ formatDate(indicatorValuesMap[indicator.id]) || '-' }}</span>
                     </template>
 
                     <!-- 长文本类型 -->
                     <template v-else-if="indicator.valueType === 5">
-                      <div class="long-text">
+                      <span class="info-value long-text">
                         {{ indicatorValuesMap[indicator.id] || '-' }}
+                      </span>
+                    </template>
+
+                    <!-- 单选类型 - 显示全部选项，用户选中项主色标注 -->
+                    <template v-else-if="indicator.valueType === 6">
+                      <div class="option-list">
+                        <span
+                          v-for="opt in getOptions(indicator.valueOptions)"
+                          :key="opt.value"
+                          class="option-tag"
+                          :class="{
+                            'option-selected': String(opt.value) === String(indicatorValuesMap[indicator.id])
+                          }"
+                        >
+                          {{ opt.label }}
+                        </span>
                       </div>
                     </template>
 
-                    <!-- 单选类型 -->
-                    <template v-else-if="indicator.valueType === 6">
-                      <span class="status-tag status-tag-warning">
-                        {{
-                          getOptionLabel(
-                            indicator.valueOptions,
-                            indicatorValuesMap[indicator.id]
-                          )
-                        }}
-                      </span>
-                    </template>
-
-                    <!-- 多选类型 -->
+                    <!-- 多选类型 - 显示全部选项，用户选中项主色标注 -->
                     <template v-else-if="indicator.valueType === 7">
-                      <span
-                        v-for="val in indicatorValuesMap[indicator.id] || []"
-                        :key="val"
-                        class="status-tag status-tag-warning mr-1"
-                      >
-                        {{ getOptionLabel(indicator.valueOptions, val) }}
-                      </span>
-                      <span
-                        v-if="!indicatorValuesMap[indicator.id]?.length"
-                        >-</span
-                      >
+                      <div class="option-list">
+                        <span
+                          v-for="opt in getOptions(indicator.valueOptions)"
+                          :key="opt.value"
+                          class="option-tag"
+                          :class="{
+                            'option-selected': (indicatorValuesMap[indicator.id] || []).includes(opt.value)
+                          }"
+                        >
+                          {{ opt.label }}
+                        </span>
+                      </div>
                     </template>
 
                     <!-- 日期区间类型 -->
                     <template v-else-if="indicator.valueType === 8">
-                      <template
-                        v-if="indicatorValuesMap[indicator.id]?.length === 2"
-                      >
+                      <span class="info-value">
                         {{
-                          indicatorValuesMap[indicator.id][0]
-                        }}
-                        ~
-                        {{
-                          indicatorValuesMap[indicator.id][1]
-                        }}
-                      </template>
-                      <template v-else>-</template>
-                    </template>
-
-                    <!-- 文件上传类型 -->
-                    <template v-else-if="indicator.valueType === 9">
-                      <div
-                        v-if="
-                          parseFileList(indicatorValuesMap[indicator.id]).length
-                        "
-                        class="file-list"
-                      >
-                        <div
-                          v-for="file in parseFileList(
-                            indicatorValuesMap[indicator.id]
-                          )"
-                          :key="file.url"
-                          class="file-item"
-                        >
-                          <a
-                            :href="file.url"
-                            target="_blank"
-                            class="download-link"
-                          >
-                            <i class="fas fa-file-alt mr-1" />
-                            {{ file.name }}
-                          </a>
-                        </div>
-                      </div>
-                      <span v-else>-</span>
-                    </template>
-
-                    <!-- 单选下拉类型 -->
-                    <template v-else-if="indicator.valueType === 10">
-                      <span class="status-tag status-tag-warning">
-                        {{
-                          getOptionLabel(
-                            indicator.valueOptions,
-                            indicatorValuesMap[indicator.id]
-                          )
+                          indicatorValuesMap[indicator.id]?.start
+                            ? `${indicatorValuesMap[indicator.id].start} ~ ${indicatorValuesMap[indicator.id].end}`
+                            : '-'
                         }}
                       </span>
                     </template>
 
-                    <!-- 多选下拉类型 -->
-                    <template v-else-if="indicator.valueType === 11">
-                      <span
-                        v-for="val in indicatorValuesMap[indicator.id] || []"
-                        :key="val"
-                        class="status-tag status-tag-warning mr-1"
-                      >
-                        {{ getOptionLabel(indicator.valueOptions, val) }}
-                      </span>
-                      <span
-                        v-if="!indicatorValuesMap[indicator.id]?.length"
-                        >-</span
-                      >
-                    </template>
-
-                    <!-- 未知类型 -->
+                    <!-- 默认显示 -->
                     <template v-else>
-                      {{ indicatorValuesMap[indicator.id] || '-' }}
+                      <span class="info-value">{{ indicatorValuesMap[indicator.id] || '-' }}</span>
                     </template>
                   </div>
                 </div>
               </div>
             </a-collapse-panel>
           </a-collapse>
-          <div v-else class="empty-text">暂无指标数据</div>
-        </a-tab-pane>
-      </a-tabs>
+
+          <!-- 无指标数据时显示提示 -->
+          <div v-if="!indicatorGroups.length" class="empty-text">
+            暂无指标数据
+          </div>
 
       <!-- 审核记录区 -->
-      <div class="info-block">
-        <div class="info-block-header">
-          <i class="fas fa-history mr-2" />
-          审核记录
+      <div class="detail-card">
+        <div class="detail-card-header">
+          <h3 class="detail-card-title">
+            <i class="fas fa-history mr-2" />
+            审核记录
+          </h3>
         </div>
-        <div class="info-block-content">
+        <div class="detail-card-content">
           <div v-if="approvalHistory.length" class="audit-records">
             <div
               v-for="task in approvalHistory"
@@ -710,8 +782,8 @@ defineExpose({
         </div>
       </div>
 
-      <!-- 审批操作按钮 -->
-      <div v-if="availableActions.length" class="action-buttons">
+      <!-- 审批操作按钮：仅当 showActions 为 true 时在组件内显示；否则由父组件（如弹窗底部）负责展示 -->
+      <div v-if="props.showActions && availableActions.length" class="action-buttons">
         <a-button
           v-for="action in availableActions"
           :key="action.key"
@@ -722,10 +794,9 @@ defineExpose({
           {{ action.label }}
         </a-button>
       </div>
-      <div v-else class="empty-text">
+      <div v-else-if="props.showActions && !availableActions.length" class="empty-text">
         当前无可用审批操作
       </div>
-    </div>
 
     <!-- 审批操作弹窗 -->
     <a-modal
@@ -749,10 +820,10 @@ defineExpose({
             :rows="4"
           />
         </a-form-item>
-      </a-form>
-    </a-modal>
-  </Modal>
-</template>
+        </a-form>
+      </a-modal>
+  </div>
+  </template>
 
 <style lang="scss" scoped>
 .approval-detail-content {
@@ -761,71 +832,108 @@ defineExpose({
   padding: 0 4px;
 }
 
-// 状态标签 - 使用CSS变量实现主题适配
-.status-section {
+// 备案状态标识区
+.filing-status-section {
   text-align: center;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
 
-.status-tag {
+.filing-status-tag {
   display: inline-block;
-  padding: 4px 12px;
+  padding: 6px 16px;
   border-radius: 4px;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 500;
+  margin-bottom: 12px;
+  background-color: #F2E4D3;
+  color: var(--color-primary, #2A5C45);
 }
 
+// 流程状态样式
 .status-tag-success {
-  background-color: var(--color-success-bg, #f6ffed);
-  color: var(--color-success, #52c41a);
-  border: 1px solid var(--color-success-border, #b7eb8f);
-}
-
-.status-tag-warning {
-  background-color: var(--color-warning-bg, #fff7e6);
-  color: var(--color-warning-text, #d46b08);
-  border: 1px solid var(--color-warning-border, #ffd591);
-}
-
-.status-tag-pending {
-  background-color: var(--color-bg-container, #fafafa);
-  color: var(--color-text-quaternary, #bfbfbf);
-  border: 1px solid var(--color-border, #d9d9d9);
+  background-color: #f6ffed !important;
+  color: var(--color-primary, #2A5C45);
+  border: 1px solid #b7eb8f;
 }
 
 .status-tag-error {
-  background-color: var(--color-error-bg, #fff2f0);
-  color: var(--color-error, #ff4d4f);
-  border: 1px solid var(--color-error-border, #ffccc7);
+  background-color: #fff2f0 !important;
+  color: #ff4d4f !important;
+  border: 1px solid #ffccc7;
 }
 
-// 区块样式 - 使用CSS变量
-.info-block {
-  background: var(--color-bg-container, white);
+.status-tag-pending {
+  background-color: #fff7e6 !important;
+  color: #fa8c16 !important;
+  border: 1px solid #ffd591;
+}
+
+.filing-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: #232931;
+  margin-bottom: 8px;
+}
+
+.filing-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 16px;
+  font-size: 14px;
+  color: #6C737A;
+}
+
+// 卡片样式 - GemDesign风格
+.detail-card {
+  background: white;
   border-radius: 8px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   margin-bottom: 16px;
   overflow: hidden;
 }
 
-.info-block-header {
-  background-color: var(--color-primary-light-9, #e6f7ff);
+.detail-card-header {
+  background-color: var(--color-primary-light-9, #E6EEE8);
   padding: 12px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.detail-card-title {
   font-size: 16px;
-  font-weight: bold;
-  color: var(--color-text, #232931);
+  font-weight: 600;
+  color: #232931;
+  margin: 0;
   display: flex;
   align-items: center;
-  cursor: pointer;
 
   i {
-    color: var(--color-primary, #1677ff);
+    color: var(--color-primary, #2A5C45);
   }
 }
 
-.info-block-content {
+.detail-card-content {
   padding: 20px;
-  background-color: var(--color-bg-container, white);
+}
+
+// 信息区块
+.info-section {
+  margin-bottom: 20px;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.info-section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #232931;
+  padding-bottom: 8px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid #D4D9DF;
 }
 
 // 表单信息样式
@@ -838,30 +946,100 @@ defineExpose({
 .info-item {
   display: flex;
   align-items: flex-start;
-  padding: 8px 0;
+  padding: 6px 0;
 
   &.col-span-2 {
-    flex-direction: column;
+    flex-direction: row;
     grid-column: span 2;
   }
 }
 
 .info-label {
   flex-shrink: 0;
-  width: 140px;
-  color: var(--color-text-quaternary, #8c8c8c);
+  width: 300px;
+  color: #6C737A;
   font-size: 14px;
 }
 
 .info-value {
   flex: 1;
-  color: var(--color-text, #262626);
+  color: #232931;
   font-size: 14px;
   word-break: break-all;
 
   &.font-medium {
     font-weight: 500;
   }
+}
+
+.info-value-wrap {
+  // flex: 1;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.status-tag {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.status-tag-success {
+  background-color: var(--color-primary-light-9, #E6EEE8);
+  color: var(--color-primary, #2A5C45);
+  border: 1px solid var(--color-primary, #D4E4DD);
+}
+
+.status-tag-primary {
+  background-color: var(--color-primary-light-9, #E6EEE8);
+  color: var(--color-primary, #2A5C45);
+  border: 1px solid var(--color-primary, #2A5C45);
+}
+
+// 选项列表样式
+.option-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.option-tag {
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 13px;
+  background-color: #F3F4F6;
+  color: #595959;
+  border: 1px solid #D4D9DF;
+  transition: all 0.2s ease;
+
+  &.option-selected {
+    background-color: var(--color-primary-light-9, #E6EEE8);
+    color: var(--color-primary, #2A5C45);
+    
+    font-weight: 500;
+  }
+}
+
+.status-tag-warning {
+  background-color: #FFF7E6;
+  color: #D46B08;
+  border: 1px solid #FFD591;
+}
+
+.status-tag-pending {
+  background-color: #F3F4F6;
+  color: #6C737A;
+  border: 1px solid #D4D9DF;
+}
+
+.status-tag-error {
+  background-color: #FFF2F0;
+  color: #9B3636;
+  border: 1px solid #FFCCC7;
 }
 
 // 指标样式
@@ -905,6 +1083,7 @@ defineExpose({
   .unit {
     margin-left: 4px;
     color: var(--color-text-quaternary, #8c8c8c);
+    text-align: left;
     font-size: 12px;
   }
 
@@ -1036,13 +1215,30 @@ defineExpose({
     &:last-child {
       margin-bottom: 0;
     }
+
+    &.ant-collapse-item-active .ant-collapse-header {
+      background-color: var(--color-primary-light-9, #E6EEE8) !important; /* 浅绿色，与填报信息卡片头一致 */
+    }
   }
 
   .ant-collapse-header {
-    background-color: var(--color-primary-light-9, #e6f7ff) !important;
+    background-color: var(--color-primary-light-9, #E6EEE8) !important; /* 浅绿色，与填报信息卡片头一致 */
     padding: 12px 20px !important;
+    padding-right: 48px !important;
     font-weight: bold;
     color: var(--color-text, #262626) !important;
+    position: relative;
+
+    // 箭头移到右侧
+    .ant-collapse-expand-icon {
+      position: absolute;
+      right: 16px;
+      left: auto !important;
+    }
+
+    .ant-collapse-header-text {
+      flex: 1;
+    }
   }
 
   .ant-collapse-content {

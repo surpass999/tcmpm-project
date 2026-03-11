@@ -230,15 +230,44 @@
 
 ```json
 {
+  "nodeKey": "Activity_0isavu8",
   "cap": "COUNTERSIGN",
-  "actions": "signAgree,signReject,urge",
+  "actions": [
+    {
+      "key": "signAgree",
+      "label": "同意",
+      "bizStatus": "EXPERT_APPROVED",
+      "bizStatusLabel": "专家已同意",
+      "bpmAction": "complete",
+      "vars": {}
+    },
+    {
+      "key": "signReject",
+      "label": "拒绝",
+      "bizStatus": "EXPERT_REJECTED",
+      "bizStatusLabel": "专家已拒绝",
+      "bpmAction": "reject",
+      "vars": {"reason": "审核意见", "reasonRequired": true}
+    }
+  ],
   "assign": {
     "type": "DYNAMIC_USER",
     "source": "expertUsers"
   },
-  "signRule": "MAJORITY"
+  "signRule": "MAJORITY",
+  "rejectRule": "ANY_REJECT"
 }
 ```
+
+**配置说明**：
+
+| 字段 | 说明 | 可选值 |
+|------|------|--------|
+| `signRule` | 会签通过规则 | `ALL` / `ANY` / `MAJORITY` / `2/3` |
+| `rejectRule` | 会签拒绝规则 | `ANY_REJECT`（默认，任一拒绝）/ `ALL_REJECT`（全部拒绝）|
+| `actions[].bizStatus` | 该动作执行后的业务状态 | 业务定义的状态码 |
+
+**说明**：通过 `signAgree` 和 `signReject` 动作单独配置 `bizStatus`，可以灵活控制会签通过和拒绝后的业务状态。
 
 ### 5. 固定角色（传统方式）
 

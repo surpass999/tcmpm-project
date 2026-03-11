@@ -171,12 +171,13 @@ public interface BpmProcessService {
      *
      * @param businessType 业务类型
      * @param businessId   业务ID
-     * @param actionKey   操作标识（如 submit, approve 等）
+     * @param actionKey   操作标识（如 submit, agree, reject, back 等）
      * @param userId      当前用户ID
      * @param reason      审批意见
      * @param expertUserIds 选择的专家用户ID列表（选择专家操作时使用）
+     * @param targetNodeKey 退回时的目标节点（退回操作时使用）
      */
-    void submitAction(String businessType, Long businessId, String actionKey, Long userId, String reason, List<Long> expertUserIds);
+    void submitAction(String businessType, Long businessId, String actionKey, Long userId, String reason, List<Long> expertUserIds, String targetNodeKey);
 
     // ========== 流程撤回/撤销 ==========
 

@@ -153,11 +153,13 @@ public class BpmDataPermissionServiceImpl implements BpmDataPermissionService {
                 .map(BpmBusinessTypeDO::getBusinessType)
                 .collect(Collectors.toList());
 
-        // 1. 查询该用户是发起人的业务
+        // 1. 查询该用户是发起人或者参与人的业务（使用 FIND_IN_SET 精确匹配）
         List<BpmBusinessProcessDO> initiatorProcesses = businessProcessMapper.selectList(
                 Wrappers.<BpmBusinessProcessDO>lambdaQuery()
                         .in(BpmBusinessProcessDO::getBusinessType, businessTypeList)
-                        .eq(BpmBusinessProcessDO::getInitiatorId, userId)
+                        .and(w -> w.eq(BpmBusinessProcessDO::getInitiatorId, userId)
+                                .or()
+                                .apply("FIND_IN_SET(" + userId + ", initiator_ids) > 0"))
         );
         initiatorProcesses.forEach(p -> authorizedBusinessIds.add(p.getBusinessId()));
 

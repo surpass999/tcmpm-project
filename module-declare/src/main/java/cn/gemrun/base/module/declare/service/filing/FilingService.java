@@ -59,11 +59,11 @@ public interface FilingService {
     PageResult<FilingDO> getFilingPage(FilingPageReqVO pageReqVO);
 
     /**
-     * 更新备案状态
+     * 更新备案状态（流程事件触发）
      *
-     * @param id     备案ID
-     * @param status 状态
+     * @param id        备案ID
+     * @param bizStatus 流程 DSL 中定义的 bizStatus
      */
-    void updateFilingStatus(Long id, Integer status);
+    void updateFilingStatus(Long id, String bizStatus);
 
 }

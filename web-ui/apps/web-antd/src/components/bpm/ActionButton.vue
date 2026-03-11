@@ -1,48 +1,71 @@
 <template>
   <div class="bpm-action-button">
     <template v-for="action in availableActions" :key="action.key">
-      <!-- 提交审核按钮 -->
+      <!-- 退回按钮：发起节点不显示退回按钮 -->
       <a-button
-        v-if="action.key === 'submit'"
-        type="primary"
-        @click="handleSubmit(action)"
+        v-if="action.key === 'back' && !action.vars?.isStartNode"
+        :type="getActionType(action.key)"
+        @click="handleActionClick(action)"
       >
-        {{ action.label || '提交审核' }}
+        <template #icon>
+          <IconifyIcon icon="ep:back" />
+        </template>
+        {{ getActionLabel(action) }}
       </a-button>
 
-      <!-- 其他操作按钮（暂时只支持提交） -->
+      <!-- 其他按钮 -->
       <a-button
-        v-else
-        @click="handleAction(action)"
+        v-else-if="action.key !== 'back'"
+        :type="getActionType(action.key)"
+        @click="handleActionClick(action)"
       >
-        {{ action.label || action.key }}
+        <template #icon>
+          <IconifyIcon v-if="action.key.includes('pass') || action.key.includes('agree')" icon="ep:circle-check" />
+          <IconifyIcon v-else-if="action.key.includes('reject') || action.key.includes('refuse')" icon="ep:circle-close" />
+          <IconifyIcon v-else-if="action.key.includes('transfer')" icon="ep:right" />
+          <IconifyIcon v-else-if="action.key.includes('selectExpert') || action.key.includes('expert')" icon="ep:user" />
+          <IconifyIcon v-else icon="ep:minus" />
+        </template>
+        {{ getActionLabel(action) }}
       </a-button>
     </template>
 
-    <!-- 提交审核弹窗 -->
+    <!-- 审批操作弹窗（填写审批意见） -->
     <a-modal
-      v-model:open="submitModalVisible"
-      title="提交审核"
-      @ok="handleSubmitConfirm"
-      :confirm-loading="submitLoading"
+      v-model:open="actionModalVisible"
+      :title="currentAction?.label || '审批操作'"
+      :confirm-loading="actionLoading"
+      @ok="handleActionConfirm"
     >
-      <a-form :model="submitForm" layout="vertical">
-        <a-form-item label="审批意见">
+      <a-form :model="actionForm" layout="vertical">
+        <a-form-item :label="currentAction?.vars?.reason || '审批意见'" :required="currentAction?.vars?.reasonRequired">
           <a-textarea
-            v-model:value="submitForm.reason"
-            placeholder="请输入审批意见（可选）"
+            v-model:value="actionForm.reason"
+            :placeholder="currentAction?.vars?.reason ? `请输入${currentAction.vars.reason}` : '请输入审批意见'"
             :rows="4"
           />
         </a-form-item>
       </a-form>
     </a-modal>
+
+    <!-- 专家选择弹窗 -->
+    <ExpertSelectModal
+      ref="expertModalRef"
+      :multiple="true"
+      :expert-min="currentAction?.vars?.expertMin || 1"
+      :expert-max="currentAction?.vars?.expertMax || 10"
+      @confirm="handleExpertConfirm"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue';
+import { ref, watch } from 'vue';
 import { message } from 'ant-design-vue';
-import { getAvailableActions, submitBpmAction, type SubmitActionParams } from '#/api/bpm/action';
+import { IconifyIcon } from '@vben/icons';
+import { submitBpmAction, type SubmitActionParams } from '#/api/bpm/action';
+import ExpertSelectModal from './ExpertSelectModal.vue';
+import type { DeclareExpertApi } from '#/api/declare/expert';
 
 interface BpmAction {
   key: string;
@@ -51,72 +74,164 @@ interface BpmAction {
   bizStatusLabel?: string;
   bpmAction?: string;
   taskId?: string;
+  vars?: {
+    reason?: string;
+    reasonRequired?: boolean;
+    expertMin?: number;
+    expertMax?: number;
+    isReturned?: boolean;
+    isStartNode?: boolean;
+    backStrategy?: string;
+    [key: string]: any;
+  };
 }
 
 interface Props {
   businessType: string;
   businessId: number;
+  actions?: BpmAction[];
   reload?: () => void;
 }
 
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+  actions: () => [],
+});
+
 const emit = defineEmits<{
   success: [];
+  'update:actions': [actions: BpmAction[]];
+  refresh: [];
 }>();
 
 const availableActions = ref<BpmAction[]>([]);
-const submitModalVisible = ref(false);
-const submitLoading = ref(false);
+const actionModalVisible = ref(false);
+const actionLoading = ref(false);
 const currentAction = ref<BpmAction | null>(null);
-const submitForm = ref({
+const actionForm = ref({
   reason: '',
 });
 
-// 加载可用操作
-async function loadActions() {
-  if (!props.businessType || !props.businessId) {
-    availableActions.value = [];
+// 专家选择弹窗
+const expertModalRef = ref<{
+  open: () => void;
+  close: () => void;
+} | null>(null);
+
+// 已选中的专家（用于提交时传递 IDs）
+const selectedExperts = ref<DeclareExpertApi.Expert[]>([]);
+
+// 监听外部传入的 actions
+watch(
+  () => props.actions,
+  (newActions) => {
+    // 过滤掉 _PROCESS_RUNNING_ 标记（这是流程进行中但无操作权限的标记）
+    availableActions.value = (newActions || []).filter((a: any) => a.key !== '_PROCESS_RUNNING_');
+  },
+  { immediate: true, deep: true }
+);
+
+// 获取按钮类型
+function getActionType(key: string): 'primary' | 'default' | 'dashed' | 'link' | 'text' {
+  if (key.includes('pass') || key.includes('agree') || key.includes('approve')) {
+    return 'primary';
+  }
+  if (key.includes('reject') || key.includes('refuse') || key.includes('deny')) {
+    return 'default';
+  }
+  if (key.includes('back')) {
+    return 'default';
+  }
+  return 'default';
+}
+
+// 获取按钮显示文案
+function getActionLabel(action: BpmAction): string {
+  const vars = action.vars || {};
+  const key = action.key;
+
+  // 退回状态或发起节点：submit 改为"重新提交"
+  if ((vars.isReturned || vars.isStartNode) && (key === 'submit' || key === 'resubmit')) {
+    return '重新提交';
+  }
+
+  // 退回按钮显示文案
+  if (key === 'back') {
+    if (vars.backStrategy === 'TO_START') {
+      return '退回发起人';
+    }
+    if (vars.backStrategy === 'TO_PREV') {
+      return '退回上一级';
+    }
+    return '退回';
+  }
+
+  return action.label || key;
+}
+
+// 处理操作点击
+function handleActionClick(action: BpmAction) {
+  const vars = action.vars || {};
+  currentAction.value = action;
+  actionForm.value.reason = '';
+
+  // 选择专家操作 - 打开专家选择弹窗
+  if (action.key.includes('selectExpert') || action.key.includes('expert')) {
+    expertModalRef.value?.open({
+      expertMin: action.vars?.expertMin,
+      expertMax: action.vars?.expertMax,
+    });
     return;
   }
 
-  try {
-    const actions = await getAvailableActions(props.businessType, props.businessId);
-    availableActions.value = actions || [];
-  } catch (error) {
-    console.error('[BpmActionButton] 加载操作失败:', error);
-    availableActions.value = [];
+  // 如果需要填写理由，打开弹窗
+  if (vars.reason || vars.reasonRequired) {
+    actionModalVisible.value = true;
+    return;
   }
+
+  // 直接执行
+  handleActionConfirm();
 }
 
-// 提交审核
-function handleSubmit(action: BpmAction) {
-  currentAction.value = action;
-  submitForm.value.reason = '';
-  submitModalVisible.value = true;
+// 专家选择确认
+function handleExpertConfirm(experts: DeclareExpertApi.Expert[]) {
+  selectedExperts.value = experts;
+  // 选择专家后不直接提交，而是触发刷新事件，让父组件刷新数据
+  // ExpertSelectModal 使用 useVbenModal，onConfirm 返回 true 后会自动关闭弹窗
+  emit('refresh');
 }
 
-// 确认提交
-async function handleSubmitConfirm() {
+// 确认操作
+async function handleActionConfirm() {
   if (!currentAction.value) {
     return;
   }
 
-  submitLoading.value = true;
+  actionLoading.value = true;
   try {
+    // 获取专家用户 IDs
+    const expertUserIds = selectedExperts.value.length > 0
+      ? selectedExperts.value.map(e => e.userId).filter((id): id is number => id !== undefined)
+      : undefined;
+
     const params: SubmitActionParams = {
       businessType: props.businessType,
       businessId: props.businessId,
       actionKey: currentAction.value.key,
-      reason: submitForm.value.reason,
+      reason: actionForm.value.reason,
+      expertUserIds,
     };
 
+    // 退回操作时，传递目标节点
+    if (currentAction.value.key === 'back') {
+      params.targetNodeKey = currentAction.value.vars?.backStrategy;
+    }
+
     await submitBpmAction(params);
-    message.success('提交成功');
+    message.success('操作成功');
 
-    submitModalVisible.value = false;
-
-    // 刷新操作列表
-    await loadActions();
+    actionModalVisible.value = false;
+    selectedExperts.value = [];
 
     // 触发成功回调
     emit('success');
@@ -126,34 +241,18 @@ async function handleSubmitConfirm() {
       props.reload();
     }
   } catch (error: any) {
-    console.error('[BpmActionButton] 提交失败:', error);
-    message.error(error.message || '提交失败');
+    console.error('[BpmActionButton] 操作失败:', error);
+    message.error(error.message || '操作失败');
   } finally {
-    submitLoading.value = false;
+    actionLoading.value = false;
   }
 }
 
-// 其他操作（暂未实现）
-function handleAction(action: BpmAction) {
-  message.info(`暂不支持操作: ${action.label || action.key}`);
-}
-
-// 监听业务ID变化，重新加载
-watch(
-  () => [props.businessType, props.businessId],
-  () => {
-    loadActions();
-  },
-  { immediate: true }
-);
-
-onMounted(() => {
-  loadActions();
-});
-
 // 暴露方法供外部调用
 defineExpose({
-  loadActions,
+  loadActions: () => {
+    // 外部调用时不做任何操作，由父组件控制 actions
+  },
 });
 </script>
 

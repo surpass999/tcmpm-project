@@ -68,4 +68,11 @@ public class DslAssign implements Serializable {
      */
     private String[] userGroupCodes;
 
+    /**
+     * 审批模式
+     * 0 = 抢签模式（默认）：所有候选人都能看到任务，谁先签收谁审批
+     * 1 = 指定模式：随机选择一个候选人作为处理人
+     */
+    private Integer approvalMode;
+
 }

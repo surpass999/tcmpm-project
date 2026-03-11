@@ -3,6 +3,7 @@ import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { DeclareFilingApi } from '#/api/declare/filing';
 import type { DeclareIndicatorApi } from '#/api/declare/indicator';
 import type { DeclareExpertApi } from '#/api/declare/expert';
+import type { BpmActionApi } from '#/api/bpm/action';
 
 import { computed, nextTick, onMounted, ref, shallowRef } from 'vue';
 
@@ -18,7 +19,7 @@ import {
   getFilingPage,
 } from '#/api/declare/filing';
 import { getIndicatorsForListDisplay } from '#/api/declare/indicator';
-import { getAvailableActionsBatch, submitBpmAction } from '#/api/bpm/action';
+import { getAvailableActions, getAvailableActionsBatch } from '#/api/bpm/action';
 import { $t } from '#/locales';
 
 import ExpertSelectModalCmp from '#/components/bpm/ExpertSelectModal.vue';
@@ -29,6 +30,7 @@ import { useGridColumns, useGridFormSchema } from './data';
 import Form from './modules/form.vue';
 
 import ApprovalDetailCmp from '#/views/bpm/components/approval-detail.vue';
+import ActionButtonCmp from '#/components/bpm/ActionButton.vue';
 
 // 业务类型
 const BUSINESS_TYPE_KEY = 'declare:filing:create';
@@ -132,6 +134,46 @@ async function loadRowAvailableActions(rows: DeclareFilingApi.Filing[]) {
   rowAvailableActions.value = { ...results };
 }
 
+/** 获取行操作按钮列表（处理退回状态的按钮文案） */
+function getRowActions(row: DeclareFilingApi.Filing) {
+  const actions = rowAvailableActions.value[row.id!] || [];
+  return [
+    // DSL 定义的流程操作按钮（如：提交、通过、退回等）
+    ...actions.map((action: any) => ({
+    // 退回状态：submit 改为"重新提交"（只有被退回后才显示"重新提交"，新提交显示"提交审核"）
+    // isReturned=true 表示被退回后重新提交，isStartNode=true 表示发起节点（新提交）
+    label: action.vars?.isReturned && (action.key === 'submit' || action.key === 'resubmit')
+      ? '重新提交'
+      : action.label,
+      type: 'link' as any,
+      onClick: () => handleBpmAction(row, action),
+    })),
+    {
+      label: '审批详情',
+      type: 'link' as any,
+      onClick: () => handleViewApprovalDetail(row),
+    },
+    {
+      label: $t('common.edit'),
+      type: 'link' as any,
+      icon: ACTION_ICON.EDIT,
+      auth: ['declare:filing:update'],
+      onClick: handleEdit.bind(null, row),
+    },
+    {
+      label: $t('common.delete'),
+      type: 'link' as any,
+      danger: true,
+      icon: ACTION_ICON.DELETE,
+      auth: ['declare:filing:delete'],
+      popConfirm: {
+        title: $t('ui.actionMessage.deleteConfirm', [row.id]),
+        confirm: handleDelete.bind(null, row),
+      },
+    },
+  ];
+}
+
 // 使用 BPM 操作 Hook
 const {
   submitModalVisible,
@@ -188,14 +230,58 @@ const [ExpertSelectModal, expertSelectModalApi] = useVbenModal({
   destroyOnClose: true,
 });
 
-/** 审批详情弹窗引用 */
-const [ApprovalDetailModal, approvalDetailModalApi] = useVbenModal({
-  connectedComponent: ApprovalDetailCmp,
-  destroyOnClose: true,
-  class: '!min-w-[90%]',
-  contentClass: '!min-w-[90%] !min-h-[80vh]',
-  closeOnClickModal: false, // 点击遮罩不关闭弹窗
-});
+/** 审批详情弹窗 - 使用 a-modal 直接控制宽度 */
+const approvalDetailVisible = ref(false);
+const approvalDetailRef = ref<InstanceType<typeof ApprovalDetailCmp> | null>(null);
+
+/** 审批操作相关状态 */
+const currentApprovalActions = ref<(BpmActionApi.BpmAction & { taskId?: string })[]>([]);
+const currentApprovalBusinessId = ref<number | null>(null);
+const currentApprovalRow = ref<DeclareFilingApi.Filing | null>(null);
+
+/** 打开审批详情弹窗 */
+async function handleViewApprovalDetail(row: DeclareFilingApi.Filing) {
+  approvalDetailVisible.value = true;
+  // 保存当前行数据
+  currentApprovalRow.value = row;
+  // 保存当前业务 ID
+  currentApprovalBusinessId.value = row.id ?? null;
+  // 传递数据给组件
+    nextTick(async () => {
+    approvalDetailRef.value?.openWithData(row);
+    // 使用和列表页相同的方式获取可用操作
+    try {
+      const actions = await getAvailableActions(BUSINESS_TYPE_KEY, row.id!);
+      // 过滤掉特殊标记：
+      // _PROCESS_RUNNING_: 流程进行中但无操作权限
+      // _PROCESS_FINISHED_: 流程已结束
+      currentApprovalActions.value = (actions || []).filter(
+        (a: any) => a.key !== '_PROCESS_RUNNING_' && a.key !== '_PROCESS_FINISHED_'
+      );
+    } catch (e) {
+      console.error('获取审批操作失败:', e);
+      currentApprovalActions.value = [];
+    }
+  });
+}
+
+/** 处理审批操作成功 */
+function handleApprovalActionSuccess() {
+  approvalDetailVisible.value = false;
+  handleRefresh();
+}
+
+/** 处理审批操作刷新（选择专家后刷新数据） */
+function handleApprovalActionRefresh() {
+  // 刷新审批详情数据，但不关闭弹窗
+  if (approvalDetailRef.value) {
+    approvalDetailRef.value.openWithData(currentApprovalRow.value as DeclareFilingApi.Filing);
+  }
+  // 刷新列表中的操作按钮
+  if (currentApprovalRow.value) {
+    loadRowAvailableActions([currentApprovalRow.value]);
+  }
+}
 
 /** 处理专家选择确认 */
 async function handleExpertSelectConfirm(experts: DeclareExpertApi.Expert[]) {
@@ -235,14 +321,6 @@ function handleCreate() {
 /** 编辑项目备案核心信息 */
 function handleEdit(row: DeclareFilingApi.Filing) {
   formModalApi.setData(row).open();
-}
-
-/** 查看审批详情 */
-function handleViewApprovalDetail(row: DeclareFilingApi.Filing) {
-  approvalDetailModalApi.setData({
-    businessId: row.id!,
-    businessType: BUSINESS_TYPE_KEY,
-  }).open();
 }
 
 /** 删除项目备案核心信息 */
@@ -442,37 +520,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
       </template>
       <template #actions="{ row }">
         <TableAction
-          :actions="[
-            // DSL 定义的流程操作按钮（如：提交、通过、退回等）
-            ...(rowAvailableActions[row.id] || []).map((action) => ({
-              label: action.label,
-              type: 'link' as const,
-              onClick: () => handleBpmAction(row, action),
-            })),
-            {
-              label: '审批详情',
-              type: 'link',
-              onClick: () => handleViewApprovalDetail(row),
-            },
-            {
-              label: $t('common.edit'),
-              type: 'link',
-              icon: ACTION_ICON.EDIT,
-              auth: ['declare:filing:update'],
-              onClick: handleEdit.bind(null, row),
-            },
-            {
-              label: $t('common.delete'),
-              type: 'link',
-              danger: true,
-              icon: ACTION_ICON.DELETE,
-              auth: ['declare:filing:delete'],
-              popConfirm: {
-                title: $t('ui.actionMessage.deleteConfirm', [row.id]),
-                confirm: handleDelete.bind(null, row),
-              },
-            },
-          ]"
+          :actions="getRowActions(row)"
         />
       </template>
     </Grid>
@@ -498,7 +546,79 @@ const [Grid, gridApi] = useVbenVxeGrid({
     <!-- 选择专家弹窗 -->
     <ExpertSelectModal @confirm="handleExpertSelectConfirm" />
 
-    <!-- 审批详情弹窗 -->
-    <ApprovalDetailModal @success="handleRefresh" />
+    <!-- 审批详情弹窗 - 使用 a-modal 直接控制宽度 -->
+    <a-modal
+      v-model:open="approvalDetailVisible"
+      :title="`审批详情`"
+      :footer="null"
+      width="90%"
+      :body-style="{ minHeight: '80vh', padding: '16px', paddingBottom: '80px', position: 'relative' }"
+      :z-index="1000"
+      destroy-on-close
+    >
+      <ApprovalDetailCmp
+        ref="approvalDetailRef"
+        class="approval-detail-content-wrapper"
+        :show-actions="false"
+        @success="handleRefresh"
+      />
+
+      <!-- 审批操作按钮 - 使用通用组件 -->
+      <div class="approval-action-bar">
+        <ActionButtonCmp
+          v-if="currentApprovalBusinessId"
+          :business-type="BUSINESS_TYPE_KEY"
+          :business-id="currentApprovalBusinessId"
+          :actions="currentApprovalActions"
+          @success="handleApprovalActionSuccess"
+          @refresh="handleApprovalActionRefresh"
+        />
+        <span v-else class="no-action-tip">当前无可用审批操作</span>
+      </div>
+    </a-modal>
   </Page>
 </template>
+
+<style lang="scss" scoped>
+/* 审批详情弹窗底部操作栏 */
+.approval-action-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 24px;
+  background: white;
+  border-top: 1px solid var(--color-border, #d9d9d9);
+  z-index: 10;
+}
+
+.approval-action-btn {
+  min-width: 100px;
+  height: 36px;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+
+  &:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  }
+
+  :deep(.anticon) {
+    font-size: 14px;
+  }
+}
+
+.no-action-tip {
+  color: var(--color-text-quaternary, #bfbfbf);
+  font-size: 14px;
+}
+</style>

@@ -100,9 +100,9 @@ const [Grid, gridApi] = useVbenVxeGrid({
 
 <template>
   <Page auto-content-height>
-    <template #doc>
+    <!-- <template #doc>
       <DocAlert title="工作流手册" url="https://doc.iocoder.cn/bpm" />
-    </template>
+    </template> -->
 
     <Grid table-title="流程实例">
       <template #tasks="{ row }">
@@ -134,7 +134,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
               danger: true,
               icon: ACTION_ICON.DELETE,
               ifShow: row.status === BpmProcessInstanceStatus.RUNNING,
-              auth: ['bpm:process-instance:cancel'],
+              // auth: ['bpm:process-instance:cancel-by-admin'],
               onClick: handleCancel.bind(null, row),
             },
           ]"

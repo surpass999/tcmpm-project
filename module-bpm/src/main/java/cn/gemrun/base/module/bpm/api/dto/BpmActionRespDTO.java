@@ -45,6 +45,11 @@ public class BpmActionRespDTO {
     private String taskId;
 
     /**
+     * 流程实例ID（始终返回，用于前端加载流程进度）
+     */
+    private String processInstanceId;
+
+    /**
      * 动作参数（从 DSL action.vars 中读取，如专家数量、可修改字段等）
      */
     private Map<String, Object> vars;

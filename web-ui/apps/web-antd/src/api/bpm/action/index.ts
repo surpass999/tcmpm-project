@@ -17,6 +17,15 @@ export namespace BpmActionApi {
     bizStatusLabel?: string;
     /** BPM 操作类型 */
     bpmAction?: string;
+    /** DSL 变量配置 */
+    vars?: {
+      reason?: string;
+      reasonRequired?: boolean;
+      isReturned?: boolean;
+      isStartNode?: boolean;
+      backStrategy?: string;
+      [key: string]: any;
+    };
   }
 }
 
@@ -32,14 +41,14 @@ export function getBpmAction(key: string) {
 
 /** 获取当前用户对指定业务可执行的操作列表 */
 export function getAvailableActions(businessType: string, businessId: number) {
-  return requestClient.get<(BpmActionApi.BpmAction & { taskId?: string })[]>('/bpm/action/available', {
+  return requestClient.get<(BpmActionApi.BpmAction & { taskId?: string; processInstanceId?: string })[]>('/bpm/action/available', {
     params: { businessType, businessId },
   });
 }
 
 /** 批量获取当前用户对多个业务可执行的操作列表 */
 export function getAvailableActionsBatch(businessType: string, businessIds: number[]) {
-  return requestClient.get<(BpmActionApi.BpmAction & { taskId?: string })[]>(
+  return requestClient.get<(BpmActionApi.BpmAction & { taskId?: string; processInstanceId?: string })[]>(
     '/bpm/action/available-batch',
     { params: { businessType, businessIds: businessIds.join(',') } }
   );
@@ -57,6 +66,8 @@ export interface SubmitActionParams {
   reason?: string;
   /** 选择的专家用户ID列表（选择专家操作时使用） */
   expertUserIds?: number[];
+  /** 退回时的目标节点（退回操作时使用） */
+  targetNodeKey?: string;
 }
 
 /** 提交操作（完成任务，推进流程） */

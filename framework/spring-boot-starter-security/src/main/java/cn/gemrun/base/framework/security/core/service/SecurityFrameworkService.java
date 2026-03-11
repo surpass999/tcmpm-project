@@ -56,4 +56,11 @@ public interface SecurityFrameworkService {
      * @return 是否
      */
     boolean hasAnyScopes(String... scope);
+
+    /**
+     * 判断是否已认证（登录）
+     *
+     * @return 是否已认证
+     */
+    boolean isAuthenticated();
 }

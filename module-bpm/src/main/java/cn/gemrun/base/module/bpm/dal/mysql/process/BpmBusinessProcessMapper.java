@@ -81,11 +81,14 @@ public interface BpmBusinessProcessMapper extends BaseMapperX<BpmBusinessProcess
         if (businessTypes == null || businessTypes.isEmpty()) {
             return java.util.Collections.emptyList();
         }
-        // initiator_ids 格式：,1,2,3,  即逗号分隔，首尾有逗号
-        String likePattern = "%," + userId + ",%";
+        // 使用 FIND_IN_SET 精确匹配逗号分隔的 ID 列表，避免 like 匹配到 1433 的问题
+        // initiator_ids 格式：144,143 或 144,143,145
+        // 组合条件：initiator_id = userId OR FIND_IN_SET(userId, initiator_ids) > 0
         List<BpmBusinessProcessDO> processes = selectList(new QueryWrapperX<BpmBusinessProcessDO>()
                 .in("business_type", businessTypes)
-                .like("initiator_ids", likePattern)
+                .and(w -> w.eq("initiator_id", userId)
+                        .or()
+                        .apply("FIND_IN_SET(" + userId + ", initiator_ids) > 0"))
                 .eq("deleted", 0));
         return processes.stream()
                 .map(BpmBusinessProcessDO::getBusinessId)

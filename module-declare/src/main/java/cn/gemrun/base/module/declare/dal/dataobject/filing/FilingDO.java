@@ -54,9 +54,11 @@ public class FilingDO extends BaseDO {
      */
     private String constructionContent;
     /**
-     * 备案状态：0=草稿，1=已提交，2=省级审核通过，3=专家论证通过，4=已归档，5=退回修改
+     * 备案状态：对应流程 DSL bizStatus
+     * DRAFT=草稿，SUBMITTED=已提交，PROVINCE_APPROVED=省级审核通过，EXPERT_APPROVED=专家论证通过，
+     * NATION_APPROVED=国家局审核通过，ARCHIVED=已归档，RETURNED=退回修改
      */
-    private Integer filingStatus;
+    private String filingStatus;
     /**
      * 状态原因
      */

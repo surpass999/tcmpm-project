@@ -18,6 +18,7 @@ import org.springframework.stereotype.Component;
 import javax.annotation.Resource;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -89,54 +90,33 @@ public class BpmTaskCandidateDeptPostStrategy implements BpmTaskCandidateStrateg
             return Collections.emptySet();
         }
 
-        // 2. 获取上一节点的处理人（上一个已完成的任务）
-        Long previousUserId = getPreviousTaskAssignee(processInstanceId);
-        if (previousUserId == null) {
-            // 如果没有上一节点，说明是第一个用户任务，使用发起人
-            log.info("[BpmTaskCandidateDeptPostStrategy] 暂无上一节点，使用发起人作为起点");
-            return calculateUsersByStartUser(execution, postId);
+        // 2. 从流程变量中获取 level 参数（默认1）
+        Integer level = 1;
+        Map<String, Object> processVariables = execution.getVariables();
+        log.info("[BpmTaskCandidateDeptPostStrategy] 当前流程变量 keys: {}", processVariables.keySet());
+        if (processVariables.containsKey("PROCESS_DEPT_POST_LEVEL")) {
+            Object levelObj = processVariables.get("PROCESS_DEPT_POST_LEVEL");
+            if (levelObj instanceof Number) {
+                level = ((Number) levelObj).intValue();
+            }
+            log.info("[BpmTaskCandidateDeptPostStrategy] 从流程变量读取到 level: {}", level);
+        } else {
+            log.warn("[BpmTaskCandidateDeptPostStrategy] 未找到 PROCESS_DEPT_POST_LEVEL 变量，使用默认 level=1");
         }
 
-        log.info("[BpmTaskCandidateDeptPostStrategy] 上一节点处理人ID={}", previousUserId);
-
-        // 3. 获取上一节点处理人的部门
-        AdminUserRespDTO previousUser = adminUserApi.getUser(previousUserId);
-        if (previousUser == null || previousUser.getDeptId() == null) {
-            log.warn("[BpmTaskCandidateDeptPostStrategy] 未找到上一节点处理人的部门信息, userId={}", previousUserId);
-            return Collections.emptySet();
-        }
-
-        Long previousDeptId = previousUser.getDeptId();
-
-        // 4. 向上查找1级部门
-        Long targetDeptId = findParentDeptByLevel(previousDeptId, 1);
-        if (targetDeptId == null) {
-            log.warn("[BpmTaskCandidateDeptPostStrategy] 未找到1级上级部门, startDeptId={}", previousDeptId);
-            return Collections.emptySet();
-        }
-
-        log.info("[BpmTaskCandidateDeptPostStrategy] 上一节点部门={}, 1级上级部门={}, 岗位ID={}",
-                previousDeptId, targetDeptId, postId);
-
-        // 5. 获取岗位信息（通过ID查找）
-        PostRespDTO post = postApi.getPost(postId);
-        if (post == null) {
-            log.warn("[BpmTaskCandidateDeptPostStrategy] 岗位不存在, postId={}", postId);
-            return Collections.emptySet();
-        }
-
-        // 6. 查询目标部门下有该岗位的用户
-        List<AdminUserRespDTO> users = adminUserApi.getUserListByDeptIds(Collections.singletonList(targetDeptId));
-        return users.stream()
-                .filter(user -> user.getPostIds() != null && user.getPostIds().contains(post.getId()))
-                .map(AdminUserRespDTO::getId)
-                .collect(Collectors.toSet());
+        // 3. 始终基于发起人计算，不管上一节点是谁
+        // 这样可以确保省级用户提交后，专家审批后，仍然由省级用户审批
+        log.info("[BpmTaskCandidateDeptPostStrategy] 基于发起人计算部门层级, level={}", level);
+        return calculateUsersByStartUser(execution, postId, level);
     }
 
     /**
      * 基于发起人查找（用于第一个用户任务，没有上一节点的情况）
      */
-    private Set<Long> calculateUsersByStartUser(DelegateExecution execution, Long postId) {
+    private Set<Long> calculateUsersByStartUser(DelegateExecution execution, Long postId, Integer level) {
+        if (level == null) {
+            level = 1;
+        }
         Long startUserId = getStartUserId(execution);
         if (startUserId == null) {
             log.warn("[BpmTaskCandidateDeptPostStrategy] 未找到发起人ID");
@@ -151,15 +131,15 @@ public class BpmTaskCandidateDeptPostStrategy implements BpmTaskCandidateStrateg
 
         Long startDeptId = startUser.getDeptId();
 
-        // 向上查找1级部门
-        Long targetDeptId = findParentDeptByLevel(startDeptId, 1);
+        // 向上查找 level 级部门
+        Long targetDeptId = findParentDeptByLevel(startDeptId, level);
         if (targetDeptId == null) {
-            log.warn("[BpmTaskCandidateDeptPostStrategy] 未找到1级上级部门, startDeptId={}", startDeptId);
+            log.warn("[BpmTaskCandidateDeptPostStrategy] 未找到{}级上级部门, startDeptId={}", level, startDeptId);
             return Collections.emptySet();
         }
 
-        log.info("[BpmTaskCandidateDeptPostStrategy] 基于发起人: 发起人部门={}, 1级上级部门={}, 岗位ID={}",
-                startDeptId, targetDeptId, postId);
+        log.info("[BpmTaskCandidateDeptPostStrategy] 基于发起人: 发起人部门={}, {}级上级部门={}, 岗位ID={}",
+                startDeptId, level, targetDeptId, postId);
 
         PostRespDTO post = postApi.getPost(postId);
         if (post == null) {
@@ -167,11 +147,28 @@ public class BpmTaskCandidateDeptPostStrategy implements BpmTaskCandidateStrateg
             return Collections.emptySet();
         }
 
+        // 查询目标部门下的所有用户
         List<AdminUserRespDTO> users = adminUserApi.getUserListByDeptIds(Collections.singletonList(targetDeptId));
-        return users.stream()
-                .filter(user -> user.getPostIds() != null && user.getPostIds().contains(post.getId()))
+        log.info("[BpmTaskCandidateDeptPostStrategy] 目标部门 {} 下的用户数量: {}, 用户IDs: {}",
+                targetDeptId, users.size(), users.stream().map(AdminUserRespDTO::getId).collect(Collectors.toList()));
+
+        // 过滤出拥有指定岗位的用户
+        Set<Long> result = users.stream()
+                .filter(user -> {
+                    if (user.getPostIds() == null || user.getPostIds().isEmpty()) {
+                        log.info("[BpmTaskCandidateDeptPostStrategy] 用户 {} 无岗位信息, postIds={}", user.getId(), user.getPostIds());
+                        return false;
+                    }
+                    boolean hasPost = user.getPostIds().contains(post.getId());
+                    log.info("[BpmTaskCandidateDeptPostStrategy] 用户 {} 的岗位 {} 是否包含岗位 {}: {}",
+                            user.getId(), user.getPostIds(), post.getId(), hasPost);
+                    return hasPost;
+                })
                 .map(AdminUserRespDTO::getId)
                 .collect(Collectors.toSet());
+
+        log.info("[BpmTaskCandidateDeptPostStrategy] 最终候选人数量: {}, 用户IDs: {}", result.size(), result);
+        return result;
     }
 
     /**

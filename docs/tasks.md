@@ -61,34 +61,109 @@
   - 任务分配下拉选择
   - 岗位列表联动
 
+### 8. DSL 流程引擎核心实现 ✅ (新增)
+- [x] DSL 配置解析 (DslConfig)
+- [x] 节点能力处理器 (DslCapHandler)
+  - AUDIT（审批）、COUNTERSIGN（会签）、FILL（填报）、EXPERT_SELECT（选择专家）等
+- [x] UI 处理器 (DslUiHandler)
+  - 根据 cap 动态渲染表单
+- [x] 退回策略处理器 (DslBackStrategyHandler)
+- [x] 重新提交策略处理器 (DslReSubmitStrategyHandler)
+- [x] 下一节点预测器 (DslNextNodePredictor)
+- [x] 审批详情构建器 (DslApprovalDetailBuilder)
+
+### 9. 流程审批功能 ✅ (新增)
+- [x] 审批操作接口 (BpmActionController)
+  - 提交 (submit)
+  - 通过 (agree)
+  - 拒绝 (reject)
+  - 退回 (back)
+  - 撤回 (cancel/withdraw)
+  - 选择专家 (selectExpert)
+  - 转办/委派 (transfer/delegate)
+- [x] 流程实例服务 (BpmProcessInstanceServiceImpl)
+- [x] 流程任务处理
+
+### 10. 专家管理模块 ✅ (新增)
+- [x] 专家信息管理 (ExpertController/ExpertService)
+- [x] 专家分页查询
+- [x] 专家新增/编辑/删除
+- [x] 专家 API 暴露
+
+### 11. 备案状态监听器 ✅ (新增)
+- [x] DeclareFilingStatusListener
+- [x] 流程状态变更时自动更新业务状态
+
 ---
 
 ## 二、开发中 🔄
 
-### 8. 备案列表动态按钮
-- [ ] 后端：备案列表返回 currentNodeKey
-- [ ] 前端：根据 DSL 配置动态显示按钮
+### 12. 备案列表动态按钮
+- [x] 后端：备案列表返回 currentNodeKey
+- [x] 前端：根据 DSL 配置动态显示按钮（部分完成）
 - [ ] 流程节点更新：任务流转时更新 currentNodeKey
+
+### 13. 流程待办任务列表
+- [x] 待办任务列表 API
+- [ ] 前端待办任务页面
+- [ ] 任务签收/处理
+- [ ] 流程审批表单
+
+### 14. 流程历史
+- [ ] 已办任务列表
+- [ ] 流程轨迹查看
 
 ---
 
 ## 三、待开发 📋
 
-### 9. 字典数据维护
-- [ ] 完善字典数据
-  - 项目类型 (declare_project_type)
-  - 指标分类 (declare_indicator_category)
-  - 值类型 (declare_indicator_value_type)
-  - 备案状态 (declare_filing_status)
+### 15. 项目管理模块
+- [ ] 项目列表页
+- [ ] 项目详情页
+- [ ] 建设过程填报
+- [ ] 年度总结
+- [ ] 中期评估
+- [ ] 整改记录
+- [ ] 验收申请
 
-### 10. 流程待办任务
-- [ ] 待办任务列表
-- [ ] 任务签收/处理
-- [ ] 流程审批表单
+### 16. 成果管理模块
+- [ ] 成果列表
+- [ ] 成果编辑
+- [ ] 成果详情
+- [ ] 成果统计
 
-### 11. 流程历史
-- [ ] 已办任务列表
-- [ ] 流程轨迹查看
+### 17. 审核管理模块
+- [ ] 备案审核（省局/国家局）
+- [ ] 项目监管
+- [ ] 成果审核
+
+### 18. 评审管理模块
+- [ ] 评审任务列表
+- [ ] 评审页面（材料查阅、评分、意见）
+- [ ] 成果评审
+
+### 19. 专家评审模块
+- [ ] 评审任务
+- [ ] 评审页面
+- [ ] 成果评审
+
+### 20. 系统管理模块
+- [ ] 用户管理
+- [ ] 角色权限
+- [ ] 流程配置
+- [ ] 专家库管理
+- [ ] 系统监控
+- [ ] 数据治理
+
+### 21. 通知公告模块
+- [ ] 通知列表
+- [ ] 通知详情
+- [ ] 通知发布
+
+### 22. 成果与推广模块
+- [ ] 推广成果列表
+- [ ] 成果详情
+- [ ] 工具包下载
 
 ---
 
@@ -98,37 +173,68 @@
 ```
 module-declare/
 ├── api/                      # 暴露给其他模块的接口
+│   ├── ExpertApi.java        # 专家 API
 ├── controller/admin/         # 管理后台接口
 │   ├── indicator/            # 指标管理
-│   └── filing/               # 备案管理
+│   ├── filing/               # 备案管理
+│   └── expert/               # 专家管理
 ├── dal/
 │   ├── dataobject/           # 实体类
 │   │   ├── filing/           # 备案相关
 │   │   ├── indicator/       # 指标相关
-│   │   └── process/          # 流程相关
+│   │   ├── process/          # 流程相关
+│   │   └── expert/           # 专家相关
 │   └── mysql/                # Mapper
 ├── service/                  # 业务逻辑
+│   ├── filing/              # 备案服务
+│   ├── indicator/           # 指标服务
+│   └── expert/              # 专家服务
 ├── framework/                # 框架扩展
 │   ├── process/              # 流程处理
 │   │   ├── aspect/           # AOP 切面
 │   │   ├── annotation/       # 注解
 │   │   └── service/         # 流程服务
-│   └── datapermission/       # 数据权限
+│   ├── datapermission/       # 数据权限
+│   └── listener/            # 监听器
 ├── convert/                  # 对象转换
 └── enums/                    # 枚举定义
 ```
 
-### BPM 模块扩展
+### BPM DSL 模块扩展
 ```
 module-bpm/
-├── framework/flowable/core/
-│   ├── candidate/
-│   │   ├── strategy/
-│   │   │   └── dept/
-│   │   │       └── BpmTaskCandidateDeptPostStrategy.java  # DEPT_POST 策略
-│   │   └── invoker/
-│   └── dsl/
-│       └── config/           # DSL 配置相关
+├── framework/
+│   ├── flowable/core/
+│   │   ├── candidate/        # 任务候选人策略
+│   │   │   ├── strategy/
+│   │   │   │   └── dept/
+│   │   │   │       └── BpmTaskCandidateDeptPostStrategy.java  # DEPT_POST 策略
+│   │   │   └── invoker/
+│   │   └── dsl/
+│   │       ├── config/       # DSL 配置
+│   │       │   └── DslConfig.java
+│   │       ├── handler/      # DSL 处理器
+│   │       │   ├── DslCapHandler.java          # 节点能力处理
+│   │       │   ├── DslUiHandler.java            # UI 处理
+│   │       │   ├── DslBackStrategyHandler.java # 退回策略处理
+│   │       │   └── DslReSubmitStrategyHandler.java # 重新提交策略
+│   │       ├── predictor/
+│   │       │   └── DslNextNodePredictor.java   # 下一节点预测
+│   │       └── builder/
+│   │           └── DslApprovalDetailBuilder.java # 审批详情构建
+│   └── process/
+│       ├── service/
+│       │   ├── BpmProcessService.java
+│       │   └── impl/
+│       └── listener/
+├── controller/admin/
+│   ├── action/              # 审批操作
+│   │   └── BpmActionController.java
+│   └── task/                # 任务管理
+│       └── BpmProcessInstanceController.java
+└── api/
+    ├── task/                # 任务 API
+    └── event/               # 事件
 ```
 
 ### 前端页面
@@ -145,21 +251,27 @@ web-ui/apps/web-antd/src/views/declare/
 │   ├── index.vue
 │   ├── components/RuleConfig.vue
 │   └── modules/form.vue
-└── filing/                   # 备案管理
-    ├── index.vue             # 列表页
-    └── modules/form.vue      # 两步表单
+├── filing/                   # 备案管理
+│   ├── index.vue             # 列表页
+│   └── modules/form.vue      # 两步表单
+└── expert/                   # 专家管理（新增）
+    ├── index.vue
+    └── modules/form.vue
 ```
 
 ---
 
 ## 五、开发优先级
 
-| 优先级 | 模块 | 描述 |
-|--------|------|------|
-| P0 | 备案动态按钮 | 根据 DSL 配置显示操作按钮 |
-| P1 | 流程待办任务 | 任务签收、处理、审批 |
-| P2 | 流程历史 | 已办任务、流程轨迹 |
-| P3 | 字典维护 | 完善字典数据 |
+| 优先级 | 模块 | 描述 | 状态 |
+|--------|------|------|------|
+| P0 | 流程待办任务 | 任务签收、处理、审批 | 🔄 开发中 |
+| P1 | 备案列表动态按钮 | 根据 DSL 配置显示操作按钮 | 🔄 开发中 |
+| P2 | 流程历史 | 已办任务、流程轨迹 | 📋 待开发 |
+| P3 | 项目管理 | 项目全生命周期管理 | 📋 待开发 |
+| P3 | 成果管理 | 成果登记与转化 | 📋 待开发 |
+| P4 | 审核管理 | 省局/国家局审核 | 📋 待开发 |
+| P4 | 专家评审 | 评审任务与评分 | 📋 待开发 |
 
 ---
 
@@ -174,10 +286,8 @@ web-ui/apps/web-antd/src/views/declare/
 | declare_filing | 备案信息 | ✅ 完成 |
 | bpm_business_type | 业务类型 | ✅ 完成 |
 | declare_business_process | 业务流程 | ✅ 完成 |
-| declare_project_type | 项目类型 | 📋 待完善 |
-| declare_indicator_category | 指标分类 | 📋 待完善 |
-| declare_indicator_value_type | 值类型 | 📋 待完善 |
-| declare_filing_status | 备案状态 | 📋 待完善 |
+| declare_expert | 专家信息 | ✅ 完成 |
+| system_dict_data | 字典数据 | ✅ 完成 |
 
 ---
 
@@ -186,12 +296,12 @@ web-ui/apps/web-antd/src/views/declare/
 | 策略 | 说明 | 状态 |
 |------|------|------|
 | DEPT_POST | 上级部门+岗位 | ✅ 完成 |
-| DEPT_LEADER | 部门负责人 | ✅ 已有 |
-| START_USER | 发起人本人 | ✅ 已有 |
-| START_USER_SELECT | 发起人自选 | ✅ 已有 |
-| USER | 指定用户 | ✅ 已有 |
-| USER_GROUP | 用户组 | ✅ 已有 |
-| EXPRESSION | 流程表达式 | ✅ 已有 |
+| DEPT_LEADER | 部门负责人 | ✅ 完成 |
+| START_USER | 发起人本人 | ✅ 完成 |
+| START_USER_SELECT | 发起人自选 | ✅ 完成 |
+| USER | 指定用户 | ✅ 完成 |
+| USER_GROUP | 用户组 | ✅ 完成 |
+| EXPRESSION | 流程表达式 | ✅ 完成 |
 
 ---
 

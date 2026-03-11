@@ -128,9 +128,111 @@ public class BpmTaskCandidateInvoker {
             // 1.1 计算任务的候选人
             Integer strategy = BpmnModelUtils.parseCandidateStrategy(flowElement);
             String param = BpmnModelUtils.parseCandidateParam(flowElement);
+            String currentActivityId = execution.getCurrentActivityId();
+            log.info("[calculateUsersByTask] 开始计算候选人: nodeKey={}, strategy={}, param={}", currentActivityId, strategy, param);
             Set<Long> userIds;
-            if (strategy != null) {
+
+            // 优先检查 DSL assign 配置，如果存在则使用 DSL 配置覆盖传统策略
+            // 这样可以支持 DSL 中的 level 参数覆盖 BPMN XML 中的 candidateParam
+            boolean useDslAssign = false;
+            String dslAssignType = null;
+            String dslAssignSource = null;
+            Integer dslAssignLevel = null;
+            try {
+                // 从已部署流程定义的 BPMN XML 获取 DSL 配置（比从 Flowable 扩展元素解析更稳定）
+                ProcessInstance processInstance = SpringUtil.getBean(BpmProcessInstanceService.class)
+                        .getProcessInstance(execution.getProcessInstanceId());
+                if (processInstance != null) {
+                    cn.gemrun.base.module.bpm.service.definition.BpmModelService modelService =
+                            SpringUtil.getBean(cn.gemrun.base.module.bpm.service.definition.BpmModelService.class);
+                    String bpmnXml = modelService.getBpmnXmlByDefinitionId(processInstance.getProcessDefinitionId());
+                    if (StrUtil.isNotBlank(bpmnXml)) {
+                        String dslConfig = BpmnModelUtils.parseDslConfigFromXml(bpmnXml, currentActivityId);
+                        if (StrUtil.isNotBlank(dslConfig)) {
+                            log.info("[calculateUsersByTask] 从已部署流程定义获取 DSL: nodeKey={}, dslConfig={}",
+                                    currentActivityId, dslConfig.substring(0, Math.min(100, dslConfig.length())));
+                            JSONObject dslJson = JSONUtil.parseObj(dslConfig);
+                            JSONObject assignJson = dslJson.getJSONObject("assign");
+                            if (assignJson != null) {
+                                dslAssignType = assignJson.getStr("type");
+                                dslAssignSource = assignJson.getStr("source");
+                                dslAssignLevel = assignJson.getInt("level");
+                                if (StrUtil.isNotBlank(dslAssignType)) {
+                                    useDslAssign = true;
+                                    log.info("[calculateUsersByTask] 检测到 DSL assign 配置: type={}, source={}, level={}",
+                                            dslAssignType, dslAssignSource, dslAssignLevel);
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("[calculateUsersByTask] 解析 DSL assign 配置失败: {}", e.getMessage());
+            }
+
+            // 增加详细日志排查问题
+            log.info("[calculateUsersByTask] DSL assign 解析结果: useDslAssign={}, dslAssignType={}, dslAssignSource={}, dslAssignLevel={}, strategy={}",
+                    useDslAssign, dslAssignType, dslAssignSource, dslAssignLevel, strategy);
+
+            if (useDslAssign && "DEPT_POST".equals(dslAssignType)) {
+                // 使用 DSL assign 中的 DEPT_POST 配置
+                // 将 level 设置到流程变量中，供策略使用
+                if (dslAssignLevel != null && dslAssignLevel > 0) {
+                    execution.setVariable("PROCESS_DEPT_POST_LEVEL", dslAssignLevel);
+                    log.info("[calculateUsersByTask] DSL assign 覆盖 level={}", dslAssignLevel);
+                } else {
+                    log.warn("[calculateUsersByTask] DSL assign level 无效: dslAssignLevel={}", dslAssignLevel);
+                }
+                // 使用 DSL source 作为参数
+                BpmTaskCandidateStrategy deptPostStrategy = strategyMap.get(BpmTaskCandidateStrategyEnum.DEPT_POST);
+                if (deptPostStrategy != null) {
+                    userIds = deptPostStrategy.calculateUsersByTask(execution, dslAssignSource);
+                } else {
+                    userIds = new HashSet<>();
+                }
+            } else if (strategy != null) {
                 userIds = getCandidateStrategy(strategy).calculateUsersByTask(execution, param);
+                // 当传统策略是 USER(30) 但 param 为空时，fallback 到 DSL assign 或流程变量
+                if (strategy == 30 && (userIds == null || userIds.isEmpty()) && StrUtil.isBlank(param)) {
+                    log.info("[calculateUsersByTask] 传统策略USER(30)参数为空，fallback到DSL assign");
+                    // 优先从流程变量获取（省局用户选择专家的场景），因为 DSL 可能解析不完整
+                    // 只有当当前节点在流程变量中有对应的专家用户时，才从流程变量读取
+                    Map<String, Object> processVariables = execution.getVariables();
+                    if (processVariables.containsKey("PROCESS_APPROVE_USER_SELECT_ASSIGNEES")) {
+                        Object approveUserSelectAssignees = processVariables.get("PROCESS_APPROVE_USER_SELECT_ASSIGNEES");
+                        if (approveUserSelectAssignees instanceof Map) {
+                            @SuppressWarnings("unchecked")
+                            Map<String, List<Long>> expertMap = (Map<String, List<Long>>) approveUserSelectAssignees;
+                            // 只从流程变量中获取当前节点的专家用户
+                            List<Long> expertIds = currentActivityId != null ? expertMap.get(currentActivityId) : null;
+                            if (expertIds == null || expertIds.isEmpty()) {
+                                log.info("[calculateUsersByTask] 当前节点 {} 不在流程变量中或无专家用户，使用其他方式计算", currentActivityId);
+                            } else {
+                                log.info("[calculateUsersByTask] 从流程变量获取专家用户: nodeKey={}, expertIds={}", currentActivityId, expertIds);
+                                userIds = new HashSet<>(expertIds);
+                            }
+                        }
+                    }
+                    // 如果流程变量中没有，尝试从 DSL 获取
+                    if (CollUtil.isEmpty(userIds)) {
+                        try {
+                            // 尝试从已部署流程定义获取完整的 DSL
+                            ProcessInstance processInstance = SpringUtil.getBean(BpmProcessInstanceService.class)
+                                    .getProcessInstance(execution.getProcessInstanceId());
+                            if (processInstance != null) {
+                                cn.gemrun.base.module.bpm.service.definition.BpmModelService modelService =
+                                        SpringUtil.getBean(cn.gemrun.base.module.bpm.service.definition.BpmModelService.class);
+                                String bpmnXml = modelService.getBpmnXmlByDefinitionId(processInstance.getProcessDefinitionId());
+                                if (StrUtil.isNotBlank(bpmnXml)) {
+                                    String dslConfig = BpmnModelUtils.parseDslConfigFromXml(bpmnXml, currentActivityId);
+                                    userIds = calculateUsersByDslAssign(execution, dslConfig);
+                                }
+                            }
+                        } catch (Exception e) {
+                            log.warn("[calculateUsersByTask] 从DSL获取候选人失败: {}", e.getMessage());
+                        }
+                    }
+                }
             } else {
                 // 传统策略未配置时，尝试 DSL assign
                 String dslConfig = BpmnModelUtils.parseDslConfig(flowElement);
@@ -282,11 +384,61 @@ public class BpmTaskCandidateInvoker {
                 Integer level = assignJson.getInt("level", 1);
                 log.info("[calculateUsersByDslAssign] DEPT_POST source={}, level={}", source, level);
 
+                // 将 level 设置到流程变量中，供策略使用
+                if (level != null && level > 0) {
+                    execution.setVariable("PROCESS_DEPT_POST_LEVEL", level);
+                }
+
                 if (StrUtil.isNotBlank(source)) {
                     BpmTaskCandidateStrategy strategy = strategyMap.get(BpmTaskCandidateStrategyEnum.DEPT_POST);
                     if (strategy != null) {
                         // source 作为参数传递
                         return strategy.calculateUsersByTask(execution, source);
+                    }
+                }
+            } else if ("USER".equals(type)) {
+                // USER: 指定用户（可以是发起时配置的固定用户，也可以是选择专家后的动态用户）
+                String source = assignJson.getStr("source");
+                if (StrUtil.isBlank(source)) {
+                    // source 为空时，尝试从流程变量中获取选择的专家用户（省局用户选择专家的场景）
+                    Map<String, Object> processVariables = execution.getVariables();
+                    if (processVariables.containsKey("PROCESS_APPROVE_USER_SELECT_ASSIGNEES")) {
+                        Object approveUserSelectAssignees = processVariables.get("PROCESS_APPROVE_USER_SELECT_ASSIGNEES");
+                        if (approveUserSelectAssignees instanceof Map) {
+                            @SuppressWarnings("unchecked")
+                            Map<String, List<Long>> expertMap = (Map<String, List<Long>>) approveUserSelectAssignees;
+                            // 获取当前节点对应的专家用户ID
+                            String currentNodeKey = execution.getCurrentFlowElement() != null
+                                    ? execution.getCurrentFlowElement().getId()
+                                    : null;
+                            List<Long> expertIds = currentNodeKey != null ? expertMap.get(currentNodeKey) : null;
+                            if (expertIds == null) {
+                                // 如果找不到当前节点的，取第一个
+                                for (List<Long> ids : expertMap.values()) {
+                                    if (ids != null && !ids.isEmpty()) {
+                                        expertIds = ids;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (expertIds != null && !expertIds.isEmpty()) {
+                                log.info("[calculateUsersByDslAssign] USER类型从流程变量获取专家用户: nodeKey={}, expertIds={}",
+                                        currentNodeKey, expertIds);
+                                return new HashSet<>(expertIds);
+                            }
+                        }
+                    }
+                    log.info("[calculateUsersByDslAssign] USER类型source为空且流程变量中无专家用户");
+                } else {
+                    // source 非空时，直接使用配置的用户ID
+                    try {
+                        Set<Long> userIds = new HashSet<>();
+                        for (String userIdStr : source.split(",")) {
+                            userIds.add(Long.parseLong(userIdStr.trim()));
+                        }
+                        return userIds;
+                    } catch (NumberFormatException e) {
+                        log.warn("[calculateUsersByDslAssign] USER类型source解析失败: {}", source);
                     }
                 }
             } else {

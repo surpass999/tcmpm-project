@@ -89,7 +89,7 @@ export function useFormSchema(): VbenFormSchema[] {
       rules: 'required',
       component: 'Select',
       componentProps: {
-        options: getDictOptions(DICT_TYPE.DECLARE_FILING_STATUS, 'number'),
+        options: getDictOptions(DICT_TYPE.DECLARE_FILING_STATUS, 'string'),
         buttonStyle: 'solid',
         optionType: 'button',
       },
@@ -222,7 +222,7 @@ export function useGridFormSchema(): VbenFormSchema[] {
       component: 'Select',
       componentProps: {
         allowClear: true,
-        options: getDictOptions(DICT_TYPE.DECLARE_FILING_STATUS, 'number'),
+        options: getDictOptions(DICT_TYPE.DECLARE_FILING_STATUS, 'string'),
         placeholder: '请选择备案状态',
       },
     },

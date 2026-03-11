@@ -1001,30 +1001,38 @@ public class BpmProcessInstanceServiceImpl implements BpmProcessInstanceService 
             });
         }
 
-        // 2. 发送对应的消息通知
-        if (Objects.equals(status, BpmProcessInstanceStatusEnum.APPROVE.getStatus())) {
-            messageService.sendMessageWhenProcessInstanceApprove(
-                    BpmProcessInstanceConvert.INSTANCE.buildProcessInstanceApproveMessage(instance));
-        } else if (Objects.equals(status, BpmProcessInstanceStatusEnum.REJECT.getStatus())) {
-            messageService.sendMessageWhenProcessInstanceReject(
-                    BpmProcessInstanceConvert.INSTANCE.buildProcessInstanceRejectMessage(instance, reason));
+        // 2. 发送对应的消息通知（捕获异常，避免短信发送失败影响流程审批）
+        try {
+            if (Objects.equals(status, BpmProcessInstanceStatusEnum.APPROVE.getStatus())) {
+                messageService.sendMessageWhenProcessInstanceApprove(
+                        BpmProcessInstanceConvert.INSTANCE.buildProcessInstanceApproveMessage(instance));
+            } else if (Objects.equals(status, BpmProcessInstanceStatusEnum.REJECT.getStatus())) {
+                messageService.sendMessageWhenProcessInstanceReject(
+                        BpmProcessInstanceConvert.INSTANCE.buildProcessInstanceRejectMessage(instance, reason));
+            }
+        } catch (Exception e) {
+            log.warn("[processProcessInstanceCompleted] 发送消息通知失败，不影响流程审批: {}", e.getMessage());
         }
 
         // 3. 发送流程实例的状态事件
         processInstanceEventPublisher.sendProcessInstanceResultEvent(
                 BpmProcessInstanceConvert.INSTANCE.buildProcessInstanceStatusEvent(this, instance, status, reason));
 
-        // 4. 流程后置通知
-        if (Objects.equals(status, BpmProcessInstanceStatusEnum.APPROVE.getStatus())) {
-            BpmProcessDefinitionInfoDO processDefinitionInfo = processDefinitionService.
-                    getProcessDefinitionInfo(instance.getProcessDefinitionId());
-            if (ObjUtil.isNotNull(processDefinitionInfo) &&
-                    ObjUtil.isNotNull(processDefinitionInfo.getProcessAfterTriggerSetting())) {
-                BpmModelMetaInfoVO.HttpRequestSetting setting = processDefinitionInfo.getProcessAfterTriggerSetting();
+        // 4. 流程后置通知（捕获异常，避免通知失败影响流程审批）
+        try {
+            if (Objects.equals(status, BpmProcessInstanceStatusEnum.APPROVE.getStatus())) {
+                BpmProcessDefinitionInfoDO processDefinitionInfo = processDefinitionService.
+                        getProcessDefinitionInfo(instance.getProcessDefinitionId());
+                if (ObjUtil.isNotNull(processDefinitionInfo) &&
+                        ObjUtil.isNotNull(processDefinitionInfo.getProcessAfterTriggerSetting())) {
+                    BpmModelMetaInfoVO.HttpRequestSetting setting = processDefinitionInfo.getProcessAfterTriggerSetting();
 
-                BpmHttpRequestUtils.executeBpmHttpRequest(instance,
-                        setting.getUrl(), setting.getHeader(), setting.getBody(), true, setting.getResponse());
+                    BpmHttpRequestUtils.executeBpmHttpRequest(instance,
+                            setting.getUrl(), setting.getHeader(), setting.getBody(), true, setting.getResponse());
+                }
             }
+        } catch (Exception e) {
+            log.warn("[processProcessInstanceCompleted] 执行流程后置通知失败，不影响流程审批: {}", e.getMessage());
         }
     }
 

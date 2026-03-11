@@ -71,11 +71,17 @@ public class DslApprovalDetailBuilder {
         }
 
         // 2. 构建节点状态映射
+        // 使用 taskDefinitionKey 作为分组 key，与 DSL 节点 key 匹配
         Map<String, List<BpmApprovalDetailRespVO.ActivityNodeTask>> taskMap = historicTasks.stream()
                 .collect(Collectors.groupingBy(task -> {
-                    // 优先使用任务定义key，否则使用流程定义key
-                    return task.getId() != null ? task.getId() : processDefinitionId;
+                    // 使用任务定义 key（与 DSL nodeKey 匹配）
+                    return task.getTaskDefinitionKey();
                 }));
+
+        log.info("[DslApprovalDetailBuilder] 历史任务映射: processInstanceId={}, taskMap={}", processInstanceId, taskMap.keySet());
+        for (Map.Entry<String, List<BpmApprovalDetailRespVO.ActivityNodeTask>> entry : taskMap.entrySet()) {
+            log.info("[DslApprovalDetailBuilder] 节点任务: nodeKey={}, tasks={}", entry.getKey(), entry.getValue());
+        }
 
         // 3. 构建 ActivityNode 列表
         List<BpmApprovalDetailRespVO.ActivityNode> activityNodes = new ArrayList<>();
@@ -110,6 +116,9 @@ public class DslApprovalDetailBuilder {
                                 .map(BpmApprovalDetailRespVO.ActivityNodeTask::getEndTime)
                                 .reduce((a, b) -> b)
                                 .orElse(null));
+                    } else {
+                        // 部分完成（进行中）
+                        activityNode.setStatus(1);
                     }
                 }
             } else {

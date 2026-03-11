@@ -212,15 +212,15 @@ public class FilingServiceImpl implements FilingService {
     // ========== 流程相关方法已移至 BpmProcess AOP 自动处理 ==========
 
     @Override
-    public void updateFilingStatus(Long id, Integer status) {
+    public void updateFilingStatus(Long id, String bizStatus) {
         FilingDO filing = filingMapper.selectById(id);
         if (filing == null) {
             log.warn("[updateFilingStatus] 备案不存在: id={}", id);
             return;
         }
-        filing.setFilingStatus(status);
+        filing.setFilingStatus(bizStatus);
         filingMapper.updateById(filing);
-        log.info("[updateFilingStatus] 更新备案状态: id={}, filingStatus={}", id, status);
+        log.info("[updateFilingStatus] 更新备案状态: id={}, filingStatus={}", id, bizStatus);
     }
 
 }

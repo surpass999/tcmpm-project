@@ -7,6 +7,7 @@ import cn.gemrun.base.module.bpm.framework.flowable.core.candidate.BpmTaskCandid
 import cn.gemrun.base.module.bpm.framework.flowable.core.util.BpmnModelUtils;
 import cn.gemrun.base.module.bpm.framework.flowable.core.util.FlowableUtils;
 import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
 import org.flowable.bpmn.model.*;
 import org.flowable.engine.delegate.DelegateExecution;
 import org.flowable.engine.impl.bpmn.behavior.AbstractBpmnActivityBehavior;
@@ -23,6 +24,7 @@ import java.util.Set;
  *
  * @author 芋道源码
  */
+@Slf4j
 @Setter
 public class BpmSequentialMultiInstanceBehavior extends SequentialMultiInstanceBehavior {
 
@@ -36,6 +38,58 @@ public class BpmSequentialMultiInstanceBehavior extends SequentialMultiInstanceB
         super.collectionVariable = FlowableUtils.formatExecutionCollectionVariable(activity.getId());
         // 从 execution.getVariable() 读取当前所有任务处理的人的 key
         super.collectionElementVariable = FlowableUtils.formatExecutionCollectionElementVariable(activity.getId());
+
+        // 处理会签规则的 completionCondition
+        processSignRuleCompletionCondition(activity);
+    }
+
+    /**
+     * 处理会签规则的 completionCondition
+     * 根据 DSL 中的 signRule 动态设置多实例完成条件
+     */
+    private void processSignRuleCompletionCondition(Activity activity) {
+        try {
+            // 获取 Activity 中的 FlowElement（UserTask）
+            if (!(activity instanceof UserTask)) {
+                return;
+            }
+            UserTask userTask = (UserTask) activity;
+
+            // 解析 DSL 中的 signRule
+            String signRule = BpmnModelUtils.parseSignRule(userTask);
+            if (signRule == null) {
+                log.debug("[processSignRuleCompletionCondition] 节点 {} 未配置 signRule，跳过", userTask.getId());
+                return;
+            }
+
+            // 根据 signRule 生成 completionCondition
+            String completionCondition = BpmnModelUtils.buildSignRuleCompletionCondition(signRule);
+            if (completionCondition == null) {
+                log.debug("[processSignRuleCompletionCondition] 节点 {} signRule={} 无对应规则，跳过",
+                        userTask.getId(), signRule);
+                return;
+            }
+
+            // 获取或创建多实例配置
+            MultiInstanceLoopCharacteristics loopCharacteristics = userTask.getLoopCharacteristics();
+            if (loopCharacteristics == null) {
+                // 如果没有多实例配置，创建一个（专家会签场景）
+                loopCharacteristics = new MultiInstanceLoopCharacteristics();
+                loopCharacteristics.setInputDataItem("${coll_userList}");
+                loopCharacteristics.setSequential(true); // 串行
+                loopCharacteristics.setLoopCardinality("1");
+                userTask.setLoopCharacteristics(loopCharacteristics);
+                log.info("[processSignRuleCompletionCondition] 节点 {} 创建新的串行多实例配置", userTask.getId());
+            }
+
+            // 设置完成条件
+            loopCharacteristics.setCompletionCondition(completionCondition);
+            log.info("[processSignRuleCompletionCondition] 节点 {} 设置会签规则: signRule={}, completionCondition={}",
+                    userTask.getId(), signRule, completionCondition);
+
+        } catch (Exception e) {
+            log.warn("[processSignRuleCompletionCondition] 处理会签规则失败: {}", e.getMessage());
+        }
     }
 
     /**

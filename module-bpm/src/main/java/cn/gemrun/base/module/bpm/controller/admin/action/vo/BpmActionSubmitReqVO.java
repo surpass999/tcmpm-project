@@ -29,4 +29,7 @@ public class BpmActionSubmitReqVO {
     @Schema(description = "选择的专家用户ID列表（选择专家操作时使用）", example = "[1, 2, 3]")
     private List<Long> expertUserIds;
 
+    @Schema(description = "退回时的目标节点（退回操作时使用，backStrategy为TO_ANY时必填）")
+    private String targetNodeKey;
+
 }

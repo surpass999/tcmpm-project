@@ -4,6 +4,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/bpm',
     name: 'bpm',
+    redirect: '/bpm/process-instance/manager',
     meta: {
       title: '工作流',
       hideInMenu: true,

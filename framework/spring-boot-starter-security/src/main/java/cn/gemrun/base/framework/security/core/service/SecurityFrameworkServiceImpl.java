@@ -81,4 +81,15 @@ public class SecurityFrameworkServiceImpl implements SecurityFrameworkService {
         return CollUtil.containsAny(user.getScopes(), Arrays.asList(scope));
     }
 
+    @Override
+    public boolean isAuthenticated() {
+        // 特殊：跨租户访问
+        if (skipPermissionCheck()) {
+            return true;
+        }
+
+        // 判断是否已登录
+        return getLoginUserId() != null;
+    }
+
 }

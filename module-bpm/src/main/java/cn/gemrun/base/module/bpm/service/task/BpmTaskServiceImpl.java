@@ -618,7 +618,19 @@ public class BpmTaskServiceImpl implements BpmTaskService {
             runtimeService.setVariable(task.getProcessInstanceId(), BpmnVariableConstants.PROCESS_INSTANCE_VARIABLE_NEED_SIMULATE_TASK_IDS, needSimulateTaskIdsByReturn);
         }
 
-        // 6. 调用 BPM complete 去完成任务
+        // 6. 【抢签模式】如果是候选人但任务没有处理人，自动签收
+        if (StrUtil.isBlank(task.getAssignee()) && userId != null) {
+            List<org.flowable.identitylink.api.IdentityLink> identityLinks = taskService.getIdentityLinksForTask(task.getId());
+            boolean isCandidate = identityLinks.stream()
+                    .anyMatch(il -> "candidate".equals(il.getType())
+                            && userId.toString().equals(il.getUserId()));
+            if (isCandidate) {
+                log.info("[approveTask][抢签模式] 用户 {} 自动签收任务 {}", userId, task.getId());
+                taskService.claim(task.getId(), userId.toString());
+            }
+        }
+
+        // 7. 调用 BPM complete 去完成任务
         taskService.complete(task.getId(), variables, true);
 
         // 【加签专属】处理加签任务
@@ -1383,6 +1395,13 @@ public class BpmTaskServiceImpl implements BpmTaskService {
                 if (ObjectUtil.equal(approveType, BpmUserTaskApproveTypeEnum.USER.getType())) {
                     // 如果有审批人、或者拥有人，则说明不满足情况一，不自动通过、不自动拒绝
                     if (!ObjectUtil.isAllEmpty(task.getAssignee(), task.getOwner())) {
+                        return;
+                    }
+                    // 抢签模式：仅设置了候选人、未设置处理人，不应视为“审批人为空”，不自动通过
+                    List<org.flowable.identitylink.api.IdentityLink> identityLinks = taskService.getIdentityLinksForTask(task.getId());
+                    boolean hasCandidates = identityLinks != null && identityLinks.stream()
+                            .anyMatch(il -> "candidate".equals(il.getType()) && il.getUserId() != null);
+                    if (hasCandidates) {
                         return;
                     }
                     if (ObjectUtil.equal(assignEmptyHandlerType, BpmUserTaskAssignEmptyHandlerTypeEnum.APPROVE.getType())) {

@@ -36,8 +36,8 @@ public class FilingPageReqVO extends PageParam {
     @Schema(description = "建设内容（备案方案核心）")
     private String constructionContent;
 
-    @Schema(description = "备案状态：0=草稿，1=已提交，2=省级审核通过，3=专家论证通过，4=已归档，5=退回修改", example = "1")
-    private Integer filingStatus;
+    @Schema(description = "备案状态：对应流程 DSL bizStatus，如 DRAFT/SUBMITTED/PROVINCE_APPROVED/EXPERT_APPROVED/NATION_APPROVED/ARCHIVED/RETURNED", example = "SUBMITTED")
+    private String filingStatus;
 
     @Schema(description = "省级审核意见")
     private String provinceReviewOpinion;

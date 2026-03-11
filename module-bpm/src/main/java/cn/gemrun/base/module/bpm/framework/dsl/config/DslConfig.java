@@ -86,6 +86,11 @@ public class DslConfig implements Serializable {
     private String signRule;
 
     /**
+     * 会签拒绝规则：ANY_REJECT(任一拒绝则结束), ALL_REJECT(全部拒绝才结束)
+     */
+    private String rejectRule;
+
+    /**
      * 退回策略：TO_START(退回起点), TO_PREV(退回上一节点), TO_ANY(退回任意节点), TO_ROLE(退回指定角色)
      */
     private String backStrategy;

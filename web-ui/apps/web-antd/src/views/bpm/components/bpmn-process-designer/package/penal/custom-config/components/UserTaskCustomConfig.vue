@@ -23,6 +23,7 @@ import {
   Divider,
   Form,
   Input,
+  InputNumber,
   Radio,
   RadioGroup,
   Select,
@@ -228,7 +229,6 @@ const dslAssignTypeOptions = [
   { label: '本部门岗位 (DEPT_POST)', value: 'DEPT_POST' },
   { label: '部门负责人 (DEPT_LEADER)', value: 'DEPT_LEADER' },
   { label: '发起人 (START_USER)', value: 'START_USER' },
-  { label: '发起人自选 (START_USER_SELECT)', value: 'START_USER_SELECT' },
   { label: '指定用户 (USER)', value: 'USER' },
 ];
 
@@ -279,6 +279,7 @@ const dslFormData = ref({
   roles: [] as string[],
   assignType: 'DEPT_POST',
   assignSource: '',
+  assignLevel: 1,  // 部门层级：1表示上一级部门，0表示本部门
   signRule: 'MAJORITY',
   backStrategy: 'TO_START',
   enable: true,
@@ -366,13 +367,14 @@ function parseDslJson(jsonStr: string) {
     // 根据类型获取不同的 source
     const assignType = config.assign?.type || 'DEPT_POST';
     let assignSource = '';
+    let assignLevel = 1;  // 默认1，表示上一级部门
     if (assignType === 'DEPT_POST') {
       // 兼容旧数据：优先使用 source，其次使用 postCode
       assignSource = config.assign?.source || config.assign?.postCode || '';
+      // 解析 level 参数：0表示本部门，1表示上一级部门，2表示上两级部门，以此类推
+      assignLevel = config.assign?.level !== undefined ? config.assign.level : 1;
     } else if (assignType === 'USER') {
       assignSource = config.assign?.userIds || config.assign?.source || '';
-    } else if (assignType === 'START_USER_SELECT') {
-      assignSource = config.assign?.userSource || config.assign?.source || '';
     } else {
       assignSource = config.assign?.source || '';
     }
@@ -383,6 +385,7 @@ function parseDslJson(jsonStr: string) {
       roles: config.roles || [],
       assignType,
       assignSource,
+      assignLevel,
       signRule: config.signRule || 'MAJORITY',
       backStrategy: config.backStrategy || 'TO_START',
       enable: config.enable !== false,
@@ -400,7 +403,7 @@ function handleAssignTypeChange() {
 
 // 构建 DSL JSON
 function buildDslJson(): string {
-  const { cap, actions, roles, assignType, assignSource, signRule, backStrategy, enable } = dslFormData.value;
+  const { cap, actions, roles, assignType, assignSource, assignLevel, signRule, backStrategy, enable } = dslFormData.value;
 
   // actions 转换为带 label、bizStatus、bizStatusLabel、bpmAction 和 vars 的对象数组
   const actionsWithMeta = actions.map((action) => {
@@ -445,11 +448,10 @@ function buildDslJson(): string {
   let assign: any = undefined;
   if (assignType === 'DEPT_POST' && assignSource) {
     // DEPT_POST: source 就是岗位ID，后端通过 parent_id 自动查找上级部门
-    assign = { type: assignType, source: assignSource };
+    // level: 0表示本部门，1表示上一级部门，2表示上两级部门，以此类推
+    assign = { type: assignType, source: assignSource, level: assignLevel };
   } else if (assignType === 'USER' && assignSource) {
     assign = { type: assignType, userIds: assignSource, source: assignSource };
-  } else if (assignType === 'START_USER_SELECT' && assignSource) {
-    assign = { type: assignType, userSource: assignSource, source: assignSource };
   } else if (assignType) {
     // DEPT_LEADER, START_USER 等无参数的类型
     assign = { type: assignType };
@@ -679,7 +681,9 @@ const resetCustomConfigList = () => {
         ex.$type !== `${prefix}:ApproveType` &&
         ex.$type !== `${prefix}:SignEnable` &&
         ex.$type !== `${prefix}:ReasonRequire` &&
-        ex.$type !== `${prefix}:DslConfig`,
+        ex.$type !== `${prefix}:DslConfig` &&
+        ex.$type !== `${prefix}:CandidateStrategy` &&
+        ex.$type !== `${prefix}:CandidateParam`,
     ) ?? [];
 
   // 更新元素扩展属性，避免后续报错
@@ -1383,62 +1387,64 @@ onMounted(async () => {
       <!-- 任务分配 -->
       <Form.Item label="任务分配">
         <!-- 第一级：分配类型 -->
-        <a-row :gutter="8">
-          <a-col :span="12">
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+          <div style="flex: 1; min-width: 150px; max-width: 200px;">
             <Select
               v-model:value="dslFormData.assignType"
               :options="dslAssignTypeOptions"
               placeholder="分配类型"
+              style="width: 100%;"
               @change="handleAssignTypeChange"
             />
-          </a-col>
+          </div>
           <!-- 第二级：根据类型显示不同选项 -->
-          <a-col :span="12">
-            <!-- DEPT_POST: 显示岗位列表 -->
-            <Select
-              v-if="dslFormData.assignType === 'DEPT_POST'"
-              v-model:value="dslFormData.assignSource"
-              :options="postOptions"
-              placeholder="选择岗位"
-              allowClear
-              @change="updateElementExtensions"
-            />
+          <div style="flex: 2; min-width: 200px;">
+            <!-- DEPT_POST: 显示岗位列表 + 部门层级 -->
+            <div v-show="dslFormData.assignType === 'DEPT_POST'" style="display: flex; align-items: center; gap: 8px;">
+              <Select
+                v-model:value="dslFormData.assignSource"
+                :options="postOptions"
+                placeholder="选择岗位"
+                allowClear
+                style="width: 120px;"
+                @change="updateElementExtensions"
+              />
+              <InputNumber
+                v-model:value="dslFormData.assignLevel"
+                :min="0"
+                :max="10"
+                placeholder="层级"
+                style="width: 60px;"
+                @change="updateElementExtensions"
+              />
+            </div>
             <!-- USER: 显示用户列表 -->
             <Select
-              v-else-if="dslFormData.assignType === 'USER'"
+              v-show="dslFormData.assignType === 'USER'"
               v-model:value="dslFormData.assignSource"
               :options="userOptions"
               placeholder="选择用户"
               allowClear
               @change="updateElementExtensions"
             />
-            <!-- START_USER_SELECT: 显示用户来源 -->
-            <Select
-              v-else-if="dslFormData.assignType === 'START_USER_SELECT'"
-              v-model:value="dslFormData.assignSource"
-              :options="dslAssignSourceOptions.filter(o => o.value === 'startUser' || o.value === 'startUserDeptLeader' || o.value === 'expertUsers')"
-              placeholder="选择用户来源"
-              allowClear
-              @change="updateElementExtensions"
-            />
             <!-- DEPT_LEADER, START_USER 无需选择 -->
             <Select
-              v-else-if="dslFormData.assignType === 'DEPT_LEADER' || dslFormData.assignType === 'START_USER'"
+              v-show="dslFormData.assignType === 'DEPT_LEADER' || dslFormData.assignType === 'START_USER'"
               :value="dslFormData.assignSource"
               disabled
               placeholder="无需配置"
             />
             <!-- 其他类型 -->
             <Select
-              v-else-if="dslFormData.assignType"
+              v-show="dslFormData.assignType && dslFormData.assignType !== 'DEPT_POST' && dslFormData.assignType !== 'USER' && dslFormData.assignType !== 'DEPT_LEADER' && dslFormData.assignType !== 'START_USER'"
               v-model:value="dslFormData.assignSource"
               :options="dslAssignSourceOptions"
               placeholder="分配来源"
               allowClear
               @change="updateElementExtensions"
             />
-          </a-col>
-        </a-row>
+          </div>
+        </div>
       </Form.Item>
 
       <!-- 会签规则（当 cap 为 COUNTERSIGN 时显示） -->
