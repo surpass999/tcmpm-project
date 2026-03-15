@@ -168,6 +168,11 @@ export type UserTaskFormType = {
   formUser?: string; // 表单内用户字段
   maxRemindCount?: number;
   postIds?: number[]; // 岗位
+  // 上级部门+岗位策略参数: 岗位ID,部门层级
+  superiorDeptPostId?: number;
+  superiorDeptLevel?: number;
+  // 业务发起人策略参数: 部门层级(可选)
+  businessStartUserLevel?: number;
   reasonRequire: boolean;
   rejectHandlerType?: RejectHandlerType;
   returnNodeId?: string;
@@ -388,6 +393,30 @@ export function useNodeForm(nodeType: BpmNodeTypeEnum) {
     if (configForm.value?.candidateStrategy === CandidateStrategy.EXPRESSION) {
       showText = `流程表达式：${configForm.value.expression}`;
     }
+
+    // 上级部门+岗位
+    if (
+      configForm.value?.candidateStrategy === CandidateStrategy.SUPERIOR_DEPT_POST
+    ) {
+      const postId = configForm.value.superiorDeptPostId;
+      const level = configForm.value.superiorDeptLevel;
+      if (postId && level) {
+        showText = `上级部门+岗位：${postId},${level}`;
+      } else if (postId) {
+        showText = `上级部门+岗位：${postId}（待选择层级）`;
+      } else {
+        showText = `上级部门+岗位：待配置`;
+      }
+    }
+
+    // 业务发起人
+    if (
+      configForm.value?.candidateStrategy === CandidateStrategy.BUSINESS_START_USER
+    ) {
+      const level = configForm.value.businessStartUserLevel;
+      showText = level ? `业务发起人（第${level}级部门负责人）` : `业务发起人（本部门负责人）`;
+    }
+
     return showText;
   }
 
@@ -449,6 +478,20 @@ export function useNodeForm(nodeType: BpmNodeTypeEnum) {
       }
       case CandidateStrategy.USER_GROUP: {
         candidateParam = configForm.value.userGroups?.join(',');
+        break;
+      }
+      // 上级部门+岗位
+      case CandidateStrategy.SUPERIOR_DEPT_POST: {
+        const postId = configForm.value.superiorDeptPostId;
+        const level = configForm.value.superiorDeptLevel;
+        if (postId && level) {
+          candidateParam = `${postId},${level}`;
+        }
+        break;
+      }
+      // 业务发起人
+      case CandidateStrategy.BUSINESS_START_USER: {
+        candidateParam = configForm.value.businessStartUserLevel?.toString();
         break;
       }
       default: {
@@ -533,6 +576,24 @@ export function useNodeForm(nodeType: BpmNodeTypeEnum) {
         configForm.value.userGroups = candidateParam
           .split(',')
           .map((item) => +item);
+        break;
+      }
+      // 上级部门+岗位
+      case CandidateStrategy.SUPERIOR_DEPT_POST: {
+        if (candidateParam) {
+          const params = candidateParam.split(',');
+          if (params.length >= 2) {
+            configForm.value.superiorDeptPostId = parseInt(params[0], 10);
+            configForm.value.superiorDeptLevel = parseInt(params[1], 10);
+          }
+        }
+        break;
+      }
+      // 业务发起人
+      case CandidateStrategy.BUSINESS_START_USER: {
+        configForm.value.businessStartUserLevel = candidateParam
+          ? parseInt(candidateParam, 10)
+          : undefined;
         break;
       }
       default: {

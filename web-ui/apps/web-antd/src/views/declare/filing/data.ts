@@ -78,6 +78,17 @@ export function useFormSchema(): VbenFormSchema[] {
       },
     },
     {
+      fieldName: 'planEndTime',
+      label: '项目计划完成时间',
+      rules: 'required',
+      component: 'DatePicker',
+      componentProps: {
+        showTime: true,
+        format: 'YYYY-MM-DD',
+        valueFormat: 'x',
+      },
+    },
+    {
       fieldName: 'constructionContent',
       label: '建设内容',
       rules: 'required',
@@ -334,6 +345,12 @@ export function useGridColumns(): VxeTableGridOptions<DeclareFilingApi.Filing>['
     {
       field: 'validEndTime',
       title: '有效期结束时间',
+      minWidth: 120,
+      formatter: 'formatDateTime',
+    },
+    {
+      field: 'planEndTime',
+      title: '项目计划完成时间',
       minWidth: 120,
       formatter: 'formatDateTime',
     },

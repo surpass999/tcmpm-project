@@ -293,10 +293,19 @@ const showChildProcessNodeConfig = (node: SimpleFlowNode) => {
       if (configForm.value.timeoutType === DelayTypeEnum.FIXED_TIME_DURATION) {
         const strTimeDuration =
           node.childProcessSetting.timeoutSetting.timeExpression ?? '';
-        const parseTime = strTimeDuration.slice(2, -1);
-        const parseTimeUnit = strTimeDuration.slice(-1);
-        configForm.value.timeDuration = Number.parseInt(parseTime);
-        configForm.value.timeUnit = convertTimeUnit(parseTimeUnit);
+        // 检查是否为有效的 ISO 8601 持续时间格式
+        const isValidDuration = /^P\d+[DHM]$/.test(strTimeDuration);
+        if (isValidDuration) {
+          const parseTime = strTimeDuration.slice(2, -1);
+          const parseTimeUnit = strTimeDuration.slice(-1);
+          configForm.value.timeDuration = Number.parseInt(parseTime);
+          configForm.value.timeUnit = convertTimeUnit(parseTimeUnit);
+        } else {
+          // 无效的超时配置，设置默认值
+          console.warn('[子流程超时配置] 检测到无效的持续时间格式:', strTimeDuration, ', 使用默认值');
+          configForm.value.timeDuration = 24;
+          configForm.value.timeUnit = TimeUnitType.HOUR;
+        }
       }
       // 固定日期时间
       if (configForm.value.timeoutType === DelayTypeEnum.FIXED_DATE_TIME) {

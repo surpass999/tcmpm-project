@@ -18,6 +18,7 @@ import cn.gemrun.base.module.bpm.enums.task.BpmReasonEnum;
 import cn.gemrun.base.module.bpm.framework.flowable.core.candidate.BpmTaskCandidateInvoker;
 import cn.gemrun.base.module.bpm.framework.flowable.core.enums.BpmTaskCandidateStrategyEnum;
 import cn.gemrun.base.module.bpm.framework.flowable.core.util.BpmnModelUtils;
+import cn.gemrun.base.module.bpm.framework.flowable.core.util.FlowableUtils;
 import cn.gemrun.base.module.bpm.framework.flowable.core.util.SimpleModelUtils;
 import cn.gemrun.base.module.bpm.service.task.BpmProcessInstanceCopyService;
 import lombok.extern.slf4j.Slf4j;
@@ -41,7 +42,7 @@ import org.springframework.validation.annotation.Validated;
 
 import javax.annotation.Resource;
 import javax.validation.Valid;
-import java.io.InputStream;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -88,6 +89,7 @@ public class BpmModelServiceImpl implements BpmModelService {
         if (StrUtil.isNotEmpty(name)) {
             modelQuery.modelNameLike("%" + name + "%");
         }
+        modelQuery.modelTenantId(FlowableUtils.getTenantId());
         return modelQuery.list();
     }
 
@@ -95,6 +97,7 @@ public class BpmModelServiceImpl implements BpmModelService {
     public Long getModelCountByCategory(String category) {
         return repositoryService.createModelQuery()
                 .modelCategory(category)
+                .modelTenantId(FlowableUtils.getTenantId())
                 .count();
     }
 
@@ -114,6 +117,7 @@ public class BpmModelServiceImpl implements BpmModelService {
         createReqVO.setSort(System.currentTimeMillis()); // 使用当前时间，作为排序
         Model model = repositoryService.newModel();
         BpmModelConvert.INSTANCE.copyToModel(model, createReqVO);
+        model.setTenantId(FlowableUtils.getTenantId());
 
         // 3. 保存模型
         saveModel(model, createReqVO);
@@ -146,9 +150,11 @@ public class BpmModelServiceImpl implements BpmModelService {
         // 2. 保存流程图
         if (ObjUtil.equals(BpmModelTypeEnum.BPMN.getType(), saveReqVO.getType())
                 && StrUtil.isNotEmpty(saveReqVO.getBpmnXml())) {
+            // BPMN 类型：保存前端传入的 bpmnXml
             updateModelBpmnXml(model.getId(), saveReqVO.getBpmnXml());
         } else if (ObjUtil.equals(BpmModelTypeEnum.SIMPLE.getType(), saveReqVO.getType())
                 && saveReqVO.getSimpleModel() != null) {
+            // SIMPLE 类型：始终从 simpleModel 生成 bpmnXml，忽略前端传入的 bpmnXml（可能是旧数据）
             // JSON 转换成 bpmnModel
             BpmnModel bpmnModel = SimpleModelUtils.buildBpmnModel(model.getKey(), model.getName(),
                     saveReqVO.getSimpleModel());
@@ -164,7 +170,7 @@ public class BpmModelServiceImpl implements BpmModelService {
     public void updateModelSortBatch(Long userId, List<String> ids) {
         // 1.1 校验流程模型存在
         List<Model> models = repositoryService.createModelQuery()
-                .list();
+                .modelTenantId(FlowableUtils.getTenantId()).list();
         models.removeIf(model -> !ids.contains(model.getId()));
         if (ids.size() != models.size()) {
             throw exception(MODEL_NOT_EXISTS);
@@ -219,25 +225,6 @@ public class BpmModelServiceImpl implements BpmModelService {
         BpmModelMetaInfoVO metaInfo = BpmModelConvert.INSTANCE.parseMetaInfo(model);
         // 1.2 校验流程图
         byte[] bpmnBytes = getModelBpmnXML(model.getId());
-
-        // 【调试】打印 BPMN XML 长度和关键内容
-        log.info("[deployModel] 模型 ID: {}, 获取的 BPMN XML 长度: {}", id, bpmnBytes != null ? bpmnBytes.length : 0);
-        if (bpmnBytes != null && bpmnBytes.length > 0) {
-            String bpmnXml = StrUtil.utf8Str(bpmnBytes);
-            // 检查第二个节点是否有 DSL 配置
-            int dslIndex = bpmnXml.indexOf("Activity_0isavu8");
-            if (dslIndex > 0) {
-                int dslConfigStart = bpmnXml.indexOf("<flowable:dslConfig>", dslIndex);
-                int dslConfigEnd = bpmnXml.indexOf("</flowable:dslConfig>", dslIndex);
-                if (dslConfigStart > 0 && dslConfigEnd > dslConfigStart) {
-                    String dslContent = bpmnXml.substring(dslConfigStart, Math.min(dslConfigEnd + 22, dslConfigStart + 500));
-                    log.info("[deployModel] 第二个节点 DSL 配置: {}", dslContent);
-                } else {
-                    log.warn("[deployModel] 第二个节点没有 DSL 配置！");
-                }
-            }
-        }
-
         validateBpmnXml(bpmnBytes, metaInfo.getType());
         // 1.3 校验表单已配
         BpmFormDO form = validateFormConfig(metaInfo);
@@ -247,14 +234,14 @@ public class BpmModelServiceImpl implements BpmModelService {
         String simpleJson = getModelSimpleJson(model.getId());
 
         // 2.1 创建流程定义
-        String definitionId = processDefinitionService.createProcessDefinition(model, metaInfo, bpmnBytes, simpleJson, form);
+        String definitionId = processDefinitionService.createProcessDefinition(model, metaInfo, bpmnBytes, simpleJson,
+                form);
 
         // 2.2 将老的流程定义进行挂起。也就是说，只有最新部署的流程定义，才可以发起任务。
         updateProcessDefinitionSuspended(model.getDeploymentId());
 
         // 2.3 更新 model 的 deploymentId，进行关联
         ProcessDefinition definition = processDefinitionService.getProcessDefinition(definitionId);
-        
         model.setDeploymentId(definition.getDeploymentId());
         repositoryService.saveModel(model);
     }
@@ -345,26 +332,6 @@ public class BpmModelServiceImpl implements BpmModelService {
     @Override
     public BpmnModel getBpmnModelByDefinitionId(String processDefinitionId) {
         return repositoryService.getBpmnModel(processDefinitionId);
-    }
-
-    @Override
-    public String getBpmnXmlByDefinitionId(String processDefinitionId) {
-        ProcessDefinition pd = repositoryService.createProcessDefinitionQuery()
-                .processDefinitionId(processDefinitionId)
-                .singleResult();
-        if (pd == null) {
-            return null;
-        }
-        try (InputStream is = repositoryService.getResourceAsStream(pd.getDeploymentId(), pd.getResourceName())) {
-            if (is == null) {
-                return null;
-            }
-            return cn.hutool.core.io.IoUtil.readUtf8(is);
-        } catch (Exception e) {
-            log.warn("[getBpmnXmlByDefinitionId] 读取 BPMN XML 失败: processDefinitionId={}, error={}",
-                    processDefinitionId, e.getMessage());
-            return null;
-        }
     }
 
     @Override
@@ -463,6 +430,7 @@ public class BpmModelServiceImpl implements BpmModelService {
 
     private Model getModelByKey(String key) {
         return repositoryService.createModelQuery()
+                .modelTenantId(FlowableUtils.getTenantId())
                 .modelKey(key).singleResult();
     }
 

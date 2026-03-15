@@ -33,7 +33,6 @@
             <artifactId>spring-boot-starter-biz-data-permission</artifactId>
         </dependency>
 
-
         <!-- Web 相关 -->
         <dependency>
             <groupId>cn.gemrun</groupId>

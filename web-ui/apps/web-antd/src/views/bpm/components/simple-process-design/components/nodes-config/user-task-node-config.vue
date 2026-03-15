@@ -232,6 +232,9 @@ function changeCandidateStrategy() {
   configForm.value.formDept = '';
   configForm.value.expression = '';
   configForm.value.approveMethod = ApproveMethodType.SEQUENTIAL_APPROVE;
+  // 新策略字段
+  configForm.value.superiorDeptPostParam = '';
+  configForm.value.businessStartUserLevel = undefined;
 }
 
 function openExpressionSelect() {
@@ -415,12 +418,26 @@ function showUserTaskNodeConfig(node: SimpleFlowNode) {
   returnTaskList.value = matchNodeList;
   // 2.4 设置审批超时处理
   configForm.value.timeoutHandlerEnable = node.timeoutHandler?.enable;
+  console.log('[加载超时配置] enable=', node.timeoutHandler?.enable, 'timeDuration=', node.timeoutHandler?.timeDuration);
   if (node.timeoutHandler?.enable && node.timeoutHandler?.timeDuration) {
     const strTimeDuration = node.timeoutHandler.timeDuration;
-    const parseTime = strTimeDuration.slice(2, -1);
-    const parseTimeUnit = strTimeDuration.slice(-1);
-    configForm.value.timeDuration = Number.parseInt(parseTime);
-    timeUnit.value = convertTimeUnit(parseTimeUnit);
+    console.log('[加载超时配置] strTimeDuration=', strTimeDuration);
+    // 检查是否为有效的 ISO 8601 持续时间格式
+    const isValidDuration = /^P\d+[DHM]$/.test(strTimeDuration);
+    console.log('[加载超时配置] isValidDuration=', isValidDuration);
+    if (isValidDuration) {
+      const parseTime = strTimeDuration.slice(1, -1);
+      const parseTimeUnit = strTimeDuration.slice(-1);
+      console.log('[加载超时配置] parseTime=', parseTime, 'parseTimeUnit=', parseTimeUnit);
+      configForm.value.timeDuration = Number.parseInt(parseTime);
+      timeUnit.value = convertTimeUnit(parseTimeUnit);
+      console.log('[加载超时配置] 解析成功: timeDuration=', configForm.value.timeDuration, 'timeUnit=', timeUnit.value);
+    } else {
+      // 无效的超时配置，设置默认值
+      console.warn('[超时配置] 检测到无效的持续时间格式:', strTimeDuration, ', 使用默认值');
+      configForm.value.timeDuration = 6;
+      timeUnit.value = TimeUnitType.HOUR;
+    }
   }
   configForm.value.timeoutHandlerType = node.timeoutHandler?.type;
   configForm.value.maxRemindCount = node.timeoutHandler?.maxRemindCount;
@@ -429,12 +446,24 @@ function showUserTaskNodeConfig(node: SimpleFlowNode) {
   configForm.value.assignEmptyHandlerUserIds = node.assignEmptyHandler?.userIds;
   // 2.6 设置用户任务的审批人与发起人相同时
   configForm.value.assignStartUserHandlerType = node.assignStartUserHandlerType;
-  // 3. 操作按钮设置
-  buttonsSetting.value =
-    cloneDeep(node.buttonsSetting) ||
-    (node.type === BpmNodeTypeEnum.TRANSACTOR_NODE
+  // 3. 操作按钮设置（与默认列表合并，保证新增按钮类型在旧流程中也能显示）
+  const defaultButtonSetting =
+    node.type === BpmNodeTypeEnum.TRANSACTOR_NODE
       ? TRANSACTOR_DEFAULT_BUTTON_SETTING
-      : DEFAULT_BUTTON_SETTING);
+      : DEFAULT_BUTTON_SETTING;
+  const savedButtons = cloneDeep(node.buttonsSetting);
+  if (savedButtons?.length) {
+    const savedIds = new Set(savedButtons.map((b) => b.id));
+    for (const def of defaultButtonSetting) {
+      if (!savedIds.has(def.id)) {
+        savedButtons.push({ ...def });
+        savedIds.add(def.id);
+      }
+    }
+    buttonsSetting.value = savedButtons;
+  } else {
+    buttonsSetting.value = cloneDeep(defaultButtonSetting);
+  }
   // 4. 表单字段权限配置
   getNodeConfigFormFields(node.fieldsPermission);
   // 5. 监听器
@@ -563,7 +592,7 @@ function useTimeoutHandler() {
     if (!configForm.value.timeoutHandlerEnable) {
       return undefined;
     }
-    let strTimeDuration = 'PT';
+    let strTimeDuration = 'P';
     if (timeUnit.value === TimeUnitType.MINUTE) {
       strTimeDuration += `${configForm.value.timeDuration}M`;
     }
@@ -863,6 +892,73 @@ onMounted(() => {
                   {{ item.label }}
                 </SelectOption>
               </Select>
+            </FormItem>
+            <!-- 上级部门+岗位 -->
+            <FormItem
+              v-if="
+                configForm.candidateStrategy === CandidateStrategy.SUPERIOR_DEPT_POST
+              "
+              label="上级部门+岗位参数"
+            >
+              <div class="flex gap-2">
+                <FormItem name="superiorDeptPostId" :noStyle>
+                  <Select
+                    v-model:value="configForm.superiorDeptPostId"
+                    placeholder="请选择岗位"
+                    style="width: 180px"
+                  >
+                    <SelectOption
+                      v-for="item in postOptions"
+                      :key="item.id"
+                      :label="item.name"
+                      :value="item.id!"
+                    >
+                      {{ item.name }}
+                    </SelectOption>
+                  </Select>
+                </FormItem>
+                <FormItem name="superiorDeptLevel" :noStyle>
+                  <Select
+                    v-model:value="configForm.superiorDeptLevel"
+                    placeholder="请选择部门层级"
+                    style="width: 160px"
+                  >
+                    <SelectOption
+                      v-for="item in MULTI_LEVEL_DEPT"
+                      :key="item.value"
+                      :label="item.label"
+                      :value="item.value"
+                    >
+                      {{ item.label }}
+                    </SelectOption>
+                  </Select>
+                </FormItem>
+              </div>
+              <div class="text-xs text-gray-500 mt-1">
+                选择岗位和部门层级后，系统将查找发起人对应层级上级部门下该岗位的用户
+              </div>
+            </FormItem>
+            <!-- 业务发起人 -->
+            <FormItem
+              v-if="
+                configForm.candidateStrategy === CandidateStrategy.BUSINESS_START_USER
+              "
+              label="部门层级"
+              name="businessStartUserLevel"
+            >
+              <Select v-model:value="configForm.businessStartUserLevel" clearable placeholder="不选则获取本部门负责人">
+                <SelectOption
+                  v-for="(item, index) in MULTI_LEVEL_DEPT"
+                  :key="index"
+                  :label="item.label"
+                  :value="item.value"
+                >
+                  {{ item.label }}
+                </SelectOption>
+              </Select>
+              <div class="text-xs text-gray-500 mt-1">
+                不选择则获取业务创建人所在部门的负责人，选择则获取对应层级的上级部门负责人
+              </div>
             </FormItem>
             <FormItem
               v-if="
@@ -1169,9 +1265,10 @@ onMounted(() => {
 
           <!-- 表头 -->
           <Row class="border border-gray-200 px-4 py-3">
-            <Col :span="8" class="font-bold">操作按钮</Col>
-            <Col :span="12" class="font-bold">显示名称</Col>
-            <Col :span="4" class="flex items-center justify-center font-bold">
+            <Col :span="6" class="font-bold">操作按钮</Col>
+            <Col :span="8" class="font-bold">显示名称</Col>
+            <Col :span="7" class="font-bold">业务状态(bizStatus)</Col>
+            <Col :span="3" class="flex items-center justify-center font-bold">
               启用
             </Col>
           </Row>
@@ -1179,15 +1276,15 @@ onMounted(() => {
           <!-- 表格内容 -->
           <div v-for="(item, index) in buttonsSetting" :key="index">
             <Row class="border border-t-0 border-gray-200 px-4 py-2">
-              <Col :span="8" class="flex items-center truncate">
+              <Col :span="6" class="flex items-center truncate">
                 {{ OPERATION_BUTTON_NAME.get(item.id) }}
               </Col>
-              <Col :span="12" class="flex items-center">
+              <Col :span="8" class="flex items-center">
                 <Input
                   v-if="btnDisplayNameEdit[index]"
                   :ref="(el) => setInputRef(el, index)"
                   type="text"
-                  class="max-w-32 focus:border-blue-500 focus:shadow-[0_0_0_2px_rgba(24,144,255,0.2)] focus:outline-none"
+                  class="max-w-24 focus:border-blue-500 focus:shadow-[0_0_0_2px_rgba(24,144,255,0.2)] focus:outline-none"
                   @blur="btnDisplayNameBlurEvent(index)"
                   @press-enter="btnDisplayNameBlurEvent(index)"
                   v-model:value="item.displayName"
@@ -1200,7 +1297,15 @@ onMounted(() => {
                   </div>
                 </Button>
               </Col>
-              <Col :span="4" class="flex items-center justify-center">
+              <Col :span="7" class="flex items-center">
+                <Input
+                  type="text"
+                  class="max-w-24"
+                  v-model:value="item.bizStatus"
+                  placeholder="如: PASS, REJECT"
+                />
+              </Col>
+              <Col :span="3" class="flex items-center justify-center">
                 <Switch v-model:checked="item.enable" />
               </Col>
             </Row>

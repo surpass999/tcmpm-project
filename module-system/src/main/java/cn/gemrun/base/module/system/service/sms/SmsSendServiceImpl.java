@@ -63,6 +63,11 @@ public class SmsSendServiceImpl implements SmsSendService {
                 mobile = user.getMobile();
             }
         }
+        // 如果手机号仍然为空，跳过发送（用户可能没有设置手机号）
+        if (StrUtil.isEmpty(mobile)) {
+            log.warn("[sendSingleSmsToAdmin] 用户({}) 手机号为空，跳过短信发送", userId);
+            return null;
+        }
         // 执行发送
         return sendSingleSms(mobile, userId, UserTypeEnum.ADMIN.getValue(), templateCode, templateParams);
     }
@@ -72,6 +77,11 @@ public class SmsSendServiceImpl implements SmsSendService {
         // 如果 mobile 为空，则加载用户编号对应的手机号
         if (StrUtil.isEmpty(mobile)) {
             mobile = memberService.getMemberUserMobile(userId);
+        }
+        // 如果手机号仍然为空，跳过发送（用户可能没有设置手机号）
+        if (StrUtil.isEmpty(mobile)) {
+            log.warn("[sendSingleSmsToMember] 用户({}) 手机号为空，跳过短信发送", userId);
+            return null;
         }
         // 执行发送
         return sendSingleSms(mobile, userId, UserTypeEnum.MEMBER.getValue(), templateCode, templateParams);

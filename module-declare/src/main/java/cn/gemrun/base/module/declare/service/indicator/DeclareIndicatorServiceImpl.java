@@ -12,7 +12,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import javax.annotation.Resource;
-import java.util.List;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * 指标体系 Service 实现
@@ -123,6 +124,20 @@ public class DeclareIndicatorServiceImpl implements DeclareIndicatorService {
     @Override
     public DeclareIndicatorDO getIndicatorByCode(String indicatorCode) {
         return indicatorMapper.selectByIndicatorCode(indicatorCode);
+    }
+
+    @Override
+    public List<DeclareIndicatorDO> getIndicatorList(Set<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return new ArrayList<>();
+        }
+        return indicatorMapper.selectBatchIds(ids);
+    }
+
+    @Override
+    public Map<Long, DeclareIndicatorDO> getIndicatorMap(Set<Long> ids) {
+        List<DeclareIndicatorDO> list = getIndicatorList(ids);
+        return list.stream().collect(Collectors.toMap(DeclareIndicatorDO::getId, v -> v, (v1, v2) -> v1));
     }
 
 }

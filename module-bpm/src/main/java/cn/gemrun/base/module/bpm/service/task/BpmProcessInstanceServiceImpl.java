@@ -18,6 +18,7 @@ import cn.gemrun.base.module.bpm.controller.admin.definition.vo.model.BpmModelMe
 import cn.gemrun.base.module.bpm.controller.admin.definition.vo.model.simple.BpmSimpleModelNodeVO;
 import cn.gemrun.base.module.bpm.controller.admin.task.vo.instance.*;
 import cn.gemrun.base.module.bpm.controller.admin.task.vo.instance.BpmApprovalDetailRespVO.ActivityNodeTask;
+import cn.gemrun.base.module.bpm.controller.admin.task.vo.task.BpmTaskApproveReqVO;
 import cn.gemrun.base.module.bpm.controller.admin.task.vo.task.BpmTaskRespVO;
 import cn.gemrun.base.module.bpm.convert.task.BpmProcessInstanceConvert;
 import cn.gemrun.base.module.bpm.dal.dataobject.definition.BpmProcessDefinitionInfoDO;
@@ -25,6 +26,7 @@ import cn.gemrun.base.module.bpm.dal.redis.BpmProcessIdRedisDAO;
 import cn.gemrun.base.module.bpm.enums.ErrorCodeConstants;
 import cn.gemrun.base.module.bpm.enums.definition.BpmModelTypeEnum;
 import cn.gemrun.base.module.bpm.enums.definition.BpmSimpleModelNodeTypeEnum;
+import cn.gemrun.base.module.bpm.enums.definition.BpmUserTaskAssignStartUserHandlerTypeEnum;
 import cn.gemrun.base.module.bpm.enums.task.BpmProcessInstanceStatusEnum;
 import cn.gemrun.base.module.bpm.enums.task.BpmReasonEnum;
 import cn.gemrun.base.module.bpm.enums.task.BpmTaskStatusEnum;
@@ -48,6 +50,7 @@ import org.flowable.bpmn.constants.BpmnXMLConstants;
 import org.flowable.bpmn.model.*;
 import org.flowable.engine.HistoryService;
 import org.flowable.engine.RuntimeService;
+import org.flowable.engine.TaskService;
 import org.flowable.engine.history.HistoricActivityInstance;
 import org.flowable.engine.history.HistoricProcessInstance;
 import org.flowable.engine.history.HistoricProcessInstanceQuery;
@@ -98,6 +101,8 @@ public class BpmProcessInstanceServiceImpl implements BpmProcessInstanceService 
 
     @Resource
     private RuntimeService runtimeService;
+    @Resource
+    private TaskService flowableTaskService;
     @Resource
     private HistoryService historyService;
 
@@ -828,9 +833,93 @@ public class BpmProcessInstanceServiceImpl implements BpmProcessInstanceService 
         processInstanceBuilder.name(generateProcessInstanceName(userId, definition, processDefinitionInfo, variables));
         // 3.3 发起流程实例
         ProcessInstance instance = processInstanceBuilder.start();
+
+        // 4. 自动完成发起人节点（如果配置了自动跳过）
+        autoCompleteStartUserNode(instance.getId(), userId);
+
         return instance.getId();
     }
 
+    /**
+     * 自动完成发起人节点（如果配置了自动跳过）
+     *
+     * @param processInstanceId 流程实例ID
+     * @param startUserId 发起人用户ID
+     */
+    private void autoCompleteStartUserNode(String processInstanceId, Long startUserId) {
+        try {
+        // 1. 查询发起人节点的任务
+        List<Task> tasks = flowableTaskService.createTaskQuery()
+                .processInstanceId(processInstanceId)
+                .taskAssignee(String.valueOf(startUserId))
+                .list();
+        log.info("[autoCompleteStartUserNode] 查询任务: processInstanceId={}, startUserId={}, 任务数量={}",
+                processInstanceId, startUserId, tasks != null ? tasks.size() : 0);
+        if (CollUtil.isEmpty(tasks)) {
+            log.info("[autoCompleteStartUserNode] 没有找到任务: processInstanceId={}, startUserId={}", processInstanceId, startUserId);
+            return;
+        }
+
+            log.info("[autoCompleteStartUserNode] 找到 {} 个任务", tasks.size());
+            // 2. 检查是否有发起人节点需要自动完成
+            for (Task task : tasks) {
+                log.info("[autoCompleteStartUserNode] 开始处理任务: taskId={}, taskDefinitionKey={}, taskName={}, START_USER_NODE_ID={}",
+                        task.getId(), task.getTaskDefinitionKey(), task.getName(), START_USER_NODE_ID);
+
+                // 获取流程定义
+                ProcessDefinition processDefinition = processDefinitionService.getProcessDefinition(task.getProcessDefinitionId());
+                if (processDefinition == null) {
+                    continue;
+                }
+
+                // 获取 BpmnModel
+                BpmnModel bpmnModel = processDefinitionService.getProcessDefinitionBpmnModel(processDefinition.getId());
+                if (bpmnModel == null) {
+                    continue;
+                }
+
+                // 获取当前节点配置
+                FlowElement flowElement = bpmnModel.getFlowElement(task.getTaskDefinitionKey());
+                if (!(flowElement instanceof UserTask)) {
+                    continue;
+                }
+
+                log.info("[autoCompleteStartUserNode] taskDefinitionKey={}, START_USER_NODE_ID={}, equals={}",
+                        task.getTaskDefinitionKey(), START_USER_NODE_ID, Objects.equals(task.getTaskDefinitionKey(), START_USER_NODE_ID));
+
+                // 只有发起人节点才自动完成
+                if (!Objects.equals(task.getTaskDefinitionKey(), START_USER_NODE_ID)) {
+                    log.info("[autoCompleteStartUserNode] taskId={} 不是发起人节点(taskDefinitionKey={})，跳过自动完成",
+                            task.getId(), task.getTaskDefinitionKey());
+                    continue;
+                }
+
+                // 使用 BpmnModelUtils 解析发起人处理类型
+                Integer assignStartUserHandlerType = BpmnModelUtils.parseAssignStartUserHandlerType(flowElement);
+
+                // 如果配置了自动跳过，则自动完成该任务
+                if (ObjectUtil.equal(assignStartUserHandlerType, BpmUserTaskAssignStartUserHandlerTypeEnum.SKIP.getType())) {
+                    log.info("[BPM] 自动完成发起人节点任务: taskId={}, taskName={}, processInstanceId={}",
+                            task.getId(), task.getName(), processInstanceId);
+
+                    // 使用 BpmTaskService.approveTask 完成任务（会自动处理定时器）
+                    BpmTaskApproveReqVO approveReqVO = new BpmTaskApproveReqVO();
+                    approveReqVO.setId(task.getId());
+                    approveReqVO.setReason("自动通过");
+                    approveReqVO.setVariables(new HashMap<>());
+                    taskService.approveTask(startUserId, approveReqVO);
+
+                    log.info("[BPM] 自动完成发起人节点任务成功: taskId={}", task.getId());
+                }
+            }
+        } catch (Exception e) {
+            log.error("[BPM] 自动完成发起人节点任务失败: processInstanceId={}", processInstanceId, e);
+        }
+    }
+
+    /**
+     * 删除任务上的所有定时器（边界事件）
+     */
     private void validateStartUserSelectAssignees(Long userId, ProcessDefinition definition,
                                                   Map<String, List<Long>> startUserSelectAssignees,
                                                   Map<String, Object> variables) {
@@ -1001,38 +1090,30 @@ public class BpmProcessInstanceServiceImpl implements BpmProcessInstanceService 
             });
         }
 
-        // 2. 发送对应的消息通知（捕获异常，避免短信发送失败影响流程审批）
-        try {
-            if (Objects.equals(status, BpmProcessInstanceStatusEnum.APPROVE.getStatus())) {
-                messageService.sendMessageWhenProcessInstanceApprove(
-                        BpmProcessInstanceConvert.INSTANCE.buildProcessInstanceApproveMessage(instance));
-            } else if (Objects.equals(status, BpmProcessInstanceStatusEnum.REJECT.getStatus())) {
-                messageService.sendMessageWhenProcessInstanceReject(
-                        BpmProcessInstanceConvert.INSTANCE.buildProcessInstanceRejectMessage(instance, reason));
-            }
-        } catch (Exception e) {
-            log.warn("[processProcessInstanceCompleted] 发送消息通知失败，不影响流程审批: {}", e.getMessage());
+        // 2. 发送对应的消息通知
+        if (Objects.equals(status, BpmProcessInstanceStatusEnum.APPROVE.getStatus())) {
+            messageService.sendMessageWhenProcessInstanceApprove(
+                    BpmProcessInstanceConvert.INSTANCE.buildProcessInstanceApproveMessage(instance));
+        } else if (Objects.equals(status, BpmProcessInstanceStatusEnum.REJECT.getStatus())) {
+            messageService.sendMessageWhenProcessInstanceReject(
+                    BpmProcessInstanceConvert.INSTANCE.buildProcessInstanceRejectMessage(instance, reason));
         }
 
         // 3. 发送流程实例的状态事件
         processInstanceEventPublisher.sendProcessInstanceResultEvent(
                 BpmProcessInstanceConvert.INSTANCE.buildProcessInstanceStatusEvent(this, instance, status, reason));
 
-        // 4. 流程后置通知（捕获异常，避免通知失败影响流程审批）
-        try {
-            if (Objects.equals(status, BpmProcessInstanceStatusEnum.APPROVE.getStatus())) {
-                BpmProcessDefinitionInfoDO processDefinitionInfo = processDefinitionService.
-                        getProcessDefinitionInfo(instance.getProcessDefinitionId());
-                if (ObjUtil.isNotNull(processDefinitionInfo) &&
-                        ObjUtil.isNotNull(processDefinitionInfo.getProcessAfterTriggerSetting())) {
-                    BpmModelMetaInfoVO.HttpRequestSetting setting = processDefinitionInfo.getProcessAfterTriggerSetting();
+        // 4. 流程后置通知
+        if (Objects.equals(status, BpmProcessInstanceStatusEnum.APPROVE.getStatus())) {
+            BpmProcessDefinitionInfoDO processDefinitionInfo = processDefinitionService.
+                    getProcessDefinitionInfo(instance.getProcessDefinitionId());
+            if (ObjUtil.isNotNull(processDefinitionInfo) &&
+                    ObjUtil.isNotNull(processDefinitionInfo.getProcessAfterTriggerSetting())) {
+                BpmModelMetaInfoVO.HttpRequestSetting setting = processDefinitionInfo.getProcessAfterTriggerSetting();
 
-                    BpmHttpRequestUtils.executeBpmHttpRequest(instance,
-                            setting.getUrl(), setting.getHeader(), setting.getBody(), true, setting.getResponse());
-                }
+                BpmHttpRequestUtils.executeBpmHttpRequest(instance,
+                        setting.getUrl(), setting.getHeader(), setting.getBody(), true, setting.getResponse());
             }
-        } catch (Exception e) {
-            log.warn("[processProcessInstanceCompleted] 执行流程后置通知失败，不影响流程审批: {}", e.getMessage());
         }
     }
 

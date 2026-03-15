@@ -124,7 +124,7 @@ public class BpmTaskController {
     @GetMapping("/list-by-process-instance-id")
     @Operation(summary = "获得指定流程实例的任务列表", description = "包括完成的、未完成的")
     @Parameter(name = "processInstanceId", description = "流程实例的编号", required = true)
-    @PreAuthorize("@ss.isAuthenticated()")
+    @PreAuthorize("@ss.hasPermission('bpm:task:query')")
     public CommonResult<List<BpmTaskRespVO>> getTaskListByProcessInstanceId(
             @RequestParam("processInstanceId") String processInstanceId) {
         List<HistoricTaskInstance> taskList = taskService.getTaskListByProcessInstanceId(processInstanceId, true);
@@ -158,6 +158,14 @@ public class BpmTaskController {
     @PreAuthorize("@ss.hasPermission('bpm:task:update')")
     public CommonResult<Boolean> rejectTask(@Valid @RequestBody BpmTaskRejectReqVO reqVO) {
         taskService.rejectTask(getLoginUserId(), reqVO);
+        return success(true);
+    }
+
+    @PutMapping("/next-assignees")
+    @Operation(summary = "设置下一个节点的审批人", description = "用于审批人单独设置下一个节点的审批人（如选择专家），不触发流程流转")
+    @PreAuthorize("@ss.hasPermission('bpm:task:update')")
+    public CommonResult<Boolean> setNextAssignees(@Valid @RequestBody BpmTaskNextAssigneesReqVO reqVO) {
+        taskService.setNextAssignees(getLoginUserId(), reqVO);
         return success(true);
     }
 

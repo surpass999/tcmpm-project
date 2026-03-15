@@ -17,6 +17,12 @@ public class FilingRespVO {
     @ExcelProperty("备案主键（自增）")
     private Long id;
 
+    @Schema(description = "流程实例ID")
+    private String processInstanceId;
+
+    @Schema(description = "备案编号（格式：PRNT+年月日+序号）")
+    private String filingCode;
+
     @Schema(description = "统一社会信用代码", requiredMode = Schema.RequiredMode.REQUIRED)
     @ExcelProperty("统一社会信用代码")
     private String socialCreditCode;
@@ -40,6 +46,10 @@ public class FilingRespVO {
     @Schema(description = "有效期限结束时间", requiredMode = Schema.RequiredMode.REQUIRED)
     @ExcelProperty("有效期限结束时间")
     private LocalDateTime validEndTime;
+
+    @Schema(description = "项目计划完成时间")
+    @ExcelProperty("项目计划完成时间")
+    private LocalDateTime planEndTime;
 
     @Schema(description = "建设内容（备案方案核心）", requiredMode = Schema.RequiredMode.REQUIRED)
     @ExcelProperty("建设内容（备案方案核心）")
@@ -76,6 +86,12 @@ public class FilingRespVO {
     @Schema(description = "创建时间", requiredMode = Schema.RequiredMode.REQUIRED)
     @ExcelProperty("创建时间")
     private LocalDateTime createTime;
+
+    /**
+     * 创建者（用户ID），对应 system_users.id
+     */
+    @Schema(description = "创建者（用户ID）")
+    private Long creator;
 
     /**
      * 指标值 Map（key 为 indicatorCode，value 为指标值对象）

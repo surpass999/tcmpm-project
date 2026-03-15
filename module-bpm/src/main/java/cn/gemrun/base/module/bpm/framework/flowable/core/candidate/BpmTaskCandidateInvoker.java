@@ -5,9 +5,6 @@ import cn.hutool.core.lang.Assert;
 import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.extra.spring.SpringUtil;
-import cn.hutool.json.JSONArray;
-import cn.hutool.json.JSONObject;
-import cn.hutool.json.JSONUtil;
 import cn.gemrun.base.framework.common.enums.CommonStatusEnum;
 import cn.gemrun.base.framework.common.util.object.ObjectUtils;
 import cn.gemrun.base.framework.datapermission.core.annotation.DataPermission;
@@ -17,8 +14,6 @@ import cn.gemrun.base.module.bpm.framework.flowable.core.enums.BpmTaskCandidateS
 import cn.gemrun.base.module.bpm.framework.flowable.core.util.BpmnModelUtils;
 import cn.gemrun.base.module.bpm.framework.flowable.core.util.FlowableUtils;
 import cn.gemrun.base.module.bpm.service.task.BpmProcessInstanceService;
-import cn.gemrun.base.module.system.api.permission.PermissionApi;
-import cn.gemrun.base.module.system.api.permission.RoleApi;
 import cn.gemrun.base.module.system.api.user.AdminUserApi;
 import cn.gemrun.base.module.system.api.user.dto.AdminUserRespDTO;
 import com.google.common.annotations.VisibleForTesting;
@@ -43,20 +38,14 @@ public class BpmTaskCandidateInvoker {
     private final Map<BpmTaskCandidateStrategyEnum, BpmTaskCandidateStrategy> strategyMap = new HashMap<>();
 
     private final AdminUserApi adminUserApi;
-    private final RoleApi roleApi;
-    private final PermissionApi permissionApi;
 
     public BpmTaskCandidateInvoker(List<BpmTaskCandidateStrategy> strategyList,
-                                   AdminUserApi adminUserApi,
-                                   RoleApi roleApi,
-                                   PermissionApi permissionApi) {
+                                   AdminUserApi adminUserApi) {
         strategyList.forEach(strategy -> {
             BpmTaskCandidateStrategy oldStrategy = strategyMap.put(strategy.getStrategy(), strategy);
             Assert.isNull(oldStrategy, "策略(%s) 重复", strategy.getStrategy());
         });
         this.adminUserApi = adminUserApi;
-        this.roleApi = roleApi;
-        this.permissionApi = permissionApi;
     }
 
     /**
@@ -78,30 +67,18 @@ public class BpmTaskCandidateInvoker {
                     BpmUserTaskApproveTypeEnum.AUTO_REJECT.getType())) {
                 return;
             }
-
             // 1.2 非空校验
             Integer strategy = BpmnModelUtils.parseCandidateStrategy(userTask);
             String param = BpmnModelUtils.parseCandidateParam(userTask);
-
-            // 如果 BPMN 没有配置审批人策略，检查 DSL 是否配置了 assign
-            boolean hasDslAssign = BpmnModelUtils.hasDslAssign(userTask);
-
-            if (strategy == null && !hasDslAssign) {
+            if (strategy == null) {
                 throw exception(MODEL_DEPLOY_FAIL_TASK_CANDIDATE_NOT_CONFIG, userTask.getName());
             }
-            // 如果策略存在且需要参数，但参数为空
-            if (strategy != null) {
-                BpmTaskCandidateStrategy candidateStrategy = getCandidateStrategy(strategy);
-                // 如果 DSL 有 assign 配置，则跳过参数校验（因为 DSL assign 会覆盖 BPMN 策略）
-                if (candidateStrategy.isParamRequired() && StrUtil.isBlank(param) && !hasDslAssign) {
-                    throw exception(MODEL_DEPLOY_FAIL_TASK_CANDIDATE_NOT_CONFIG, userTask.getName());
-                }
-                // DSL 有 assign 时，不需要校验 BPMN 策略的参数
-                if (!hasDslAssign) {
-                    // 2. 具体策略校验（仅当 DSL 没有 assign 配置时）
-                    getCandidateStrategy(strategy).validateParam(param);
-                }
+            BpmTaskCandidateStrategy candidateStrategy = getCandidateStrategy(strategy);
+            if (candidateStrategy.isParamRequired() && StrUtil.isBlank(param)) {
+                throw exception(MODEL_DEPLOY_FAIL_TASK_CANDIDATE_NOT_CONFIG, userTask.getName());
             }
+            // 2. 具体策略校验
+            getCandidateStrategy(strategy).validateParam(param);
         });
     }
 
@@ -128,116 +105,7 @@ public class BpmTaskCandidateInvoker {
             // 1.1 计算任务的候选人
             Integer strategy = BpmnModelUtils.parseCandidateStrategy(flowElement);
             String param = BpmnModelUtils.parseCandidateParam(flowElement);
-            String currentActivityId = execution.getCurrentActivityId();
-            log.info("[calculateUsersByTask] 开始计算候选人: nodeKey={}, strategy={}, param={}", currentActivityId, strategy, param);
-            Set<Long> userIds;
-
-            // 优先检查 DSL assign 配置，如果存在则使用 DSL 配置覆盖传统策略
-            // 这样可以支持 DSL 中的 level 参数覆盖 BPMN XML 中的 candidateParam
-            boolean useDslAssign = false;
-            String dslAssignType = null;
-            String dslAssignSource = null;
-            Integer dslAssignLevel = null;
-            try {
-                // 从已部署流程定义的 BPMN XML 获取 DSL 配置（比从 Flowable 扩展元素解析更稳定）
-                ProcessInstance processInstance = SpringUtil.getBean(BpmProcessInstanceService.class)
-                        .getProcessInstance(execution.getProcessInstanceId());
-                if (processInstance != null) {
-                    cn.gemrun.base.module.bpm.service.definition.BpmModelService modelService =
-                            SpringUtil.getBean(cn.gemrun.base.module.bpm.service.definition.BpmModelService.class);
-                    String bpmnXml = modelService.getBpmnXmlByDefinitionId(processInstance.getProcessDefinitionId());
-                    if (StrUtil.isNotBlank(bpmnXml)) {
-                        String dslConfig = BpmnModelUtils.parseDslConfigFromXml(bpmnXml, currentActivityId);
-                        if (StrUtil.isNotBlank(dslConfig)) {
-                            log.info("[calculateUsersByTask] 从已部署流程定义获取 DSL: nodeKey={}, dslConfig={}",
-                                    currentActivityId, dslConfig.substring(0, Math.min(100, dslConfig.length())));
-                            JSONObject dslJson = JSONUtil.parseObj(dslConfig);
-                            JSONObject assignJson = dslJson.getJSONObject("assign");
-                            if (assignJson != null) {
-                                dslAssignType = assignJson.getStr("type");
-                                dslAssignSource = assignJson.getStr("source");
-                                dslAssignLevel = assignJson.getInt("level");
-                                if (StrUtil.isNotBlank(dslAssignType)) {
-                                    useDslAssign = true;
-                                    log.info("[calculateUsersByTask] 检测到 DSL assign 配置: type={}, source={}, level={}",
-                                            dslAssignType, dslAssignSource, dslAssignLevel);
-                                }
-                            }
-                        }
-                    }
-                }
-            } catch (Exception e) {
-                log.warn("[calculateUsersByTask] 解析 DSL assign 配置失败: {}", e.getMessage());
-            }
-
-            // 增加详细日志排查问题
-            log.info("[calculateUsersByTask] DSL assign 解析结果: useDslAssign={}, dslAssignType={}, dslAssignSource={}, dslAssignLevel={}, strategy={}",
-                    useDslAssign, dslAssignType, dslAssignSource, dslAssignLevel, strategy);
-
-            if (useDslAssign && "DEPT_POST".equals(dslAssignType)) {
-                // 使用 DSL assign 中的 DEPT_POST 配置
-                // 将 level 设置到流程变量中，供策略使用
-                if (dslAssignLevel != null && dslAssignLevel > 0) {
-                    execution.setVariable("PROCESS_DEPT_POST_LEVEL", dslAssignLevel);
-                    log.info("[calculateUsersByTask] DSL assign 覆盖 level={}", dslAssignLevel);
-                } else {
-                    log.warn("[calculateUsersByTask] DSL assign level 无效: dslAssignLevel={}", dslAssignLevel);
-                }
-                // 使用 DSL source 作为参数
-                BpmTaskCandidateStrategy deptPostStrategy = strategyMap.get(BpmTaskCandidateStrategyEnum.DEPT_POST);
-                if (deptPostStrategy != null) {
-                    userIds = deptPostStrategy.calculateUsersByTask(execution, dslAssignSource);
-                } else {
-                    userIds = new HashSet<>();
-                }
-            } else if (strategy != null) {
-                userIds = getCandidateStrategy(strategy).calculateUsersByTask(execution, param);
-                // 当传统策略是 USER(30) 但 param 为空时，fallback 到 DSL assign 或流程变量
-                if (strategy == 30 && (userIds == null || userIds.isEmpty()) && StrUtil.isBlank(param)) {
-                    log.info("[calculateUsersByTask] 传统策略USER(30)参数为空，fallback到DSL assign");
-                    // 优先从流程变量获取（省局用户选择专家的场景），因为 DSL 可能解析不完整
-                    // 只有当当前节点在流程变量中有对应的专家用户时，才从流程变量读取
-                    Map<String, Object> processVariables = execution.getVariables();
-                    if (processVariables.containsKey("PROCESS_APPROVE_USER_SELECT_ASSIGNEES")) {
-                        Object approveUserSelectAssignees = processVariables.get("PROCESS_APPROVE_USER_SELECT_ASSIGNEES");
-                        if (approveUserSelectAssignees instanceof Map) {
-                            @SuppressWarnings("unchecked")
-                            Map<String, List<Long>> expertMap = (Map<String, List<Long>>) approveUserSelectAssignees;
-                            // 只从流程变量中获取当前节点的专家用户
-                            List<Long> expertIds = currentActivityId != null ? expertMap.get(currentActivityId) : null;
-                            if (expertIds == null || expertIds.isEmpty()) {
-                                log.info("[calculateUsersByTask] 当前节点 {} 不在流程变量中或无专家用户，使用其他方式计算", currentActivityId);
-                            } else {
-                                log.info("[calculateUsersByTask] 从流程变量获取专家用户: nodeKey={}, expertIds={}", currentActivityId, expertIds);
-                                userIds = new HashSet<>(expertIds);
-                            }
-                        }
-                    }
-                    // 如果流程变量中没有，尝试从 DSL 获取
-                    if (CollUtil.isEmpty(userIds)) {
-                        try {
-                            // 尝试从已部署流程定义获取完整的 DSL
-                            ProcessInstance processInstance = SpringUtil.getBean(BpmProcessInstanceService.class)
-                                    .getProcessInstance(execution.getProcessInstanceId());
-                            if (processInstance != null) {
-                                cn.gemrun.base.module.bpm.service.definition.BpmModelService modelService =
-                                        SpringUtil.getBean(cn.gemrun.base.module.bpm.service.definition.BpmModelService.class);
-                                String bpmnXml = modelService.getBpmnXmlByDefinitionId(processInstance.getProcessDefinitionId());
-                                if (StrUtil.isNotBlank(bpmnXml)) {
-                                    String dslConfig = BpmnModelUtils.parseDslConfigFromXml(bpmnXml, currentActivityId);
-                                    userIds = calculateUsersByDslAssign(execution, dslConfig);
-                                }
-                            }
-                        } catch (Exception e) {
-                            log.warn("[calculateUsersByTask] 从DSL获取候选人失败: {}", e.getMessage());
-                        }
-                    }
-                }
-            } else {
-                // 传统策略未配置时，尝试 DSL assign
-                String dslConfig = BpmnModelUtils.parseDslConfig(flowElement);
-                userIds = calculateUsersByDslAssign(execution, dslConfig);
-            }
+            Set<Long> userIds = getCandidateStrategy(strategy).calculateUsersByTask(execution, param);
             // 1.2 移除被禁用的用户
             removeDisableUsers(userIds);
 
@@ -276,13 +144,8 @@ public class BpmTaskCandidateInvoker {
         // 1.1 计算任务的候选人
         Integer strategy = BpmnModelUtils.parseCandidateStrategy(flowElement);
         String param = BpmnModelUtils.parseCandidateParam(flowElement);
-        Set<Long> userIds;
-        if (strategy != null) {
-            userIds = getCandidateStrategy(strategy).calculateUsersByActivity(bpmnModel, activityId, param,
-                    startUserId, processDefinitionId, processVariables);
-        } else {
-            userIds = new HashSet<>();
-        }
+        Set<Long> userIds = getCandidateStrategy(strategy).calculateUsersByActivity(bpmnModel, activityId, param,
+                startUserId, processDefinitionId, processVariables);
         // 1.2 移除被禁用的用户
         removeDisableUsers(userIds);
 
@@ -333,121 +196,10 @@ public class BpmTaskCandidateInvoker {
 
     private BpmTaskCandidateStrategy getCandidateStrategy(Integer strategy) {
         BpmTaskCandidateStrategyEnum strategyEnum = BpmTaskCandidateStrategyEnum.valueOf(strategy);
-        Assert.notNull(strategyEnum, "策略({}) 不存在", strategy);
+        Assert.notNull(strategyEnum, "策略(%s) 不存在", strategy);
         BpmTaskCandidateStrategy strategyObj = strategyMap.get(strategyEnum);
-        Assert.notNull(strategyObj, "策略({}) 不存在", strategy);
+        Assert.notNull(strategyObj, "策略(%s) 不存在", strategy);
         return strategyObj;
-    }
-
-    /**
-     * 根据 DSL assign 配置计算候选人（当 BPMN 未配置传统候选策略时使用）
-     *
-     * DSL assign type 说明：
-     * - START_USER：发起人自己
-     * - STATIC_ROLE：固定角色，通过 DSL 顶层 roles 字段获取角色编码列表
-     */
-    private Set<Long> calculateUsersByDslAssign(DelegateExecution execution, String dslConfig) {
-        if (StrUtil.isBlank(dslConfig)) {
-            log.warn("[calculateUsersByDslAssign] DSL配置为空，无法计算候选人");
-            return new HashSet<>();
-        }
-        try {
-            JSONObject dslJson = JSONUtil.parseObj(dslConfig);
-            JSONObject assignJson = dslJson.getJSONObject("assign");
-            if (assignJson == null) {
-                log.warn("[calculateUsersByDslAssign] DSL中无assign配置: {}", dslConfig);
-                return new HashSet<>();
-            }
-            String type = assignJson.getStr("type");
-            log.info("[calculateUsersByDslAssign] DSL assign type={}", type);
-
-            if ("START_USER".equals(type)) {
-                BpmTaskCandidateStrategy strategy = strategyMap.get(BpmTaskCandidateStrategyEnum.START_USER);
-                if (strategy != null) {
-                    return strategy.calculateUsersByTask(execution, null);
-                }
-            } else if ("STATIC_ROLE".equals(type)) {
-                // 从 DSL 顶层 roles 字段获取角色编码（如 ["PROVINCE", "NATION"]）
-                JSONArray rolesArray = dslJson.getJSONArray("roles");
-                if (rolesArray != null && !rolesArray.isEmpty()) {
-                    Set<String> roleCodes = new HashSet<>(rolesArray.toList(String.class));
-                    Set<Long> roleIds = roleApi.getRoleIdsByCodes(roleCodes);
-                    log.info("[calculateUsersByDslAssign] STATIC_ROLE roleCodes={}, roleIds={}", roleCodes, roleIds);
-                    if (!roleIds.isEmpty()) {
-                        return permissionApi.getUserRoleIdListByRoleIds(roleIds);
-                    }
-                }
-            } else if ("DEPT_POST".equals(type)) {
-                // DEPT_POST: 本部门岗位
-                // source 是岗位ID（如 "2"），level 是部门层级（默认1）
-                String source = assignJson.getStr("source");
-                Integer level = assignJson.getInt("level", 1);
-                log.info("[calculateUsersByDslAssign] DEPT_POST source={}, level={}", source, level);
-
-                // 将 level 设置到流程变量中，供策略使用
-                if (level != null && level > 0) {
-                    execution.setVariable("PROCESS_DEPT_POST_LEVEL", level);
-                }
-
-                if (StrUtil.isNotBlank(source)) {
-                    BpmTaskCandidateStrategy strategy = strategyMap.get(BpmTaskCandidateStrategyEnum.DEPT_POST);
-                    if (strategy != null) {
-                        // source 作为参数传递
-                        return strategy.calculateUsersByTask(execution, source);
-                    }
-                }
-            } else if ("USER".equals(type)) {
-                // USER: 指定用户（可以是发起时配置的固定用户，也可以是选择专家后的动态用户）
-                String source = assignJson.getStr("source");
-                if (StrUtil.isBlank(source)) {
-                    // source 为空时，尝试从流程变量中获取选择的专家用户（省局用户选择专家的场景）
-                    Map<String, Object> processVariables = execution.getVariables();
-                    if (processVariables.containsKey("PROCESS_APPROVE_USER_SELECT_ASSIGNEES")) {
-                        Object approveUserSelectAssignees = processVariables.get("PROCESS_APPROVE_USER_SELECT_ASSIGNEES");
-                        if (approveUserSelectAssignees instanceof Map) {
-                            @SuppressWarnings("unchecked")
-                            Map<String, List<Long>> expertMap = (Map<String, List<Long>>) approveUserSelectAssignees;
-                            // 获取当前节点对应的专家用户ID
-                            String currentNodeKey = execution.getCurrentFlowElement() != null
-                                    ? execution.getCurrentFlowElement().getId()
-                                    : null;
-                            List<Long> expertIds = currentNodeKey != null ? expertMap.get(currentNodeKey) : null;
-                            if (expertIds == null) {
-                                // 如果找不到当前节点的，取第一个
-                                for (List<Long> ids : expertMap.values()) {
-                                    if (ids != null && !ids.isEmpty()) {
-                                        expertIds = ids;
-                                        break;
-                                    }
-                                }
-                            }
-                            if (expertIds != null && !expertIds.isEmpty()) {
-                                log.info("[calculateUsersByDslAssign] USER类型从流程变量获取专家用户: nodeKey={}, expertIds={}",
-                                        currentNodeKey, expertIds);
-                                return new HashSet<>(expertIds);
-                            }
-                        }
-                    }
-                    log.info("[calculateUsersByDslAssign] USER类型source为空且流程变量中无专家用户");
-                } else {
-                    // source 非空时，直接使用配置的用户ID
-                    try {
-                        Set<Long> userIds = new HashSet<>();
-                        for (String userIdStr : source.split(",")) {
-                            userIds.add(Long.parseLong(userIdStr.trim()));
-                        }
-                        return userIds;
-                    } catch (NumberFormatException e) {
-                        log.warn("[calculateUsersByDslAssign] USER类型source解析失败: {}", source);
-                    }
-                }
-            } else {
-                log.warn("[calculateUsersByDslAssign] 未支持的DSL assign type={}", type);
-            }
-        } catch (Exception e) {
-            log.warn("[calculateUsersByDslAssign] DSL解析失败: {}", e.getMessage());
-        }
-        return new HashSet<>();
     }
 
 }

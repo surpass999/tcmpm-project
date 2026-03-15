@@ -911,6 +911,7 @@ async function handleSubmit() {
       projectType: step1FormData.value.projectType || 1,
       validStartTime: formatDate(step1FormData.value.validStartTime),
       validEndTime: formatDate(step1FormData.value.validEndTime),
+      planEndTime: formatDate(step1FormData.value.planEndTime),
       constructionContent: step1FormData.value.constructionContent || '',
       filingStatus: 0,
       provinceReviewOpinion: '',

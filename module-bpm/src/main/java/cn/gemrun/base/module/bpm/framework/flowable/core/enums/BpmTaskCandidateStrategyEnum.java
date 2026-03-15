@@ -23,7 +23,6 @@ public enum BpmTaskCandidateStrategyEnum implements ArrayValuable<Integer> {
     DEPT_LEADER(21, "部门的负责人"),
     MULTI_DEPT_LEADER_MULTI(23, "连续多级部门的负责人"),
     POST(22, "岗位"),
-    DEPT_POST(24, "本部门岗位"), // 通过 parent_id 递归查找上级部门，再查找岗位用户
     USER(30, "用户"),
     APPROVE_USER_SELECT(34, "审批人自身"), // 当前审批人，可在审批时，选择下一个节点的审批人
     START_USER_SELECT(35, "发起人自选"), // 申请人自己，可在提交申请时，选择此节点的审批人
@@ -35,6 +34,17 @@ public enum BpmTaskCandidateStrategyEnum implements ArrayValuable<Integer> {
     FORM_DEPT_LEADER(51, "表单内部门负责人"),
     EXPRESSION(60, "流程表达式"), // 表达式 ExpressionManager
     ASSIGN_EMPTY(1, "审批人为空"),
+    /**
+     * 上级部门+岗位：查找发起人的上级部门，并获取该部门下指定岗位的用户
+     * 参数格式：岗位ID,部门层级（如：100,2 表示查找发起人第2级上级部门下的岗位用户）
+     */
+    SUPERIOR_DEPT_POST(70, "上级部门+岗位"),
+    /**
+     * 业务发起人：通过业务ID找到业务创建人，获取其所在部门
+     * 适用于整改流程，由省级/国家级在业务列表页面发起，携带业务ID，通过业务创建人找到其部门
+     * 参数格式：业务表名,业务ID字段名（如：declare_filing,filingId）
+     */
+    BUSINESS_START_USER(71, "业务发起人"),
     ;
 
     public static final Integer[] ARRAYS = Arrays.stream(values()).map(BpmTaskCandidateStrategyEnum::getStrategy).toArray(Integer[]::new);

@@ -14,6 +14,12 @@ public class FilingSaveReqVO {
     @Schema(description = "备案主键（自增）", requiredMode = Schema.RequiredMode.REQUIRED, example = "13238")
     private Long id;
 
+    @Schema(description = "流程实例ID")
+    private String processInstanceId;
+
+    @Schema(description = "备案编号（格式：PRNT+年月日+序号）")
+    private String filingCode;
+
     @Schema(description = "统一社会信用代码", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotEmpty(message = "统一社会信用代码不能为空")
     private String socialCreditCode;
@@ -39,6 +45,10 @@ public class FilingSaveReqVO {
     @NotNull(message = "有效期限结束时间不能为空")
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime validEndTime;
+
+    @Schema(description = "项目计划完成时间")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime planEndTime;
 
     @Schema(description = "建设内容（备案方案核心）", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotEmpty(message = "建设内容（备案方案核心）不能为空")

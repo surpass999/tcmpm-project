@@ -13,6 +13,9 @@ public class BpmTaskReturnReqVO {
     @NotEmpty(message = "任务编号不能为空")
     private String id;
 
+    @Schema(description = "按钮ID，用于更新业务状态", example = "3")
+    private Integer buttonId;
+
     @Schema(description = "退回到的任务 Key", requiredMode = Schema.RequiredMode.REQUIRED, example = "1")
     @NotEmpty(message = "退回到的任务 Key 不能为空")
     private String targetTaskDefinitionKey;

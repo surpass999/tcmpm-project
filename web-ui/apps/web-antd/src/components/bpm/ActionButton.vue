@@ -1,47 +1,39 @@
 <template>
   <div class="bpm-action-button">
-    <template v-for="action in availableActions" :key="action.key">
-      <!-- 退回按钮：发起节点不显示退回按钮 -->
+    <template v-for="action in availableActions" :key="action.id">
+      <!-- 显示已启用的按钮 -->
       <a-button
-        v-if="action.key === 'back' && !action.vars?.isStartNode"
-        :type="getActionType(action.key)"
+        v-if="action.enable"
+        :type="getActionType(action.id)"
         @click="handleActionClick(action)"
       >
         <template #icon>
-          <IconifyIcon icon="ep:back" />
-        </template>
-        {{ getActionLabel(action) }}
-      </a-button>
-
-      <!-- 其他按钮 -->
-      <a-button
-        v-else-if="action.key !== 'back'"
-        :type="getActionType(action.key)"
-        @click="handleActionClick(action)"
-      >
-        <template #icon>
-          <IconifyIcon v-if="action.key.includes('pass') || action.key.includes('agree')" icon="ep:circle-check" />
-          <IconifyIcon v-else-if="action.key.includes('reject') || action.key.includes('refuse')" icon="ep:circle-close" />
-          <IconifyIcon v-else-if="action.key.includes('transfer')" icon="ep:right" />
-          <IconifyIcon v-else-if="action.key.includes('selectExpert') || action.key.includes('expert')" icon="ep:user" />
+          <IconifyIcon v-if="action.id === OperationButtonType.APPROVE" icon="ep:circle-check" />
+          <IconifyIcon v-else-if="action.id === OperationButtonType.REJECT" icon="ep:circle-close" />
+          <IconifyIcon v-else-if="action.id === OperationButtonType.TRANSFER" icon="ep:right" />
+          <IconifyIcon v-else-if="action.id === OperationButtonType.DELEGATE" icon="ep:user" />
+          <IconifyIcon v-else-if="action.id === OperationButtonType.ADD_SIGN" icon="ep:document-add" />
+          <IconifyIcon v-else-if="action.id === OperationButtonType.RETURN" icon="ep:back" />
+          <IconifyIcon v-else-if="action.id === OperationButtonType.COPY" icon="ep:copy-document" />
+          <IconifyIcon v-else-if="action.id === OperationButtonType.SELECT_APPROVER" icon="ep:user" />
           <IconifyIcon v-else icon="ep:minus" />
         </template>
-        {{ getActionLabel(action) }}
+        {{ action.displayName }}
       </a-button>
     </template>
 
     <!-- 审批操作弹窗（填写审批意见） -->
     <a-modal
       v-model:open="actionModalVisible"
-      :title="currentAction?.label || '审批操作'"
+      :title="currentAction?.displayName || '审批操作'"
       :confirm-loading="actionLoading"
       @ok="handleActionConfirm"
     >
       <a-form :model="actionForm" layout="vertical">
-        <a-form-item :label="currentAction?.vars?.reason || '审批意见'" :required="currentAction?.vars?.reasonRequired">
+        <a-form-item label="审批意见" :required="true">
           <a-textarea
             v-model:value="actionForm.reason"
-            :placeholder="currentAction?.vars?.reason ? `请输入${currentAction.vars.reason}` : '请输入审批意见'"
+            placeholder="请输入审批意见"
             :rows="4"
           />
         </a-form-item>
@@ -52,8 +44,8 @@
     <ExpertSelectModal
       ref="expertModalRef"
       :multiple="true"
-      :expert-min="currentAction?.vars?.expertMin || 1"
-      :expert-max="currentAction?.vars?.expertMax || 10"
+      :expert-min="1"
+      :expert-max="10"
       @confirm="handleExpertConfirm"
     />
   </div>
@@ -66,47 +58,59 @@ import { IconifyIcon } from '@vben/icons';
 import { submitBpmAction, type SubmitActionParams } from '#/api/bpm/action';
 import ExpertSelectModal from './ExpertSelectModal.vue';
 import type { DeclareExpertApi } from '#/api/declare/expert';
+import { OperationButtonType } from '#/views/bpm/components/simple-process-design/consts';
 
-interface BpmAction {
-  key: string;
-  label?: string;
-  bizStatus?: string;
-  bizStatusLabel?: string;
-  bpmAction?: string;
-  taskId?: string;
-  vars?: {
-    reason?: string;
-    reasonRequired?: boolean;
-    expertMin?: number;
-    expertMax?: number;
-    isReturned?: boolean;
-    isStartNode?: boolean;
-    backStrategy?: string;
-    [key: string]: any;
+/**
+ * Simple 设计器按钮配置格式 - 数组格式
+ */
+interface ButtonSetting {
+  id: OperationButtonType;
+  displayName: string;
+  enable: boolean;
+}
+
+/**
+ * 后端返回的按钮配置格式 - 对象格式
+ * key 是按钮类型数字（如 1=通过, 2=拒绝, 6=退回, 8=选择专家）
+ */
+interface ButtonSettingMap {
+  [key: number]: {
+    displayName: string;
+    enable: boolean;
   };
+}
+
+/**
+ * 任务信息
+ */
+interface TaskInfo {
+  taskId?: string;
+  processInstanceId?: string;
 }
 
 interface Props {
   businessType: string;
   businessId: number;
-  actions?: BpmAction[];
+  actions?: ButtonSetting[] | ButtonSettingMap;
+  taskInfo?: TaskInfo;
   reload?: () => void;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   actions: () => [],
+  taskInfo: () => ({}),
 });
 
 const emit = defineEmits<{
   success: [];
-  'update:actions': [actions: BpmAction[]];
+  'update:actions': [actions: ButtonSetting[]];
   refresh: [];
 }>();
 
-const availableActions = ref<BpmAction[]>([]);
+const availableActions = ref<ButtonSetting[]>([]);
 const actionModalVisible = ref(false);
 const actionLoading = ref(false);
-const currentAction = ref<BpmAction | null>(null);
+const currentAction = ref<ButtonSetting | null>(null);
 const actionForm = ref({
   reason: '',
 });
@@ -124,72 +128,62 @@ const selectedExperts = ref<DeclareExpertApi.Expert[]>([]);
 watch(
   () => props.actions,
   (newActions) => {
-    // 过滤掉 _PROCESS_RUNNING_ 标记（这是流程进行中但无操作权限的标记）
-    availableActions.value = (newActions || []).filter((a: any) => a.key !== '_PROCESS_RUNNING_');
+    if (!newActions || newActions.length === 0) {
+      availableActions.value = [];
+      return;
+    }
+
+    // 判断是数组格式还是对象格式
+    if (Array.isArray(newActions)) {
+      // 数组格式：[{ id: 1, displayName: '通过', enable: true }, ...]
+      availableActions.value = newActions.filter((a) => a.enable);
+    } else {
+      // 对象格式：{ 1: { displayName: '通过', enable: true }, 2: { displayName: '拒绝', enable: true }, ... }
+      const actions: ButtonSetting[] = [];
+      Object.entries(newActions).forEach(([key, config]: [string, any]) => {
+        if (config && config.enable) {
+          actions.push({
+            id: parseInt(key),
+            displayName: config.displayName || key,
+            enable: true,
+          });
+        }
+      });
+      availableActions.value = actions;
+    }
   },
   { immediate: true, deep: true }
 );
 
 // 获取按钮类型
-function getActionType(key: string): 'primary' | 'default' | 'dashed' | 'link' | 'text' {
-  if (key.includes('pass') || key.includes('agree') || key.includes('approve')) {
+function getActionType(id: number): 'primary' | 'default' | 'dashed' | 'link' | 'text' {
+  if (id === OperationButtonType.APPROVE) {
     return 'primary';
   }
-  if (key.includes('reject') || key.includes('refuse') || key.includes('deny')) {
-    return 'default';
-  }
-  if (key.includes('back')) {
+  if (id === OperationButtonType.REJECT) {
     return 'default';
   }
   return 'default';
 }
 
-// 获取按钮显示文案
-function getActionLabel(action: BpmAction): string {
-  const vars = action.vars || {};
-  const key = action.key;
-
-  // 退回状态或发起节点：submit 改为"重新提交"
-  if ((vars.isReturned || vars.isStartNode) && (key === 'submit' || key === 'resubmit')) {
-    return '重新提交';
-  }
-
-  // 退回按钮显示文案
-  if (key === 'back') {
-    if (vars.backStrategy === 'TO_START') {
-      return '退回发起人';
-    }
-    if (vars.backStrategy === 'TO_PREV') {
-      return '退回上一级';
-    }
-    return '退回';
-  }
-
-  return action.label || key;
-}
-
 // 处理操作点击
-function handleActionClick(action: BpmAction) {
-  const vars = action.vars || {};
+function handleActionClick(action: ButtonSetting) {
   currentAction.value = action;
   actionForm.value.reason = '';
 
   // 选择专家操作 - 打开专家选择弹窗
-  if (action.key.includes('selectExpert') || action.key.includes('expert')) {
-    expertModalRef.value?.open({
-      expertMin: action.vars?.expertMin,
-      expertMax: action.vars?.expertMax,
-    });
+  if (action.id === OperationButtonType.SELECT_APPROVER) {
+    expertModalRef.value?.open();
     return;
   }
 
-  // 如果需要填写理由，打开弹窗
-  if (vars.reason || vars.reasonRequired) {
+  // 拒绝和退回操作，需要填写审批意见
+  if (action.id === OperationButtonType.REJECT || action.id === OperationButtonType.RETURN) {
     actionModalVisible.value = true;
     return;
   }
 
-  // 直接执行
+  // 其他操作直接执行（通过、转办、委派、加签等）
   handleActionConfirm();
 }
 
@@ -199,6 +193,21 @@ function handleExpertConfirm(experts: DeclareExpertApi.Expert[]) {
   // 选择专家后不直接提交，而是触发刷新事件，让父组件刷新数据
   // ExpertSelectModal 使用 useVbenModal，onConfirm 返回 true 后会自动关闭弹窗
   emit('refresh');
+}
+
+// 获取按钮对应的 actionKey
+function getActionKey(id: number): string {
+  const actionKeyMap: Record<number, string> = {
+    [OperationButtonType.APPROVE]: 'approve',
+    [OperationButtonType.REJECT]: 'reject',
+    [OperationButtonType.TRANSFER]: 'transfer',
+    [OperationButtonType.DELEGATE]: 'delegate',
+    [OperationButtonType.ADD_SIGN]: 'addSign',
+    [OperationButtonType.RETURN]: 'return',
+    [OperationButtonType.COPY]: 'copy',
+    [OperationButtonType.SELECT_APPROVER]: 'selectApprover',
+  };
+  return actionKeyMap[id] || 'approve';
 }
 
 // 确认操作
@@ -217,15 +226,11 @@ async function handleActionConfirm() {
     const params: SubmitActionParams = {
       businessType: props.businessType,
       businessId: props.businessId,
-      actionKey: currentAction.value.key,
+      actionKey: getActionKey(currentAction.value.id),
       reason: actionForm.value.reason,
       expertUserIds,
+      taskId: props.taskInfo?.taskId,
     };
-
-    // 退回操作时，传递目标节点
-    if (currentAction.value.key === 'back') {
-      params.targetNodeKey = currentAction.value.vars?.backStrategy;
-    }
 
     await submitBpmAction(params);
     message.success('操作成功');

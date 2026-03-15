@@ -58,22 +58,19 @@ public class FlowableUtils {
         }
     }
 
+    // ========== Tenant 相关的工具方法（已移除租户功能，默认返回无租户） ==========
+
+    public static String getTenantId() {
+        return "";
+    }
+
     public static void execute(String tenantIdStr, Runnable runnable) {
         runnable.run();
     }
 
     @SneakyThrows
-    public static <V> V execute(String tenantIdStr, Callable<V> callable) {  
+    public static <V> V execute(String tenantIdStr, Callable<V> callable) {
         return callable.call();
-    }
-
-    /**
-     * 获得当前租户ID（已移除租户功能，返回空字符串）
-     *
-     * @return 空字符串
-     */
-    public static String getTenantId() {
-        return "";
     }
 
     // ========== Execution 相关的工具方法 ==========

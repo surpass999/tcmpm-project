@@ -121,16 +121,6 @@ public interface BpmModelService {
      */
     BpmnModel getBpmnModelByDefinitionId(String processDefinitionId);
 
-    /**
-     * 获得流程定义对应的 BPMN XML 原始字符串
-     * <p>
-     * 注意：直接读取原始 bytes，不经过 BpmnModel 解析，避免 StAX 长文本截断问题
-     *
-     * @param processDefinitionId 流程定义编号
-     * @return BPMN XML 字符串，如果不存在则返回 null
-     */
-    String getBpmnXmlByDefinitionId(String processDefinitionId);
-
     // ========== 仿钉钉/飞书的精简模型 =========
 
     /**

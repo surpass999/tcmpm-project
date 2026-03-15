@@ -45,4 +45,36 @@ public interface ErrorCodeConstants {
 
     ErrorCode EXPERT_STATUS_ERROR = new ErrorCode(1_010_003_003, "专家状态不正确");
 
+    // ========== 项目信息模块 1-010-004-000 ==========
+
+    ErrorCode PROJECT_NOT_EXISTS = new ErrorCode(1_010_004_001, "项目信息不存在");
+
+    // ========== 项目过程记录模块 1-010-005-000 ==========
+
+    ErrorCode PROJECT_PROCESS_NOT_EXISTS = new ErrorCode(1_010_005_001, "项目过程记录不存在");
+
+    // ========== 过程指标配置模块 1-010-005-100 ==========
+
+    ErrorCode PROCESS_INDICATOR_CONFIG_NOT_EXISTS = new ErrorCode(1_010_005_101, "过程指标配置不存在");
+
+    ErrorCode PROCESS_INDICATOR_CONFIG_EXISTS = new ErrorCode(1_010_005_102, "该过程类型已配置此指标");
+
+    // ========== 整改记录模块 1-010_006-000 ==========
+
+    ErrorCode RECTIFICATION_NOT_EXISTS = new ErrorCode(1_010_006_001, "整改记录不存在");
+
+    // ========== 数据流通模块 1-010-007-000 ==========
+
+    ErrorCode DATAFLOW_NOT_EXISTS = new ErrorCode(1_010_007_001, "数据流通记录不存在");
+
+    ErrorCode DATAFLOW_SUBMIT_STATUS_ERROR = new ErrorCode(1_010_007_002, "只有草稿状态才能提交审核");
+
+    // ========== 成果信息模块 1-010-008-000 ==========
+
+    ErrorCode ACHIEVEMENT_NOT_EXISTS = new ErrorCode(1_010_008_001, "成果信息不存在");
+
+    ErrorCode ACHIEVEMENT_SUBMIT_STATUS_ERROR = new ErrorCode(1_010_008_002, "只有草稿状态才能提交审核");
+
+    ErrorCode ACHIEVEMENT_NO_DATA_FLOW = new ErrorCode(1_010_008_003, "无数据基础，不得填写转化成果");
+
 }

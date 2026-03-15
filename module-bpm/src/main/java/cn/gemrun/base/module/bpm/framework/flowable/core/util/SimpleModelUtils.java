@@ -20,6 +20,8 @@ import org.flowable.bpmn.model.*;
 import org.flowable.bpmn.model.Process;
 import org.flowable.engine.delegate.ExecutionListener;
 import org.flowable.engine.delegate.TaskListener;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.*;
 
@@ -38,6 +40,7 @@ import static java.util.Arrays.asList;
  */
 public class SimpleModelUtils {
 
+    private static final Logger log = LoggerFactory.getLogger(SimpleModelUtils.class);
     private static final Map<BpmSimpleModelNodeTypeEnum, NodeConvert> NODE_CONVERTS = MapUtil.newHashMap();
 
     static {
@@ -360,6 +363,9 @@ public class SimpleModelUtils {
             userTask.setId(node.getId());
             userTask.setName(node.getName());
 
+            log.info("[StartUserNodeConvert] 转换发起人节点: nodeId={}, userTaskId={}, userTaskName={}",
+                    node.getId(), userTask.getId(), userTask.getName());
+
             // 人工审批
             addExtensionElement(userTask, USER_TASK_APPROVE_TYPE, BpmUserTaskApproveTypeEnum.USER.getType());
             // 候选人策略为发起人自己
@@ -413,14 +419,16 @@ public class SimpleModelUtils {
         private BoundaryEvent buildUserTaskTimeoutBoundaryEvent(UserTask userTask,
                                                                 BpmSimpleModelNodeVO.TimeoutHandler timeoutHandler) {
             // 1. 创建 Timeout Boundary Event
+            // 转换 ISO 8601 持续时间格式为 Java Duration 支持的格式
+            // 例如：PT1D -> P1D, PT2H -> PT2H
+            String timeDuration = convertToJavaDurationFormat(timeoutHandler.getTimeDuration());
             String timeCycle = null;
-            if (Objects.equals(BpmUserTaskTimeoutHandlerTypeEnum.REMINDER.getType(), timeoutHandler.getType()) &&
-                    timeoutHandler.getMaxRemindCount() != null && timeoutHandler.getMaxRemindCount() > 1) {
-                timeCycle = String.format("R%d/%s",
-                        timeoutHandler.getMaxRemindCount(), timeoutHandler.getTimeDuration());
-            }
+
+            log.info("[buildUserTaskTimeoutBoundaryEvent] timeDuration origin={}, converted={}",
+                    timeoutHandler.getTimeDuration(), timeDuration);
+
             BoundaryEvent boundaryEvent = buildTimeoutBoundaryEvent(userTask, BpmBoundaryEventTypeEnum.USER_TASK_TIMEOUT.getType(),
-                    timeoutHandler.getTimeDuration(), timeCycle, null);
+                    timeDuration, timeCycle, null, timeoutHandler.getMaxRemindCount());
 
             // 2 添加超时执行动作元素
             addExtensionElement(boundaryEvent, USER_TASK_TIMEOUT_HANDLER_TYPE, timeoutHandler.getType());
@@ -454,7 +462,12 @@ public class SimpleModelUtils {
             addAssignEmptyHandlerType(node.getAssignEmptyHandler(), userTask);
             //  设置审批任务的截止时间
             if (node.getTimeoutHandler() != null && node.getTimeoutHandler().getEnable()) {
-                userTask.setDueDate(node.getTimeoutHandler().getTimeDuration());
+                // 转换 ISO 8601 持续时间格式为 Java Duration 支持的格式
+                // 例如：PT1D -> P1D, PT2H -> PT2H
+                String timeDuration = convertToJavaDurationFormat(node.getTimeoutHandler().getTimeDuration());
+                log.info("[buildBpmnUserTask] timeDuration origin={}, converted={}",
+                        node.getTimeoutHandler().getTimeDuration(), timeDuration);
+                userTask.setDueDate(timeDuration);
             }
             // 设置监听器
             addUserTaskListener(node, userTask);
@@ -735,14 +748,20 @@ public class SimpleModelUtils {
             // 2. 添加接收任务的 Timer Boundary Event
             if (node.getDelaySetting() != null) {
                 BoundaryEvent boundaryEvent = null;
+                // 转换 ISO 8601 持续时间格式为 Java Duration 支持的格式
+                // 例如：PT1D -> P1D, PT2H -> PT2H
+                String delayTime = convertToJavaDurationFormat(node.getDelaySetting().getDelayTime());
+                log.info("[DelayTimerNode] delayTime origin={}, converted={}",
+                        node.getDelaySetting().getDelayTime(), delayTime);
+
                 if (node.getDelaySetting().getDelayType().equals(BpmDelayTimerTypeEnum.FIXED_DATE_TIME.getType())) {
                     // 固定日期
                     boundaryEvent = buildTimeoutBoundaryEvent(receiveTask, BpmBoundaryEventTypeEnum.DELAY_TIMER_TIMEOUT.getType(),
-                            null, null, node.getDelaySetting().getDelayTime());
+                            null, null, node.getDelaySetting().getDelayTime(), 1);
                 } else if (node.getDelaySetting().getDelayType().equals(BpmDelayTimerTypeEnum.FIXED_TIME_DURATION.getType())) {
                     // 固定时长
                     boundaryEvent = buildTimeoutBoundaryEvent(receiveTask, BpmBoundaryEventTypeEnum.DELAY_TIMER_TIMEOUT.getType(),
-                            node.getDelaySetting().getDelayTime(), null, null);
+                            delayTime, null, null, 1);
                 } else {
                     throw new UnsupportedOperationException("不支持的延迟类型：" + node.getDelaySetting());
                 }
@@ -878,12 +897,18 @@ public class SimpleModelUtils {
             // 7. 超时设置
             if (childProcessSetting.getTimeoutSetting() != null && Boolean.TRUE.equals(childProcessSetting.getTimeoutSetting().getEnable())) {
                 BoundaryEvent boundaryEvent = null;
+                // 转换 ISO 8601 持续时间格式为 Java Duration 支持的格式
+                // 例如：PT1D -> P1D, PT2H -> PT2H
+                String timeoutExpr = convertToJavaDurationFormat(childProcessSetting.getTimeoutSetting().getTimeExpression());
+                log.info("[ChildProcess] timeoutExpr origin={}, converted={}",
+                        childProcessSetting.getTimeoutSetting().getTimeExpression(), timeoutExpr);
+
                 if (childProcessSetting.getTimeoutSetting().getType().equals(BpmDelayTimerTypeEnum.FIXED_DATE_TIME.getType())) {
                     boundaryEvent = buildTimeoutBoundaryEvent(callActivity, BpmBoundaryEventTypeEnum.DELAY_TIMER_TIMEOUT.getType(),
-                            childProcessSetting.getTimeoutSetting().getTimeExpression(), null, null);
+                            timeoutExpr, null, null, 1);
                 } else if (childProcessSetting.getTimeoutSetting().getType().equals(BpmDelayTimerTypeEnum.FIXED_TIME_DURATION.getType())) {
                     boundaryEvent = buildTimeoutBoundaryEvent(callActivity, BpmBoundaryEventTypeEnum.CHILD_PROCESS_TIMEOUT.getType(),
-                            null, null, childProcessSetting.getTimeoutSetting().getTimeExpression());
+                            timeoutExpr, null, null, 1);
                 }
                 flowElements.add(boundaryEvent);
             }
@@ -923,7 +948,8 @@ public class SimpleModelUtils {
     }
 
     private static BoundaryEvent buildTimeoutBoundaryEvent(Activity attachedToRef, Integer type,
-                                                           String timeDuration, String timeCycle, String timeDate) {
+                                                           String timeDuration, String timeCycle, String timeDate,
+                                                           Integer maxRemindCount) {
         // 1.1 定时器边界事件
         BoundaryEvent boundaryEvent = new BoundaryEvent();
         boundaryEvent.setId("Event-" + IdUtil.fastUUID());
@@ -934,7 +960,7 @@ public class SimpleModelUtils {
         if (ObjUtil.isNotNull(timeDuration)) {
             eventDefinition.setTimeDuration(timeDuration);
         }
-        if (ObjUtil.isNotNull(timeDuration)) {
+        if (ObjUtil.isNotNull(timeCycle)) {
             eventDefinition.setTimeCycle(timeCycle);
         }
         if (ObjUtil.isNotNull(timeDate)) {
@@ -944,7 +970,31 @@ public class SimpleModelUtils {
 
         // 2. 添加定时器边界事件类型
         addExtensionElement(boundaryEvent, BOUNDARY_EVENT_TYPE, type);
+        // 3. 添加最大提醒次数
+        if (ObjUtil.isNotNull(maxRemindCount)) {
+            addExtensionElement(boundaryEvent, BOUNDARY_EVENT_MAX_REMIND_COUNT, maxRemindCount.toString());
+        }
         return boundaryEvent;
+    }
+
+    /**
+     * 转换 ISO 8601 持续时间格式为 Java Duration 支持的格式
+     * Java Duration 解析器不支持 PT1D 这种格式（只有日期部分带T是错误的）
+     * 需要转换为 P1D 格式（只有日期时不能有T）
+     *
+     * @param duration ISO 8601 格式的持续时间，如 PT1D, PT6H, PT30M
+     * @return 转换后的格式，如 P1D, PT6H, PT30M
+     */
+    private static String convertToJavaDurationFormat(String duration) {
+        if (duration == null || duration.isEmpty()) {
+            return duration;
+        }
+        // 如果格式是 PT + 数字 + D（只有日期部分，没有时间部分），则去掉 T
+        // 例如：PT1D -> P1D, PT2D -> P2D
+        if (duration.matches("^PT\\d+D$")) {
+            return "P" + duration.substring(2); // PT1D -> P1D
+        }
+        return duration;
     }
 
     // ========== SIMPLE 流程预测相关的方法 ==========

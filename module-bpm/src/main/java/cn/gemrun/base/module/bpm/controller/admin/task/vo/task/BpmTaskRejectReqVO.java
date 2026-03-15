@@ -13,6 +13,9 @@ public class BpmTaskRejectReqVO {
     @NotEmpty(message = "任务编号不能为空")
     private String id;
 
+    @Schema(description = "按钮ID，用于更新业务状态", example = "2")
+    private Integer buttonId;
+
     @Schema(description = "审批意见", requiredMode = Schema.RequiredMode.REQUIRED, example = "不错不错！")
     private String reason;
 

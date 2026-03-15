@@ -98,6 +98,10 @@ export enum OperationButtonType {
    * 转办
    */
   TRANSFER = 3,
+  /**
+   * 选择审批人（用于审批人自选场景）
+   */
+  SELECT_APPROVER = 8,
 }
 
 // 审批拒绝类型枚举
@@ -341,6 +345,14 @@ export enum CandidateStrategy {
    * 指定用户组
    */
   USER_GROUP = 40,
+  /**
+   * 上级部门+岗位：查找发起人的上级部门，并获取该部门下指定岗位的用户
+   */
+  SUPERIOR_DEPT_POST = 70,
+  /**
+   * 业务发起人：通过流程变量中的业务创建人ID，获取其所在部门的负责人
+   */
+  BUSINESS_START_USER = 71,
 }
 
 export enum BpmHttpRequestParamTypeEnum {
@@ -472,6 +484,7 @@ export type ButtonSetting = {
   displayName: string;
   enable: boolean;
   id: OperationButtonType;
+  bizStatus?: string;
 };
 
 /**
@@ -684,6 +697,8 @@ export const CANDIDATE_STRATEGY: DictDataType[] = [
     value: CandidateStrategy.FORM_DEPT_LEADER as any,
   },
   { label: '流程表达式', value: CandidateStrategy.EXPRESSION as any },
+  { label: '上级部门+岗位', value: CandidateStrategy.SUPERIOR_DEPT_POST as any },
+  { label: '业务发起人', value: CandidateStrategy.BUSINESS_START_USER as any },
 ];
 // 审批节点 的审批类型
 export const APPROVE_TYPE: DictDataType[] = [
@@ -781,6 +796,7 @@ OPERATION_BUTTON_NAME.set(OperationButtonType.DELEGATE, '委派');
 OPERATION_BUTTON_NAME.set(OperationButtonType.ADD_SIGN, '加签');
 OPERATION_BUTTON_NAME.set(OperationButtonType.RETURN, '退回');
 OPERATION_BUTTON_NAME.set(OperationButtonType.COPY, '抄送');
+OPERATION_BUTTON_NAME.set(OperationButtonType.SELECT_APPROVER, '选择专家');
 
 // 默认的按钮权限设置
 export const DEFAULT_BUTTON_SETTING: ButtonSetting[] = [
@@ -790,6 +806,7 @@ export const DEFAULT_BUTTON_SETTING: ButtonSetting[] = [
   { id: OperationButtonType.DELEGATE, displayName: '委派', enable: true },
   { id: OperationButtonType.ADD_SIGN, displayName: '加签', enable: true },
   { id: OperationButtonType.RETURN, displayName: '退回', enable: true },
+  { id: OperationButtonType.SELECT_APPROVER, displayName: '选择专家', enable: false },
 ];
 
 // 办理人默认的按钮权限设置
@@ -804,7 +821,7 @@ export const TRANSACTOR_DEFAULT_BUTTON_SETTING: ButtonSetting[] = [
 
 // 发起人的按钮权限。暂时定死，不可以编辑
 export const START_USER_BUTTON_SETTING: ButtonSetting[] = [
-  { id: OperationButtonType.APPROVE, displayName: '提交', enable: true },
+  { id: OperationButtonType.APPROVE, displayName: '提交', enable: true, bizStatus: 'SUBMIT' },
   { id: OperationButtonType.REJECT, displayName: '拒绝', enable: false },
   { id: OperationButtonType.TRANSFER, displayName: '转办', enable: false },
   { id: OperationButtonType.DELEGATE, displayName: '委派', enable: false },

@@ -1072,9 +1072,10 @@ onMounted(() => {
 
           <!-- 表头 -->
           <ElRow class="border border-gray-200 px-4 py-3">
-            <ElCol :span="8" class="font-bold">操作按钮</ElCol>
-            <ElCol :span="12" class="font-bold">显示名称</ElCol>
-            <ElCol :span="4" class="flex items-center justify-center font-bold">
+            <ElCol :span="6" class="font-bold">操作按钮</ElCol>
+            <ElCol :span="8" class="font-bold">显示名称</ElCol>
+            <ElCol :span="7" class="font-bold">业务状态</ElCol>
+            <ElCol :span="3" class="flex items-center justify-center font-bold">
               启用
             </ElCol>
           </ElRow>
@@ -1082,15 +1083,15 @@ onMounted(() => {
           <!-- 表格内容 -->
           <div v-for="(item, index) in buttonsSetting" :key="index">
             <ElRow class="border border-t-0 border-gray-200 px-4 py-2">
-              <ElCol :span="8" class="flex items-center truncate">
+              <ElCol :span="6" class="flex items-center truncate">
                 {{ OPERATION_BUTTON_NAME.get(item.id) }}
               </ElCol>
-              <ElCol :span="12" class="flex items-center">
+              <ElCol :span="8" class="flex items-center">
                 <ElInput
                   v-if="btnDisplayNameEdit[index]"
                   :ref="(el: any) => setInputRef(el, index)"
                   type="text"
-                  class="max-w-32 focus:border-blue-500 focus:shadow-[0_0_0_2px_rgba(24,144,255,0.2)] focus:outline-none"
+                  class="max-w-24 focus:border-blue-500 focus:shadow-[0_0_0_2px_rgba(24,144,255,0.2)] focus:outline-none"
                   @blur="btnDisplayNameBlurEvent(index)"
                   @keyup.enter="btnDisplayNameBlurEvent(index)"
                   v-model="item.displayName"
@@ -1103,7 +1104,15 @@ onMounted(() => {
                   </div>
                 </ElButton>
               </ElCol>
-              <ElCol :span="4" class="flex items-center justify-center">
+              <ElCol :span="7" class="flex items-center">
+                <ElInput
+                  type="text"
+                  class="max-w-24"
+                  v-model="item.bizStatus"
+                  placeholder="如: PASS, REJECT"
+                />
+              </ElCol>
+              <ElCol :span="3" class="flex items-center justify-center">
                 <ElSwitch v-model="item.enable" />
               </ElCol>
             </ElRow>

@@ -468,6 +468,7 @@ export type ButtonSetting = {
   displayName: string;
   enable: boolean;
   id: OperationButtonType;
+  bizStatus?: string;
 };
 
 /**
@@ -800,7 +801,7 @@ export const TRANSACTOR_DEFAULT_BUTTON_SETTING: ButtonSetting[] = [
 
 // 发起人的按钮权限。暂时定死，不可以编辑
 export const START_USER_BUTTON_SETTING: ButtonSetting[] = [
-  { id: OperationButtonType.APPROVE, displayName: '提交', enable: true },
+  { id: OperationButtonType.APPROVE, displayName: '提交', enable: true, bizStatus: 'SUBMIT' },
   { id: OperationButtonType.REJECT, displayName: '拒绝', enable: false },
   { id: OperationButtonType.TRANSFER, displayName: '转办', enable: false },
   { id: OperationButtonType.DELEGATE, displayName: '委派', enable: false },

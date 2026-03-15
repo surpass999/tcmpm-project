@@ -81,6 +81,7 @@ public class BpmHttpRequestUtils {
         // 1.1 设置请求头
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
+
         // 1.2 设置请求体
 //        MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
 //        body.add("id", event.getId());

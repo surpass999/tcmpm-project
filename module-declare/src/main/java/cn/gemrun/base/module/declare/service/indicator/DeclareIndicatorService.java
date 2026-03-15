@@ -5,6 +5,8 @@ import cn.gemrun.base.module.declare.dal.dataobject.indicator.DeclareIndicatorDO
 import cn.gemrun.base.framework.common.pojo.PageResult;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * 指标体系 Service 接口
@@ -52,5 +54,15 @@ public interface DeclareIndicatorService {
      * 根据指标代号获取指标
      */
     DeclareIndicatorDO getIndicatorByCode(String indicatorCode);
+
+    /**
+     * 批量获取指标
+     */
+    List<DeclareIndicatorDO> getIndicatorList(Set<Long> ids);
+
+    /**
+     * 根据ID集合获取指标Map
+     */
+    Map<Long, DeclareIndicatorDO> getIndicatorMap(Set<Long> ids);
 
 }

@@ -135,10 +135,19 @@ function openDrawer(node: SimpleFlowNode) {
     // 固定时长
     if (configForm.value.delayType === DelayTypeEnum.FIXED_TIME_DURATION) {
       const strTimeDuration = node.delaySetting.delayTime;
-      const parseTime = strTimeDuration.slice(2, -1);
-      const parseTimeUnit = strTimeDuration.slice(-1);
-      configForm.value.timeDuration = Number.parseInt(parseTime);
-      configForm.value.timeUnit = convertTimeUnit(parseTimeUnit);
+      // 检查是否为有效的 ISO 8601 持续时间格式
+      const isValidDuration = /^P\d+[DHM]$/.test(strTimeDuration);
+      if (isValidDuration) {
+        const parseTime = strTimeDuration.slice(2, -1);
+        const parseTimeUnit = strTimeDuration.slice(-1);
+        configForm.value.timeDuration = Number.parseInt(parseTime);
+        configForm.value.timeUnit = convertTimeUnit(parseTimeUnit);
+      } else {
+        // 无效的延迟配置，设置默认值
+        console.warn('[延迟器配置] 检测到无效的持续时间格式:', strTimeDuration, ', 使用默认值');
+        configForm.value.timeDuration = 1;
+        configForm.value.timeUnit = TimeUnitType.DAY;
+      }
     }
     // 固定日期时间
     if (configForm.value.delayType === DelayTypeEnum.FIXED_DATE_TIME) {

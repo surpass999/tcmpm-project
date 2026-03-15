@@ -97,6 +97,7 @@ export function useBpmAction(options: UseBpmActionOptions) {
         businessId,
         actionKey: action.key,
         reason: extraParams?.reason ?? '',
+        taskId: action.taskId, // 传递任务ID
         ...extraParams,
       } as any);
       message.success(`操作 "${action.label}" 执行成功`);
@@ -159,6 +160,7 @@ export function useBpmAction(options: UseBpmActionOptions) {
         businessId: row?.id ?? businessIdGetter(),
         actionKey: action.key,
         reason: submitForm.value.reason,
+        taskId: action.taskId, // 传递任务ID
       } as any);
       message.success('提交成功');
 

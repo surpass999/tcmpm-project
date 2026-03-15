@@ -18,8 +18,6 @@ import org.flowable.bpmn.model.BpmnModel;
 import org.flowable.bpmn.model.FlowElement;
 import org.flowable.common.engine.api.delegate.event.FlowableEngineEntityEvent;
 import org.flowable.common.engine.api.delegate.event.FlowableEngineEventType;
-import org.flowable.engine.HistoryService;
-import org.flowable.engine.TaskService;
 import org.flowable.engine.delegate.event.AbstractFlowableEngineEventListener;
 import org.flowable.engine.delegate.event.FlowableActivityCancelledEvent;
 import org.flowable.engine.history.HistoricActivityInstance;
@@ -47,12 +45,6 @@ public class BpmTaskEventListener extends AbstractFlowableEngineEventListener {
     @Resource
     @Lazy // 解决循环依赖
     private BpmTaskService taskService;
-    @Resource
-    @Lazy // 解决循环依赖
-    private TaskService flowableTaskService;
-    @Resource
-    @Lazy // 解决循环依赖
-    private HistoryService historyService;
 
     public static final Set<FlowableEngineEventType> TASK_EVENTS = ImmutableSet.<FlowableEngineEventType>builder()
             .add(FlowableEngineEventType.TASK_CREATED)
@@ -88,7 +80,7 @@ public class BpmTaskEventListener extends AbstractFlowableEngineEventListener {
     protected void activityCancelled(FlowableActivityCancelledEvent event) {
         List<HistoricActivityInstance> activityList = taskService.getHistoricActivityListByExecutionId(event.getExecutionId());
         if (CollUtil.isEmpty(activityList)) {
-            log.warn("[activityCancelled][使用 executionId({}) 查找不到对应的活动实例]", event.getExecutionId());
+            log.error("[activityCancelled][使用 executionId({}) 查找不到对应的活动实例]", event.getExecutionId());
             return;
         }
         // 遍历处理
@@ -96,18 +88,7 @@ public class BpmTaskEventListener extends AbstractFlowableEngineEventListener {
             if (StrUtil.isEmpty(activity.getTaskId())) {
                 return;
             }
-            // 检查任务是否还存在（可能被 Flowable 异步删除了）
-            try {
-                Task task = flowableTaskService.createTaskQuery().taskId(activity.getTaskId()).singleResult();
-                if (task != null) {
-                    taskService.processTaskCanceled(activity.getTaskId());
-                } else {
-                    log.debug("[activityCancelled][任务已不存在，跳过处理] taskId={}", activity.getTaskId());
-                }
-            } catch (Exception e) {
-                log.warn("[activityCancelled][处理任务取消失败，跳过] taskId={}, error={}",
-                        activity.getTaskId(), e.getMessage());
-            }
+            taskService.processTaskCanceled(activity.getTaskId());
         });
     }
 

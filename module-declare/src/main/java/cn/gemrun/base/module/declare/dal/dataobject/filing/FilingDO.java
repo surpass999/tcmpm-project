@@ -8,7 +8,7 @@ import cn.gemrun.base.framework.mybatis.core.dataobject.BaseDO;
 /**
  * 项目备案核心信息 DO
  *
- * @author 芋道源码
+ * @author 杜春渔
  */
 @TableName("declare_filing")
 @KeySequence("declare_filing_seq") // 用于 Oracle、PostgreSQL、Kingbase、DB2、H2 数据库的主键自增。如果是 MySQL 等数据库，可不写。
@@ -25,6 +25,14 @@ public class FilingDO extends BaseDO {
      */
     @TableId
     private Long id;
+    /**
+     * 流程实例ID
+     */
+    private String processInstanceId;
+    /**
+     * 备案编号（格式：PRNT+年月日+序号，如 PRNT202603140001）
+     */
+    private String filingCode;
     /**
      * 统一社会信用代码
      */
@@ -49,6 +57,10 @@ public class FilingDO extends BaseDO {
      * 有效期限结束时间
      */
     private LocalDateTime validEndTime;
+    /**
+     * 项目计划完成时间
+     */
+    private LocalDateTime planEndTime;
     /**
      * 建设内容（备案方案核心）
      */

@@ -206,8 +206,7 @@ public interface BpmProcessInstanceConvert {
         }
         return BeanUtils.toBean(task, BpmApprovalDetailRespVO.ActivityNodeTask.class)
                 .setStatus(FlowableUtils.getTaskStatus(task)).setReason(FlowableUtils.getTaskReason(task))
-                .setSignPicUrl(FlowableUtils.getTaskSignPicUrl(task))
-                .setTaskDefinitionKey(task.getTaskDefinitionKey());
+                .setSignPicUrl(FlowableUtils.getTaskSignPicUrl(task));
     }
 
     default Set<Long> parseUserIds(HistoricProcessInstance processInstance,

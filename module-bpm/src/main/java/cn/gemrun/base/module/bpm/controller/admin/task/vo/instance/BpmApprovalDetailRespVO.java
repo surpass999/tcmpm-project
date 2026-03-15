@@ -84,9 +84,6 @@ public class BpmApprovalDetailRespVO {
         @Schema(description = "任务编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "1")
         private String id;
 
-        @Schema(description = "任务定义Key", example = "Activity_0isavu8")
-        private String taskDefinitionKey;
-
         @Schema(description = "任务所属人编号", requiredMode = Schema.RequiredMode.NOT_REQUIRED, example = "1818")
         @JsonIgnore // 不返回，只是方便后续读取，赋值给 ownerUser
         private Long owner;
@@ -109,12 +106,6 @@ public class BpmApprovalDetailRespVO {
 
         @Schema(description = "签名", example = "https://www.iocoder.cn/sign.png")
         private String signPicUrl;
-
-        @Schema(description = "任务开始时间（创建时间）")
-        private LocalDateTime createTime;
-
-        @Schema(description = "任务结束时间（完成时间）")
-        private LocalDateTime endTime;
 
     }
 

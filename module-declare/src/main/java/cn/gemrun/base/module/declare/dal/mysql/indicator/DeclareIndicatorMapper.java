@@ -17,6 +17,11 @@ import java.util.List;
 @Mapper
 public interface DeclareIndicatorMapper extends BaseMapperX<DeclareIndicatorDO> {
 
+    /**
+     * 项目类型 - 通用/全部类型
+     */
+    Integer COMPREHENSIVE_PROJECT_TYPE = 0;
+
     default PageResult<DeclareIndicatorDO> selectPage(DeclareIndicatorPageReqVO reqVO) {
         LambdaQueryWrapperX<DeclareIndicatorDO> wrapper = new LambdaQueryWrapperX<DeclareIndicatorDO>();
         
@@ -45,7 +50,7 @@ public interface DeclareIndicatorMapper extends BaseMapperX<DeclareIndicatorDO> 
                 .and(wrapper -> wrapper
                         .eq(DeclareIndicatorDO::getProjectType, projectType)
                         .or()
-                        .eq(DeclareIndicatorDO::getProjectType, 0))  // 0 表示适用于所有项目类型
+                        .eq(DeclareIndicatorDO::getProjectType, COMPREHENSIVE_PROJECT_TYPE))  // 通用类型适用于所有项目类型
                 .orderByAsc(DeclareIndicatorDO::getCategory)
                 .orderByAsc(DeclareIndicatorDO::getSort));
     }

@@ -159,6 +159,10 @@ export enum BpmTaskOperationButtonTypeEnum {
    * 转办
    */
   TRANSFER = 3,
+  /**
+   * 选择审批人（用于审批人自选场景）
+   */
+  SELECT_APPROVER = 8,
 }
 
 /**
@@ -286,6 +290,7 @@ OPERATION_BUTTON_NAME.set(BpmTaskOperationButtonTypeEnum.DELEGATE, '委派');
 OPERATION_BUTTON_NAME.set(BpmTaskOperationButtonTypeEnum.ADD_SIGN, '加签');
 OPERATION_BUTTON_NAME.set(BpmTaskOperationButtonTypeEnum.RETURN, '退回');
 OPERATION_BUTTON_NAME.set(BpmTaskOperationButtonTypeEnum.COPY, '抄送');
+OPERATION_BUTTON_NAME.set(BpmTaskOperationButtonTypeEnum.SELECT_APPROVER, '选择专家');
 
 /**
  * 流程实例的变量枚举

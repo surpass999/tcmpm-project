@@ -114,14 +114,16 @@ SET FOREIGN_KEY_CHECKS = 0;
 DROP TABLE IF EXISTS `declare_filing`;
 CREATE TABLE `declare_filing`  (
   `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '备案主键（自增）',
+  `filing_code` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '备案编号',
+  `process_instance_id` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '流程实例ID',
   `social_credit_code` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '统一社会信用代码',
   `medical_license_no` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '医疗机构执业许可证号',
   `org_name` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '机构名称',
   `project_type` tinyint(4) NOT NULL COMMENT '项目类型：1=综合型，2=中医电子病历型，3=智慧中药房型，4=名老中医传承型，5=中医临床科研型，6=中医智慧医共体型',
-
   -- 备案时间
   `valid_start_time` datetime NOT NULL COMMENT '有效期限开始时间',
   `valid_end_time` datetime NOT NULL COMMENT '有效期限结束时间',
+  `plan_end_time` datetime DEFAULT NULL COMMENT '项目计划完成时间',
 
   -- 备案内容
   `construction_content` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '建设内容（备案方案核心）',
@@ -178,8 +180,8 @@ CREATE TABLE `declare_project`  (
   `filing_id` bigint(20) NOT NULL COMMENT '关联备案ID（declare_filing.id）',
   `project_name` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '项目名称',
 
-  -- 项目状态：0=立项中(FILING)，1=建设中(CONSTRUCTION)，2=中期评估(MIDTERM)，3=整改中(RECTIFICATION)，4=验收中(ACCEPTANCE)，5=已验收(ACCEPTED)，6=已终止(TERMINATED)
-  `project_status` tinyint(4) NOT NULL DEFAULT 0 COMMENT '项目状态：0=立项中，1=建设中，2=中期评估，3=整改中，4=验收中，5=已验收，6=已终止',
+  -- 项目状态：
+  `project_status` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'APPROVAL' COMMENT '项目状态：字典:declare_project_status',
 
   -- 核心指标（冗余存储，方便查询）
   `total_investment` decimal(18, 2) DEFAULT NULL COMMENT '总投资（万元，关联指标201）',
@@ -189,17 +191,17 @@ CREATE TABLE `declare_project`  (
 
   -- 时间信息
   `start_time` datetime NOT NULL COMMENT '立项时间',
-  `plan_end_time` datetime NOT NULL COMMENT '计划完成时间',
+  `plan_end_time` datetime DEFAULT NULL COMMENT '计划完成时间',
   `actual_end_time` datetime DEFAULT NULL COMMENT '实际完成时间',
 
   -- 进度信息
   `actual_progress` int(11) DEFAULT 0 COMMENT '实际进度（%）',
 
   -- 负责人信息
-  `leader_user_id` bigint(20) NOT NULL COMMENT '项目负责人ID（关联system_users.id）',
-  `leader_mobile` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '负责人手机号',
+  `leader_user_id` bigint(20) DEFAULT NULL COMMENT '项目负责人ID（关联system_users.id）',
+  `leader_mobile` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '负责人手机号',
   `leader_name` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '负责人姓名（冗余）',
-
+  `dept_id` bigint(20) DEFAULT NULL COMMENT '所属部门ID（关联system_dept.id）',
   -- 通用字段
   `version` int(11) NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',
   `delete_reason` varchar(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '删除原因',
@@ -225,16 +227,16 @@ CREATE TABLE `declare_project_process`  (
   `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '过程记录主键（自增）',
   `project_id` bigint(20) NOT NULL COMMENT '关联项目ID（declare_project.id）',
 
-  -- 过程类型：1=建设过程，2=年度总结，3=中期评估，4=整改记录，5=验收申请
-  `process_type` tinyint(4) NOT NULL COMMENT '过程类型：1=建设过程，2=年度总结，3=中期评估，4=整改记录，5=验收申请',
+  -- 过程类型：1=建设过程，2=半年报，3=年度总结，4=中期评估，5=整改记录，6=验收申请
+  `process_type` tinyint(4) NOT NULL COMMENT '过程类型：1=建设过程，2=半年报，3=年度总结，4=中期评估，5=整改记录，6=验收申请',
   `process_title` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '过程标题（如：2025年上半年建设过程）',
 
   -- 过程数据（JSON格式，灵活存储）
   `process_data` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci COMMENT '过程数据JSON',
   `indicator_values` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci COMMENT '指标值JSON',
 
-  -- 状态：0=草稿(DRAFT)，1=已提交(SUBMITTED)，2=审核中(AUDITING)，3=通过(APPROVED)，4=退回(REJECTED)
-  `status` tinyint(4) NOT NULL DEFAULT 0 COMMENT '状态：0=草稿，1=已提交，2=审核中，3=通过，4=退回',
+  -- 状态：数据字典
+  `status` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '0' COMMENT '状态：数据字典',
   `status_reason` varchar(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '状态变更原因',
 
   -- 时间信息
@@ -364,6 +366,20 @@ CREATE TABLE `declare_achievement`  (
   INDEX `idx_audit_status`(`audit_status`) USING BTREE COMMENT '审核状态索引',
   INDEX `idx_recommend_status`(`recommend_status`) USING BTREE COMMENT '推荐状态索引'
 ) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '成果核心信息表' ROW_FORMAT = Dynamic;
+
+-- ----------------------------
+-- 补充字段：成果转化表缺失字段（根据需求文档3.6.1补充）
+-- ----------------------------
+ALTER TABLE `declare_achievement`
+  ADD COLUMN `effect_description` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci COMMENT '应用效果描述' AFTER `description`,
+  ADD COLUMN `replication_value` tinyint(4) DEFAULT NULL COMMENT '可复制性评估：1=高，2=中，3=低' AFTER `effect_description`,
+  ADD COLUMN `promotion_scope` tinyint(4) DEFAULT NULL COMMENT '推广范围：1=院内，2=省级，3=全国' AFTER `replication_value`,
+  ADD COLUMN `promotion_count` int(11) NOT NULL DEFAULT 0 COMMENT '推广次数' AFTER `promotion_scope`,
+  ADD COLUMN `transform_type` tinyint(4) DEFAULT NULL COMMENT '转化类型：1=标准规范，2=创新模式，3=典型案例' AFTER `promotion_count`;
+
+CREATE INDEX `idx_replication_value` ON `declare_achievement`(`replication_value`);
+CREATE INDEX `idx_promotion_scope` ON `declare_achievement`(`promotion_scope`);
+CREATE INDEX `idx_transform_type` ON `declare_achievement`(`transform_type`);
 
 -- ----------------------------
 -- 6. declare_indicator（指标体系表）
@@ -1069,6 +1085,19 @@ CREATE TABLE `declare_data_flow`  (
 ) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '数据流通记录表' ROW_FORMAT = Dynamic;
 
 -- ----------------------------
+-- 补充字段：数据流通表缺失字段（根据需求文档3.6/3.7指标分类补充）
+-- ----------------------------
+ALTER TABLE `declare_data_flow`
+  ADD COLUMN `data_volume` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '数据量规模（如：100万条、50GB）' AFTER `data_source`,
+  ADD COLUMN `data_quality` tinyint(4) DEFAULT NULL COMMENT '数据质量评级：1=优，2=良，3=中，4=差' AFTER `data_volume`,
+  ADD COLUMN `share_scope` tinyint(4) DEFAULT NULL COMMENT '共享范围：1=院内，2=省级，3=全国' AFTER `data_quality`,
+  ADD COLUMN `start_time` datetime DEFAULT NULL COMMENT '流通开始时间' AFTER `share_scope`,
+  ADD COLUMN `end_time` datetime DEFAULT NULL COMMENT '流通结束时间' AFTER `start_time`;
+
+CREATE INDEX `idx_data_quality` ON `declare_data_flow`(`data_quality`);
+CREATE INDEX `idx_share_scope` ON `declare_data_flow`(`share_scope`);
+
+-- ----------------------------
 -- 22. declare_achievement_display（成果展示表）
 -- ----------------------------
 -- 说明：展示数据流通的成果，关联 declare_achievement
@@ -1262,8 +1291,20 @@ CREATE TABLE IF NOT EXISTS `bpm_business_type` (
   INDEX `idx_enabled`(`enabled`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='业务类型与流程关联配置表';
 
-
-
+-- 流程过程指标配置表
+DROP TABLE IF EXISTS `declare_process_indicator_config`;
+CREATE TABLE `declare_process_indicator_config` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `process_type` tinyint(4) NOT NULL COMMENT '过程类型(1=建设过程,2=半年报,3=年度总结,4=中期评估,5=整改记录,6=验收申请)',
+  `project_type` tinyint(4) NOT NULL DEFAULT 0 COMMENT '项目类型(0=全部,1=综合型,2=中医电子病历型,3=智慧中药房型,4=名老中医传承型,5=中医临床科研型,6=中医智慧医共体型)',
+  `indicator_id` bigint(20) NOT NULL COMMENT '指标ID(关联declare_indicator.id)',
+  `is_required` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否必填',
+  `sort` int(11) NOT NULL DEFAULT 0 COMMENT '排序',
+  `create_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_process_project_indicator` (`process_type`, `project_type`, `indicator_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='流程过程指标配置表';
 
 -- =====================================================
 -- 外键约束（如需要可取消注释）

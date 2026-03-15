@@ -120,3 +120,56 @@ export const withdrawTask = async (taskId: string) => {
     params: { taskId },
   });
 };
+
+/** 根据业务ID批量查询任务状态 */
+export namespace BpmTaskByBusinessApi {
+  export interface ReqVO {
+    /** 业务表分类（对应 bpm_business_type.process_category） */
+    tableName: string;
+    /** 业务ID列表 */
+    businessIds: number[];
+  }
+
+  export interface TodoTask {
+    taskId: string;
+    taskName: string;
+    taskDefinitionKey: string;
+    createTime: string;
+    formId?: number;
+    formName?: string;
+    formConf?: string;
+    buttonSettings?: Record<string, { displayName: string; enable: boolean }>;
+    signEnable?: boolean;
+    reasonRequire?: boolean;
+    nodeType?: string;
+  }
+
+  export interface DoneTask {
+    taskId: string;
+    taskName: string;
+    taskDefinitionKey: string;
+    endTime: string;
+    approved?: boolean;
+    reason?: string;
+    assigneeUser?: any;
+  }
+
+  export interface RespVO {
+    businessId: number;
+    processInstanceId?: string;
+    hasTodoTask: boolean;
+    todoTasks: TodoTask[];
+    doneTasks: DoneTask[];
+  }
+}
+
+/**
+ * 根据业务ID批量查询任务状态
+ * 用于列表页面批量获取多个业务ID的待办/已办任务
+ */
+export const getTaskByBusiness = async (data: BpmTaskByBusinessApi.ReqVO) => {
+  return await requestClient.post<BpmTaskByBusinessApi.RespVO[]>(
+    '/bpm/declare/task-status/query-by-business',
+    data,
+  );
+};

@@ -203,6 +203,14 @@ public interface BpmTaskService {
     void rejectTask(Long userId, @Valid BpmTaskRejectReqVO reqVO);
 
     /**
+     * 设置下一个节点的审批人
+     *
+     * @param userId 用户编号
+     * @param reqVO  设置下一个节点审批人请求
+     */
+    void setNextAssignees(Long userId, @Valid BpmTaskNextAssigneesReqVO reqVO);
+
+    /**
      * 将流程任务分配给指定用户
      *
      * @param userId 用户编号

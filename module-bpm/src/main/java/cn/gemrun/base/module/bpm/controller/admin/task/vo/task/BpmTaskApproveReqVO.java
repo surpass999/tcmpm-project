@@ -15,6 +15,9 @@ public class BpmTaskApproveReqVO {
     @NotEmpty(message = "任务编号不能为空")
     private String id;
 
+    @Schema(description = "按钮 Id（对应按钮设置的 Id，用于获取 bizStatus）", example = "1")
+    private Integer buttonId;
+
     @Schema(description = "审批意见", example = "不错不错！")
     private String reason;
 

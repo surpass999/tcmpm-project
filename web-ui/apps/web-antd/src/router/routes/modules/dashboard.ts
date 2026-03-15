@@ -40,6 +40,15 @@ const routes: RouteRecordRaw[] = [
           title: $t('page.dashboard.medical'),
         },
       },
+      {
+        name: 'BusinessConsole',
+        path: '/business',
+        component: () => import('#/views/dashboard/business/index.vue'),
+        meta: {
+          icon: 'ant-design:dashboard-outlined',
+          title: '业务控制台',
+        },
+      },
     ],
   },
   {

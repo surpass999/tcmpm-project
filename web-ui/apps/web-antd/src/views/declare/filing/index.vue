@@ -9,6 +9,7 @@ import { computed, nextTick, onMounted, ref, shallowRef } from 'vue';
 
 import { confirm, Page, useVbenModal } from '@vben/common-ui';
 import { downloadFileFromBlobPart, isEmpty } from '@vben/utils';
+import { useUserStore } from '@vben/stores';
 
 import { message } from 'ant-design-vue';
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
@@ -16,13 +17,18 @@ import {
   deleteFiling,
   deleteFilingList,
   exportFiling,
+  submitFiling,
   getFilingPage,
 } from '#/api/declare/filing';
 import { getIndicatorsForListDisplay } from '#/api/declare/indicator';
-import { getAvailableActions, getAvailableActionsBatch } from '#/api/bpm/action';
+import { getTaskListByProcessInstanceId, approveTask, rejectTask, transferTask, delegateTask, signCreateTask, returnTask, copyTask, setNextAssignees, getTaskListByReturn } from '#/api/bpm/task';
+import { getTaskByBusiness } from '#/api/bpm/task';
+import { getAvailableActions } from '#/api/bpm/action';
+import { getSimpleUserList } from '#/api/system/user';
 import { $t } from '#/locales';
 
 import ExpertSelectModalCmp from '#/components/bpm/ExpertSelectModal.vue';
+import UserSelectModalCmp from '#/components/bpm/UserSelectModal.vue';
 
 import { useBpmAction } from '#/composables/useBpmAction';
 
@@ -34,6 +40,12 @@ import ActionButtonCmp from '#/components/bpm/ActionButton.vue';
 
 // 业务类型
 const BUSINESS_TYPE_KEY = 'declare:filing:create';
+
+// 当前登录用户ID
+const userStore = useUserStore();
+const currentUserId = computed(() => {
+  return Number(userStore.userInfo?.userId) || userStore.userInfo?.id;
+});
 
 // 每行的可用操作缓存 { [id]: BpmAction[] }
 const rowAvailableActions = ref<Record<number, any[]>>({});
@@ -104,30 +116,64 @@ const [FormModal, formModalApi] = useVbenModal({
   // contentClass: '!min-w-[90%] !min-h-[80vh]'
 });
 
-/** 加载一批备案行的可用操作按钮（批量请求优化） */
+/** 加载一批备案行的可用操作按钮（从 BPM 获取） */
 async function loadRowAvailableActions(rows: DeclareFilingApi.Filing[]) {
   const results: Record<number, any[]> = { ...rowAvailableActions.value };
-  const ids = rows.filter((row) => row.id).map((row) => row.id!);
 
-  if (ids.length === 0) {
+  // 过滤有效的业务ID
+  const validRows = rows.filter((row) => row.id);
+  if (validRows.length === 0) {
     return;
   }
 
-  try {
-    // 一次批量请求获取所有行的可用操作
-    const actionsMap = await getAvailableActionsBatch(BUSINESS_TYPE_KEY, ids);
-    console.log('[BPM] batch actions result:', actionsMap);
+  const businessIds = validRows.map((row) => row.id!);
 
-    // 按 businessId 分配结果
-    ids.forEach((id) => {
-      results[id] = actionsMap[id] || [];
+  try {
+    // 使用新的批量查询接口，根据 tableName + businessIds 批量查询
+    const taskStatusList = await getTaskByBusiness({
+      tableName: 'filing',
+      businessIds,
     });
+
+    console.log('[BPM] taskStatusList for filing:', taskStatusList);
+
+    // 遍历结果，解析待办任务中的按钮配置
+    for (const taskStatus of taskStatusList) {
+      const businessId = taskStatus.businessId;
+
+      if (taskStatus.hasTodoTask && taskStatus.todoTasks && taskStatus.todoTasks.length > 0) {
+        // 取第一个待办任务
+        const todoTask = taskStatus.todoTasks[0];
+        const buttonsSetting = todoTask.buttonSettings || {};
+
+        // 解析按钮配置
+        // 后端返回的是 Map<Integer, ButtonSetting>，key 是按钮类型枚举值
+        const actions: any[] = [];
+        Object.entries(buttonsSetting).forEach(([type, config]: [string, any]) => {
+          if (config && config.enable) {
+            actions.push({
+              key: type, // 使用按钮类型作为 key
+              label: config.displayName || type,
+              vars: {},
+              taskId: todoTask.taskId,
+              processInstanceId: taskStatus.processInstanceId,
+              taskDefinitionKey: todoTask.taskDefinitionKey,
+              // 额外的配置信息
+              signEnable: todoTask.signEnable,
+              reasonRequire: todoTask.reasonRequire,
+            });
+          }
+        });
+
+        results[businessId] = actions;
+        console.log('[BPM] actions for filing:', businessId, actions);
+      } else {
+        // 没有待办任务，说明流程已结束或没有进行中的任务
+        results[businessId] = [];
+      }
+    }
   } catch (e) {
-    console.error('[BPM] 批量加载操作失败:', e);
-    // 失败时设为空
-    ids.forEach((id) => {
-      results[id] = [];
-    });
+    console.error('[BPM] 加载操作失败:', e);
   }
 
   console.log('[BPM] rowAvailableActions updated:', results);
@@ -137,7 +183,19 @@ async function loadRowAvailableActions(rows: DeclareFilingApi.Filing[]) {
 /** 获取行操作按钮列表（处理退回状态的按钮文案） */
 function getRowActions(row: DeclareFilingApi.Filing) {
   const actions = rowAvailableActions.value[row.id!] || [];
-  return [
+
+  const actionButtons = [
+    // DRAFT 状态：显示"提交审核"按钮（只有创建者才能提交）
+    ...(row.filingStatus === 'DRAFT' && row.creator === currentUserId.value
+      ? [
+          {
+            label: '提交审核',
+            type: 'link' as any,
+            onClick: () => handleSubmitForApproval(row),
+          },
+        ]
+      : []),
+      
     // DSL 定义的流程操作按钮（如：提交、通过、退回等）
     ...actions.map((action: any) => ({
     // 退回状态：submit 改为"重新提交"（只有被退回后才显示"重新提交"，新提交显示"提交审核"）
@@ -172,6 +230,8 @@ function getRowActions(row: DeclareFilingApi.Filing) {
       },
     },
   ];
+
+  return actionButtons;
 }
 
 // 使用 BPM 操作 Hook
@@ -200,11 +260,17 @@ const {
 const currentSubmitRow = ref<DeclareFilingApi.Filing | null>(null);
 const currentSubmitAction = ref<any>(null);
 
-/** 执行 DSL 按钮操作 */
+/** 执行 BPM 按钮操作 */
 async function handleBpmAction(row: DeclareFilingApi.Filing, action: any) {
   currentSubmitRow.value = row;
   currentSubmitAction.value = action;
   const vars = action.vars || {};
+
+  // BPM 原生按钮：approve/reject
+  if (action.taskId) {
+    await handleNativeBpmAction(row, action);
+    return;
+  }
 
   // 专家选择弹窗：先打开弹窗
   if (vars.expertMin !== undefined || vars.expertMax !== undefined) {
@@ -224,18 +290,480 @@ async function handleBpmAction(row: DeclareFilingApi.Filing, action: any) {
   await handleBpmActionBase(row, action);
 }
 
+/** 处理 BPM 原生按钮（approve/reject/transfer/delegate/addSign/return/copy/selectApprover 等） */
+async function handleNativeBpmAction(row: DeclareFilingApi.Filing, action: any) {
+  const { taskId, key, reasonRequire } = action;
+  const buttonId = Number(key); // 将 key 转换为数字（1-8）
+
+  // 解析 vars 中的额外配置
+  const vars = action.vars || {};
+
+  try {
+    // 根据按钮ID处理不同的操作
+    switch (buttonId) {
+      case 1: // 通过 (APPROVE)
+        await handleApproveAction(row, action);
+        break;
+      case 2: // 拒绝 (REJECT)
+        await handleRejectAction(row, action);
+        break;
+      case 3: // 转办 (TRANSFER)
+        await handleTransferAction(row, action);
+        break;
+      case 4: // 委派 (DELEGATE)
+        await handleDelegateAction(row, action);
+        break;
+      case 5: // 加签 (ADD_SIGN)
+        await handleAddSignAction(row, action);
+        break;
+      case 6: // 退回 (RETURN)
+        await handleReturnAction(row, action);
+        break;
+      case 7: // 抄送 (COPY)
+        await handleCopyAction(row, action);
+        break;
+      case 8: // 选择专家 (SELECT_APPROVER) - 使用专家选择弹窗
+        await handleSelectApproverAction(row, action);
+        break;
+      default:
+        message.warning(`未知的操作: ${buttonId}`);
+    }
+  } catch (e: any) {
+    console.error('[BPM] 执行操作失败:', e);
+    message.error(e.message || '操作失败');
+  }
+}
+
+/** 处理通过操作 */
+async function handleApproveAction(row: DeclareFilingApi.Filing, action: any) {
+  const { taskId, reasonRequire } = action;
+  const vars = action.vars || {};
+
+  // 如果需要输入审批意见，打开弹窗
+  if (reasonRequire) {
+    // 使用弹窗让用户输入审批意见
+    approvalFormData.value.taskId = taskId;
+    approvalFormData.value.buttonId = 1;
+    approvalFormData.value.reason = '';
+    approvalFormData.value.title = vars.approveName || '通过';
+    approvalFormData.value.reasonLabel = vars.reason || '审批意见';
+    approvalFormData.value.reasonRequired = reasonRequire;
+    approvalFormVisible.value = true;
+    return;
+  }
+
+  // 直接提交
+  await approveTask({ id: taskId, buttonId: 1, reason: '' });
+  message.success('审批通过');
+  await loadRowAvailableActions([row]);
+}
+
+/** 处理拒绝操作 */
+async function handleRejectAction(row: DeclareFilingApi.Filing, action: any) {
+  const { taskId, reasonRequire } = action;
+  const vars = action.vars || {};
+
+  // 拒绝操作通常需要输入原因
+  approvalFormData.value.taskId = taskId;
+  approvalFormData.value.buttonId = 2;
+  approvalFormData.value.reason = '';
+  approvalFormData.value.title = vars.rejectName || '拒绝';
+  approvalFormData.value.reasonLabel = vars.reason || '拒绝原因';
+  approvalFormData.value.reasonRequired = reasonRequire !== false; // 拒绝原因默认必填
+  approvalFormVisible.value = true;
+}
+
+/** 处理转办操作 */
+async function handleTransferAction(row: DeclareFilingApi.Filing, action: any) {
+  const { taskId, reasonRequire } = action;
+  const vars = action.vars || {};
+
+  // 打开用户选择弹窗
+  userSelectData.value.taskId = taskId;
+  userSelectData.value.buttonId = 3;
+  userSelectData.value.title = vars.transferName || '转办';
+  userSelectData.value.multiple = false;
+  userSelectData.value.reasonRequired = reasonRequire !== false;
+  userSelectModalApi.setData({
+    title: vars.transferName || '选择转办人',
+    multiple: false,
+  }).open();
+}
+
+/** 处理委派操作 */
+async function handleDelegateAction(row: DeclareFilingApi.Filing, action: any) {
+  const { taskId, reasonRequire } = action;
+  const vars = action.vars || {};
+
+  // 打开用户选择弹窗
+  userSelectData.value.taskId = taskId;
+  userSelectData.value.buttonId = 4;
+  userSelectData.value.title = vars.delegateName || '委派';
+  userSelectData.value.multiple = false;
+  userSelectData.value.reasonRequired = reasonRequire !== false;
+  userSelectModalApi.setData({
+    title: vars.delegateName || '选择被委派人',
+    multiple: false,
+  }).open();
+}
+
+/** 处理加签操作 */
+async function handleAddSignAction(row: DeclareFilingApi.Filing, action: any) {
+  const { taskId, reasonRequire } = action;
+  const vars = action.vars || {};
+
+  // 打开用户选择弹窗（加签可以多人）
+  userSelectData.value.taskId = taskId;
+  userSelectData.value.buttonId = 5;
+  userSelectData.value.title = vars.addSignName || '加签';
+  userSelectData.value.multiple = true;
+  userSelectData.value.reasonRequired = reasonRequire !== false;
+  userSelectModalApi.setData({
+    title: vars.addSignName || '选择加签人',
+    multiple: true,
+  }).open();
+}
+
+/** 处理退回操作 */
+async function handleReturnAction(row: DeclareFilingApi.Filing, action: any) {
+  const { taskId, reasonRequire } = action;
+  const vars = action.vars || {};
+
+  // 先获取可退回的节点列表
+  try {
+    const returnNodes = await getTaskListByReturn(taskId);
+    if (!returnNodes || returnNodes.length === 0) {
+      message.warning('没有可退回的节点');
+      return;
+    }
+
+    // 打开退回弹窗
+    returnData.value.taskId = taskId;
+    returnData.value.buttonId = 6;
+    returnData.value.title = vars.returnName || '退回';
+    returnData.value.reasonRequired = reasonRequire !== false;
+    returnData.value.nodes = returnNodes.map((node: any) => ({
+      key: node.taskDefinitionKey,
+      label: node.name,
+    }));
+    returnModalVisible.value = true;
+  } catch (e: any) {
+    console.error('[BPM] 获取可退回节点失败:', e);
+    // 根据错误类型给出不同提示
+    if (e.response?.status === 403 || e.response?.data?.code === 403) {
+      message.error('您没有执行此操作的权限，请联系管理员');
+    } else {
+      message.error('获取可退回节点失败');
+    }
+  }
+}
+
+/** 处理抄送操作 */
+async function handleCopyAction(row: DeclareFilingApi.Filing, action: any) {
+  const { taskId, reasonRequire } = action;
+  const vars = action.vars || {};
+
+  // 打开用户选择弹窗（抄送可以多人）
+  userSelectData.value.taskId = taskId;
+  userSelectData.value.buttonId = 7;
+  userSelectData.value.title = vars.copyName || '抄送';
+  userSelectData.value.multiple = true;
+  userSelectData.value.reasonRequired = reasonRequire;
+  userSelectModalApi.setData({
+    title: vars.copyName || '选择抄送人',
+    multiple: true,
+  }).open();
+}
+
+/** 处理选择专家操作 */
+async function handleSelectApproverAction(row: DeclareFilingApi.Filing, action: any) {
+  const { taskId } = action;
+  const vars = action.vars || {};
+
+  // 使用已有的专家选择弹窗
+  const selectedCount = row.expertReviewerIds
+    ? row.expertReviewerIds.split(',').filter(Boolean).length
+    : 0;
+  expertSelectModalApi.setData({
+    expertMin: vars.expertMin,
+    expertMax: vars.expertMax,
+    processSelectedCount: selectedCount,
+  }).open();
+}
+
 /** 专家选择弹窗引用 */
 const [ExpertSelectModal, expertSelectModalApi] = useVbenModal({
   connectedComponent: ExpertSelectModalCmp,
   destroyOnClose: true,
 });
 
+/** 用户选择弹窗引用 */
+const [UserSelectModal, userSelectModalApi] = useVbenModal({
+  connectedComponent: UserSelectModalCmp,
+  destroyOnClose: true,
+  onConfirm: async () => {
+    // UserSelectModal 自己处理确认，这里不做额外处理
+    return false;
+  },
+});
+
+/** 审批表单数据类型 */
+interface ApprovalFormData {
+  taskId: string;
+  buttonId: number;
+  reason: string;
+  title: string;
+  reasonLabel: string;
+  reasonRequired: boolean;
+}
+
+/** 审批表单数据 */
+const approvalFormData = ref<ApprovalFormData>({
+  taskId: '',
+  buttonId: 0,
+  reason: '',
+  title: '审批',
+  reasonLabel: '审批意见',
+  reasonRequired: false,
+});
+const approvalFormVisible = ref(false);
+
+/** 退回弹窗显示状态 */
+const returnModalVisible = ref(false);
+
+/** 审批表单确认处理 */
+async function handleApprovalFormConfirm() {
+  const { taskId, buttonId, reason } = approvalFormData.value;
+
+  if (approvalFormData.value.reasonRequired && !reason?.trim()) {
+    message.warning(`请输入${approvalFormData.value.reasonLabel}`);
+    return;
+  }
+
+  try {
+    if (buttonId === 1) {
+      // 通过
+      await approveTask({ id: taskId, buttonId, reason });
+      message.success('审批通过');
+    } else if (buttonId === 2) {
+      // 拒绝
+      await rejectTask({ id: taskId, reason });
+      message.success('已拒绝');
+    }
+    approvalFormVisible.value = false;
+    // 刷新操作按钮
+    if (currentSubmitRow.value) {
+      await loadRowAvailableActions([currentSubmitRow.value]);
+    }
+  } catch (e: any) {
+    console.error('[BPM] 审批操作失败:', e);
+    message.error(e.message || '操作失败');
+  }
+}
+
+/** 用户选择弹窗数据类型 */
+interface UserSelectData {
+  taskId: string;
+  buttonId: number;
+  title: string;
+  multiple: boolean;
+  reasonRequired: boolean;
+}
+
+/** 用户选择弹窗数据 */
+const userSelectData = ref<UserSelectData>({
+  taskId: '',
+  buttonId: 0,
+  title: '选择用户',
+  multiple: false,
+  reasonRequired: false,
+});
+
+/** 确认用户选择后处理 */
+async function handleUserSelectConfirm(users: any[], reason: string) {
+  const { taskId, buttonId, reasonRequired } = userSelectData.value;
+
+  if (reasonRequired && !reason?.trim()) {
+    message.warning('请输入操作原因');
+    return;
+  }
+
+  if (users.length === 0) {
+    message.warning('请选择用户');
+    return;
+  }
+
+  try {
+    switch (buttonId) {
+      case 3: // 转办
+        await transferTask({
+          id: taskId,
+          assigneeUserId: users[0].id,
+          reason,
+        });
+        message.success('转办成功');
+        break;
+      case 4: // 委派
+        await delegateTask({
+          id: taskId,
+          delegateUserId: users[0].id,
+          reason,
+        });
+        message.success('委派成功');
+        break;
+      case 5: // 加签
+        await signCreateTask({
+          id: taskId,
+          userIds: users.map((u) => u.id),
+          type: 'after', // 默认后加签
+          reason,
+        });
+        message.success('加签成功');
+        break;
+      case 7: // 抄送
+        await copyTask({
+          id: taskId,
+          copyUserIds: users.map((u) => u.id),
+          reason,
+        });
+        message.success('抄送成功');
+        break;
+      default:
+        message.warning(`未知的操作: ${buttonId}`);
+        return;
+    }
+
+    // 刷新操作按钮
+    if (currentSubmitRow.value) {
+      await loadRowAvailableActions([currentSubmitRow.value]);
+    }
+  } catch (e: any) {
+    console.error('[BPM] 操作失败:', e);
+    message.error(e.message || '操作失败');
+  }
+}
+
+/** 退回弹窗数据类型 */
+interface ReturnData {
+  taskId: string;
+  buttonId: number;
+  title: string;
+  reasonRequired: boolean;
+  targetTaskDefinitionKey: string;
+  reason: string;
+  nodes: { key: string; label: string }[];
+}
+
+/** 退回弹窗数据 */
+const returnData = ref<ReturnData>({
+  taskId: '',
+  buttonId: 0,
+  title: '退回',
+  reasonRequired: false,
+  targetTaskDefinitionKey: '',
+  reason: '',
+  nodes: [],
+});
+
+/** 用户选择弹窗确认处理 */
+async function handleUserSelectModalConfirm(users: any[], reason: string) {
+  const { taskId, buttonId } = userSelectData.value;
+
+  try {
+    switch (buttonId) {
+      case 3: // 转办
+        await transferTask({
+          id: taskId,
+          assigneeUserId: users[0].id,
+          reason,
+        });
+        message.success('转办成功');
+        break;
+      case 4: // 委派
+        await delegateTask({
+          id: taskId,
+          delegateUserId: users[0].id,
+          reason,
+        });
+        message.success('委派成功');
+        break;
+      case 5: // 加签
+        await signCreateTask({
+          id: taskId,
+          userIds: users.map((u) => u.id),
+          type: 'after', // 默认后加签
+          reason,
+        });
+        message.success('加签成功');
+        break;
+      case 7: // 抄送
+        await copyTask({
+          id: taskId,
+          copyUserIds: users.map((u) => u.id),
+          reason,
+        });
+        message.success('抄送成功');
+        break;
+      default:
+        message.warning(`未知的操作: ${buttonId}`);
+        return;
+    }
+
+    // 刷新操作按钮
+    if (currentSubmitRow.value) {
+      await loadRowAvailableActions([currentSubmitRow.value]);
+    }
+  } catch (e: any) {
+    console.error('[BPM] 操作失败:', e);
+    message.error(e.message || '操作失败');
+  }
+}
+
+/** 退回确认处理 */
+async function handleReturnConfirm() {
+  const { taskId, targetTaskDefinitionKey, reason, reasonRequired } = returnData.value;
+
+  if (reasonRequired && !reason?.trim()) {
+    message.warning('请输入退回原因');
+    return;
+  }
+
+  if (!targetTaskDefinitionKey) {
+    message.warning('请选择退回节点');
+    return;
+  }
+
+  try {
+    await returnTask({
+      id: taskId,
+      targetTaskDefinitionKey,
+      reason,
+    });
+    message.success('退回成功');
+
+    // 关闭弹窗
+    returnModalVisible.value = false;
+
+    // 刷新表格数据
+    handleRefresh();
+
+    // 刷新操作按钮
+    if (currentSubmitRow.value) {
+      await loadRowAvailableActions([currentSubmitRow.value]);
+    }
+  } catch (e: any) {
+    console.error('[BPM] 退回失败:', e);
+    message.error(e.message || '操作失败');
+  }
+}
+
 /** 审批详情弹窗 - 使用 a-modal 直接控制宽度 */
 const approvalDetailVisible = ref(false);
 const approvalDetailRef = ref<InstanceType<typeof ApprovalDetailCmp> | null>(null);
 
 /** 审批操作相关状态 */
-const currentApprovalActions = ref<(BpmActionApi.BpmAction & { taskId?: string })[]>([]);
+const currentApprovalActions = ref<any[]>([]);
+const currentApprovalTaskInfo = ref<{ taskId?: string; processInstanceId?: string }>({});
 const currentApprovalBusinessId = ref<number | null>(null);
 const currentApprovalRow = ref<DeclareFilingApi.Filing | null>(null);
 
@@ -246,21 +774,27 @@ async function handleViewApprovalDetail(row: DeclareFilingApi.Filing) {
   currentApprovalRow.value = row;
   // 保存当前业务 ID
   currentApprovalBusinessId.value = row.id ?? null;
-  // 传递数据给组件
-    nextTick(async () => {
-    approvalDetailRef.value?.openWithData(row);
+  // 组件现在从 props 读取 tableName 和 businessId，自动加载数据
+  // 仍然需要获取操作按钮供 ActionButtonCmp 使用
+  nextTick(async () => {
     // 使用和列表页相同的方式获取可用操作
     try {
-      const actions = await getAvailableActions(BUSINESS_TYPE_KEY, row.id!);
-      // 过滤掉特殊标记：
-      // _PROCESS_RUNNING_: 流程进行中但无操作权限
-      // _PROCESS_FINISHED_: 流程已结束
-      currentApprovalActions.value = (actions || []).filter(
-        (a: any) => a.key !== '_PROCESS_RUNNING_' && a.key !== '_PROCESS_FINISHED_'
-      );
+      const result = await getAvailableActions(BUSINESS_TYPE_KEY, row.id!);
+      // 新接口返回格式：{ actions: {...}, taskInfo: {...} }
+      if (result && typeof result === 'object' && 'actions' in result) {
+        currentApprovalActions.value = result.actions;
+        currentApprovalTaskInfo.value = result.taskInfo || {};
+      } else {
+        // 兼容旧格式（数组）
+        currentApprovalActions.value = (result || []).filter(
+          (a: any) => a.key !== '_PROCESS_RUNNING_' && a.key !== '_PROCESS_FINISHED_'
+        );
+        currentApprovalTaskInfo.value = {};
+      }
     } catch (e) {
       console.error('获取审批操作失败:', e);
       currentApprovalActions.value = [];
+      currentApprovalTaskInfo.value = {};
     }
   });
 }
@@ -335,6 +869,26 @@ async function handleDelete(row: DeclareFilingApi.Filing) {
     handleRefresh();
   } finally {
     hideLoading();
+  }
+}
+
+/** 提交审核 */
+async function handleSubmitForApproval(row: DeclareFilingApi.Filing) {
+  try {
+    await confirm('确定要提交审核吗？提交后将进入审批流程。');
+    const hideLoading = message.loading({
+      content: '提交审核中...',
+      duration: 0,
+    });
+    try {
+      await submitFiling(row.id!);
+      message.success('提交审核成功');
+      handleRefresh();
+    } finally {
+      hideLoading();
+    }
+  } catch (e) {
+    // 用户取消不处理
   }
 }
 
@@ -546,10 +1100,66 @@ const [Grid, gridApi] = useVbenVxeGrid({
     <!-- 选择专家弹窗 -->
     <ExpertSelectModal @confirm="handleExpertSelectConfirm" />
 
+    <!-- 用户选择弹窗（用于转办、委派、加签、抄送） -->
+    <UserSelectModal @confirm="handleUserSelectModalConfirm" />
+
+    <!-- 审批表单弹窗（用于通过/拒绝） -->
+    <a-modal
+      v-model:open="approvalFormVisible"
+      :title="approvalFormData.title"
+      width="500px"
+      @ok="handleApprovalFormConfirm"
+    >
+      <a-form layout="vertical">
+        <a-form-item
+          :label="approvalFormData.reasonLabel"
+          :required="approvalFormData.reasonRequired"
+        >
+          <a-textarea
+            v-model:value="approvalFormData.reason"
+            :placeholder="`请输入${approvalFormData.reasonLabel}`"
+            :rows="4"
+          />
+        </a-form-item>
+      </a-form>
+    </a-modal>
+
+    <!-- 退回弹窗 -->
+    <a-modal
+      v-model:open="returnModalVisible"
+      :title="returnData.title"
+      width="500px"
+      @ok="handleReturnConfirm"
+    >
+      <a-form layout="vertical">
+        <a-form-item label="退回节点" required>
+          <a-select
+            v-model:value="returnData.targetTaskDefinitionKey"
+            placeholder="请选择退回节点"
+          >
+            <a-select-option
+              v-for="node in returnData.nodes"
+              :key="node.key"
+              :value="node.key"
+            >
+              {{ node.label }}
+            </a-select-option>
+          </a-select>
+        </a-form-item>
+        <a-form-item :label="returnData.reasonRequired ? '退回原因' : '退回原因（可选）'">
+          <a-textarea
+            v-model:value="returnData.reason"
+            placeholder="请输入退回原因"
+            :rows="3"
+          />
+        </a-form-item>
+      </a-form>
+    </a-modal>
+
     <!-- 审批详情弹窗 - 使用 a-modal 直接控制宽度 -->
     <a-modal
       v-model:open="approvalDetailVisible"
-      :title="`审批详情`"
+      :title="`备案详情`"
       :footer="null"
       width="90%"
       :body-style="{ minHeight: '80vh', padding: '16px', paddingBottom: '80px', position: 'relative' }"
@@ -559,6 +1169,8 @@ const [Grid, gridApi] = useVbenVxeGrid({
       <ApprovalDetailCmp
         ref="approvalDetailRef"
         class="approval-detail-content-wrapper"
+        :table-name="BUSINESS_TYPE"
+        :business-id="currentApprovalBusinessId"
         :show-actions="false"
         @success="handleRefresh"
       />
@@ -570,6 +1182,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
           :business-type="BUSINESS_TYPE_KEY"
           :business-id="currentApprovalBusinessId"
           :actions="currentApprovalActions"
+          :task-info="currentApprovalTaskInfo"
           @success="handleApprovalActionSuccess"
           @refresh="handleApprovalActionRefresh"
         />

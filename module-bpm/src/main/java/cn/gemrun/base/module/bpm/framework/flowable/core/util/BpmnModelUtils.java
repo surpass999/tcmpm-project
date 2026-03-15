@@ -125,17 +125,8 @@ public class BpmnModelUtils {
                 BpmnModelConstants.NAMESPACE, BpmnModelConstants.USER_TASK_CANDIDATE_STRATEGY));
         // TODO @芋艿 尝试从 ExtensionElement 取. 后续相关扩展是否都可以 存 extensionElement。 如表单权限。 按钮权限
         if (candidateStrategy == null) {
-            // BPMN 中同一 key 可能有多个扩展元素（部分为空值），遍历取第一个有效值
-            List<ExtensionElement> elements = userTask.getExtensionElements().get(BpmnModelConstants.USER_TASK_CANDIDATE_STRATEGY);
-            if (elements != null) {
-                for (ExtensionElement el : elements) {
-                    Integer parsed = NumberUtils.parseInt(el.getElementText());
-                    if (parsed != null) {
-                        candidateStrategy = parsed;
-                        break;
-                    }
-                }
-            }
+            ExtensionElement element = CollUtil.getFirst(userTask.getExtensionElements().get(BpmnModelConstants.USER_TASK_CANDIDATE_STRATEGY));
+            candidateStrategy = element != null ? NumberUtils.parseInt(element.getElementText()) : null;
         }
         return candidateStrategy;
     }
@@ -150,185 +141,10 @@ public class BpmnModelUtils {
         String candidateParam = userTask.getAttributeValue(
                 BpmnModelConstants.NAMESPACE, BpmnModelConstants.USER_TASK_CANDIDATE_PARAM);
         if (candidateParam == null) {
-            List<ExtensionElement> elements = userTask.getExtensionElements().get(BpmnModelConstants.USER_TASK_CANDIDATE_PARAM);
-            if (elements != null && !elements.isEmpty()) {
-                // 读取最后一个非空的参数值（因为可能存在多个重复元素，第一个可能是空的）
-                for (int i = elements.size() - 1; i >= 0; i--) {
-                    String text = elements.get(i).getElementText();
-                    if (StrUtil.isNotBlank(text)) {
-                        candidateParam = text;
-                        break;
-                    }
-                }
-            }
+            ExtensionElement element = CollUtil.getFirst(userTask.getExtensionElements().get(BpmnModelConstants.USER_TASK_CANDIDATE_PARAM));
+            candidateParam = element != null ? element.getElementText() : null;
         }
         return candidateParam;
-    }
-
-    /**
-     * 解析 DSL 配置
-     *
-     * @param flowElement 流程节点
-     * @return DSL 配置 JSON 字符串，如果不存在则返回 null
-     */
-    public static String parseDslConfig(FlowElement flowElement) {
-        if (flowElement == null) {
-            return null;
-        }
-        // 前端以 moddle.create(`${prefix}:DslConfig`, { value: '...' }) 方式存储，
-        // 序列化为 <flowable:DslConfig value='...'/>，需读 value 属性而非元素文本
-
-        // 调试：打印节点的所有扩展元素
-        Map<String, List<ExtensionElement>> extElements = flowElement.getExtensionElements();
-        if (extElements != null && !extElements.isEmpty()) {
-            log.info("[parseDslConfig] 节点 {} 的扩展元素 keys: {}", flowElement.getId(), extElements.keySet());
-        }
-
-        ExtensionElement element = CollUtil.getFirst(flowElement.getExtensionElements().get(BpmnModelConstants.DSL_CONFIG));
-        String dslConfig = readExtensionElementValue(element);
-        log.info("[parseDslConfig] 节点 {} 解析 DSL (大写): '{}'", flowElement.getId(), dslConfig);
-
-        // 兜底：尝试小写 key（部分旧 BPMN 以文本形式存储）
-        if (StrUtil.isBlank(dslConfig)) {
-            element = CollUtil.getFirst(flowElement.getExtensionElements().get("dslConfig"));
-            dslConfig = readExtensionElementValue(element);
-            log.info("[parseDslConfig] 节点 {} 解析 DSL (小写): '{}'", flowElement.getId(), dslConfig);
-        }
-
-        return StrUtil.isBlank(dslConfig) ? null : dslConfig;
-    }
-
-    /**
-     * 读取扩展元素的值：优先读取 value 属性，如为空则读取元素文本
-     */
-    private static String readExtensionElementValue(ExtensionElement element) {
-        if (element == null) {
-            return null;
-        }
-        // 尝试 value 属性（前端以 { value: '...' } 方式序列化）
-        List<ExtensionAttribute> valueAttrs = element.getAttributes().get("value");
-        if (CollUtil.isNotEmpty(valueAttrs)) {
-            String attrValue = valueAttrs.get(0).getValue();
-            if (StrUtil.isNotBlank(attrValue)) {
-                return attrValue;
-            }
-        }
-        // 兜底读元素文本内容
-        return element.getElementText();
-    }
-
-    /**
-     * 从原始 BPMN XML 字符串中直接提取指定节点的 dslConfig
-     * <p>
-     * 直接使用 indexOf 方式解析，绕过 Flowable StAX 解析器对长文本的截断问题
-     * 以及 DOM 解析器无法正确解析扩展元素属性的问题。
-     *
-     * @param bpmnXml       原始 BPMN XML 字符串
-     * @param flowElementId 节点 ID（如 Activity_1ftwrrv）
-     * @return dslConfig JSON，未找到则返回 null
-     */
-    public static String parseDslConfigFromXml(String bpmnXml, String flowElementId) {
-        log.info("[parseDslConfigFromXml] ====== 开始解析 DSL ====== flowElementId={}, bpmnXml长度={}",
-                flowElementId, bpmnXml != null ? bpmnXml.length() : 0);
-
-        if (StrUtil.isBlank(bpmnXml) || StrUtil.isBlank(flowElementId)) {
-            log.warn("[parseDslConfigFromXml] bpmnXml 或 flowElementId 为空");
-            return null;
-        }
-
-        // 直接使用 indexOf 方式解析（更稳定，绕过 Flowable 解析器的各种问题）
-        return parseDslConfigFromXmlByIndexOf(bpmnXml, flowElementId);
-    }
-
-    /**
-     * 使用 indexOf 方式从 XML 中提取 DSL
-     * 从节点 ID 位置开始向后查找，确保找到正确的节点
-     */
-    private static String parseDslConfigFromXmlByIndexOf(String bpmnXml, String flowElementId) {
-        // 找到对应节点在 XML 中的起始位置
-        int nodeStart = bpmnXml.indexOf("id=\"" + flowElementId + "\"");
-        if (nodeStart < 0) {
-            // 尝试其他可能的格式
-            nodeStart = bpmnXml.indexOf("id='" + flowElementId + "'");
-        }
-        if (nodeStart < 0) {
-            log.warn("[parseDslConfigFromXmlByIndexOf] 未找到节点: {}", flowElementId);
-            return null;
-        }
-
-        // 截取节点所在的区域（从节点ID位置开始，向后查找 DSL）
-        // 这样可以避免找到前面节点的 DslConfig
-        int sectionStart = nodeStart;
-        int sectionEnd = Math.min(nodeStart + 80000, bpmnXml.length()); // 扩大范围，确保包含完整 DSL
-        String nodeSection = bpmnXml.substring(sectionStart, sectionEnd);
-
-        log.info("[parseDslConfigFromXmlByIndexOf] 截取的节点区域长度: {}", nodeSection.length());
-        // 打印截取的节点区域的前 1000 个字符
-        log.info("[parseDslConfigFromXmlByIndexOf] 节点区域前 1000 字符 START:\n{}\n节点区域前 1000 字符 END",
-                nodeSection.substring(0, Math.min(1000, nodeSection.length())));
-
-        // 1. 先尝试 value 属性格式
-        java.util.regex.Matcher m = java.util.regex.Pattern
-                .compile("<[^>]*[Dd]sl[Cc]onfig[^>]*value=[\"']([^\"']+)[\"']")
-                .matcher(nodeSection);
-        if (m.find()) {
-            String v = m.group(1).trim();
-            log.info("[parseDslConfigFromXmlByIndexOf] 通过 value 属性解析成功, 长度={}", v.length());
-            log.info("[parseDslConfigFromXmlByIndexOf] value 属性内容 START:\n{}\nvalue 属性内容 END", v);
-            return v;
-        } else {
-            log.info("[parseDslConfigFromXmlByIndexOf] 未通过 value 属性找到 DSL");
-        }
-
-        // 2. 再尝试文本内容格式
-        String openTag1 = ":dslConfig>";
-        String openTag2 = ":DslConfig>";
-        int dslStart = nodeSection.indexOf(openTag1);
-        if (dslStart < 0) {
-            dslStart = nodeSection.indexOf(openTag2);
-        }
-        log.info("[parseDslConfigFromXmlByIndexOf] 查找DslConfig标签: openTag1={}, openTag2={}, dslStart={}",
-                openTag1, openTag2, dslStart);
-        if (dslStart >= 0) {
-            int tagLen = (nodeSection.indexOf(openTag1) == dslStart) ? openTag1.length() : openTag2.length();
-            int contentStart = dslStart + tagLen;
-            int closeIdx = nodeSection.indexOf("</", contentStart);
-            log.info("[parseDslConfigFromXmlByIndexOf] dslStart={}, contentStart={}, closeIdx={}",
-                    dslStart, contentStart, closeIdx);
-            if (closeIdx > contentStart) {
-                String content = nodeSection.substring(contentStart, closeIdx).trim();
-                log.info("[parseDslConfigFromXmlByIndexOf] 原始内容长度={}", content.length());
-                if (content.startsWith("<![CDATA[")) {
-                    content = content.substring("<![CDATA[".length());
-                }
-                if (content.endsWith("]]>")) {
-                    content = content.substring(0, content.length() - "]]>".length());
-                }
-                content = content.trim();
-                log.info("[parseDslConfigFromXmlByIndexOf] 处理后内容长度={}, 是否以 { 开头: {}", content.length(), content.startsWith("{"));
-                log.info("[parseDslConfigFromXmlByIndexOf] 处理后内容 START:\n{}\n处理后内容 END", content);
-                if (StrUtil.isNotBlank(content) && content.startsWith("{")) {
-                    log.info("[parseDslConfigFromXmlByIndexOf] 解析成功, 最终长度={}", content.length());
-                    return content;
-                }
-            }
-        }
-        log.warn("[parseDslConfigFromXmlByIndexOf] 解析失败，未找到有效的 DSL 内容");
-        return null;
-    }
-
-    /**
-     * 检查 DSL 配置中是否包含审批人分配信息
-     *
-     * @param flowElement 流程节点
-     * @return 是否包含分配信息
-     */
-    public static boolean hasDslAssign(FlowElement flowElement) {
-        String dslConfig = parseDslConfig(flowElement);
-        if (StrUtil.isBlank(dslConfig)) {
-            return false;
-        }
-        return dslConfig.contains("\"assign\"");
     }
 
     /**
@@ -340,77 +156,6 @@ public class BpmnModelUtils {
      */
     public static Integer parseApproveType(FlowElement userTask) {
         return NumberUtils.parseInt(parseExtensionElement(userTask, BpmnModelConstants.USER_TASK_APPROVE_TYPE));
-    }
-
-    /**
-     * 解析会签规则（signRule）
-     *
-     * @param flowElement 流程节点
-     * @return 会签规则：ALL（全部通过）、ANY（任一通过）、MAJORITY（多数通过），如果不存在则返回 null
-     */
-    public static String parseSignRule(FlowElement flowElement) {
-        String dslConfig = parseDslConfig(flowElement);
-        if (StrUtil.isBlank(dslConfig)) {
-            return null;
-        }
-        try {
-            cn.hutool.json.JSONObject dslJson = cn.hutool.json.JSONUtil.parseObj(dslConfig);
-            String signRule = dslJson.getStr("signRule");
-            log.info("[parseSignRule] 节点 {} 解析 signRule: {}", flowElement.getId(), signRule);
-            return signRule;
-        } catch (Exception e) {
-            log.warn("[parseSignRule] 解析 signRule 失败: {}", e.getMessage());
-            return null;
-        }
-    }
-
-    /**
-     * 根据会签规则生成 Flowable 的 completionCondition
-     *
-     * @param signRule 会签规则：ALL（全部通过）、ANY（任一通过）、MAJORITY（多数通过）
-     * @return Flowable 的 completionCondition 表达式
-     */
-    public static String buildSignRuleCompletionCondition(String signRule) {
-        if (StrUtil.isBlank(signRule)) {
-            return null;
-        }
-        switch (signRule.toUpperCase()) {
-            case "ALL":
-                // 全部同意：同意数量等于总数量
-                return "${ agreeCount != null && agreeCount >= nrOfInstances }";
-            case "ANY":
-                // 任一同意：同意数量大于0
-                return "${ agreeCount != null && agreeCount > 0 }";
-            case "MAJORITY":
-                // 多数同意：60%及以上同意
-                return "${ agreeCount != null && (agreeCount * 1.0 / nrOfInstances) >= 0.6 }";
-            default:
-                log.warn("[buildSignRuleCompletionCondition] 未知的会签规则: {}，使用默认 ALL 规则", signRule);
-                return "${ agreeCount != null && agreeCount >= nrOfInstances }";
-        }
-    }
-
-    /**
-     * 检查节点是否会签节点（COUNTERSIGN）
-     *
-     * @param flowElement 流程节点
-     * @return 是否会签节点
-     */
-    public static boolean isCountersignNode(FlowElement flowElement) {
-        String dslConfig = parseDslConfig(flowElement);
-        if (StrUtil.isBlank(dslConfig)) {
-            return false;
-        }
-        try {
-            cn.hutool.json.JSONObject dslJson = cn.hutool.json.JSONUtil.parseObj(dslConfig);
-            String cap = dslJson.getStr("cap");
-            boolean isCountersign = "COUNTERSIGN".equalsIgnoreCase(cap);
-            log.info("[isCountersignNode] 节点 {} cap={}, isCountersign={}", flowElement.getId(), cap, isCountersign);
-            return isCountersign;
-        } catch (Exception e) {
-            log.warn("[isCountersignNode] 判断会签节点失败: {}", e.getMessage());
-            return false;
-        }
     }
 
     /**
@@ -566,10 +311,13 @@ public class BpmnModelUtils {
     public static void addButtonsSetting(List<BpmSimpleModelNodeVO.OperationButtonSetting> buttonsSetting, UserTask userTask) {
         if (CollUtil.isNotEmpty(buttonsSetting)) {
             List<Map<String, String>> list = CollectionUtils.convertList(buttonsSetting, item -> {
-                Map<String, String> settingMap = Maps.newHashMapWithExpectedSize(3);
+                Map<String, String> settingMap = Maps.newHashMapWithExpectedSize(4);
                 settingMap.put(BUTTON_SETTING_ELEMENT_ID_ATTRIBUTE, String.valueOf(item.getId()));
                 settingMap.put(BUTTON_SETTING_ELEMENT_DISPLAY_NAME_ATTRIBUTE, item.getDisplayName());
                 settingMap.put(BUTTON_SETTING_ELEMENT_ENABLE_ATTRIBUTE, String.valueOf(item.getEnable()));
+                if (StrUtil.isNotEmpty(item.getBizStatus())) {
+                    settingMap.put(BUTTON_SETTING_ELEMENT_BIZ_STATUS_ATTRIBUTE, item.getBizStatus());
+                }
                 return settingMap;
             });
             list.forEach(item -> addExtensionElement(userTask, BUTTON_SETTING_ELEMENT, item));
@@ -597,9 +345,13 @@ public class BpmnModelUtils {
             String id = element.getAttributeValue(null, BUTTON_SETTING_ELEMENT_ID_ATTRIBUTE);
             String displayName = element.getAttributeValue(null, BUTTON_SETTING_ELEMENT_DISPLAY_NAME_ATTRIBUTE);
             String enable = element.getAttributeValue(null, BUTTON_SETTING_ELEMENT_ENABLE_ATTRIBUTE);
+            String bizStatus = element.getAttributeValue(null, BUTTON_SETTING_ELEMENT_BIZ_STATUS_ATTRIBUTE);
             if (StrUtil.isNotEmpty(id)) {
                 BpmTaskRespVO.OperationButtonSetting setting = new BpmTaskRespVO.OperationButtonSetting();
-                buttonSettings.put(Integer.valueOf(id), setting.setDisplayName(displayName).setEnable(Boolean.parseBoolean(enable)));
+                setting.setDisplayName(displayName);
+                setting.setEnable(Boolean.parseBoolean(enable));
+                setting.setBizStatus(bizStatus);
+                buttonSettings.put(Integer.valueOf(id), setting);
             }
         });
         return buttonSettings;

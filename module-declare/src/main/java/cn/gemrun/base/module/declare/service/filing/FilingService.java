@@ -66,4 +66,22 @@ public interface FilingService {
      */
     void updateFilingStatus(Long id, String bizStatus);
 
+    /**
+     * 发起 BPM 流程
+     *
+     * @param id 备案ID
+     * @param processDefinitionKey 流程定义Key
+     * @return 流程实例ID
+     */
+    String startProcess(Long id, String processDefinitionKey);
+
+    /**
+     * 更新备案的流程实例ID和状态（由BPM模块调用）
+     *
+     * @param id 备案ID
+     * @param processInstanceId 流程实例ID
+     * @param filingStatus 备案状态
+     */
+    void updateFilingProcessInstance(Long id, String processInstanceId, String filingStatus);
+
 }

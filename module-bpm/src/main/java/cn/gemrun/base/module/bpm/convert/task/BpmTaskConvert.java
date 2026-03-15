@@ -107,89 +107,11 @@ public interface BpmTaskConvert {
                 taskVO.setFormId(form.getId()).setFormName(form.getName()).setFormConf(form.getConf())
                         .setFormFields(form.getFields()).setFormVariables(FlowableUtils.getTaskFormVariable(task));
             }
-            // 用户信息：优先从任务变量中获取（抢签模式下，assigneeUser 存储在任务变量中）
-            buildTaskAssigneeFromTaskVariables(taskVO, task, userMap, deptMap);
-            buildTaskOwnerFromTaskVariables(taskVO, task, userMap, deptMap);
+            // 用户信息
+            buildTaskAssignee(taskVO, task.getAssignee(), userMap, deptMap);
+            buildTaskOwner(taskVO, task.getOwner(), userMap, deptMap);
             return taskVO;
         });
-    }
-
-    /**
-     * 从任务变量中构建 assigneeUser（抢签模式下使用）
-     */
-    default void buildTaskAssigneeFromTaskVariables(BpmTaskRespVO taskVO, HistoricTaskInstance task,
-                                                    Map<Long, AdminUserRespDTO> userMap,
-                                                    Map<Long, DeptRespDTO> deptMap) {
-        // 1. 优先从任务变量中获取 assigneeUser
-        Map<String, Object> taskLocalVariables = task.getTaskLocalVariables();
-        if (taskLocalVariables != null && taskLocalVariables.containsKey("assigneeUser")) {
-            Object assigneeUserObj = taskLocalVariables.get("assigneeUser");
-            if (assigneeUserObj != null) {
-                try {
-                    cn.hutool.json.JSONObject assigneeUserJson = cn.hutool.json.JSONUtil.parseObj(String.valueOf(assigneeUserObj));
-                    if (assigneeUserJson != null) {
-                        UserSimpleBaseVO assigneeUser = new UserSimpleBaseVO();
-                        assigneeUser.setId(assigneeUserJson.getLong("id"));
-                        assigneeUser.setNickname(assigneeUserJson.getStr("nickname"));
-                        assigneeUser.setAvatar(assigneeUserJson.getStr("avatar"));
-                        assigneeUser.setDeptId(assigneeUserJson.getLong("deptId"));
-                        // 补充部门名称
-                        Long deptId = assigneeUser.getDeptId();
-                        if (deptId != null) {
-                            DeptRespDTO dept = deptMap.get(deptId);
-                            if (dept != null) {
-                                assigneeUser.setDeptName(dept.getName());
-                            }
-                        }
-                        taskVO.setAssigneeUser(assigneeUser);
-                        return;
-                    }
-                } catch (Exception e) {
-                    // 解析失败，继续使用原有方式
-                }
-            }
-        }
-        // 2. 兜底：从 task.getAssignee() 获取
-        buildTaskAssignee(taskVO, task.getAssignee(), userMap, deptMap);
-    }
-
-    /**
-     * 从任务变量中构建 ownerUser（抢签模式下使用）
-     */
-    default void buildTaskOwnerFromTaskVariables(BpmTaskRespVO taskVO, HistoricTaskInstance task,
-                                                Map<Long, AdminUserRespDTO> userMap,
-                                                Map<Long, DeptRespDTO> deptMap) {
-        // 1. 优先从任务变量中获取 ownerUser
-        Map<String, Object> taskLocalVariables = task.getTaskLocalVariables();
-        if (taskLocalVariables != null && taskLocalVariables.containsKey("ownerUser")) {
-            Object ownerUserObj = taskLocalVariables.get("ownerUser");
-            if (ownerUserObj != null) {
-                try {
-                    cn.hutool.json.JSONObject ownerUserJson = cn.hutool.json.JSONUtil.parseObj(String.valueOf(ownerUserObj));
-                    if (ownerUserJson != null) {
-                        UserSimpleBaseVO ownerUser = new UserSimpleBaseVO();
-                        ownerUser.setId(ownerUserJson.getLong("id"));
-                        ownerUser.setNickname(ownerUserJson.getStr("nickname"));
-                        ownerUser.setAvatar(ownerUserJson.getStr("avatar"));
-                        ownerUser.setDeptId(ownerUserJson.getLong("deptId"));
-                        // 补充部门名称
-                        Long deptId = ownerUser.getDeptId();
-                        if (deptId != null) {
-                            DeptRespDTO dept = deptMap.get(deptId);
-                            if (dept != null) {
-                                ownerUser.setDeptName(dept.getName());
-                            }
-                        }
-                        taskVO.setOwnerUser(ownerUser);
-                        return;
-                    }
-                } catch (Exception e) {
-                    // 解析失败，继续使用原有方式
-                }
-            }
-        }
-        // 2. 兜底：从 task.getOwner() 获取
-        buildTaskOwner(taskVO, task.getOwner(), userMap, deptMap);
     }
 
     default List<BpmTaskRespVO> buildTaskListByParentTaskId(List<Task> taskList,

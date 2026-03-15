@@ -1,34 +1,31 @@
 <script lang="ts" setup>
-import type { DeclareFilingApi } from '#/api/declare/filing';
 import type { DeclareIndicatorApi } from '#/api/declare/indicator';
 import type { DeclareIndicatorValueApi } from '#/api/declare/indicatorValue';
-import type { BpmProcessInstanceApi } from '#/api/bpm/processInstance';
 import type { BpmTaskApi } from '#/api/bpm/task';
 import type { BpmActionApi } from '#/api/bpm/action';
 
-import { ref, shallowRef, computed } from 'vue';
+import { ref, shallowRef, computed, watch, nextTick } from 'vue';
 import { getDictObj } from '@vben/hooks';
 import { DICT_TYPE } from '@vben/constants';
 
-// 不再使用 useVbenModal，直接渲染内容
-
-import { Steps, Step, Tabs, TabPane, Tag, Button, Spin } from 'ant-design-vue';
+import { Steps, Step, Spin } from 'ant-design-vue';
 import { message } from 'ant-design-vue';
 
 import { getFiling } from '#/api/declare/filing';
 import { getIndicatorsByProjectType } from '#/api/declare/indicator';
 import { getIndicatorValues } from '#/api/declare/indicatorValue';
-import { getApprovalDetail } from '#/api/bpm/processInstance';
-import { getTaskListByProcessInstanceId } from '#/api/bpm/task';
-import { getAvailableActions, submitBpmAction } from '#/api/bpm/action';
+import { submitBpmAction } from '#/api/bpm/action';
+import { getTaskByBusiness, getProcessByBusiness } from '#/api/bpm/task';
+import ExpertSelectModal from '#/components/bpm/ExpertSelectModal.vue';
+import { OperationButtonType } from '#/views/bpm/components/simple-process-design/consts';
 
-// 业务类型
-const BUSINESS_TYPE = 'declare:filing:create';
 // 指标业务类型（数字）
 const BUSINESS_TYPE_NUMBER = 1;
 
-// Props
+// Props - 只支持通过 tableName + businessId 获取审批详情
 const props = defineProps<{
+  tableName: string;  // 业务表分类，如 filing
+  businessId: number;  // 业务ID
   showActions?: boolean;
 }>();
 
@@ -36,20 +33,27 @@ const props = defineProps<{
 const emit = defineEmits<{
   success: [];
   action: [action: BpmActionApi.BpmAction & { taskId?: string }];
+  refresh: [];
 }>();
-
-// 直接渲染内容，不创建 Modal
-// 当被外部 a-modal 包裹时，宽度由外部控制
-
-// 存储最终的businessId和businessType
-const finalBusinessId = ref<number>(0);
-const finalBusinessType = ref<string>(BUSINESS_TYPE);
 
 // 加载状态
 const loading = ref(false);
 
-// 备案数据
-const filingData = ref<DeclareFilingApi.Filing | null>(null);
+// 监听 businessId 变化，自动加载数据
+watch(
+  () => props.businessId,
+  (newBusinessId) => {
+    if (newBusinessId && props.tableName) {
+      nextTick(() => {
+        loadAllData();
+      });
+    }
+  },
+  { immediate: true }
+);
+
+// 备案数据（仅用于展示基本信息）
+const filingData = ref<any>(null);
 
 // 指标列表（按分类分组）
 const indicatorGroups = ref<{
@@ -64,11 +68,16 @@ const indicatorValuesMap = ref<Record<number, any>>({});
 // 折叠面板展开的key
 const activeCollapseKeys = ref<(string | number)[]>([]);
 
-// 审批详情数据（包含流程节点）
-const approvalDetail = ref<BpmProcessInstanceApi.ApprovalDetailRespVO | null>(null);
+// 审批详情数据
+const approvalDetail = ref<{
+  status?: number;
+  processInstance?: any;
+  activityNodes?: any[];
+  todoTask?: any;
+} | null>(null);
 
 // 审批历史（任务列表）
-const approvalHistory = ref<BpmTaskApi.Task[]>([]);
+const approvalHistory = ref<any[]>([]);
 
 // 可用操作按钮
 const availableActions = ref<(BpmActionApi.BpmAction & { taskId?: string })[]>([]);
@@ -85,6 +94,15 @@ const reasonForm = ref({
 const actionModalVisible = ref(false);
 const actionModalLoading = ref(false);
 const currentAction = shallowRef<BpmActionApi.BpmAction & { taskId?: string } | null>(null);
+
+// 专家选择弹窗
+const expertModalRef = ref<{
+  open: () => void;
+  close: () => void;
+} | null>(null);
+
+// 已选中的专家
+const selectedExperts = ref<any[]>([]);
 
 // 计算当前流程进度
 const processNodes = computed(() => {
@@ -113,16 +131,18 @@ function getNodeStatus(node: BpmProcessInstanceApi.ApprovalNodeInfo): number {
 }
 
 // 格式化日期（完整格式）
-function formatDate(date: string | Date | undefined): string {
+function formatDate(date: string | Date | number | undefined): string {
   if (!date) return '-';
-  const d = new Date(date);
+  // 如果是时间戳（毫秒），转换为 Date
+  const d = typeof date === 'number' ? new Date(date) : new Date(date);
   return d.toLocaleString('zh-CN');
 }
 
 // 格式化日期（仅日期）
-function formatDateOnly(date: string | Date | undefined): string {
+function formatDateOnly(date: string | Date | number | undefined): string {
   if (!date) return '-';
-  const d = new Date(date);
+  // 如果是时间戳（毫秒），转换为 Date
+  const d = typeof date === 'number' ? new Date(date) : new Date(date);
   return d.toLocaleDateString('zh-CN');
 }
 
@@ -131,37 +151,6 @@ function getProjectTypeText(value: number | undefined): string {
   if (!value) return '-';
   const dict = getDictObj(DICT_TYPE.DECLARE_PROJECT_TYPE, String(value));
   return dict?.label || String(value);
-}
-
-// 获取状态样式类
-function getStatusClass(status?: string): string {
-  if (status === 'APPROVED' || status === '已完成') return 'status-tag-success';
-  if (status === 'REJECTED' || status === '已退回') return 'status-tag-error';
-  return 'status-tag-pending';
-}
-
-// 获取状态显示文本
-function getStatusText(status?: number): string {
-  if (status === undefined || status === null) return '未知';
-  // 备案状态: 0=草稿，1=已提交，2=省级审核通过，3=专家论证通过，4=已归档，5=退回修改，6=等待专家审核
-  switch (status) {
-    case 0:
-      return '待提交';
-    case 1:
-      return '审核中';
-    case 2:
-      return '省级审核通过';
-    case 3:
-      return '专家论证通过';
-    case 4:
-      return '已归档';
-    case 5:
-      return '退回修改';
-    case 6:
-      return '等待专家审核';
-    default:
-      return `状态${status}`;
-  }
 }
 
 // 获取流程状态显示文本（基于 approvalDetail.status）
@@ -205,10 +194,6 @@ function getActionType(key: string): 'primary' | 'default' | 'dashed' | 'link' |
 // 处理审批操作点击
 function handleActionClick(action: BpmActionApi.BpmAction & { taskId?: string }) {
   const vars = action.vars || {};
-  if (vars.expertMin !== undefined || vars.expertMax !== undefined) {
-    message.info('该操作需要选择专家，请联系管理员配置');
-    return;
-  }
 
   // 如果外部需要处理操作点击，emit 事件
   if (props.showActions === false) {
@@ -216,14 +201,46 @@ function handleActionClick(action: BpmActionApi.BpmAction & { taskId?: string })
     return;
   }
 
-  if (vars.reason || vars.reasonRequired) {
-    currentAction.value = action;
-    reasonForm.value.reason = '';
-    actionModalVisible.value = true;
-    return;
-  }
+  // 判断是否是 simple 设计器的按钮格式（使用数字 key）
+  const actionKey = action.key;
+  const isSimpleButton = !isNaN(Number(actionKey));
 
-  executeAction(action, '');
+  if (isSimpleButton) {
+    // Simple 设计器按钮格式处理
+    const buttonType = Number(actionKey);
+
+    // 选择专家操作 - 打开专家选择弹窗
+    if (buttonType === OperationButtonType.SELECT_APPROVER) {
+      expertModalRef.value?.open();
+      return;
+    }
+
+    // 拒绝和退回操作，需要填写审批意见
+    if (buttonType === OperationButtonType.REJECT || buttonType === OperationButtonType.RETURN) {
+      currentAction.value = action;
+      reasonForm.value.reason = '';
+      actionModalVisible.value = true;
+      return;
+    }
+
+    // 其他操作直接执行
+    executeAction(action, '');
+  } else {
+    // 原有 DSL 按钮格式处理
+    if (vars.expertMin !== undefined || vars.expertMax !== undefined) {
+      message.info('该操作需要选择专家，请联系管理员配置');
+      return;
+    }
+
+    if (vars.reason || vars.reasonRequired) {
+      currentAction.value = action;
+      reasonForm.value.reason = '';
+      actionModalVisible.value = true;
+      return;
+    }
+
+    executeAction(action, '');
+  }
 }
 
 // 执行审批操作
@@ -233,9 +250,10 @@ async function executeAction(
 ) {
   actionModalLoading.value = true;
   try {
+    // 使用 props 中的 tableName 作为 businessType
     await submitBpmAction({
-      businessType: finalBusinessType.value,
-      businessId: finalBusinessId.value,
+      businessType: props.tableName,
+      businessId: props.businessId,
       actionKey: action.key,
       reason,
     });
@@ -262,126 +280,214 @@ async function handleActionConfirm() {
   await executeAction(currentAction.value, reasonForm.value.reason);
 }
 
-// 加载所有数据
+// 专家选择确认
+function handleExpertConfirm(experts: any[]) {
+  selectedExperts.value = experts;
+  // 选择专家后触发刷新，让父组件刷新数据
+  emit('refresh');
+}
+
+// 加载所有数据 - 通过 tableName + businessId 获取
 async function loadAllData() {
-  // 从 filingData.value 获取数据（外部传入）
-  const filing = filingData.value;
-
-  const id = filing?.id;
-  const type = BUSINESS_TYPE;
-
-  // 存储到 ref 供其他方法使用
-  finalBusinessId.value = id as number;
-  finalBusinessType.value = type;
+  const { tableName, businessId } = props;
 
   // 参数验证
-  if (!id) {
-    console.error('businessId 不能为空，filing:', filing);
-    message.error('参数错误：业务ID不能为空');
+  if (!tableName || !businessId) {
+    console.error('tableName 或 businessId 不能为空', props);
+    message.error('参数错误：业务表分类和业务ID不能为空');
     loading.value = false;
     return;
   }
 
   loading.value = true;
   try {
-    // 1. 加载备案基本信息
-    filingData.value = await getFiling(id);
+    // 1. 如果是 filing 类型，获取备案基本信息
+    if (tableName === 'filing') {
+      try {
+        filingData.value = await getFiling(businessId);
+      } catch (e) {
+        console.warn('获取备案信息失败:', e);
+      }
 
-    // 2. 加载指标和指标值
-    if (filingData.value?.projectType) {
-      const indicators = await getIndicatorsByProjectType(
-        filingData.value.projectType,
-        'filing'
-      );
+      // 2. 加载指标和指标值
+      if (filingData.value?.projectType) {
+        const indicators = await getIndicatorsByProjectType(
+          filingData.value.projectType,
+          'filing'
+        );
 
-      // 按分类分组
-      const categoryMap = new Map<number, typeof indicatorGroups.value[0]>();
-      indicators.forEach((indicator) => {
-        if (!categoryMap.has(indicator.category)) {
-          categoryMap.set(indicator.category, {
-            category: indicator.category,
-            categoryName: getCategoryName(indicator.category),
-            indicators: [],
+        // 按分类分组
+        const categoryMap = new Map<number, typeof indicatorGroups.value[0]>();
+        indicators.forEach((indicator) => {
+          if (!categoryMap.has(indicator.category)) {
+            categoryMap.set(indicator.category, {
+              category: indicator.category,
+              categoryName: getCategoryName(indicator.category),
+              indicators: [],
+            });
+          }
+          categoryMap.get(indicator.category)!.indicators.push(indicator);
+        });
+        indicatorGroups.value = Array.from(categoryMap.values()).sort(
+          (a, b) => a.category - b.category
+        );
+
+        // 默认展开所有分类
+        if (indicatorGroups.value.length > 0) {
+          activeCollapseKeys.value = indicatorGroups.value.map((g) => g.category);
+        }
+
+        // 获取指标值
+        const values = await getIndicatorValues(BUSINESS_TYPE_NUMBER, businessId);
+        const map: Record<number, any> = {};
+        values.forEach((v) => {
+          map[v.indicatorId] = parseIndicatorValue(v);
+        });
+        indicatorValuesMap.value = map;
+      }
+    }
+
+    // 3. 通过 tableName + businessId 获取审批信息
+    const taskStatusList = await getTaskByBusiness({
+      tableName,
+      businessIds: [businessId],
+    });
+
+    const taskStatus = taskStatusList?.[0];
+
+    // 4. 通过 tableName + businessId 获取流程详情（用于流程进度）
+    let processActivityNodes: any[] = [];
+    try {
+      const processList = await getProcessByBusiness({
+        tableName,
+        businessId,
+      });
+      // 取第一个流程实例的节点信息
+      const firstProcess = processList?.[0];
+      if (firstProcess) {
+        processActivityNodes = firstProcess.activityNodes || [];
+      }
+    } catch (e) {
+      console.warn('获取流程详情失败:', e);
+    }
+
+    // 5. 构建审批详情数据
+    if (taskStatus) {
+      // 有流程实例信息
+      approvalDetail.value = {
+        status: taskStatus.hasTodoTask ? 1 : (taskStatus.processInstanceId ? 2 : -1),
+        processInstance: taskStatus.processInstanceId ? { id: taskStatus.processInstanceId } : null,
+        activityNodes: processActivityNodes, // 使用流程详情中的节点信息
+        todoTask: taskStatus.todoTasks?.[0] || null,
+      };
+
+      // 6. 转换审批历史 - 使用 processActivityNodes 显示完整的审批记录（包含所有节点的处理信息）
+      // 从 activityNodes 中提取所有已完成的任务作为审批历史
+      const approvalHistoryFromNodes: any[] = [];
+      processActivityNodes.forEach((node: any) => {
+        if (node.tasks && node.tasks.length > 0) {
+          node.tasks.forEach((task: any) => {
+            // 根据节点状态判断操作结果
+            let approved: boolean | undefined;
+            let actionLabel = '';
+            switch (node.status) {
+              case 2: // 审批通过
+                approved = true;
+                actionLabel = '通过';
+                break;
+              case 3: // 审批不通过
+                approved = false;
+                actionLabel = '拒绝';
+                break;
+              case 5: // 退回
+                approved = undefined;
+                actionLabel = '退回';
+                break;
+              default:
+                actionLabel = node.name;
+            }
+
+            approvalHistoryFromNodes.push({
+              id: task.id,
+              name: node.name,
+              taskDefinitionKey: node.id,
+              createTime: task.endTime || node.endTime,
+              endTime: node.endTime,
+              reason: task.reason,
+              approved,
+              status: node.status === 5 ? 5 : (approved ? 2 : approved === false ? 3 : undefined),
+              actionLabel,
+              assignees: task.assigneeUser ? [task.assigneeUser.id] : [],
+              assigneeUser: task.assigneeUser,
+              ownerUser: task.assigneeUser,
+            });
           });
         }
-        categoryMap.get(indicator.category)!.indicators.push(indicator);
       });
-      indicatorGroups.value = Array.from(categoryMap.values()).sort(
-        (a, b) => a.category - b.category
-      );
+      // 按时间正序排列（最早的操作在最前面）
+      approvalHistoryFromNodes.sort((a, b) => (a.createTime || 0) - (b.createTime || 0));
 
-      // 默认展开所有分类（指标数据默认展开）
-      if (indicatorGroups.value.length > 0) {
-        activeCollapseKeys.value = indicatorGroups.value.map((g) => g.category);
-      }
-
-      // 获取指标值
-      const values = await getIndicatorValues(BUSINESS_TYPE_NUMBER, id);
-      const map: Record<number, any> = {};
-      values.forEach((v) => {
-        map[v.indicatorId] = parseIndicatorValue(v);
-      });
-      indicatorValuesMap.value = map;
-    }
-
-    // 3. 加载可用操作按钮（包含 taskId 信息）
-    const actions = await getAvailableActions(type, id);
-    // 过滤掉特殊标记：
-    // _PROCESS_RUNNING_: 流程进行中但无操作权限
-    // _PROCESS_FINISHED_: 流程已结束，用于获取流程实例信息
-    const filteredActions = (actions || []).filter(
-      (a: any) => a.key !== '_PROCESS_RUNNING_' && a.key !== '_PROCESS_FINISHED_'
-    );
-    availableActions.value = filteredActions;
-
-    // 4. 尝试获取流程实例信息
-    let taskId: string | undefined;
-    let processInstanceId: string | undefined;
-
-    // 优先从 actions 中获取 processInstanceId（新版逻辑）
-    if (actions.length > 0) {
-      // 优先使用 processInstanceId
-      const firstAction = actions[0] as any;
-      if (firstAction?.processInstanceId) {
-        processInstanceId = firstAction.processInstanceId;
-      }
-      // 其次使用 taskId
-      if (firstAction?.taskId) {
-        taskId = firstAction.taskId;
-      }
-    }
-
-    // 5. 如果有 taskId，通过 taskId 加载审批详情
-    if (taskId) {
-      approvalDetail.value = await getApprovalDetail({ taskId });
-
-      if (approvalDetail.value?.processInstance) {
-        const procId = String(approvalDetail.value.processInstance.id);
-        const tasks = await getTaskListByProcessInstanceId(procId);
-        approvalHistory.value = (tasks || []).reverse();
-      }
-    } else if (processInstanceId) {
-      // 6. 没有待处理任务但有流程实例ID时，直接通过流程实例ID加载审批详情
-      try {
-        approvalDetail.value = await getApprovalDetail({ processInstanceId });
-
-        if (approvalDetail.value?.processInstance) {
-          const tasks = await getTaskListByProcessInstanceId(processInstanceId);
-          approvalHistory.value = (tasks || []).reverse();
-        }
-      } catch (error) {
-        console.warn('获取流程详情失败:', error);
-        approvalDetail.value = null;
-        approvalHistory.value = [];
-      }
+      // 优先使用 activityNodes 构建的审批历史，否则使用 allDoneTasks
+      approvalHistory.value = approvalHistoryFromNodes.length > 0
+        ? approvalHistoryFromNodes
+        : (taskStatus.allDoneTasks || taskStatus.doneTasks || []).map((done: any) => ({
+            id: done.taskId,
+            name: done.taskName,
+            taskDefinitionKey: done.taskDefinitionKey,
+            createTime: done.endTime,
+            endTime: done.endTime,
+            reason: done.reason,
+            approved: done.approved,
+            status: done.status,
+            assignees: done.assigneeUser ? [done.assigneeUser.id] : [],
+            assigneeUser: done.assigneeUser,
+            ownerUser: done.assigneeUser,
+          })).reverse();
+    } else if (processActivityNodes.length > 0) {
+      // 没有任务信息但有流程节点信息（可能是已结束的流程）
+      approvalDetail.value = {
+        status: 2, // 视为已完成
+        processInstance: null,
+        activityNodes: processActivityNodes,
+        todoTask: null,
+      };
+      approvalHistory.value = [];
     } else {
-      // 7. 没有任何流程信息
-      approvalDetail.value = null;
+      // 没有流程信息
+      approvalDetail.value = {
+        status: -1,
+        processInstance: null,
+        activityNodes: [],
+        todoTask: null,
+      };
       approvalHistory.value = [];
     }
+
+    // 7. 加载可用操作按钮
+    // 根据是否有待办任务构建操作
+    if (taskStatus?.hasTodoTask && taskStatus.todoTasks?.[0]) {
+      const todoTask = taskStatus.todoTasks[0];
+      // 从 buttonSettings 构建操作按钮
+      const buttons = todoTask.buttonSettings || {};
+      availableActions.value = Object.entries(buttons)
+        .filter(([_, setting]: [string, any]) => setting.enable)
+        .map(([key, setting]: [string, any]) => ({
+          key,
+          label: setting.displayName,
+          taskId: todoTask.taskId,
+          vars: {
+            reasonRequired: todoTask.reasonRequire,
+          },
+        }));
+    } else {
+      availableActions.value = [];
+    }
+
   } catch (error) {
     console.error('加载审批详情失败:', error);
     message.error('加载审批详情失败');
+    approvalDetail.value = null;
+    approvalHistory.value = [];
   } finally {
     loading.value = false;
   }
@@ -443,13 +549,6 @@ function parseOptions(
   }
 }
 
-// 获取选项标签
-function getOptionLabel(valueOptions: string, value: string): string {
-  const options = parseOptions(valueOptions);
-  const option = options.find((opt) => opt.value === value);
-  return option?.label || value;
-}
-
 // 获取选项数组
 function getOptions(valueOptions: string): Array<{ label: string; value: string }> {
   return parseOptions(valueOptions);
@@ -486,22 +585,17 @@ function parseFileList(
 
 // 暴露方法给外部调用
 defineExpose({
-  openWithData: async (row: DeclareFilingApi.Filing) => {
-    // 传递数据
-    filingData.value = row;
-    // 加载完整数据
+  // 打开审批详情 - 直接加载数据（使用 props 中的 tableName 和 businessId）
+  openWithData: async (_row?: any) => {
+    // _row 参数保留兼容，但不依赖它获取数据
     await loadAllData();
   },
-  // 暴露 availableActions 供外部使用
-  availableActions,
-  open: async (businessId: number, businessType: string) => {
-    filingData.value = null;
+  // 兼容旧接口
+  open: async () => {
     await loadAllData();
   },
   close: () => {
     // 重置数据
-    filingData.value = null;
-    indicatorValuesMap.value = {};
   },
 });
 </script>
@@ -760,6 +854,10 @@ defineExpose({
               <div class="audit-record-header">
                 <div class="audit-record-info">
                   <span class="audit-stage">{{ task.name }}</span>
+                  <!-- 操作结果标签：通过(2)/拒绝(3)/退回(5) -->
+                  <a-tag v-if="task.status === 5 || task.actionLabel === '退回'" color="orange">退回</a-tag>
+                  <a-tag v-else-if="task.approved === true || task.actionLabel === '通过'" color="green">通过</a-tag>
+                  <a-tag v-else-if="task.approved === false || task.actionLabel === '拒绝'" color="red">拒绝</a-tag>
                   <span class="audit-operator">
                     操作人：{{
                       task.assigneeUser?.nickname ||
@@ -768,9 +866,11 @@ defineExpose({
                     }}
                   </span>
                 </div>
-                <span class="audit-time">{{ formatDate(task.createTime) }}</span>
+                <span class="audit-time">{{ formatDate(task.createTime || task.endTime) }}</span>
               </div>
+              <!-- 审批意见 -->
               <div v-if="task.reason" class="audit-reason">
+                <span class="reason-label">审批意见：</span>
                 {{ task.reason }}
               </div>
               <div v-if="task.endTime" class="audit-completed">
@@ -822,6 +922,15 @@ defineExpose({
         </a-form-item>
         </a-form>
       </a-modal>
+
+    <!-- 专家选择弹窗 -->
+    <ExpertSelectModal
+      ref="expertModalRef"
+      :multiple="true"
+      :expert-min="1"
+      :expert-max="10"
+      @confirm="handleExpertConfirm"
+    />
   </div>
   </template>
 
@@ -1167,6 +1276,15 @@ defineExpose({
   color: var(--color-text-secondary, #595959);
   font-size: 14px;
   margin-top: 4px;
+  padding: 8px 12px;
+  background-color: var(--color-bg-container, #fafafa);
+  border-radius: 4px;
+  border-left: 3px solid var(--color-primary, #1677ff);
+}
+
+.reason-label {
+  font-weight: 500;
+  color: var(--color-text-secondary, #595959);
 }
 
 .audit-completed {

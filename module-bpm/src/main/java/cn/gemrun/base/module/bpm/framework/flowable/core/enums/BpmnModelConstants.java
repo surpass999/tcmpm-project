@@ -31,6 +31,11 @@ public interface BpmnModelConstants {
     String BOUNDARY_EVENT_TYPE = "boundaryEventType";
 
     /**
+     * BPMN ExtensionElement 的扩展属性，用于标记边界事件最大提醒次数
+     */
+    String BOUNDARY_EVENT_MAX_REMIND_COUNT = "boundaryEventMaxRemindCount";
+
+    /**
      * BPMN ExtensionElement 的扩展属性，用于标记用户任务超时执行动作
      */
     String USER_TASK_TIMEOUT_HANDLER_TYPE = "timeoutHandlerType";
@@ -108,6 +113,11 @@ public interface BpmnModelConstants {
     String BUTTON_SETTING_ELEMENT_ENABLE_ATTRIBUTE = "enable";
 
     /**
+     * BPMN ExtensionElement Attribute, 用于标记按钮业务状态标识
+     */
+    String BUTTON_SETTING_ELEMENT_BIZ_STATUS_ATTRIBUTE = "bizStatus";
+
+    /**
      * BPMN ExtensionElement 的扩展属性，用于标记触发器的类型
      */
     String TRIGGER_TYPE = "triggerType";
@@ -142,10 +152,5 @@ public interface BpmnModelConstants {
      * 目前只有 {@link BpmModelTypeEnum#SIMPLE} 的 UserTask 节点会设置该属性，用于区分是审批节点、还是办理节点
      */
     String NODE_TYPE = "nodeType";
-
-    /**
-     * DSL 配置扩展元素
-     */
-    String DSL_CONFIG = "DslConfig";
 
 }

@@ -1,7 +1,7 @@
 package cn.gemrun.base.module.declare.framework.listener;
 
 import cn.gemrun.base.module.bpm.api.event.BpmProcessInstanceStatusEvent;
-import cn.gemrun.base.module.bpm.api.event.BpmProcessInstanceStatusEventListenerV2;
+import cn.gemrun.base.module.bpm.api.event.BpmProcessInstanceStatusEventListener;
 import cn.gemrun.base.module.declare.service.filing.FilingService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -16,14 +16,14 @@ import javax.annotation.Resource;
  */
 @Component
 @Slf4j
-public class DeclareFilingStatusListener extends BpmProcessInstanceStatusEventListenerV2 {
+public class DeclareFilingStatusListener extends BpmProcessInstanceStatusEventListener {
 
     @Resource
     private FilingService filingService;
 
     @Override
-    protected String getBusinessKeyPrefix() {
-        return "declare:filing";
+    protected String getProcessDefinitionKey() {
+        return "declare_filing";
     }
 
     @Override
@@ -44,7 +44,7 @@ public class DeclareFilingStatusListener extends BpmProcessInstanceStatusEventLi
             Long filingId = Long.parseLong(parts[3]);
 
             // 直接使用 DSL 中定义的 bizStatus 更新业务表状态
-            String bizStatus = event.getBizStatus();
+            String bizStatus = event.getStatus().toString();
             if (bizStatus != null) {
                 filingService.updateFilingStatus(filingId, bizStatus);
                 log.info("[DeclareFilingStatusListener] 更新备案状态: filingId={}, bizStatus={}",

@@ -34,7 +34,7 @@ public class BpmApprovalDetailReqVO {
     @AssertTrue(message = "流程定义的编号和流程实例的编号不能同时为空")
     @JsonIgnore
     public boolean isValidProcessParam() {
-        return StrUtil.isNotEmpty(processDefinitionId) || StrUtil.isNotEmpty(processInstanceId) || StrUtil.isNotEmpty(taskId);
+        return StrUtil.isNotEmpty(processDefinitionId) || StrUtil.isNotEmpty(processInstanceId);
     }
 
 }

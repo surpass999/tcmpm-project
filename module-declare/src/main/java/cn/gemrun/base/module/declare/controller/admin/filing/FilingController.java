@@ -21,8 +21,6 @@ import cn.gemrun.base.module.declare.dal.dataobject.filing.FilingDO;
 import cn.gemrun.base.module.declare.dal.dataobject.indicator.DeclareIndicatorValueDO;
 import cn.gemrun.base.module.declare.service.filing.FilingService;
 import cn.gemrun.base.module.declare.service.indicator.DeclareIndicatorValueService;
-import cn.gemrun.base.module.bpm.framework.process.annotation.BpmProcess;
-import cn.gemrun.base.module.bpm.framework.process.annotation.BpmProcessQuery;
 
 /**
  * 项目备案核心信息 Controller（流程配置化示例）
@@ -55,7 +53,6 @@ public class FilingController {
     @PostMapping("/create")
     @Operation(summary = "创建项目备案核心信息")
     @PreAuthorize("@ss.hasPermission('declare:filing:create')")
-    @BpmProcess
     public CommonResult<Long> createFiling(@Valid @RequestBody FilingSaveReqVO createReqVO) {
         return success(filingService.createFiling(createReqVO));
     }
@@ -66,6 +63,16 @@ public class FilingController {
     public CommonResult<Boolean> updateFiling(@Valid @RequestBody FilingSaveReqVO updateReqVO) {
         filingService.updateFiling(updateReqVO);
         return success(true);
+    }
+
+    @PostMapping("/start-process")
+    @Operation(summary = "发起备案流程")
+    @PreAuthorize("isAuthenticated()")
+    public CommonResult<String> startProcess(
+            @RequestParam("id") Long id,
+            @RequestParam(value = "processDefinitionKey", required = false, defaultValue = "declare_filing") String processDefinitionKey) {
+        String processInstanceId = filingService.startProcess(id, processDefinitionKey);
+        return success(processInstanceId);
     }
 
     // ========== 触发流程的操作 ==========
@@ -80,16 +87,25 @@ public class FilingController {
     @Operation(summary = "获得项目备案核心信息")
     @Parameter(name = "id", description = "编号", required = true, example = "1024")
     @PreAuthorize("@ss.hasPermission('declare:filing:query')")
-    @BpmProcessQuery
     public CommonResult<FilingRespVO> getFiling(@RequestParam("id") Long id) {
         FilingDO filing = filingService.getFiling(id);
-        return success(BeanUtils.toBean(filing, FilingRespVO.class));
+        FilingRespVO respVO = BeanUtils.toBean(filing, FilingRespVO.class);
+
+        // 处理 creator 类型转换（String -> Long）
+        if (filing.getCreator() != null) {
+            try {
+                respVO.setCreator(Long.parseLong(filing.getCreator()));
+            } catch (NumberFormatException e) {
+                respVO.setCreator(null);
+            }
+        }
+
+        return success(respVO);
     }
 
     @GetMapping("/page")
     @Operation(summary = "获得项目备案核心信息分页")
     @PreAuthorize("@ss.hasPermission('declare:filing:query')")
-    @BpmProcessQuery
     public CommonResult<PageResult<FilingRespVO>> getFilingPage(@Valid FilingPageReqVO pageReqVO) {
         PageResult<FilingDO> pageResult = filingService.getFilingPage(pageReqVO);
 
@@ -97,6 +113,16 @@ public class FilingController {
         List<FilingRespVO> voList = new ArrayList<>();
         for (FilingDO filing : pageResult.getList()) {
             FilingRespVO respVO = BeanUtils.toBean(filing, FilingRespVO.class);
+
+            // 处理 creator 类型转换（String -> Long）
+            if (filing.getCreator() != null) {
+                try {
+                    respVO.setCreator(Long.parseLong(filing.getCreator()));
+                } catch (NumberFormatException e) {
+                    // 如果转换失败，设置为 null
+                    respVO.setCreator(null);
+                }
+            }
 
             // 查询指标值
             Map<String, DeclareIndicatorValueDO> indicatorValueMap =
