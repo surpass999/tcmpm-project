@@ -4,7 +4,7 @@ import type { AiKnowledgeKnowledgeApi } from '#/api/ai/knowledge/knowledge';
 
 import { useRouter } from 'vue-router';
 
-import { DocAlert, Page, useVbenModal } from '@vben/common-ui';
+import { Page, useVbenModal } from '@vben/common-ui';
 
 import { message } from 'ant-design-vue';
 
@@ -103,9 +103,6 @@ const [Grid, gridApi] = useVbenVxeGrid({
 
 <template>
   <Page auto-content-height>
-    <template #doc>
-      <DocAlert title="AI 手册" url="https://doc.iocoder.cn/ai/build/" />
-    </template>
     <FormModal @success="handleRefresh" />
     <Grid table-title="AI 知识库列表">
       <template #toolbar-tools>

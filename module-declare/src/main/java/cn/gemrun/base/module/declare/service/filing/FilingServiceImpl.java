@@ -27,9 +27,11 @@ import cn.gemrun.base.module.system.api.user.dto.AdminUserRespDTO;
 import cn.gemrun.base.framework.security.core.util.SecurityFrameworkUtils;
 import org.flowable.engine.repository.ProcessDefinition;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.mzt.logapi.starter.annotation.LogRecord;
 
 import static cn.gemrun.base.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.gemrun.base.module.declare.enums.ErrorCodeConstants.*;
+import static cn.gemrun.base.module.declare.enums.DeclareLogRecordConstants.*;
 
 /**
  * 项目备案核心信息 Service 实现类
@@ -61,6 +63,8 @@ public class FilingServiceImpl implements FilingService {
     private BpmProcessDefinitionService bpmProcessDefinitionService;
 
     @Override
+    @LogRecord(type = FILING_TYPE, subType = FILING_CREATE_SUB_TYPE,
+            bizNo = "{{#_ret}}", success = FILING_CREATE_SUCCESS)
     public Long createFiling(FilingSaveReqVO createReqVO) {
         // 获取当前登录用户的部门ID，用于数据权限控制
         Long deptId = null;
@@ -80,6 +84,10 @@ public class FilingServiceImpl implements FilingService {
 
         // 插入基本信息
         FilingDO filing = BeanUtils.toBean(createReqVO, FilingDO.class);
+        // 如果没有设置计划完成时间，默认设为有效结束时间
+        if (filing.getPlanEndTime() == null && filing.getValidEndTime() != null) {
+            filing.setPlanEndTime(filing.getValidEndTime());
+        }
         filing.setDeptId(deptId);  // 设置部门ID，用于数据权限控制
         filing.setFilingStatus("DRAFT");  // 初始状态为草稿
 
@@ -98,6 +106,8 @@ public class FilingServiceImpl implements FilingService {
     }
 
     @Override
+    @LogRecord(type = FILING_TYPE, subType = FILING_UPDATE_SUB_TYPE,
+            bizNo = "{{#updateReqVO.id}}", success = FILING_UPDATE_SUCCESS)
     public void updateFiling(FilingSaveReqVO updateReqVO) {
         // 校验存在
         validateFilingExists(updateReqVO.getId());
@@ -138,9 +148,11 @@ public class FilingServiceImpl implements FilingService {
     }
 
     @Override
+    @LogRecord(type = FILING_TYPE, subType = FILING_DELETE_SUB_TYPE,
+            bizNo = "{{#id}}", success = FILING_DELETE_SUCCESS)
     public void deleteFiling(Long id) {
         // 校验存在
-        validateFilingExists(id);
+        FilingDO existing = validateFilingExists(id);
         // 删除备案基本信息
         filingMapper.deleteById(id);
         // 逻辑删除关联的指标值（业务类型1=备案）
@@ -152,6 +164,8 @@ public class FilingServiceImpl implements FilingService {
     }
 
     @Override
+    @LogRecord(type = FILING_TYPE, subType = FILING_BATCH_DELETE_SUB_TYPE,
+            bizNo = "{{#ids}}", success = FILING_BATCH_DELETE_SUCCESS)
     public void deleteFilingListByIds(List<Long> ids) {
         // 批量逻辑删除关联的指标值（业务类型1=备案）
         for (Long id : ids) {
@@ -201,6 +215,8 @@ public class FilingServiceImpl implements FilingService {
     // ========== 流程相关方法已移至 BpmProcess AOP 自动处理 ==========
 
     @Override
+    @LogRecord(type = FILING_TYPE, subType = FILING_STATUS_CHANGE_SUB_TYPE,
+            bizNo = "{{#id}}", success = FILING_STATUS_CHANGE_SUCCESS)
     public void updateFilingStatus(Long id, String bizStatus) {
         FilingDO filing = filingMapper.selectById(id);
         if (filing == null) {
@@ -222,7 +238,7 @@ public class FilingServiceImpl implements FilingService {
         }
         if ("NATION_APPROVED".equals(actualStatus) && !"NATION_APPROVED".equals(oldStatus)) {
             try {
-                createProjectFromFiling(filing);
+                autoCreateProjectFromFiling(id);
             } catch (Exception e) {
                 log.error("[updateFilingStatus] 自动立项失败: filingId={}", id, e);
                 // 不影响主流程，立项失败可手动处理
@@ -231,17 +247,34 @@ public class FilingServiceImpl implements FilingService {
     }
 
     /**
-     * 从备案自动创建项目
+     * 自动从备案创建项目（带日志记录）
      * 当备案国家局审核通过时，自动创建一个项目记录
      *
-     * @param filing 备案信息
+     * @param filingId 备案ID
      */
-    private void createProjectFromFiling(FilingDO filing) {
+    @LogRecord(type = FILING_TYPE, subType = FILING_AUTO_CREATE_PROJECT_SUB_TYPE,
+            bizNo = "{{#filingId}}", success = FILING_AUTO_CREATE_PROJECT_SUCCESS)
+    public Long autoCreateProjectFromFiling(Long filingId) {
+        FilingDO filing = filingMapper.selectById(filingId);
+        if (filing == null) {
+            log.warn("[autoCreateProjectFromFiling] 备案不存在: filingId={}", filingId);
+            return null;
+        }
+        return doCreateProjectFromFiling(filing);
+    }
+
+    /**
+     * 从备案自动创建项目（内部实现）
+     *
+     * @param filing 备案信息
+     * @return 创建的项目ID
+     */
+    private Long doCreateProjectFromFiling(FilingDO filing) {
         // 1. 检查是否已存在关联项目
         if (filing.getProjectId() != null) {
-            log.info("[createProjectFromFiling] 备案已有关联项目，跳过: filingId={}, projectId={}",
+            log.info("[doCreateProjectFromFiling] 备案已有关联项目，跳过: filingId={}, projectId={}",
                 filing.getId(), filing.getProjectId());
-            return;
+            return filing.getProjectId();
         }
 
         // 2. 创建项目基本信息
@@ -257,9 +290,15 @@ public class FilingServiceImpl implements FilingService {
         projectReq.setActualProgress(0);
         // 继承备案的项目类型
         projectReq.setProjectType(filing.getProjectType());
-        // 继承备案的建设内容作为项目描述（如果有相关字段）
-        // projectReq.setConstructionContent(filing.getConstructionContent());
 
+        // ========== 同步备案的冗余字段到项目 ==========
+        projectReq.setSocialCreditCode(filing.getSocialCreditCode());
+        projectReq.setMedicalLicenseNo(filing.getMedicalLicenseNo());
+        projectReq.setOrgName(filing.getOrgName());
+        projectReq.setValidStartTime(filing.getValidStartTime());
+        projectReq.setValidEndTime(filing.getValidEndTime());
+        projectReq.setConstructionContent(filing.getConstructionContent());
+        
         // 3. 设置项目负责人信息（备案的创建人）
         if (filing.getCreator() != null && !filing.getCreator().isEmpty()) {
             try {
@@ -269,11 +308,11 @@ public class FilingServiceImpl implements FilingService {
                     projectReq.setLeaderUserId(creatorId);
                     projectReq.setLeaderMobile(creator.getMobile());
                     projectReq.setLeaderName(creator.getNickname());
-                    log.info("[createProjectFromFiling] 设置项目负责人: filingId={}, leaderUserId={}, leaderName={}",
+                    log.info("[doCreateProjectFromFiling] 设置项目负责人: filingId={}, leaderUserId={}, leaderName={}",
                         filing.getId(), creatorId, creator.getNickname());
                 }
             } catch (NumberFormatException e) {
-                log.warn("[createProjectFromFiling] 解析创建人ID失败: filingId={}, creator={}",
+                log.warn("[doCreateProjectFromFiling] 解析创建人ID失败: filingId={}, creator={}",
                     filing.getId(), filing.getCreator());
             }
         }
@@ -287,20 +326,31 @@ public class FilingServiceImpl implements FilingService {
         // 6. 保存项目
         Long projectId = projectService.createProject(projectReq);
 
-        // 4. 更新备案的 projectId，建立关联
+        // 7. 更新备案的 projectId，建立关联
         filing.setProjectId(projectId);
         filingMapper.updateById(filing);
 
-        // 5. 复制备案的指标数据到项目（避免误删备案导致指标数据丢失）
+        // 8. 复制备案的指标数据到项目（避免误删备案导致指标数据丢失）
         try {
             copyIndicatorValuesFromFilingToProject(filing.getId(), projectId);
         } catch (Exception e) {
-            log.warn("[createProjectFromFiling] 复制指标数据失败: filingId={}, projectId={}, error={}",
+            log.warn("[doCreateProjectFromFiling] 复制指标数据失败: filingId={}, projectId={}, error={}",
                 filing.getId(), projectId, e.getMessage());
         }
 
-        log.info("[createProjectFromFiling] 自动立项成功: filingId={}, projectId={}, projectName={}",
+        log.info("[doCreateProjectFromFiling] 自动立项成功: filingId={}, projectId={}, projectName={}",
             filing.getId(), projectId, projectReq.getProjectName());
+
+        return projectId;
+    }
+
+    /**
+     * 从备案自动创建项目
+     *
+     * @param filing 备案信息
+     */
+    private void createProjectFromFiling(FilingDO filing) {
+        doCreateProjectFromFiling(filing);
     }
 
     /**
@@ -363,6 +413,8 @@ public class FilingServiceImpl implements FilingService {
     }
 
     @Override
+    @LogRecord(type = FILING_TYPE, subType = FILING_START_PROCESS_SUB_TYPE,
+            bizNo = "{{#id}}", success = FILING_START_PROCESS_SUCCESS)
     public String startProcess(Long id, String processDefinitionKey) {
         // 1. 校验备案是否存在
         FilingDO filing = validateFilingExists(id);
@@ -386,7 +438,7 @@ public class FilingServiceImpl implements FilingService {
         }
 
         // 4. 构建流程变量
-        // businessKey 格式: declare:filing:create:{filingId} - 用于监听器解析
+        // businessKey 格式: filing:approval:{filingId} - 用于监听器解析
         String businessKey = String.format("declare:filing:create:%d", id);
         Map<String, Object> variables = new HashMap<>();
         variables.put("businessKey", businessKey);
@@ -396,16 +448,12 @@ public class FilingServiceImpl implements FilingService {
         // 5. 构建创建请求
         BpmProcessInstanceCreateReqVO createReqVO = new BpmProcessInstanceCreateReqVO();
         createReqVO.setProcessDefinitionId(processDefinition.getId());
+        createReqVO.setBusinessKey(businessKey);
         createReqVO.setVariables(variables);
 
-        // 6. 发起流程（需要获取当前用户ID）
+        // 6. 发起流程（状态更新由 DeclareProcessStartedListener 通过事件驱动）
         Long userId = getCurrentUserId();
         String processInstanceId = bpmProcessInstanceService.createProcessInstance(userId, createReqVO);
-
-        // 7. 更新备案的流程实例ID
-        filing.setProcessInstanceId(processInstanceId);
-        filing.setFilingStatus("SUBMITTED");  // 提交状态
-        filingMapper.updateById(filing);
 
         log.info("[startProcess] 发起流程成功: filingId={}, processInstanceId={}, processDefinitionKey={}",
             id, processInstanceId, processDefinitionKey);

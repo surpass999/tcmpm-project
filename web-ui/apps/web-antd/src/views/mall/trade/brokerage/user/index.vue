@@ -2,7 +2,7 @@
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { MallBrokerageUserApi } from '#/api/mall/trade/brokerage/user';
 
-import { confirm, DocAlert, Page, useVbenModal } from '@vben/common-ui';
+import { confirm, Page, useVbenModal } from '@vben/common-ui';
 import { $t } from '@vben/locales';
 
 import { message } from 'ant-design-vue';
@@ -142,12 +142,6 @@ const [Grid, gridApi] = useVbenVxeGrid({
 
 <template>
   <Page auto-content-height>
-    <template #doc>
-      <DocAlert
-        title="【交易】分销返佣"
-        url="https://doc.iocoder.cn/mall/trade-brokerage/"
-      />
-    </template>
 
     <!-- 创建分销员 -->
     <CreateFormModal @success="handleRefresh" />

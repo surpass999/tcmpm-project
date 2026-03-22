@@ -18,7 +18,7 @@ import {
 import { $t } from '#/locales';
 
 import { useGridColumns, useGridFormSchema } from './data';
-import ProjectDetailModal from './detail/ProjectDetailModal.vue';
+import ProjectDetailModal from './detail/components/ProjectDetailModal.vue';
 
 // 选中的项目ID列表
 const checkedIds = ref<number[]>([]);
@@ -186,13 +186,13 @@ const [Grid, gridApi] = useVbenVxeGrid({
         <TableAction
           :actions="[
             {
-              label: '详情',
+              label: '查看详情',
               type: 'link',
               auth: ['declare:project:detail'],
               onClick: () => {
                 detailModalApi.setData({ 
                   projectId: row.id,
-                  class: 'min-w-[800px]'
+                  class: 'min-w-[800px]; min-h-[800px]!important'
                 }).open();
               },
             },

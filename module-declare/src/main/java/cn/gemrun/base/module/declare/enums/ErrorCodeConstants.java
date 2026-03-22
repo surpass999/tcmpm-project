@@ -53,6 +53,12 @@ public interface ErrorCodeConstants {
 
     ErrorCode PROJECT_PROCESS_NOT_EXISTS = new ErrorCode(1_010_005_001, "项目过程记录不存在");
 
+    ErrorCode PROCESS_STATUS_NOT_EDITABLE = new ErrorCode(1_010_005_002, "当前状态不允许编辑");
+
+    ErrorCode PROCESS_STATUS_NOT_WITHDRAWABLE = new ErrorCode(1_010_005_003, "只有已提交状态才能撤回");
+
+    ErrorCode PROCESS_STATUS_NOT_SUBMITTABLE = new ErrorCode(1_010_005_004, "只有已保存状态才能提交");
+
     // ========== 过程指标配置模块 1-010-005-100 ==========
 
     ErrorCode PROCESS_INDICATOR_CONFIG_NOT_EXISTS = new ErrorCode(1_010_005_101, "过程指标配置不存在");
@@ -76,5 +82,7 @@ public interface ErrorCodeConstants {
     ErrorCode ACHIEVEMENT_SUBMIT_STATUS_ERROR = new ErrorCode(1_010_008_002, "只有草稿状态才能提交审核");
 
     ErrorCode ACHIEVEMENT_NO_DATA_FLOW = new ErrorCode(1_010_008_003, "无数据基础，不得填写转化成果");
+
+    ErrorCode ACHIEVEMENT_NOT_RECOMMENDED_TO_NATION = new ErrorCode(1_010_008_004, "成果未被推荐至国家局，无法纳入推广库");
 
 }

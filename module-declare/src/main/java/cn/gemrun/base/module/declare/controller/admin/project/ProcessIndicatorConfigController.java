@@ -76,7 +76,7 @@ public class ProcessIndicatorConfigController {
     @GetMapping("/get")
     @Operation(summary = "获得过程指标配置")
     @Parameter(name = "id", description = "编号", required = true)
-    @PreAuthorize("@ss.hasPermission('declare:process-indicator-config:query')")
+    @PreAuthorize("isAuthenticated()")
     public CommonResult<ProcessIndicatorConfigRespVO> getConfig(@RequestParam("id") Long id) {
         ProcessIndicatorConfigDO config = configService.getConfig(id);
         if (config == null) {
@@ -87,7 +87,7 @@ public class ProcessIndicatorConfigController {
 
     @GetMapping("/page")
     @Operation(summary = "获得过程指标配置分页")
-    @PreAuthorize("@ss.hasPermission('declare:process-indicator-config:query')")
+    @PreAuthorize("isAuthenticated()")
     public CommonResult<PageResult<ProcessIndicatorConfigRespVO>> getConfigPage(@Valid ProcessIndicatorConfigPageReqVO pageReqVO) {
         PageResult<ProcessIndicatorConfigDO> page = configService.getConfigPage(pageReqVO);
         if (page.getList().isEmpty()) {
@@ -123,6 +123,7 @@ public class ProcessIndicatorConfigController {
     @Operation(summary = "根据过程类型获取已配置的指标列表")
     @Parameter(name = "processType", description = "过程类型")
     @Parameter(name = "projectType", description = "项目类型")
+    @PreAuthorize("isAuthenticated()")
     public CommonResult<List<ProcessIndicatorConfigRespVO>> getConfigListByProcessTypeAndProjectType(
             @RequestParam("processType") Integer processType,
             @RequestParam(value = "projectType", required = false) Integer projectType) {

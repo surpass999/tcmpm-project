@@ -2,7 +2,7 @@
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { BpmProcessListenerApi } from '#/api/bpm/processListener';
 
-import { DocAlert, Page, useVbenModal } from '@vben/common-ui';
+import { Page, useVbenModal } from '@vben/common-ui';
 
 import { message } from 'ant-design-vue';
 
@@ -84,12 +84,6 @@ const [Grid, gridApi] = useVbenVxeGrid({
 
 <template>
   <Page auto-content-height>
-    <template #doc>
-      <DocAlert
-        title="执行监听器、任务监听器"
-        url="https://doc.iocoder.cn/bpm/listener/"
-      />
-    </template>
 
     <FormModal @success="handleRefresh" />
     <Grid table-title="流程监听器">

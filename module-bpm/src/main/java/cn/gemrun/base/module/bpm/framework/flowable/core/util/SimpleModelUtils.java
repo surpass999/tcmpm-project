@@ -53,6 +53,117 @@ public class SimpleModelUtils {
     }
 
     /**
+     * 校验 Simple 模型的有效性
+     *
+     * @param simpleModelNode 模型根节点
+     * @throws IllegalArgumentException 如果模型无效
+     */
+    public static void validateSimpleModel(BpmSimpleModelNodeVO simpleModelNode) {
+        if (simpleModelNode == null) {
+            throw new IllegalArgumentException("流程模型不能为空");
+        }
+        validateNode(simpleModelNode, true);
+    }
+
+    /**
+     * 递归校验节点
+     *
+     * @param node        节点
+     * @param isRootNode  是否是根节点
+     */
+    private static void validateNode(BpmSimpleModelNodeVO node, boolean isRootNode) {
+        if (node == null) {
+            return;
+        }
+
+        // 1. 校验节点ID
+        if (node.getId() == null || node.getId().isEmpty()) {
+            throw new IllegalArgumentException("节点ID不能为空");
+        }
+
+        // 2. 校验节点类型
+        BpmSimpleModelNodeTypeEnum nodeType = BpmSimpleModelNodeTypeEnum.valueOf(node.getType());
+        if (nodeType == null) {
+            throw new IllegalArgumentException("不支持的节点类型: " + node.getType());
+        }
+
+        // 3. 根节点不能是结束节点
+        if (isRootNode && nodeType == BpmSimpleModelNodeTypeEnum.END_NODE) {
+            throw new IllegalArgumentException("流程模型根节点不能是结束节点");
+        }
+
+        // 4. 校验审批节点配置
+        if (nodeType == BpmSimpleModelNodeTypeEnum.APPROVE_NODE) {
+            validateApproveNode(node);
+        }
+
+        // 5. 校验分支节点配置
+        if (BpmSimpleModelNodeTypeEnum.isBranchNode(node.getType())) {
+            validateBranchNode(node);
+        }
+
+        // 6. 递归校验子节点
+        if (node.getChildNode() != null) {
+            validateNode(node.getChildNode(), false);
+        }
+
+        // 7. 递归校验条件节点
+        if (CollUtil.isNotEmpty(node.getConditionNodes())) {
+            for (BpmSimpleModelNodeVO conditionNode : node.getConditionNodes()) {
+                if (conditionNode.getChildNode() != null) {
+                    validateNode(conditionNode.getChildNode(), false);
+                }
+            }
+        }
+    }
+
+    /**
+     * 校验审批节点配置
+     */
+    private static void validateApproveNode(BpmSimpleModelNodeVO node) {
+        // 审批类型必须配置
+        if (node.getApproveType() == null) {
+            throw new IllegalArgumentException("审批节点[" + node.getName() + "]的审批类型未配置");
+        }
+
+        // 人工审批必须配置候选人策略
+        if (BpmUserTaskApproveTypeEnum.USER.getType().equals(node.getApproveType())) {
+            if (node.getCandidateStrategy() == null) {
+                throw new IllegalArgumentException("审批节点[" + node.getName() + "]的候选人策略未配置");
+            }
+        }
+    }
+
+    /**
+     * 校验分支节点配置
+     */
+    private static void validateBranchNode(BpmSimpleModelNodeVO node) {
+        BpmSimpleModelNodeTypeEnum nodeType = BpmSimpleModelNodeTypeEnum.valueOf(node.getType());
+
+        // 条件分支必须配置条件节点
+        if (nodeType == BpmSimpleModelNodeTypeEnum.CONDITION_BRANCH_NODE) {
+            if (CollUtil.isEmpty(node.getConditionNodes())) {
+                throw new IllegalArgumentException("条件分支节点[" + node.getName() + "]未配置条件");
+            }
+
+            // 必须有默认分支
+            boolean hasDefault = node.getConditionNodes().stream()
+                    .anyMatch(n -> n.getConditionSetting() != null && BooleanUtil.isTrue(n.getConditionSetting().getDefaultFlow()));
+            if (!hasDefault) {
+                throw new IllegalArgumentException("条件分支节点[" + node.getName() + "]必须配置一个默认分支");
+            }
+        }
+
+        // 包容分支/并行分支必须有条件节点
+        if (nodeType == BpmSimpleModelNodeTypeEnum.INCLUSIVE_BRANCH_NODE
+                || nodeType == BpmSimpleModelNodeTypeEnum.PARALLEL_BRANCH_NODE) {
+            if (CollUtil.isEmpty(node.getConditionNodes())) {
+                throw new IllegalArgumentException("分支节点[" + node.getName() + "]必须配置条件节点");
+            }
+        }
+    }
+
+    /**
      * 仿钉钉流程设计模型数据结构（json）转换成 Bpmn Model
      * <p>
      * 整体逻辑如下：
@@ -66,7 +177,10 @@ public class SimpleModelUtils {
      * @return Bpmn Model
      */
     public static BpmnModel buildBpmnModel(String processId, String processName, BpmSimpleModelNodeVO simpleModelNode) {
-        // 1. 创建 BpmnModel
+        // 1. 校验模型有效性
+        validateSimpleModel(simpleModelNode);
+
+        // 2. 创建 BpmnModel
         BpmnModel bpmnModel = new BpmnModel();
         bpmnModel.setTargetNamespace(BpmnXMLConstants.BPMN2_NAMESPACE); // 设置命名空间。不加这个，解析 Message 会报 NPE 异常
         // 创建 Process 对象
@@ -453,7 +567,7 @@ public class SimpleModelUtils {
             // 添加操作按钮配置属性元素
             addButtonsSetting(node.getButtonsSetting(), userTask);
             // 处理多实例（审批方式）
-            processMultiInstanceLoopCharacteristics(node.getApproveMethod(), node.getApproveRatio(), userTask);
+            processMultiInstanceLoopCharacteristics(node.getApproveMethod(), node.getApproveRatio(), node.getPassScore(), userTask);
             // 添加任务被拒绝的处理元素
             addTaskRejectElements(node.getRejectHandler(), userTask);
             // 添加用户任务的审批人与发起人相同时的处理元素
@@ -518,7 +632,7 @@ public class SimpleModelUtils {
             }
         }
 
-        private void processMultiInstanceLoopCharacteristics(Integer approveMethod, Integer approveRatio, UserTask userTask) {
+        private void processMultiInstanceLoopCharacteristics(Integer approveMethod, Integer approveRatio, Integer passScore, UserTask userTask) {
             BpmUserTaskApproveMethodEnum approveMethodEnum = BpmUserTaskApproveMethodEnum.valueOf(approveMethod);
             Assert.notNull(approveMethodEnum, "审批方式({})不能为空", approveMethodEnum);
             // 添加审批方式的扩展属性
@@ -544,6 +658,13 @@ public class SimpleModelUtils {
                 multiInstanceCharacteristics.setCompletionCondition(
                         String.format(approveMethodEnum.getCompletionCondition(), String.format("%.2f", approveRatio / 100D)));
                 multiInstanceCharacteristics.setSequential(false);
+            } else if (approveMethodEnum == BpmUserTaskApproveMethodEnum.SCORE) {
+                // 评审（按总分）- 等待所有专家完成评分，由 ReviewResultServiceImpl 判断是否通过
+                // 使用 Flowable 内置的多实例完成条件：所有专家都完成任务后才结束
+                multiInstanceCharacteristics.setCompletionCondition("${nrOfCompletedInstances >= nrOfInstances}");
+                multiInstanceCharacteristics.setSequential(false);
+                // 添加 passScore 扩展属性，用于评审服务计算是否达标
+                addExtensionElement(userTask, USER_TASK_PASS_SCORE, passScore);
             }
             userTask.setLoopCharacteristics(multiInstanceCharacteristics);
         }
@@ -944,7 +1065,8 @@ public class SimpleModelUtils {
     }
 
     private static String buildGatewayJoinId(String id) {
-        return id + "_join";
+        // 使用 UUID 的前8位确保唯一性，避免并行分支时的命名冲突
+        return id + "_join_" + IdUtil.fastSimpleUUID().substring(0, 8);
     }
 
     private static BoundaryEvent buildTimeoutBoundaryEvent(Activity attachedToRef, Integer type,

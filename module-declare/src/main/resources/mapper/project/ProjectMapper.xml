@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.gemrun.base.module.declare.dal.mysql.project.ProjectMapper">
+
+    <!-- 按项目类型聚合统计（用于 NationalStatsVO.projectTypeDistribution） -->
+    <!-- 修改后：新增已完成数量统计（通过 actual_end_time IS NOT NULL 判断） -->
+    <select id="selectProjectTypeAggregation" resultType="cn.gemrun.base.module.declare.controller.admin.dashboard.vo.DashboardStatsVO$NationalStats$ProjectTypeItem">
+        SELECT
+            project_type AS typeValue,
+            COUNT(*) AS projectCount,
+            SUM(CASE WHEN actual_end_time IS NOT NULL THEN 1 ELSE 0 END) AS completedCount,
+            SUM(total_investment) AS totalInvestment,
+            SUM(central_fund_arrive) AS arrivedFund
+        FROM declare_project
+        GROUP BY project_type
+    </select>
+
+    <!-- 按 actual_end_time 统计已完成项目数 -->
+    <select id="selectCountByActualEndTime" resultType="java.lang.Long">
+        SELECT COUNT(*) FROM declare_project WHERE actual_end_time IS NOT NULL
+    </select>
+
+    <!-- 按省份聚合统计（用于全国项目分布图表） -->
+    <!-- 数据链路：项目.leader_user_id → system_users.id → province_id（直接关联，不依赖 dept_id） -->
+    <!-- 优势：比原来的 dept→dept.leader_user_id→users 链路更稳定，避免中间表断裂导致数据丢失 -->
+    <select id="selectProvinceAggregation" resultType="cn.gemrun.base.module.declare.controller.admin.dashboard.vo.NationalStatsVO$ProvinceItem">
+        SELECT
+            u.province_id AS provinceId,
+            COUNT(p.id) AS projectCount,
+            ROUND(IFNULL(AVG(p.actual_progress), 0), 0) AS progress,
+            CASE
+                WHEN SUM(IFNULL(p.total_investment, 0)) > 0
+                THEN ROUND(SUM(IFNULL(p.accumulated_investment, 0)) / SUM(IFNULL(p.total_investment, 0)) * 100, 0)
+                ELSE 0
+            END AS fundRate,
+            SUM(CASE WHEN p.actual_progress &lt; 50 THEN 1 ELSE 0 END) AS highRiskCount
+        FROM declare_project p
+        LEFT JOIN system_users u ON p.leader_user_id = u.id
+        WHERE u.province_id IS NOT NULL
+        GROUP BY u.province_id
+        ORDER BY COUNT(p.id) DESC
+    </select>
+
+</mapper>

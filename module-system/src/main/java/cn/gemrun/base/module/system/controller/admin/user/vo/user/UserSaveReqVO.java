@@ -41,6 +41,12 @@ public class UserSaveReqVO {
     @DiffLogField(name = "部门", function = DeptParseFunction.NAME)
     private Long deptId;
 
+    @Schema(description = "省份ID", example = "440000")
+    private Integer provinceId;
+
+    @Schema(description = "城市ID", example = "440100")
+    private Integer cityId;
+
     @Schema(description = "岗位编号数组", example = "1")
     @DiffLogField(name = "岗位", function = PostParseFunction.NAME)
     private Set<Long> postIds;

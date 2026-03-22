@@ -5,6 +5,7 @@ import cn.gemrun.base.module.declare.controller.admin.expert.vo.*;
 import cn.gemrun.base.module.declare.dal.dataobject.expert.ExpertDO;
 
 import javax.validation.Valid;
+import java.math.BigDecimal;
 import java.util.List;
 
 /**
@@ -98,5 +99,13 @@ public interface ExpertService {
      * @return 分页结果（带 isAvoid 字段）
      */
     PageResult<ExpertDO> getExpertSelectList(ExpertPageReqVO pageReqVO);
+
+    /**
+     * 更新专家的评审统计信息（评审次数、平均分、上次评审时间）
+     *
+     * @param expertId 专家编号
+     * @param newScore 本次评审得分
+     */
+    void updateExpertReviewStats(Long expertId, BigDecimal newScore);
 
 }

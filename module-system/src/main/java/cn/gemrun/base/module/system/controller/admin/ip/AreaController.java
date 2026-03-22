@@ -12,10 +12,12 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.Collections;
 import java.util.List;
 
 import static cn.gemrun.base.framework.common.pojo.CommonResult.success;
@@ -32,6 +34,17 @@ public class AreaController {
         Area area = AreaUtils.getArea(Area.ID_CHINA);
         Assert.notNull(area, "获取不到中国");
         return success(BeanUtils.toBean(area.getChildren(), AreaNodeRespVO.class));
+    }
+
+    @GetMapping("/province/{provinceId}/cities")
+    @Operation(summary = "获取省份下的城市列表")
+    @Parameter(name = "provinceId", description = "省份ID", required = true)
+    public CommonResult<List<AreaNodeRespVO>> getCitiesByProvince(@PathVariable("provinceId") Integer provinceId) {
+        Area province = AreaUtils.getArea(provinceId);
+        if (province == null || province.getChildren() == null) {
+            return success(Collections.emptyList());
+        }
+        return success(BeanUtils.toBean(province.getChildren(), AreaNodeRespVO.class));
     }
 
     @GetMapping("/get-by-ip")

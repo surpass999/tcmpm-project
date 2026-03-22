@@ -149,6 +149,10 @@ public class ProcessIndicatorConfigServiceImpl implements ProcessIndicatorConfig
         if (projectType == null) {
             return "未知";
         }
+        // projectType=0 表示通用类型
+        if (projectType == 0) {
+            return "通用类型";
+        }
         try {
             DictDataDO dictData = dictDataService.getDictData(DICT_TYPE_PROJECT_TYPE, String.valueOf(projectType));
             return dictData != null ? dictData.getLabel() : "未知";

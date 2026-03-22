@@ -347,15 +347,25 @@ export const useTabbarStore = defineStore('core-tabbar', {
       const { currentRoute } = router;
       const { name } = currentRoute.value;
 
-      this.excludeCachedTabs.add(name as string);
-      this.renderRouteView = false;
-      startProgress();
+      // 防止重复刷新
+      if (this.isRefreshing) {
+        return;
+      }
+      this.isRefreshing = true;
 
-      await new Promise((resolve) => setTimeout(resolve, 200));
+      try {
+        this.excludeCachedTabs.add(name as string);
+        this.renderRouteView = false;
+        startProgress();
 
-      this.excludeCachedTabs.delete(name as string);
-      this.renderRouteView = true;
-      stopProgress();
+        await new Promise((resolve) => setTimeout(resolve, 200));
+
+        this.excludeCachedTabs.delete(name as string);
+        this.renderRouteView = true;
+        stopProgress();
+      } finally {
+        this.isRefreshing = false;
+      }
     },
 
     /**

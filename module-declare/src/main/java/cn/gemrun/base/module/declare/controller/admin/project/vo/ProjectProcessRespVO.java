@@ -53,14 +53,29 @@ public class ProjectProcessRespVO {
     private LocalDateTime reportTime;
 
     /**
-     * 状态
+     * 状态（DRAFT草稿，SUBMITTED已提交，AUDITING审核中，APPROVED通过，REJECTED退回）
      */
-    private Integer status;
+    private String status;
 
     /**
      * 佐证材料文件ID（逗号分隔）
      */
     private String fileIds;
+
+    /**
+     * 过程数据JSON（文本字段等）
+     */
+    private String processData;
+
+    /**
+     * 指标值JSON
+     */
+    private String indicatorValues;
+
+    /**
+     * 附件ID集合（逗号分隔，与 fileIds 同义，优先使用）
+     */
+    private String attachmentIds;
 
     /**
      * 备注
@@ -76,5 +91,10 @@ public class ProjectProcessRespVO {
      * 更新时间
      */
     private LocalDateTime updateTime;
+
+    /**
+     * 创建人ID（用于判断是否为创建人）
+     */
+    private Long creatorId;
 
 }

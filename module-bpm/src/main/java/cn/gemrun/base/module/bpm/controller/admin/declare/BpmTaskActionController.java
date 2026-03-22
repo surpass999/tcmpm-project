@@ -173,7 +173,8 @@ public class BpmTaskActionController {
         approveReqVO.setId(reqVO.getId());
         approveReqVO.setNextAssignees(nextAssignees);
         approveReqVO.setReason("设置专家审批人: " + userNames);
-        approveReqVO.setButtonId(reqVO.getButtonId());
+        // 修复：如果前端未传 buttonId，默认设置为 8（选择专家按钮），使监听器能正确处理专家任务记录
+        approveReqVO.setButtonId(reqVO.getButtonId() != null ? reqVO.getButtonId() : 8);
 
         // 8. 调用通过任务接口，完成当前任务并流转到下一个节点
         taskService.approveTask(userId, approveReqVO);

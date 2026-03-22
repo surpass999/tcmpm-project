@@ -4,7 +4,7 @@ import type { BpmProcessInstanceApi } from '#/api/bpm/processInstance';
 
 import { h } from 'vue';
 
-import { DocAlert, Page, prompt } from '@vben/common-ui';
+import { Page, prompt } from '@vben/common-ui';
 import {
   BpmModelFormType,
   BpmProcessInstanceStatus,
@@ -127,12 +127,6 @@ const [Grid, gridApi] = useVbenVxeGrid({
 
 <template>
   <Page auto-content-height>
-    <template #doc>
-      <DocAlert
-        title="流程发起、取消、重新发起"
-        url="https://doc.iocoder.cn/bpm/process-instance"
-      />
-    </template>
 
     <Grid table-title="流程状态">
       <template #slot-summary="{ row }">

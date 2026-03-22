@@ -29,7 +29,7 @@ public class ProjectReactor {
     private static final String GROUP_ID = "cn.gemrun";
     private static final String ARTIFACT_ID = "base";
     private static final String PACKAGE_NAME = "cn.gemrun.base";
-    private static final String TITLE = "Gemrun 基础系统";
+    private static final String TITLE = "项目管理系统";
 
     /**
      * 白名单文件，不进行重写，避免出问题
@@ -53,7 +53,7 @@ public class ProjectReactor {
         String groupIdNew = "cn.gemrun";
         String artifactIdNew = "base";
         String packageNameNew = "cn.gemrun.base";
-        String titleNew = "Gemrun 基础系统";
+        String titleNew = "中医医院管理系统";
         String projectBaseDirNew;
         if (args != null && args.length >= 2 && StrUtil.isNotEmpty(args[1])) {
             projectBaseDirNew = args[1];

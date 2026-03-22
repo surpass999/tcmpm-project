@@ -65,6 +65,65 @@ export const rejectTask = async (data: any) => {
   return await requestClient.put('/bpm/declare/task/reject', data);
 };
 
+// ========== 批量查询任务状态 API ==========
+
+export namespace BpmTaskBatchStatusApi {
+  export interface ReqVO {
+    processInstanceIds: string[];
+  }
+
+  export interface ButtonSetting {
+    displayName: string;
+    enable: boolean;
+    bizStatus?: string;
+    rectifyProcessDefinitionKey?: string;
+  }
+
+  export interface TodoTask {
+    taskId: string;
+    taskName: string;
+    taskDefinitionKey: string;
+    createTime?: string;
+    formId?: number;
+    formName?: string;
+    formConf?: string;
+    buttonSettings?: Record<string, ButtonSetting>;
+    signEnable?: boolean;
+    reasonRequire?: boolean;
+    nodeType?: string;
+  }
+
+  export interface DoneTask {
+    taskId: string;
+    taskName: string;
+    taskDefinitionKey: string;
+    endTime?: string;
+    approved?: boolean;
+    status?: number;
+    reason?: string;
+    assigneeUser?: any;
+  }
+
+  export interface RespVO {
+    processInstanceId: string;
+    hasTodoTask: boolean;
+    todoTasks: TodoTask[];
+    doneTasks: DoneTask[];
+    allDoneTasks: DoneTask[];
+  }
+}
+
+/**
+ * 根据流程实例ID批量查询任务状态
+ * 用于获取按钮配置
+ */
+export const getTaskBatchStatusByProcessInstanceIds = async (data: BpmTaskBatchStatusApi.ReqVO) => {
+  return await requestClient.post<BpmTaskBatchStatusApi.RespVO[]>(
+    '/bpm/declare/task-status/batch-query',
+    data,
+  );
+};
+
 /** 根据流程实例 ID 查询任务列表 */
 export const getTaskListByProcessInstanceId = async (id: string) => {
   return await requestClient.get(
@@ -140,11 +199,22 @@ export const setNextAssignees = async (data: {
   return await requestClient.put('/bpm/declare/task/next-assignees', data);
 };
 
+/** 选择专家 - 设置下一个节点审批人后自动通过当前任务 */
+export const selectExpert = async (data: {
+  id: string;
+  userIds: number[];
+  buttonId?: number;
+}) => {
+  return await requestClient.put('/bpm/declare/task/select-expert', data);
+};
+
 /** 根据业务ID批量查询任务状态 */
 export namespace BpmTaskByBusinessApi {
   export interface ReqVO {
     /** 业务表分类（对应 bpm_business_type.process_category） */
     tableName: string;
+    /** 业务类型（对应 bpm_business_type.business_type，如 project_process:type:1） */
+    businessType?: string;
     /** 业务ID列表 */
     businessIds: number[];
   }
@@ -157,7 +227,7 @@ export namespace BpmTaskByBusinessApi {
     formId?: number;
     formName?: string;
     formConf?: string;
-    buttonSettings?: Record<string, { displayName: string; enable: boolean }>;
+    buttonSettings?: Record<string, { displayName: string; enable: boolean; bizStatus?: string; rectifyProcessDefinitionKey?: string }>;
     signEnable?: boolean;
     reasonRequire?: boolean;
     nodeType?: string;
@@ -200,6 +270,8 @@ export namespace BpmProcessByBusinessApi {
   export interface ReqVO {
     /** 业务表分类（对应 bpm_business_type.process_category） */
     tableName: string;
+    /** 业务类型（对应 bpm_business_type.business_type，如 project_process:type:1） */
+    businessType?: string;
     /** 业务ID */
     businessId: number;
   }

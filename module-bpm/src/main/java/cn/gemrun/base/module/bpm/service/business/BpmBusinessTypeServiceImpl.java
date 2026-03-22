@@ -13,6 +13,7 @@ import org.springframework.validation.annotation.Validated;
 
 import javax.annotation.Resource;
 import java.util.List;
+import java.util.Objects;
 
 import static cn.gemrun.base.framework.common.exception.util.ServiceExceptionUtil.exception;
 
@@ -118,11 +119,16 @@ public class BpmBusinessTypeServiceImpl implements BpmBusinessTypeService {
     @Override
     public List<String> getProcessDefinitionKeysByCategory(String category) {
         List<BpmBusinessTypeDO> businessTypes = businessTypeMapper.selectByCategory(category);
-        return businessTypes.stream()
+        List<String> keys = businessTypes.stream()
                 .filter(bt -> bt.getEnabled() != null && bt.getEnabled() == 1)
                 .map(BpmBusinessTypeDO::getProcessDefinitionKey)
+                .filter(Objects::nonNull)
+                .filter(key -> !key.isEmpty())
                 .distinct()
                 .collect(java.util.stream.Collectors.toList());
+        log.info("[getProcessDefinitionKeysByCategory] category={}, totalRecords={}, validKeys={}",
+                category, businessTypes.size(), keys);
+        return keys;
     }
 
     /**

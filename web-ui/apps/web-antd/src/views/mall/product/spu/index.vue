@@ -5,7 +5,7 @@ import type { MallSpuApi } from '#/api/mall/product/spu';
 import { onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
-import { confirm, DocAlert, Page } from '@vben/common-ui';
+import { confirm, Page } from '@vben/common-ui';
 import { ProductSpuStatusEnum } from '@vben/constants';
 import { downloadFileFromBlobPart } from '@vben/utils';
 
@@ -206,12 +206,6 @@ onMounted(async () => {
 
 <template>
   <Page auto-content-height>
-    <template #doc>
-      <DocAlert
-        title="【商品】商品 SPU 与 SKU"
-        url="https://doc.iocoder.cn/mall/product-spu-sku/"
-      />
-    </template>
 
     <Grid>
       <template #toolbar-actions>

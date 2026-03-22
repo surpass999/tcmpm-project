@@ -4,7 +4,7 @@ import type { BpmOALeaveApi } from '#/api/bpm/oa/leave';
 
 import { h, onActivated } from 'vue';
 
-import { DocAlert, Page, prompt } from '@vben/common-ui';
+import { Page, prompt } from '@vben/common-ui';
 import { BpmProcessInstanceStatus } from '@vben/constants';
 
 import { message, Textarea } from 'ant-design-vue';
@@ -135,12 +135,6 @@ onActivated(() => {
 
 <template>
   <Page auto-content-height>
-    <template #doc>
-      <DocAlert
-        title="审批接入（业务表单）"
-        url="https://doc.iocoder.cn/bpm/use-business-form/"
-      />
-    </template>
 
     <Grid table-title="请假列表">
       <template #toolbar-tools>

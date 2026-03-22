@@ -2,7 +2,7 @@
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { ErpSupplierApi } from '#/api/erp/purchase/supplier';
 
-import { DocAlert, Page, useVbenModal } from '@vben/common-ui';
+import { Page, useVbenModal } from '@vben/common-ui';
 import { downloadFileFromBlobPart } from '@vben/utils';
 
 import { message } from 'ant-design-vue';
@@ -95,12 +95,6 @@ const [Grid, gridApi] = useVbenVxeGrid({
 
 <template>
   <Page auto-content-height>
-    <template #doc>
-      <DocAlert
-        title="【采购】采购订单、入库、退货"
-        url="https://doc.iocoder.cn/erp/purchase/"
-      />
-    </template>
 
     <FormModal @success="handleRefresh" />
     <Grid table-title="供应商列表">

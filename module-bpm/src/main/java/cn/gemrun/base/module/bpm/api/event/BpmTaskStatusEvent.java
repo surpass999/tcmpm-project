@@ -6,6 +6,7 @@ import org.springframework.context.ApplicationEvent;
 
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
+import java.util.Map;
 
 /**
  * 任务完成（状态变化）的 Event
@@ -67,6 +68,14 @@ public class BpmTaskStatusEvent extends ApplicationEvent {
     private String businessKey;
 
     /**
+     * 业务类型
+     * 对应 bpm_business_type 表的 business_type 字段
+     * 例如：project_process:type:1
+     */
+    @NotBlank(message = "业务类型不能为空")
+    private String businessType;
+
+    /**
      * 任务完成原因
      */
     private String reason;
@@ -85,6 +94,18 @@ public class BpmTaskStatusEvent extends ApplicationEvent {
      * 任务名称
      */
     private String taskName;
+
+    /**
+     * 操作按钮ID
+     * 对应操作按钮配置的 buttonId，用于判断触发的是哪个按钮
+     */
+    private Integer buttonId;
+
+    /**
+     * 流程变量（用于传递按钮扩展参数，如整改流程定义 Key）
+     * 从 BpmTaskApproveReqVO.variables 中提取，并在事件发布时构建
+     */
+    private Map<String, Object> variables;
 
     public BpmTaskStatusEvent(Object source) {
         super(source);

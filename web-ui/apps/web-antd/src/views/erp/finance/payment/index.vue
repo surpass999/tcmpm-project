@@ -4,7 +4,7 @@ import type { ErpFinancePaymentApi } from '#/api/erp/finance/payment';
 
 import { ref } from 'vue';
 
-import { DocAlert, Page, useVbenModal } from '@vben/common-ui';
+import { Page, useVbenModal } from '@vben/common-ui';
 import { downloadFileFromBlobPart, isEmpty } from '@vben/utils';
 
 import { message } from 'ant-design-vue';
@@ -134,12 +134,6 @@ const [Grid, gridApi] = useVbenVxeGrid({
 
 <template>
   <Page auto-content-height>
-    <template #doc>
-      <DocAlert
-        title="【财务】采购付款、销售收款"
-        url="https://doc.iocoder.cn/sale/finance-payment-receipt/"
-      />
-    </template>
 
     <FormModal @success="handleRefresh" />
     <Grid table-title="付款单列表">

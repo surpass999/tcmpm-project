@@ -1,112 +1,182 @@
 <script lang="ts" setup>
 import { computed, ref } from 'vue';
+import { onMounted } from 'vue';
 
-import { useUserStore } from '@vben/stores';
+import {
+  getDashboardStats,
+  getDashboardTasks,
+  getRiskWarnings,
+  getFundStats,
+  type DashboardStats,
+  type DashboardTasks,
+  type RiskWarnings,
+  type FundStats,
+} from '#/api/declare/dashboard';
 
-import HospitalPanel from './components/HospitalPanel.vue';
-import ProvincePanel from './components/ProvincePanel.vue';
-import NationalPanel from './components/NationalPanel.vue';
-import ExpertPanel from './components/ExpertPanel.vue';
+import HospitalDashboard from './components/hospital/HospitalDashboard.vue';
+import ProvinceDashboard from './components/province/ProvinceDashboard.vue';
+import NationalDashboard from './components/national/NationalDashboard.vue';
+import ExpertDashboard from './components/expert/ExpertDashboard.vue';
 
-const userStore = useUserStore();
+type RoleType = 'hospital' | 'province' | 'nation' | 'expert';
 
-// 角色类型定义
-type RoleType = 'hospital' | 'province' | 'national' | 'expert';
-
-// 角色配置
-const roleConfig: Record<RoleType, { label: string; value: RoleType; roles: string[] }> = {
-  hospital: {
-    label: '医院',
-    value: 'hospital',
-    roles: ['hospital'], // 对应的系统角色标识
-  },
-  province: {
-    label: '省级',
-    value: 'province',
-    roles: ['province', 'province_admin'],
-  },
-  national: {
-    label: '国家局',
-    value: 'national',
-    roles: ['national', 'national_admin', 'super_admin'],
-  },
-  expert: {
-    label: '专家',
-    value: 'expert',
-    roles: ['expert'],
-  },
+const roleConfig: Record<RoleType, { label: string; title: string }> = {
+  hospital: { label: '医院', title: '医院驾驶舱' },
+  province: { label: '省级', title: '省级驾驶舱' },
+  nation: { label: '国家局', title: '国家局驾驶舱' },
+  expert: { label: '专家', title: '专家驾驶舱' },
 };
 
-// 当前选中的角色类型
-const currentRoleType = ref<RoleType>('hospital');
+const loading = ref(false);
+const currentRole = ref<RoleType>('hospital');
+const stats = ref<DashboardStats | null>(null);
+const tasks = ref<DashboardTasks | null>(null);
+const warnings = ref<RiskWarnings | null>(null);
+const fundStats = ref<FundStats | null>(null);
 
-// 获取用户可用的角色列表
-const availableRoles = computed(() => {
-  const userRoles = userStore.userRoles || [];
-  const available: RoleType[] = [];
-
-  // 检查每个角色类型是否匹配用户的系统角色
-  for (const [type, config] of Object.entries(roleConfig)) {
-    const hasRole = config.roles.some((role) => userRoles.includes(role));
-    if (hasRole) {
-      available.push(type as RoleType);
-    }
-  }
-
-  // 如果没有匹配的角色，默认显示医院面板
-  if (available.length === 0) {
-    available.push('hospital');
-  }
-
-  return available;
-});
-
-// 当前应该显示的面板组件
 const currentPanel = computed(() => {
-  switch (currentRoleType.value) {
-    case 'hospital':
-      return HospitalPanel;
-    case 'province':
-      return ProvincePanel;
-    case 'national':
-      return NationalPanel;
-    case 'expert':
-      return ExpertPanel;
-    default:
-      return HospitalPanel;
+  switch (currentRole.value) {
+    case 'hospital': return HospitalDashboard;
+    case 'province': return ProvinceDashboard;
+  case 'nation': return NationalDashboard;
+    case 'expert': return ExpertDashboard;
+    default: return HospitalDashboard;
   }
 });
 
-// 初始化：根据用户角色自动选择面板
-const initRole = () => {
-  if (availableRoles.value.length > 0) {
-    currentRoleType.value = availableRoles.value[0];
+const roleTitle = computed(() => roleConfig[currentRole.value]?.title || '业务控制台');
+
+async function loadData() {
+  loading.value = true;
+  try {
+    const [statsData, tasksData, warningsData, fundData] = await Promise.all([
+      getDashboardStats(),
+      getDashboardTasks(),
+      getRiskWarnings(),
+      getFundStats(),
+    ]);
+    stats.value = statsData;
+    tasks.value = tasksData;
+    warnings.value = warningsData;
+    fundStats.value = fundData;
+
+    // 后端返回 userRole，以此为准决定展示哪个驾驶舱
+    console.log('[Dashboard] 后端返回 statsData:', statsData);
+    console.log('[Dashboard] userRole:', statsData?.userRole);
+    if (
+      statsData?.userRole
+      && ['hospital', 'province', 'nation', 'expert'].includes(statsData.userRole)
+    ) {
+      currentRole.value = statsData.userRole as RoleType;
+      console.log('[Dashboard] 设置 currentRole:', currentRole.value);
+    } else {
+      console.warn('[Dashboard] userRole 未匹配，userRole=', statsData?.userRole, '，保持 currentRole=', currentRole.value);
+    }
+  } catch (error) {
+    console.error('加载驾驶舱数据失败:', error);
+  } finally {
+    loading.value = false;
   }
-};
+}
 
-// 角色切换
-const handleRoleChange = (role: RoleType) => {
-  currentRoleType.value = role;
-};
+async function handleRefresh() {
+  await loadData();
+}
 
-// 页面加载时初始化
-initRole();
+function goToBpmTasks() {
+  window.location.href = '/bpm/task/todo-page';
+}
+
+function goToProjectList(params?: Record<string, string>) {
+  const query = params ? '?' + new URLSearchParams(params).toString() : '';
+  window.location.href = `/project${query}`;
+}
+
+function goToWarningProjects() {
+  goToProjectList({ warning: '1' });
+}
+
+onMounted(() => {
+  loadData();
+});
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50">
-    <!-- 角色切换标签 -->
-    <div class="bg-white px-5 pt-4">
-      <a-tabs v-model:activeKey="currentRoleType" @change="handleRoleChange">
-        <a-tab-pane
-          v-for="role in availableRoles"
-          :key="role"
-          :tab="roleConfig[role].label"
-        />
-      </a-tabs>
+  <div class="business-console" v-loading="loading">
+    <div class="console-header">
+      <div class="welcome">
+        <h2>{{ roleTitle }}</h2>
+        <span class="role-badge">{{ roleConfig[currentRole]?.label }}</span>
+        <span class="date">{{ new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' }) }}</span>
+      </div>
+      <div class="header-actions">
+        <a-button @click="handleRefresh" :loading="loading">刷新</a-button>
+      </div>
     </div>
 
-    <!-- 动态面板内容 -->
-    <component :is="currentPanel" :key="currentRoleType" />
+    <div class="console-content">
+      <component
+        :is="currentPanel"
+        :stats="stats"
+        :tasks="tasks"
+        :warnings="warnings"
+        :fundStats="fundStats"
+        @go-to-bpm-tasks="goToBpmTasks"
+        @go-to-project-list="goToProjectList"
+        @go-to-warning-projects="goToWarningProjects"
+      />
+    </div>
   </div>
 </template>
+
+<style scoped>
+.business-console {
+  padding: 20px;
+  background-color: #f5f7fa;
+  min-height: calc(100vh - 60px);
+}
+
+.console-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding: 20px 24px;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.welcome {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.welcome h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.role-badge {
+  padding: 2px 10px;
+  background: linear-gradient(135deg, #409eff, #67c23a);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 12px;
+}
+
+.welcome .date {
+  color: #909399;
+  font-size: 14px;
+  padding-left: 12px;
+  border-left: 1px solid #dcdfe6;
+}
+
+.console-content {
+  min-height: 400px;
+}
+</style>

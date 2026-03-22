@@ -358,6 +358,12 @@ const loadFormInfo = async () => {
   );
   if (!childInfo) return;
 
+  // 子流程未关联表单时，不调用接口
+  if (!childInfo.formId) {
+    childFormFieldOptions.value = [];
+    return;
+  }
+
   const formInfo = await getForm(childInfo.formId);
   childFormFieldOptions.value = [];
   if (formInfo.fields) {

@@ -5,7 +5,7 @@ import type { MallAfterSaleApi } from '#/api/mall/trade/afterSale';
 import { onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
-import { DocAlert, Page } from '@vben/common-ui';
+import { Page } from '@vben/common-ui';
 import { DICT_TYPE } from '@vben/constants';
 import { getDictOptions } from '@vben/hooks';
 
@@ -90,12 +90,6 @@ onMounted(() => {
 
 <template>
   <Page auto-content-height>
-    <template #doc>
-      <DocAlert
-        title="【交易】售后退款"
-        url="https://doc.iocoder.cn/mall/trade-aftersale/"
-      />
-    </template>
 
     <Grid>
       <template #toolbar-actions>

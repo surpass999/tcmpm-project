@@ -58,7 +58,7 @@ export async function getProcessDefinitionList(params: any) {
 
 /** 查询流程定义列表（简单列表） */
 export async function getSimpleProcessDefinitionList() {
-  return requestClient.get<
-    PageResult<BpmProcessDefinitionApi.ProcessDefinition>
-  >('/bpm/process-definition/simple-list');
+  return requestClient.get<BpmProcessDefinitionApi.ProcessDefinition[]>(
+    '/bpm/process-definition/simple-list',
+  );
 }

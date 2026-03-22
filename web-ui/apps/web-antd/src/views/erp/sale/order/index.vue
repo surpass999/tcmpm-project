@@ -4,7 +4,7 @@ import type { ErpSaleOrderApi } from '#/api/erp/sale/order';
 
 import { ref } from 'vue';
 
-import { DocAlert, Page, useVbenModal } from '@vben/common-ui';
+import { Page, useVbenModal } from '@vben/common-ui';
 import { downloadFileFromBlobPart, isEmpty } from '@vben/utils';
 
 import { message } from 'ant-design-vue';
@@ -134,12 +134,6 @@ const [Grid, gridApi] = useVbenVxeGrid({
 
 <template>
   <Page auto-content-height>
-    <template #doc>
-      <DocAlert
-        title="【销售】销售订单、出库、退货"
-        url="https://doc.iocoder.cn/erp/sale/"
-      />
-    </template>
 
     <FormModal @success="handleRefresh" />
     <Grid table-title="销售订单列表">

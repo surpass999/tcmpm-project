@@ -2,7 +2,7 @@
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { MallBargainActivityApi } from '#/api/mall/promotion/bargain/bargainActivity';
 
-import { confirm, DocAlert, Page, useVbenModal } from '@vben/common-ui';
+import { confirm, Page, useVbenModal } from '@vben/common-ui';
 
 import { message } from 'ant-design-vue';
 
@@ -103,12 +103,6 @@ const [Grid, gridApi] = useVbenVxeGrid({
 
 <template>
   <Page auto-content-height>
-    <template #doc>
-      <DocAlert
-        title="【营销】砍价活动"
-        url="https://doc.iocoder.cn/mall/promotion-bargain/"
-      />
-    </template>
 
     <FormModal @success="handleRefresh" />
 

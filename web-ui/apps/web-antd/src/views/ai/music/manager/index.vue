@@ -2,7 +2,7 @@
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { AiMusicApi } from '#/api/ai/music';
 
-import { confirm, DocAlert, Page } from '@vben/common-ui';
+import { confirm, Page } from '@vben/common-ui';
 
 import { Button, message } from 'ant-design-vue';
 
@@ -91,9 +91,6 @@ const [Grid, gridApi] = useVbenVxeGrid({
 
 <template>
   <Page auto-content-height>
-    <template #doc>
-      <DocAlert title="AI 音乐创作" url="https://doc.iocoder.cn/ai/music/" />
-    </template>
     <Grid table-title="音乐管理列表">
       <template #toolbar-tools>
         <TableAction :actions="[]" />

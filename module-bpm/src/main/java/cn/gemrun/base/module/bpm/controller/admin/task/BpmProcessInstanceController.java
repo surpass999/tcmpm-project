@@ -32,6 +32,7 @@ import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
 import javax.validation.Valid;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -150,6 +151,36 @@ public class BpmProcessInstanceController {
         }
         return success(BpmProcessInstanceConvert.INSTANCE.buildProcessInstance(processInstance,
                 processDefinition, processDefinitionInfo, startUser, dept));
+    }
+
+    @GetMapping("/child-list")
+    @Operation(summary = "根据主流程实例ID获取子流程实例列表")
+    @Parameter(name = "parentProcessInstanceId", description = "主流程实例ID", required = true)
+    @PreAuthorize("@ss.hasPermission('bpm:process-instance:query')")
+    public CommonResult<List<BpmProcessInstanceRespVO>> getChildProcessInstanceList(
+            @RequestParam("parentProcessInstanceId") String parentProcessInstanceId) {
+        List<HistoricProcessInstance> childProcessInstances = processInstanceService.getChildProcessInstancesByParentId(parentProcessInstanceId);
+        if (CollUtil.isEmpty(childProcessInstances)) {
+            return success(Collections.emptyList());
+        }
+
+        // 拼接返回
+        Map<String, ProcessDefinition> processDefinitionMap = processDefinitionService.getProcessDefinitionMap(
+                convertSet(childProcessInstances, HistoricProcessInstance::getProcessDefinitionId));
+        Map<String, BpmCategoryDO> categoryMap = categoryService.getCategoryMap(
+                convertSet(processDefinitionMap.values(), ProcessDefinition::getCategory));
+        Map<String, BpmProcessDefinitionInfoDO> processDefinitionInfoMap = processDefinitionService.getProcessDefinitionInfoMap(
+                convertSet(childProcessInstances, HistoricProcessInstance::getProcessDefinitionId));
+        Set<Long> userIds = convertSet(childProcessInstances, processInstance -> NumberUtils.parseLong(processInstance.getStartUserId()));
+        Map<Long, AdminUserRespDTO> userMap = adminUserApi.getUserMap(userIds);
+        Map<Long, DeptRespDTO> deptMap = deptApi.getDeptMap(
+                convertSet(userMap.values(), AdminUserRespDTO::getDeptId));
+
+        // 子流程没有任务列表，使用空map
+        Map<String, List<Task>> emptyTaskMap = Collections.emptyMap();
+        return success(BpmProcessInstanceConvert.INSTANCE.buildProcessInstancePage(
+                new PageResult<>(childProcessInstances, (long) childProcessInstances.size()),
+                processDefinitionMap, categoryMap, emptyTaskMap, userMap, deptMap, processDefinitionInfoMap).getList());
     }
 
     @DeleteMapping("/cancel-by-start-user")

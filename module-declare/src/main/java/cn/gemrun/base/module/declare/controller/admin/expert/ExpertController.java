@@ -95,6 +95,7 @@ public class ExpertController {
 
     @GetMapping("/simple-list")
     @Operation(summary = "获取专家简单列表（下拉选择用）")
+    @PreAuthorize("isAuthenticated()")
     public CommonResult<List<ExpertRespVO>> getExpertSimpleList() {
         // 获取所有在册的专家
         ExpertListReqVO reqVO = new ExpertListReqVO();
@@ -105,7 +106,7 @@ public class ExpertController {
 
     @GetMapping("/select-list")
     @Operation(summary = "获取专家选择列表（用于流程选择专家）")
-    @PreAuthorize("@ss.hasPermission('declare:expert:select')")
+    @PreAuthorize("isAuthenticated()")
     public CommonResult<PageResult<ExpertRespVO>> getExpertSelectList(@Valid ExpertPageReqVO pageReqVO) {
         // 设置默认只查询在册专家
         if (pageReqVO.getStatus() == null) {

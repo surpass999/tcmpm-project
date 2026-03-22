@@ -221,11 +221,23 @@ function initSetup(e: any) {
   if (!editor) {
     return;
   }
-  const value = modelValue.value || '';
-
-  editor.setContent(value);
   bindModelHandlers(editor);
   bindHandlers(e, attrs, unref(editorRef));
+
+  // 确保初始值被设置（解决弹窗打开时 modelValue 还未更新的时序问题）
+  if (modelValue.value) {
+    editor.setContent(modelValue.value);
+  }
+
+  // 监听 modelValue 变化，确保编辑器内容同步
+  watch(
+    () => modelValue.value,
+    (val) => {
+      if (editor && val !== editor.getContent()) {
+        editor.setContent(val || '');
+      }
+    },
+  );
 }
 
 function setValue(editor: Record<string, any>, val?: string, prevVal?: string) {
@@ -254,6 +266,7 @@ function bindModelHandlers(editor: any) {
 
   editor.on(normalizedEvents || 'change keyup undo redo', () => {
     const content = editor.getContent({ format: attrs.outputFormat });
+    modelValue.value = content;  // 同步更新 v-model
     emit('change', content);
   });
 
@@ -296,6 +309,20 @@ function handleError(name: string) {
   const val = content?.replace(getUploadingImgName(name), '') ?? '';
   setValue(editor, val);
 }
+
+/** 暴露给父组件的方法 */
+defineExpose({
+  getContent: () => {
+    const editor = unref(editorRef);
+    return editor?.getContent() ?? '';
+  },
+  setContent: (content: string) => {
+    const editor = unref(editorRef);
+    if (editor) {
+      editor.setContent(content);
+    }
+  },
+});
 </script>
 
 <template>

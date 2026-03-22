@@ -4,7 +4,7 @@ import type { MallDiyPageApi } from '#/api/mall/promotion/diy/page';
 
 import { useRouter } from 'vue-router';
 
-import { DocAlert, Page, useVbenModal } from '@vben/common-ui';
+import { Page, useVbenModal } from '@vben/common-ui';
 
 import { message } from 'ant-design-vue';
 
@@ -92,12 +92,6 @@ const [Grid, gridApi] = useVbenVxeGrid({
 
 <template>
   <Page auto-content-height>
-    <template #doc>
-      <DocAlert
-        title="【营销】商城装修"
-        url="https://doc.iocoder.cn/mall/diy/"
-      />
-    </template>
 
     <FormModal @success="handleRefresh" />
 

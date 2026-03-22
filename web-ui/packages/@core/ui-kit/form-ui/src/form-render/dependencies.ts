@@ -11,6 +11,7 @@ import { isBoolean, isFunction } from '@vben-core/shared/utils';
 import { useFormValues } from 'vee-validate';
 
 import { injectRenderFormProps } from './context';
+import { injectComponentRefMap } from '../use-form-context';
 
 export default function useDependencies(
   getDependencies: () => FormItemDependencies | undefined,
@@ -21,6 +22,8 @@ export default function useDependencies(
 
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const formApi = formRenderProps.form!;
+
+  const componentRefMap = injectComponentRefMap();
 
   if (!values) {
     throw new Error('useDependencies should be used within <VbenForm>');
@@ -71,7 +74,7 @@ export default function useDependencies(
       const formValues = values.value;
 
       if (isFunction(whenIf)) {
-        isIf.value = !!(await whenIf(formValues, formApi));
+        isIf.value = !!(await whenIf(formValues, { formApi, componentRefMap }));
         // 不渲染
         if (!isIf.value) return;
       } else if (isBoolean(whenIf)) {
@@ -81,7 +84,7 @@ export default function useDependencies(
 
       // 2. 判断show，如果show为false，则隐藏
       if (isFunction(show)) {
-        isShow.value = !!(await show(formValues, formApi));
+        isShow.value = !!(await show(formValues, { formApi, componentRefMap }));
         if (!isShow.value) return;
       } else if (isBoolean(show)) {
         isShow.value = show;
@@ -89,25 +92,25 @@ export default function useDependencies(
       }
 
       if (isFunction(componentProps)) {
-        dynamicComponentProps.value = await componentProps(formValues, formApi);
+        dynamicComponentProps.value = await componentProps(formValues, { formApi, componentRefMap });
       }
 
       if (isFunction(rules)) {
-        dynamicRules.value = await rules(formValues, formApi);
+        dynamicRules.value = await rules(formValues, { formApi, componentRefMap });
       }
 
       if (isFunction(disabled)) {
-        isDisabled.value = !!(await disabled(formValues, formApi));
+        isDisabled.value = !!(await disabled(formValues, { formApi, componentRefMap }));
       } else if (isBoolean(disabled)) {
         isDisabled.value = disabled;
       }
 
       if (isFunction(required)) {
-        isRequired.value = !!(await required(formValues, formApi));
+        isRequired.value = !!(await required(formValues, { formApi, componentRefMap }));
       }
 
       if (isFunction(trigger)) {
-        await trigger(formValues, formApi);
+        await trigger(formValues, { formApi, componentRefMap });
       }
     },
     { deep: true, immediate: true },

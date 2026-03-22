@@ -29,7 +29,7 @@ public class ProjectProcessPageReqVO extends PageParam {
     /**
      * 状态
      */
-    private Integer status;
+    private String status;
 
     /**
      * 过程标题（模糊查询）

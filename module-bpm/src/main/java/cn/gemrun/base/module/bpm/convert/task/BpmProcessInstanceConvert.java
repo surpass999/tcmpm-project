@@ -123,8 +123,8 @@ public interface BpmProcessInstanceConvert {
     void copyTo(BpmProcessDefinitionInfoDO from, @MappingTarget BpmProcessDefinitionRespVO to);
 
     default BpmProcessInstanceStatusEvent buildProcessInstanceStatusEvent(Object source, ProcessInstance instance,
-                                                                          Integer status, String reason) {
-        return new BpmProcessInstanceStatusEvent(source).setId(instance.getId()).setStatus(status).setReason(reason)
+                                                                          Integer status, String reason, String bizStatus) {
+        return new BpmProcessInstanceStatusEvent(source).setId(instance.getId()).setStatus(status).setReason(reason).setBizStatus(bizStatus)
                 .setProcessDefinitionKey(instance.getProcessDefinitionKey()).setBusinessKey(instance.getBusinessKey());
     }
 

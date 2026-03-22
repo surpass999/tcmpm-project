@@ -198,6 +198,6 @@ defineExpose({
     </slot>
 
     <!-- 萌新必读 -->
-    <DocLink />
+    <!-- <DocLink /> -->
   </div>
 </template>

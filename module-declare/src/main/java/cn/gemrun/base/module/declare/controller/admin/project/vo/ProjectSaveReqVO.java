@@ -100,4 +100,36 @@ public class ProjectSaveReqVO {
      */
     private Long deptId;
 
+    // ========== 从备案同步的冗余字段 ==========
+
+    /**
+     * 统一社会信用代码
+     */
+    private String socialCreditCode;
+
+    /**
+     * 医疗机构执业许可证号
+     */
+    private String medicalLicenseNo;
+
+    /**
+     * 机构名称
+     */
+    private String orgName;
+
+    /**
+     * 有效期开始时间
+     */
+    private LocalDateTime validStartTime;
+
+    /**
+     * 有效期结束时间
+     */
+    private LocalDateTime validEndTime;
+
+    /**
+     * 建设内容
+     */
+    private String constructionContent;
+
 }

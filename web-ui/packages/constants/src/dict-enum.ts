@@ -177,11 +177,20 @@ const IOT_DICT = {
 const DECLARE_DICT = {
   DECLARE_FILING_STATUS: 'declare_filing_status', // 备案状态
   DECLARE_PROJECT_TYPE: 'declare_project_type', // 项目类型
+  DECLARE_PROJECT_STATUS: 'declare_project_status', // 项目过程状态
+  DECLARE_PROCESS_TYPE: 'declare_process_type', // 过程类型
   DECLARE_INDICATOR_CATEGORY: 'declare_indicator_category', // 指标分类
   DECLARE_INDICATOR_VALUE_TYPE: 'declare_indicator_value_type', // 值类型
   DECLARE_BIZ_STATUS: 'declare_biz_status', // 业务状态
   DECLARE_EXPERT_STATUS: 'declare_expert_status', // 专家状态
   DECLARE_EXPERT_TYPE: 'declare_expert_type', // 专家类型
+  DECLARE_POLICY_TYPE: 'declare_policy_type', // 政策类型
+  DECLARE_POLICY_STATUS: 'declare_policy_status', // 政策状态
+  DECLARE_TARGET_SCOPE: 'declare_target_scope', // 政策目标范围
+  DECLARE_POLICY_DEPT: 'declare_policy_dept', // 发布单位
+  DECLARE_TRAINING_TYPE: 'declare_training_type', // 培训活动类型
+  DECLARE_TRAINING_STATUS: 'declare_training_status', // 培训活动状态
+  DECLARE_REGISTRATION_STATUS: 'declare_registration_status', // 报名状态
 } as const;
 
 

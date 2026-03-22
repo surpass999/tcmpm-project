@@ -488,7 +488,7 @@ loadIndicatorOptions();
         <a-button type="primary" size="small" @click="addRule">添加规则</a-button>
       </template>
 
-      <a-empty v-if="ruleConfig.rules.length === 0" description="暂无规则，请点击添加规则" />
+      <AEmpty v-if="ruleConfig.rules.length === 0" description="暂无规则，请点击添加规则" />
 
       <a-list v-else size="small" bordered :data-source="ruleConfig.rules">
         <template #renderItem="{ item, index }">

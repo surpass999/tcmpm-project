@@ -50,7 +50,7 @@ public class DeclareIndicatorValueController {
     @Operation(summary = "获取指标值列表")
     @Parameter(name = "businessType", description = "业务类型", required = true)
     @Parameter(name = "businessId", description = "业务ID", required = true)
-    @PreAuthorize("@ss.hasPermission('declare:filing:query')")
+    @PreAuthorize("isAuthenticated()")
     public CommonResult<List<DeclareIndicatorValueRespVO>> getIndicatorValueList(
             @RequestParam("businessType") Integer businessType,
             @RequestParam("businessId") Long businessId) {

@@ -2,7 +2,7 @@
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { AiImageApi } from '#/api/ai/image';
 
-import { confirm, DocAlert, Page } from '@vben/common-ui';
+import { confirm, Page } from '@vben/common-ui';
 
 import { message } from 'ant-design-vue';
 
@@ -91,9 +91,6 @@ const [Grid, gridApi] = useVbenVxeGrid({
 
 <template>
   <Page auto-content-height>
-    <template #doc>
-      <DocAlert title="AI 绘图创作" url="https://doc.iocoder.cn/ai/image/" />
-    </template>
     <Grid table-title="绘画管理列表">
       <template #actions="{ row }">
         <TableAction

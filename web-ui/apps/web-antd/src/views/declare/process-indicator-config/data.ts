@@ -3,7 +3,7 @@ import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 
 import { getDictOptions } from '@vben/hooks';
 
-import { ProcessIndicatorConfigApi } from '#/api/declare/process-indicator-config';
+import type { ProcessIndicatorConfigApi } from '#/api/declare/process-indicator-config';
 
 /** 过程类型选项 */
 const PROCESS_TYPE_OPTIONS = [
@@ -95,6 +95,12 @@ export function useGridColumns(): VxeTableGridOptions<ProcessIndicatorConfigApi.
       minWidth: 80,
     },
     {
+      field: 'maxScore',
+      title: '满分值',
+      minWidth: 80,
+      slots: { default: 'maxScoreDefault' },
+    },
+    {
       field: 'isRequired',
       title: '必填',
       minWidth: 80,
@@ -118,6 +124,13 @@ export function useGridColumns(): VxeTableGridOptions<ProcessIndicatorConfigApi.
       title: '创建时间',
       minWidth: 180,
       formatter: 'formatDateTime',
+    },
+    {
+      field: 'actions',
+      title: '操作',
+      width: 150,
+      fixed: 'right',
+      slots: { default: 'actions' },
     },
   ];
 }

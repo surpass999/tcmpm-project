@@ -86,7 +86,7 @@ public class FilingController {
     @GetMapping("/get")
     @Operation(summary = "获得项目备案核心信息")
     @Parameter(name = "id", description = "编号", required = true, example = "1024")
-    @PreAuthorize("@ss.hasPermission('declare:filing:query')")
+    @PreAuthorize("isAuthenticated()")
     public CommonResult<FilingRespVO> getFiling(@RequestParam("id") Long id) {
         FilingDO filing = filingService.getFiling(id);
         FilingRespVO respVO = BeanUtils.toBean(filing, FilingRespVO.class);

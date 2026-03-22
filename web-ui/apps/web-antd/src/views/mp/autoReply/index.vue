@@ -4,7 +4,7 @@ import type { MpAutoReplyApi } from '#/api/mp/autoReply';
 
 import { computed, nextTick, ref } from 'vue';
 
-import { DocAlert, Page, useVbenModal } from '@vben/common-ui';
+import { Page, useVbenModal } from '@vben/common-ui';
 import { AutoReplyMsgType } from '@vben/constants';
 import { IconifyIcon } from '@vben/icons';
 
@@ -144,9 +144,6 @@ const [Grid, gridApi] = useVbenVxeGrid({
 
 <template>
   <Page auto-content-height>
-    <template #doc>
-      <DocAlert title="自动回复" url="https://doc.iocoder.cn/mp/auto-reply/" />
-    </template>
 
     <FormModal @success="handleRefresh" />
     <Grid>

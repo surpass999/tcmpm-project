@@ -2,7 +2,7 @@
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { DemoWithdrawApi } from '#/api/pay/demo/withdraw';
 
-import { DocAlert, Page, useVbenModal } from '@vben/common-ui';
+import { Page, useVbenModal } from '@vben/common-ui';
 import { erpPriceInputFormatter } from '@vben/utils';
 
 import { message, Tag } from 'ant-design-vue';
@@ -76,16 +76,6 @@ const [Grid, gridApi] = useVbenVxeGrid({
 
 <template>
   <Page auto-content-height>
-    <template #doc>
-      <DocAlert
-        title="支付宝转账接入"
-        url="https://doc.iocoder.cn/pay/alipay-transfer-demo/"
-      />
-      <DocAlert
-        title="微信转账接入"
-        url="https://doc.iocoder.cn/pay/wx-transfer-demo/"
-      />
-    </template>
 
     <FormModal @success="handleRefresh" />
     <Grid table-title="示例提现单列表">

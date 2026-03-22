@@ -14,6 +14,9 @@ public class BpmProcessByBusinessReqVO {
     @NotBlank(message = "业务表分类不能为空")
     private String tableName;
 
+    @Schema(description = "业务类型（对应 bpm_business_type.business_type，如 project_process:type:1）", requiredMode = Schema.RequiredMode.NOT_REQUIRED, example = "project_process:type:1")
+    private String businessType;
+
     @Schema(description = "业务ID", requiredMode = Schema.RequiredMode.REQUIRED, example = "1")
     @NotNull(message = "业务ID不能为空")
     private Long businessId;

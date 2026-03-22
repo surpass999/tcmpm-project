@@ -4,7 +4,7 @@ import type { Rule } from 'ant-design-vue/es/form';
 import type { ComponentPublicInstance, Ref } from 'vue';
 
 import type { ButtonSetting, SimpleFlowNode } from '../../consts';
-import type { UserTaskFormType } from '../../helpers';
+import { OperationButtonType } from '../../consts';
 
 import { computed, nextTick, onMounted, reactive, ref, watchEffect } from 'vue';
 
@@ -40,6 +40,8 @@ import {
 } from 'ant-design-vue';
 
 import { ProcessExpressionSelectModal } from '#/views/bpm/processExpression/components';
+
+import { getSimpleProcessDefinitionList } from '#/api/bpm/definition';
 
 import {
   APPROVE_METHODS,
@@ -131,6 +133,24 @@ watchEffect(() => {
 // 激活的 Tab 标签页
 const activeTabName = ref('user');
 
+// 流程定义列表（用于整改按钮下拉选择）
+const processDefinitionOptions = ref<{ key: string; name: string }[]>([]);
+
+async function loadProcessDefinitionOptions() {
+  try {
+    const result = await getSimpleProcessDefinitionList();
+    if (result && Array.isArray(result)) {
+      // 过滤掉当前正在编辑的流程模型自身的 key，避免循环引用
+      const currentModelKey = currentNode.value?.key || '';
+      processDefinitionOptions.value = result
+        .filter((item) => item.key && item.key !== currentModelKey)
+        .map((item) => ({ key: item.key!, name: item.name || item.key! }));
+    }
+  } catch (e) {
+    console.warn('加载流程定义列表失败', e);
+  }
+}
+
 // 表单字段权限设置
 const {
   formType,
@@ -188,6 +208,9 @@ const formRules: Record<string, Rule[]> = reactive({
   ],
   approveRatio: [
     { required: true, message: '通过比例不能为空', trigger: 'blur' },
+  ],
+  passScore: [
+    { required: true, message: '通过分数不能为空', trigger: 'blur' },
   ],
   returnNodeId: [
     { required: true, message: '驳回节点不能为空', trigger: 'change' },
@@ -329,6 +352,9 @@ async function saveConfig() {
   if (configForm.value.approveMethod === ApproveMethodType.APPROVE_BY_RATIO) {
     currentNode.value.approveRatio = configForm.value.approveRatio;
   }
+  if (configForm.value.approveMethod === ApproveMethodType.SCORE_APPROVE) {
+    currentNode.value.passScore = configForm.value.passScore;
+  }
   // 设置拒绝处理
   currentNode.value.rejectHandler = {
     type: configForm.value.rejectHandlerType!,
@@ -410,6 +436,9 @@ function showUserTaskNodeConfig(node: SimpleFlowNode) {
   if (node.approveMethod === ApproveMethodType.APPROVE_BY_RATIO) {
     configForm.value.approveRatio = node.approveRatio!;
   }
+  if (node.approveMethod === ApproveMethodType.SCORE_APPROVE) {
+    configForm.value.passScore = node.passScore!;
+  }
   // 2.3 设置审批拒绝处理
   configForm.value.rejectHandlerType = node.rejectHandler?.type;
   configForm.value.returnNodeId = node.rejectHandler?.returnNodeId;
@@ -418,20 +447,15 @@ function showUserTaskNodeConfig(node: SimpleFlowNode) {
   returnTaskList.value = matchNodeList;
   // 2.4 设置审批超时处理
   configForm.value.timeoutHandlerEnable = node.timeoutHandler?.enable;
-  console.log('[加载超时配置] enable=', node.timeoutHandler?.enable, 'timeDuration=', node.timeoutHandler?.timeDuration);
   if (node.timeoutHandler?.enable && node.timeoutHandler?.timeDuration) {
     const strTimeDuration = node.timeoutHandler.timeDuration;
-    console.log('[加载超时配置] strTimeDuration=', strTimeDuration);
     // 检查是否为有效的 ISO 8601 持续时间格式
     const isValidDuration = /^P\d+[DHM]$/.test(strTimeDuration);
-    console.log('[加载超时配置] isValidDuration=', isValidDuration);
     if (isValidDuration) {
       const parseTime = strTimeDuration.slice(1, -1);
       const parseTimeUnit = strTimeDuration.slice(-1);
-      console.log('[加载超时配置] parseTime=', parseTime, 'parseTimeUnit=', parseTimeUnit);
       configForm.value.timeDuration = Number.parseInt(parseTime);
       timeUnit.value = convertTimeUnit(parseTimeUnit);
-      console.log('[加载超时配置] 解析成功: timeDuration=', configForm.value.timeDuration, 'timeUnit=', timeUnit.value);
     } else {
       // 无效的超时配置，设置默认值
       console.warn('[超时配置] 检测到无效的持续时间格式:', strTimeDuration, ', 使用默认值');
@@ -495,6 +519,8 @@ function showUserTaskNodeConfig(node: SimpleFlowNode) {
   configForm.value.reasonRequire = node?.reasonRequire ?? false;
   // 8. 跳过表达式
   configForm.value.skipExpression = node?.skipExpression ?? '';
+  // 9. 加载流程定义列表（用于整改按钮下拉选择）
+  loadProcessDefinitionOptions();
   drawerApi.open();
 }
 
@@ -901,7 +927,7 @@ onMounted(() => {
               label="上级部门+岗位参数"
             >
               <div class="flex gap-2">
-                <FormItem name="superiorDeptPostId" :noStyle>
+                <FormItem name="superiorDeptPostId" :noStyle="true">
                   <Select
                     v-model:value="configForm.superiorDeptPostId"
                     placeholder="请选择岗位"
@@ -917,7 +943,7 @@ onMounted(() => {
                     </SelectOption>
                   </Select>
                 </FormItem>
-                <FormItem name="superiorDeptLevel" :noStyle>
+                <FormItem name="superiorDeptLevel" :noStyle="true">
                   <Select
                     v-model:value="configForm.superiorDeptLevel"
                     placeholder="请选择部门层级"
@@ -946,7 +972,7 @@ onMounted(() => {
               label="部门层级"
               name="businessStartUserLevel"
             >
-              <Select v-model:value="configForm.businessStartUserLevel" clearable placeholder="不选则获取本部门负责人">
+              <Select v-model:value="configForm.businessStartUserLevel" clearable placeholder="不选则获取本部门所有成员">
                 <SelectOption
                   v-for="(item, index) in MULTI_LEVEL_DEPT"
                   :key="index"
@@ -957,7 +983,7 @@ onMounted(() => {
                 </SelectOption>
               </Select>
               <div class="text-xs text-gray-500 mt-1">
-                不选择则获取业务创建人所在部门的负责人，选择则获取对应层级的上级部门负责人
+                不选择或选0则获取本部门所有成员，选择数字获取对应层级的上级部门负责人
               </div>
             </FormItem>
             <FormItem
@@ -1003,6 +1029,18 @@ onMounted(() => {
                         :min="10"
                         :max="100"
                         :step="10"
+                        size="small"
+                      />
+                      <InputNumber
+                        v-if="
+                          item.value === ApproveMethodType.SCORE_APPROVE &&
+                          configForm.approveMethod ===
+                            ApproveMethodType.SCORE_APPROVE
+                        "
+                        v-model:value="configForm.passScore"
+                        :min="0"
+                        :max="100"
+                        :step="5"
                         size="small"
                       />
                     </div>
@@ -1266,9 +1304,10 @@ onMounted(() => {
           <!-- 表头 -->
           <Row class="border border-gray-200 px-4 py-3">
             <Col :span="6" class="font-bold">操作按钮</Col>
-            <Col :span="8" class="font-bold">显示名称</Col>
-            <Col :span="7" class="font-bold">业务状态(bizStatus)</Col>
-            <Col :span="3" class="flex items-center justify-center font-bold">
+            <Col :span="6" class="font-bold">显示名称</Col>
+            <Col :span="5" class="font-bold">业务状态(bizStatus)</Col>
+            <Col :span="6" class="font-bold">整改流程定义Key</Col>
+            <Col :span="1" class="flex items-center justify-center font-bold">
               启用
             </Col>
           </Row>
@@ -1279,7 +1318,7 @@ onMounted(() => {
               <Col :span="6" class="flex items-center truncate">
                 {{ OPERATION_BUTTON_NAME.get(item.id) }}
               </Col>
-              <Col :span="8" class="flex items-center">
+              <Col :span="6" class="flex items-center">
                 <Input
                   v-if="btnDisplayNameEdit[index]"
                   :ref="(el) => setInputRef(el, index)"
@@ -1297,7 +1336,7 @@ onMounted(() => {
                   </div>
                 </Button>
               </Col>
-              <Col :span="7" class="flex items-center">
+              <Col :span="5" class="flex items-center">
                 <Input
                   type="text"
                   class="max-w-24"
@@ -1305,7 +1344,19 @@ onMounted(() => {
                   placeholder="如: PASS, REJECT"
                 />
               </Col>
-              <Col :span="3" class="flex items-center justify-center">
+              <!-- 整改流程定义 Key 列（仅整改按钮显示） -->
+              <Col :span="6" class="flex items-center">
+                <Select
+                  v-if="item.id === OperationButtonType.RECTIFY"
+                  v-model:value="item.rectifyProcessDefinitionKey"
+                  placeholder="选择整改流程"
+                  allow-clear
+                  class="w-full"
+                  :options="processDefinitionOptions"
+                  :field-names="{ label: 'name', value: 'key' }"
+                />
+              </Col>
+              <Col :span="1" class="flex items-center justify-center">
                 <Switch v-model:checked="item.enable" />
               </Col>
             </Row>

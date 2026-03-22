@@ -3,7 +3,7 @@ import type { MallMemberStatisticsApi } from '#/api/mall/statistics/member';
 
 import { onMounted, ref } from 'vue';
 
-import { DocAlert, Page, SummaryCard } from '@vben/common-ui';
+import { Page, SummaryCard } from '@vben/common-ui';
 import { fenToYuan } from '@vben/utils';
 
 import { Col, Row } from 'ant-design-vue';
@@ -39,12 +39,6 @@ onMounted(async () => {
 
 <template>
   <Page auto-content-height>
-    <template #doc>
-      <DocAlert
-        title="【统计】会员、商品、交易统计"
-        url="https://doc.iocoder.cn/mall/statistics/"
-      />
-    </template>
 
     <div class="flex flex-col gap-4">
       <!-- 统计卡片 -->

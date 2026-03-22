@@ -9,6 +9,8 @@ export namespace SystemUserApi {
     username: string;
     nickname: string;
     deptId: number;
+    provinceId?: number;
+    cityId?: number;
     postIds: string[];
     email: string;
     mobile: string;
@@ -18,6 +20,10 @@ export namespace SystemUserApi {
     status: number;
     remark: string;
     createTime?: Date;
+    // 名称字段（后端返回）
+    deptName?: string;
+    provinceName?: string;
+    cityName?: string;
   }
 }
 

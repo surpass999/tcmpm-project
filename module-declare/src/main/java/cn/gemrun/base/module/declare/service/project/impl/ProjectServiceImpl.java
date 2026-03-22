@@ -1,5 +1,6 @@
 package cn.gemrun.base.module.declare.service.project.impl;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
 
@@ -18,9 +19,11 @@ import cn.gemrun.base.module.declare.service.project.ProjectService;
 import cn.gemrun.base.module.system.api.user.AdminUserApi;
 import cn.gemrun.base.module.system.api.user.dto.AdminUserRespDTO;
 import cn.gemrun.base.framework.web.core.util.WebFrameworkUtils;
+import com.mzt.logapi.starter.annotation.LogRecord;
 
 import static cn.gemrun.base.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.gemrun.base.module.declare.enums.ErrorCodeConstants.*;
+import static cn.gemrun.base.module.declare.enums.DeclareLogRecordConstants.*;
 
 /**
  * 项目信息 Service 实现类
@@ -37,6 +40,8 @@ public class ProjectServiceImpl implements ProjectService {
     private AdminUserApi adminUserApi;
 
     @Override
+    @LogRecord(type = PROJECT_TYPE, subType = PROJECT_CREATE_SUB_TYPE,
+            bizNo = "{{#_ret}}", success = PROJECT_CREATE_SUCCESS)
     public Long createProject(ProjectSaveReqVO createReqVO) {
         ProjectDO project = BeanUtils.toBean(createReqVO, ProjectDO.class);
         // 设置部门ID（如果没有设置，则从当前用户获取）
@@ -58,6 +63,8 @@ public class ProjectServiceImpl implements ProjectService {
     }
 
     @Override
+    @LogRecord(type = PROJECT_TYPE, subType = PROJECT_UPDATE_SUB_TYPE,
+            bizNo = "{{#updateReqVO.id}}", success = PROJECT_UPDATE_SUCCESS)
     public void updateProject(ProjectSaveReqVO updateReqVO) {
         validateProjectExists(updateReqVO.getId());
         ProjectDO updateObj = BeanUtils.toBean(updateReqVO, ProjectDO.class);
@@ -65,12 +72,16 @@ public class ProjectServiceImpl implements ProjectService {
     }
 
     @Override
+    @LogRecord(type = PROJECT_TYPE, subType = PROJECT_DELETE_SUB_TYPE,
+            bizNo = "{{#id}}", success = PROJECT_DELETE_SUCCESS)
     public void deleteProject(Long id) {
         validateProjectExists(id);
         projectMapper.deleteById(id);
     }
 
     @Override
+    @LogRecord(type = PROJECT_TYPE, subType = PROJECT_BATCH_DELETE_SUB_TYPE,
+            bizNo = "{{#ids}}", success = PROJECT_BATCH_DELETE_SUCCESS)
     public void deleteProjectListByIds(Set<Long> ids) {
         projectMapper.deleteByIds(ids);
     }
@@ -100,6 +111,8 @@ public class ProjectServiceImpl implements ProjectService {
     }
 
     @Override
+    @LogRecord(type = PROJECT_TYPE, subType = PROJECT_STATUS_CHANGE_SUB_TYPE,
+            bizNo = "{{#id}}", success = PROJECT_STATUS_CHANGE_SUCCESS)
     public void updateProjectStatus(Long id, String status) {
         validateProjectExists(id);
         ProjectDO updateObj = new ProjectDO();
@@ -116,6 +129,39 @@ public class ProjectServiceImpl implements ProjectService {
     @Override
     public List<ProjectDO> getProjectsForAcceptanceCheck() {
         return projectMapper.selectListForAcceptanceCheck();
+    }
+
+    @Override
+    public List<ProjectRespVO> getProjectSimpleList() {
+        List<ProjectDO> list = projectMapper.selectAll();
+        return BeanUtils.toBean(list, ProjectRespVO.class);
+    }
+
+    @Override
+    public void markProjectCompleted(Long id) {
+        validateProjectExists(id);
+        ProjectDO updateObj = new ProjectDO();
+        updateObj.setId(id);
+        updateObj.setActualEndTime(LocalDateTime.now());
+        updateObj.setActualProgress(100); // 验收完成时进度设为100%
+        projectMapper.updateById(updateObj);
+        log.info("[markProjectCompleted] 项目已标记为完成: projectId={}", id);
+    }
+
+    @Override
+    public void updateProjectProgress(Long id, Integer progress) {
+        validateProjectExists(id);
+        // 确保进度值在有效范围内
+        if (progress == null) {
+            progress = 0;
+        }
+        progress = Math.max(0, Math.min(100, progress));
+
+        ProjectDO updateObj = new ProjectDO();
+        updateObj.setId(id);
+        updateObj.setActualProgress(progress);
+        projectMapper.updateById(updateObj);
+        log.info("[updateProjectProgress] 项目进度已更新: projectId={}, progress={}%", id, progress);
     }
 
     private ProjectRespVO convertToRespVO(ProjectDO project) {

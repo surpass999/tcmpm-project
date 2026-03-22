@@ -2,7 +2,7 @@
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { ErpStockRecordApi } from '#/api/erp/stock/record';
 
-import { DocAlert, Page } from '@vben/common-ui';
+import { Page } from '@vben/common-ui';
 import { downloadFileFromBlobPart } from '@vben/utils';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
@@ -53,12 +53,6 @@ const [Grid, gridApi] = useVbenVxeGrid({
 
 <template>
   <Page auto-content-height>
-    <template #doc>
-      <DocAlert
-        title="【库存】产品库存、库存明细"
-        url="https://doc.iocoder.cn/erp/stock/"
-      />
-    </template>
 
     <Grid table-title="产品库存明细列表">
       <template #toolbar-tools>

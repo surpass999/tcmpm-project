@@ -4,7 +4,7 @@ import type { ErpStockInApi } from '#/api/erp/stock/in';
 
 import { ref } from 'vue';
 
-import { DocAlert, Page, useVbenModal } from '@vben/common-ui';
+import { Page, useVbenModal } from '@vben/common-ui';
 import { downloadFileFromBlobPart, isEmpty } from '@vben/utils';
 
 import { message } from 'ant-design-vue';
@@ -131,12 +131,6 @@ const [Grid, gridApi] = useVbenVxeGrid({
 
 <template>
   <Page auto-content-height>
-    <template #doc>
-      <DocAlert
-        title="【库存】其它入库、其它出库"
-        url="https://doc.iocoder.cn/erp/stock-in-out/"
-      />
-    </template>
 
     <FormModal @success="handleRefresh" />
     <Grid table-title="其它入库单列表">

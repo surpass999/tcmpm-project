@@ -74,5 +74,6 @@ export function uploadFile(
   if (!data.directory) {
     delete data.directory;
   }
+  // 使用 requestClient，它会自动加上 /admin-api 前缀，代理会将 /admin-api/infra 转发到 /infra
   return requestClient.upload('/infra/file/upload', data, { onUploadProgress });
 }

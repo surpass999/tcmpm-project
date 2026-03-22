@@ -9,12 +9,17 @@ import cn.gemrun.base.module.declare.dal.mysql.expert.ExpertMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.mzt.logapi.starter.annotation.LogRecord;
 
 import javax.annotation.Resource;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDateTime;
 import java.util.List;
 
 import static cn.gemrun.base.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.gemrun.base.module.declare.enums.ErrorCodeConstants.*;
+import static cn.gemrun.base.module.declare.enums.DeclareLogRecordConstants.*;
 
 /**
  * 专家管理 Service 实现类
@@ -30,6 +35,8 @@ public class ExpertServiceImpl implements ExpertService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    @LogRecord(type = EXPERT_TYPE, subType = EXPERT_CREATE_SUB_TYPE,
+            bizNo = "{{#_ret}}", success = EXPERT_CREATE_SUCCESS)
     public Long createExpert(ExpertSaveReqVO createReqVO) {
         // 校验用户ID是否已关联专家
         if (createReqVO.getUserId() != null) {
@@ -52,6 +59,8 @@ public class ExpertServiceImpl implements ExpertService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    @LogRecord(type = EXPERT_TYPE, subType = EXPERT_UPDATE_SUB_TYPE,
+            bizNo = "{{#updateReqVO.id}}", success = EXPERT_UPDATE_SUCCESS)
     public void updateExpert(ExpertSaveReqVO updateReqVO) {
         // 校验存在
         validateExpertExists(updateReqVO.getId());
@@ -73,6 +82,9 @@ public class ExpertServiceImpl implements ExpertService {
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
+    @LogRecord(type = EXPERT_TYPE, subType = EXPERT_STATUS_CHANGE_SUB_TYPE,
+            bizNo = "{{#id}}", success = EXPERT_STATUS_CHANGE_SUCCESS)
     public void updateExpertStatus(Long id, Integer status) {
         // 校验存在
         validateExpertExists(id);
@@ -91,6 +103,8 @@ public class ExpertServiceImpl implements ExpertService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    @LogRecord(type = EXPERT_TYPE, subType = EXPERT_DELETE_SUB_TYPE,
+            bizNo = "{{#id}}", success = EXPERT_DELETE_SUCCESS)
     public void deleteExpert(Long id) {
         // 校验存在
         validateExpertExists(id);
@@ -163,6 +177,33 @@ public class ExpertServiceImpl implements ExpertService {
         if (expertMapper.selectById(id) == null) {
             throw exception(EXPERT_NOT_EXISTS);
         }
+    }
+
+    @Override
+    public void updateExpertReviewStats(Long expertId, BigDecimal newScore) {
+        if (expertId == null) {
+            return;
+        }
+        ExpertDO expert = expertMapper.selectById(expertId);
+        if (expert == null) {
+            return;
+        }
+
+        int currentCount = expert.getReviewCount() != null ? expert.getReviewCount() : 0;
+        BigDecimal currentAvg = expert.getReviewScore() != null ? expert.getReviewScore() : BigDecimal.ZERO;
+
+        // 计算新的平均分：newAvg = (currentAvg * currentCount + newScore) / (currentCount + 1)
+        BigDecimal totalScore = currentAvg.multiply(BigDecimal.valueOf(currentCount))
+                .add(newScore != null ? newScore : BigDecimal.ZERO);
+        int newCount = currentCount + 1;
+        BigDecimal newAvg = totalScore.divide(BigDecimal.valueOf(newCount), 2, RoundingMode.HALF_UP);
+
+        ExpertDO updateObj = new ExpertDO();
+        updateObj.setId(expertId);
+        updateObj.setReviewCount(newCount);
+        updateObj.setReviewScore(newAvg);
+        updateObj.setLastReviewTime(LocalDateTime.now());
+        expertMapper.updateById(updateObj);
     }
 
 }

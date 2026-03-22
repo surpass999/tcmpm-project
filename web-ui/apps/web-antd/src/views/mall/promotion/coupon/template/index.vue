@@ -2,7 +2,7 @@
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { MallCouponTemplateApi } from '#/api/mall/promotion/coupon/couponTemplate';
 
-import { confirm, DocAlert, Page, useVbenModal } from '@vben/common-ui';
+import { confirm, Page, useVbenModal } from '@vben/common-ui';
 import { CommonStatusEnum } from '@vben/constants';
 import { $t } from '@vben/locales';
 
@@ -110,12 +110,6 @@ const [Grid, gridApi] = useVbenVxeGrid({
 
 <template>
   <Page auto-content-height>
-    <template #doc>
-      <DocAlert
-        title="【营销】优惠劵"
-        url="https://doc.iocoder.cn/mall/promotion-coupon/"
-      />
-    </template>
 
     <FormModal @success="handleRefresh" />
     <Grid table-title="优惠券列表">

@@ -2,7 +2,7 @@
 import type { ActionItem, VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { PayAppApi } from '#/api/pay/app';
 
-import { confirm, DocAlert, Page, useVbenModal } from '@vben/common-ui';
+import { confirm, Page, useVbenModal } from '@vben/common-ui';
 import { CommonStatusEnum, PayChannelEnum } from '@vben/constants';
 
 import { message } from 'ant-design-vue';
@@ -137,9 +137,6 @@ const [Grid, gridApi] = useVbenVxeGrid({
 
 <template>
   <Page auto-content-height>
-    <template #doc>
-      <DocAlert title="支付功能开启" url="https://doc.iocoder.cn/pay/build/" />
-    </template>
 
     <AppFormModal @success="handleRefresh" />
     <ChannelFormModal @success="handleRefresh" />

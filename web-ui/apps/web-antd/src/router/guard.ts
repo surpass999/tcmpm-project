@@ -60,8 +60,9 @@ function setupAccessGuard(router: Router) {
       if (to.path === LOGIN_PATH && accessStore.accessToken) {
         return decodeURIComponent(
           (to.query?.redirect as string) ||
+            preferences.app.defaultHomePath ||  // 前端配置优先
             userStore.userInfo?.homePath ||
-            preferences.app.defaultHomePath,
+            '/dashboard/business',
         );
       }
       return true;
@@ -131,8 +132,8 @@ function setupAccessGuard(router: Router) {
     accessStore.setIsAccessChecked(true);
     userStore.setUserRoles(userRoles);
     const redirectPath = (from.query.redirect ??
-      (to.path === preferences.app.defaultHomePath
-        ? userInfo?.homePath || preferences.app.defaultHomePath
+      (to.path === preferences.app.defaultHomePath || to.path === '/dashboard/business'
+        ? preferences.app.defaultHomePath || '/dashboard/business'
         : to.fullPath)) as string;
 
     return {

@@ -7,14 +7,14 @@ import cn.gemrun.base.module.declare.dal.dataobject.achievement.AchievementDO;
 import cn.gemrun.base.framework.common.pojo.PageResult;
 
 /**
- * 成果信息 Service 接口
+ * 成果与流通 Service 接口
  *
  * @author
  */
 public interface AchievementService {
 
     /**
-     * 创建成果信息
+     * 创建成果与流通
      *
      * @param createReqVO 创建信息
      * @return 编号
@@ -22,32 +22,32 @@ public interface AchievementService {
     Long createAchievement(@Valid AchievementSaveReqVO createReqVO);
 
     /**
-     * 更新成果信息
+     * 更新成果与流通
      *
      * @param updateReqVO 更新信息
      */
     void updateAchievement(@Valid AchievementSaveReqVO updateReqVO);
 
     /**
-     * 删除成果信息
+     * 删除成果与流通
      *
      * @param id 编号
      */
     void deleteAchievement(Long id);
 
     /**
-     * 获得成果信息
+     * 获得成果与流通
      *
      * @param id 编号
-     * @return 成果信息
+     * @return 成果与流通
      */
     AchievementDO getAchievement(Long id);
 
     /**
-     * 获得成果信息分页
+     * 获得成果与流通分页
      *
      * @param pageReqVO 分页查询
-     * @return 成果信息分页
+     * @return 成果与流通分页
      */
     PageResult<AchievementDO> getAchievementPage(AchievementPageReqVO pageReqVO);
 
@@ -77,6 +77,14 @@ public interface AchievementService {
     void recommendToNation(Long id, String opinion);
 
     /**
+     * 推荐成果至推广库（遴选完成）
+     * 条件：status=NATIONAL_APPROVED 且 recommendStatus=1
+     *
+     * @param id 成果ID
+     */
+    void recommendToLibrary(Long id);
+
+    /**
      * 更新成果状态（流程事件触发）
      *
      * @param id 成果ID
@@ -85,12 +93,35 @@ public interface AchievementService {
     void updateAchievementStatus(Long id, String bizStatus);
 
     /**
-     * 更新成果的流程实例ID和状态
+     * 更新成果的流程实例ID（由流程发起事件监听器调用）
      *
      * @param id 成果ID
      * @param processInstanceId 流程实例ID
-     * @param auditStatus 审核状态
      */
-    void updateAchievementProcessInstance(Long id, String processInstanceId, Integer auditStatus);
+    void updateAchievementProcessInstance(Long id, String processInstanceId);
+
+    /**
+     * 审核通过后，同步指标值到 declare_indicator_value 表
+     *
+     * @param achievementId 成果ID
+     */
+    void syncIndicatorsOnApproved(Long achievementId);
+
+    /**
+     * 获取已纳入推广库的成果列表（公开接口）
+     * 筛选条件：recommendStatus=2（已纳入推广库，遴选完成）
+     *
+     * @return 成果列表
+     */
+    List<AchievementRespVO> getPublishedAchievementList();
+
+    /**
+     * 获取已纳入推广库的成果详情（公开接口）
+     * 筛选条件：recommendStatus=2（已纳入推广库，遴选完成）
+     *
+     * @param id 成果ID
+     * @return 成果详情
+     */
+    AchievementRespVO getPublishedAchievement(Long id);
 
 }

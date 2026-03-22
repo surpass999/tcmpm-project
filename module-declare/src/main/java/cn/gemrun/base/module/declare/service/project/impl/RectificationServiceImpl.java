@@ -14,9 +14,11 @@ import cn.gemrun.base.module.declare.controller.admin.project.vo.*;
 import cn.gemrun.base.module.declare.dal.dataobject.project.RectificationDO;
 import cn.gemrun.base.module.declare.dal.mysql.project.RectificationMapper;
 import cn.gemrun.base.module.declare.service.project.RectificationService;
+import com.mzt.logapi.starter.annotation.LogRecord;
 
 import static cn.gemrun.base.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.gemrun.base.module.declare.enums.ErrorCodeConstants.*;
+import static cn.gemrun.base.module.declare.enums.DeclareLogRecordConstants.*;
 
 /**
  * 整改记录 Service 实现类
@@ -31,6 +33,8 @@ public class RectificationServiceImpl implements RectificationService {
     private RectificationMapper rectificationMapper;
 
     @Override
+    @LogRecord(type = RECTIFICATION_TYPE, subType = RECTIFICATION_CREATE_SUB_TYPE,
+            bizNo = "{{#_ret}}", success = RECTIFICATION_CREATE_SUCCESS)
     public Long createRectification(RectificationSaveReqVO createReqVO) {
         RectificationDO rectification = BeanUtils.toBean(createReqVO, RectificationDO.class);
         rectificationMapper.insert(rectification);
@@ -38,6 +42,8 @@ public class RectificationServiceImpl implements RectificationService {
     }
 
     @Override
+    @LogRecord(type = RECTIFICATION_TYPE, subType = RECTIFICATION_UPDATE_SUB_TYPE,
+            bizNo = "{{#updateReqVO.id}}", success = RECTIFICATION_UPDATE_SUCCESS)
     public void updateRectification(RectificationSaveReqVO updateReqVO) {
         validateRectificationExists(updateReqVO.getId());
         RectificationDO updateObj = BeanUtils.toBean(updateReqVO, RectificationDO.class);
@@ -45,6 +51,8 @@ public class RectificationServiceImpl implements RectificationService {
     }
 
     @Override
+    @LogRecord(type = RECTIFICATION_TYPE, subType = RECTIFICATION_DELETE_SUB_TYPE,
+            bizNo = "{{#id}}", success = RECTIFICATION_DELETE_SUCCESS)
     public void deleteRectification(Long id) {
         validateRectificationExists(id);
         rectificationMapper.deleteById(id);

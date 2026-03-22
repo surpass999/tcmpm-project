@@ -30,7 +30,9 @@ public class BpmBusinessProcessDO extends BaseDO implements Serializable {
 
     /**
      * 业务类型
-     * 例如：declare:filing:submit, news:publish:submit
+     * 备案：filing:approval（备案申请）
+     * 项目过程：project_process:type:{1-6}（1-5 为项目过程类型，6 为项目过程结束）
+     * 成果：achievement:submit (成果提交)
      */
     private String businessType;
 

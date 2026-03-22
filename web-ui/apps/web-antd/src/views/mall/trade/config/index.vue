@@ -3,7 +3,7 @@ import type { MallTradeConfigApi } from '#/api/mall/trade/config';
 
 import { onMounted, ref } from 'vue';
 
-import { DocAlert, Page } from '@vben/common-ui';
+import { Page } from '@vben/common-ui';
 import { fenToYuan, yuanToFen } from '@vben/utils';
 
 import { Card, message, Tabs } from 'ant-design-vue';
@@ -77,16 +77,6 @@ onMounted(() => {
 
 <template>
   <Page>
-    <template #doc>
-      <DocAlert
-        title="【交易】交易订单"
-        url="https://doc.iocoder.cn/mall/trade-order/"
-      />
-      <DocAlert
-        title="【交易】购物车"
-        url="https://doc.iocoder.cn/mall/trade-cart/"
-      />
-    </template>
     <Card>
       <Tabs :active-key="activeKey" @change="handleTabChange">
         <Tabs.TabPane tab="售后" key="afterSale" :force-render="true" />

@@ -2,7 +2,7 @@
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { ErpAccountApi } from '#/api/erp/finance/account';
 
-import { confirm, DocAlert, Page, useVbenModal } from '@vben/common-ui';
+import { confirm, Page, useVbenModal } from '@vben/common-ui';
 import { downloadFileFromBlobPart } from '@vben/utils';
 
 import { message } from 'ant-design-vue';
@@ -117,12 +117,6 @@ const [Grid, gridApi] = useVbenVxeGrid({
 
 <template>
   <Page auto-content-height>
-    <template #doc>
-      <DocAlert
-        title="【财务】采购付款、销售收款"
-        url="https://doc.iocoder.cn/sale/finance-payment-receipt/"
-      />
-    </template>
 
     <FormModal @success="handleRefresh" />
     <Grid table-title="结算账户列表">

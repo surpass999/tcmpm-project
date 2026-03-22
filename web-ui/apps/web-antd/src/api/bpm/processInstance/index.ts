@@ -190,10 +190,10 @@ export async function updateProcessInstance(
   );
 }
 
-/** 获取审批详情（内部接口） */
-export async function getApprovalDetail(params: any) {
+/** 获取审批详情 */
+export async function getApprovalDetail(params: { processInstanceId: string }) {
   return requestClient.get<BpmProcessInstanceApi.ApprovalDetailRespVO>(
-    `/bpm/process-instance/inner/get-approval-detail`,
+    `/bpm/process-instance/get-approval-detail`,
     { params },
   );
 }

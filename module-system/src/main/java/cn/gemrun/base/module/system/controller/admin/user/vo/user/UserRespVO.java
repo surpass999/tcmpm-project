@@ -37,6 +37,16 @@ public class UserRespVO{
     @ExcelProperty("部门名称")
     private String deptName;
 
+    @Schema(description = "省份ID", example = "440000")
+    private Integer provinceId;
+    @Schema(description = "省份名称", example = "广东省")
+    private String provinceName;
+
+    @Schema(description = "城市ID", example = "440100")
+    private Integer cityId;
+    @Schema(description = "城市名称", example = "广州市")
+    private String cityName;
+
     @Schema(description = "岗位编号数组", example = "1")
     private Set<Long> postIds;
 

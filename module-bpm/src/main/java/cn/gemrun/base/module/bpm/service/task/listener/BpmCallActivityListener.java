@@ -42,6 +42,9 @@ public class BpmCallActivityListener implements ExecutionListener {
     @Resource
     private BpmProcessInstanceService processInstanceService;
 
+    @Resource
+    private org.flowable.engine.HistoryService historyService;
+
     @Override
     public void notify(DelegateExecution execution) {
         String expressionText = listenerConfig.getExpressionText();
@@ -94,6 +97,35 @@ public class BpmCallActivityListener implements ExecutionListener {
                             DELEGATE_EXPRESSION, formFieldValue);
                     FlowableUtils.setAuthenticatedUserId(Long.parseLong(processInstance.getStartUserId()));
                 }
+            }
+        }
+
+        // 3. 当发起人来源为上一审批人时
+        if (startUserSetting != null
+                && startUserSetting.getType().equals(BpmChildProcessStartUserTypeEnum.PREVIOUS_APPROVER.getType())) {
+            String rootProcessInstanceId = execution.getRootProcessInstanceId();
+            log.info("[notify] PREVIOUS_APPROVER: 查找主流程最近审批人, rootProcessInstanceId={}", rootProcessInstanceId);
+            // 查询主流程中最近一个已完成的 UserTask（按结束时间倒序，取第一个有 assignee 的）
+            List<org.flowable.task.api.history.HistoricTaskInstance> finishedTasks = historyService
+                    .createHistoricTaskInstanceQuery()
+                    .processInstanceId(rootProcessInstanceId)
+                    .finished()
+                    .orderByHistoricTaskInstanceEndTime().desc()
+                    .list();
+            org.flowable.task.api.history.HistoricTaskInstance previousTask = finishedTasks.stream()
+                    .filter(task -> StrUtil.isNotEmpty(task.getAssignee()))
+                    .findFirst()
+                    .orElse(null);
+            if (previousTask != null) {
+                Long previousApproverId = Long.parseLong(previousTask.getAssignee());
+                FlowableUtils.setAuthenticatedUserId(previousApproverId);
+                log.info("[notify] PREVIOUS_APPROVER: 设置子流程发起人为上一审批人, previousTaskId={}, previousApproverId={}",
+                        previousTask.getId(), previousApproverId);
+            } else {
+                // 兜底：使用主流程发起人
+                FlowableUtils.setAuthenticatedUserId(Long.parseLong(processInstance.getStartUserId()));
+                log.warn("[notify] PREVIOUS_APPROVER: 未找到上一审批人，兜底使用主流程发起人, startUserId={}",
+                        processInstance.getStartUserId());
             }
         }
     }

@@ -4,35 +4,26 @@ import type { ProcessIndicatorConfigApi } from '#/api/declare/process-indicator-
 
 import { ref } from 'vue';
 
+import { getDictOptions } from '@vben/hooks';
+import { DICT_TYPE } from '@vben/constants';
+
 import { useVbenModal } from '@vben/common-ui';
 import { message } from 'ant-design-vue';
 
 import {
   createProcessIndicatorConfig,
-  getIndicatorsByBusinessType,
   updateProcessIndicatorConfig,
 } from '#/api/declare/process-indicator-config';
+import { getIndicatorPage } from '#/api/declare/indicator';
 import { $t } from '#/locales';
 
-/** 过程类型选项 */
-const PROCESS_TYPE_OPTIONS = [
-  { label: '建设过程', value: 1 },
-  { label: '半年报', value: 2 },
-  { label: '年度总结', value: 3 },
-  { label: '中期评估', value: 4 },
-  { label: '整改记录', value: 5 },
-  { label: '验收申请', value: 6 },
-];
+/** 过程类型选项 - 从字典获取 */
+const processTypeOptions = getDictOptions(DICT_TYPE.DECLARE_PROCESS_TYPE, 'number');
 
-/** 项目类型选项 */
-const PROJECT_TYPE_OPTIONS = [
+/** 项目类型选项 - 从字典获取，并在前面添加"通用类型"选项 */
+const projectTypeOptions = [
   { label: '通用类型', value: 0 },
-  { label: '综合型', value: 1 },
-  { label: '中医电子病历型', value: 2 },
-  { label: '智慧中药房型', value: 3 },
-  { label: '名老中医传承型', value: 4 },
-  { label: '中医临床科研型', value: 5 },
-  { label: '中医智慧医共体型', value: 6 },
+  ...getDictOptions(DICT_TYPE.DECLARE_PROJECT_TYPE, 'number'),
 ];
 
 const emit = defineEmits(['success']);
@@ -43,47 +34,52 @@ const formData = ref<ProcessIndicatorConfigApi.ConfigSaveParams>({
   indicatorId: undefined,
   isRequired: false,
   sort: 0,
+  maxScore: 100,
+  scoreRatioSatisfied: 1.0,
+  scoreRatioBasic: 0.75,
+  scoreRatioPartial: 0.5,
+  scoreRatioUnsatisfied: 0.25,
 });
 const loading = ref(false);
 const indicatorList = ref<DeclareIndicatorApi.Indicator[]>([]);
 
-// 业务类型映射
-const businessTypeMap: Record<number, string> = {
-  1: 'process_construction',
-  2: 'process_half_year',
-  3: 'process_annual',
-  4: 'process_midterm',
-  5: 'process_rectification',
-  6: 'process_acceptance',
-};
-
-// 根据过程类型获取可选指标列表
-async function loadIndicators(processType: number) {
-  const businessType = businessTypeMap[processType];
-  if (!businessType) {
-    indicatorList.value = [];
-    return;
-  }
-
+// 加载所有指标（根据项目类型筛选）
+async function loadIndicators(projectType: number) {
   try {
-    const res = await getIndicatorsByBusinessType(businessType);
-    indicatorList.value = res || [];
+    // 根据项目类型查询指标
+    const res = await getIndicatorPage({
+      pageNo: 1,
+      pageSize: 200,
+      projectType: projectType,
+    });
+    indicatorList.value = res?.list || [];
   } catch (error) {
     console.error('加载指标列表失败:', error);
     indicatorList.value = [];
   }
 }
 
-// 过程类型变化时，加载对应的指标列表
-async function handleProcessTypeChange(value: number) {
+// 项目类型变化时，重新加载指标列表
+async function handleProjectTypeChange(value: number) {
   formData.value.indicatorId = undefined;
   await loadIndicators(value);
 }
 
+// 过程类型变化时，重置指标选择
+function handleProcessTypeChange() {
+  formData.value.indicatorId = undefined;
+}
+
 const [Modal, modalApi] = useVbenModal({
-  // eslint-disable-next-line vue/require-explicit-defaults
-  async onOpen() {
+  destroyOnClose: true,
+  async onConfirm() {
+    return await handleSubmit();
+  },
+  async onOpenChange(isOpen: boolean) {
+    if (!isOpen) return;
+
     const data = modalApi.getData<ProcessIndicatorConfigApi.ConfigResp>();
+
     if (data?.id) {
       // 编辑模式
       formData.value = {
@@ -93,8 +89,14 @@ const [Modal, modalApi] = useVbenModal({
         indicatorId: data.indicatorId,
         isRequired: data.isRequired,
         sort: data.sort,
+        maxScore: data.maxScore ?? 100,
+        scoreRatioSatisfied: data.scoreRatioSatisfied ?? 1.0,
+        scoreRatioBasic: data.scoreRatioBasic ?? 0.75,
+        scoreRatioPartial: data.scoreRatioPartial ?? 0.5,
+        scoreRatioUnsatisfied: data.scoreRatioUnsatisfied ?? 0.25,
       };
-      await loadIndicators(data.processType);
+      // 编辑时根据项目类型加载指标
+      await loadIndicators(data.projectType);
     } else {
       // 新增模式
       formData.value = {
@@ -103,8 +105,14 @@ const [Modal, modalApi] = useVbenModal({
         indicatorId: undefined,
         isRequired: false,
         sort: 0,
+        maxScore: 100,
+        scoreRatioSatisfied: 1.0,
+        scoreRatioBasic: 0.75,
+        scoreRatioPartial: 0.5,
+        scoreRatioUnsatisfied: 0.25,
       };
-      indicatorList.value = [];
+      // 新增时加载通用类型的指标
+      await loadIndicators(0);
     }
   },
 });
@@ -112,28 +120,31 @@ const [Modal, modalApi] = useVbenModal({
 async function handleSubmit() {
   if (!formData.value.processType) {
     message.warning('请选择过程类型');
-    return;
+    return false;
   }
   if (formData.value.projectType === undefined || formData.value.projectType === null) {
     message.warning('请选择项目类型');
-    return;
+    return false;
   }
   if (!formData.value.indicatorId) {
     message.warning('请选择指标');
-    return;
+    return false;
   }
 
   loading.value = true;
   try {
     if (formData.value.id) {
       await updateProcessIndicatorConfig(formData.value);
-      message.success($t('common.saveSuccess'));
+      message.success($t('ui.actionMessage.operationSuccess'));
     } else {
       await createProcessIndicatorConfig(formData.value);
-      message.success($t('common.saveSuccess'));
+      message.success($t('ui.actionMessage.operationSuccess'));
     }
     emit('success');
-    modalApi.close();
+    return true;
+  } catch (error) {
+    console.error('保存失败:', error);
+    return false;
   } finally {
     loading.value = false;
   }
@@ -144,8 +155,6 @@ async function handleSubmit() {
   <Modal
     :loading="loading"
     :title="formData.id ? '编辑过程指标配置' : '创建过程指标配置'"
-    @close="modalApi.close"
-    @submit="handleSubmit"
   >
     <a-form
       ref="formRef"
@@ -160,7 +169,7 @@ async function handleSubmit() {
       >
         <a-select
           v-model:value="formData.processType"
-          :options="PROCESS_TYPE_OPTIONS"
+          :options="processTypeOptions"
           placeholder="请选择过程类型"
           @change="handleProcessTypeChange"
         />
@@ -173,8 +182,9 @@ async function handleSubmit() {
       >
         <a-select
           v-model:value="formData.projectType"
-          :options="PROJECT_TYPE_OPTIONS"
+          :options="projectTypeOptions"
           placeholder="请选择项目类型"
+          @change="handleProjectTypeChange"
         />
       </a-form-item>
 
@@ -189,8 +199,7 @@ async function handleSubmit() {
             label: `${item.indicatorCode} - ${item.indicatorName}`,
             value: item.id,
           }))"
-          :disabled="!formData.processType"
-          placeholder="请先选择过程类型"
+          placeholder="请选择指标"
           show-search
           :filter-option="(input: string, option: any) => option.label.toLowerCase().includes(input.toLowerCase())"
         />
@@ -198,6 +207,52 @@ async function handleSubmit() {
 
       <a-form-item label="是否必填" name="isRequired">
         <a-switch v-model:checked="formData.isRequired" />
+      </a-form-item>
+
+      <a-divider>评分配置</a-divider>
+
+      <a-form-item label="满分值" name="maxScore">
+        <a-input-number v-model:value="formData.maxScore" :min="0" :max="100" />
+      </a-form-item>
+
+      <a-form-item label="满足(100%)比例" name="scoreRatioSatisfied">
+        <a-input-number
+          v-model:value="formData.scoreRatioSatisfied"
+          :min="0"
+          :max="1"
+          :step="0.05"
+          :precision="4"
+        />
+      </a-form-item>
+
+      <a-form-item label="基本满足(75%)比例" name="scoreRatioBasic">
+        <a-input-number
+          v-model:value="formData.scoreRatioBasic"
+          :min="0"
+          :max="1"
+          :step="0.05"
+          :precision="4"
+        />
+      </a-form-item>
+
+      <a-form-item label="部分满足(50%)比例" name="scoreRatioPartial">
+        <a-input-number
+          v-model:value="formData.scoreRatioPartial"
+          :min="0"
+          :max="1"
+          :step="0.05"
+          :precision="4"
+        />
+      </a-form-item>
+
+      <a-form-item label="不满足(25%)比例" name="scoreRatioUnsatisfied">
+        <a-input-number
+          v-model:value="formData.scoreRatioUnsatisfied"
+          :min="0"
+          :max="1"
+          :step="0.05"
+          :precision="4"
+        />
       </a-form-item>
 
       <a-form-item label="排序" name="sort">

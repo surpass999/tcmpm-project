@@ -1,7 +1,5 @@
 <script lang="ts" setup>
-import { ref, shallowRef, onMounted } from 'vue';
-
-import { useVbenModal } from '@vben/common-ui';
+import { ref, shallowRef, watch, onMounted } from 'vue';
 
 import { message } from 'ant-design-vue';
 
@@ -40,8 +38,12 @@ const props = withDefaults(defineProps<Props>(), {
 });
 
 const emit = defineEmits<{
+  'update:open': [open: boolean];
   confirm: [users: User[], reason: string];
 }>();
+
+// 弹窗显示状态
+const open = ref(false);
 
 // 加载状态
 const loading = ref(false);
@@ -51,6 +53,19 @@ const userList = shallowRef<User[]>([]);
 const selectedUsers = ref<User[]>([]);
 // 原因输入
 const reason = ref('');
+
+// 监听 open 变化，重置状态
+watch(
+  () => open.value,
+  (isOpen) => {
+    if (isOpen) {
+      // 打开时重置状态并加载数据
+      selectedUsers.value = [];
+      reason.value = '';
+      loadUserList();
+    }
+  },
+);
 
 // 加载用户列表
 async function loadUserList() {
@@ -111,60 +126,56 @@ const columns = [
   },
 ];
 
-// 使用 Vben Modal
-const [Modal, modalApi] = useVbenModal({
-  onOpenChange: async (isOpen: boolean) => {
-    if (!isOpen) {
-      return;
-    }
-    // 重置状态
-    selectedUsers.value = [];
-    reason.value = '';
-    await loadUserList();
-  },
-  onConfirm: async () => {
-    if (selectedUsers.value.length === 0) {
-      message.warning('请至少选择一个用户');
-      return false;
-    }
-    // 如果需要输入原因
-    if (props.showReason && props.reasonRequired && !reason.value?.trim()) {
-      message.warning(`请输入${props.reasonLabel}`);
-      return false;
-    }
-    emit('confirm', selectedUsers.value, reason.value);
-    return true;
-  },
-});
+// 打开弹窗
+function openModal(data?: {
+  title?: string;
+  multiple?: boolean;
+  selectedIds?: number[];
+  showReason?: boolean;
+  reasonLabel?: string;
+  reasonRequired?: boolean;
+}) {
+  // 设置传入的参数（这里简单处理，实际可以存到组件内部状态）
+  if (data) {
+    // 可以在这里处理传入的配置
+  }
+  open.value = true;
+}
 
-// 暴露打开弹窗的方法
+// 关闭弹窗
+function closeModal() {
+  open.value = false;
+}
+
+// 确认
+function handleConfirm() {
+  if (selectedUsers.value.length === 0) {
+    message.warning('请至少选择一个用户');
+    return;
+  }
+  // 如果需要输入原因
+  if (props.showReason && props.reasonRequired && !reason.value?.trim()) {
+    message.warning(`请输入${props.reasonLabel}`);
+    return;
+  }
+  emit('confirm', selectedUsers.value, reason.value);
+  open.value = false;
+}
+
+// 暴露方法
 defineExpose({
-  open: (data?: {
-    title?: string;
-    multiple?: boolean;
-    selectedIds?: number[];
-    showReason?: boolean;
-    reasonLabel?: string;
-    reasonRequired?: boolean;
-  }) => {
-    if (data) {
-      modalApi.setData({
-        title: data.title || props.title,
-        multiple: data.multiple !== undefined ? data.multiple : props.multiple,
-        selectedIds: data.selectedIds || props.selectedIds,
-        showReason: data.showReason !== undefined ? data.showReason : props.showReason,
-        reasonLabel: data.reasonLabel || props.reasonLabel,
-        reasonRequired: data.reasonRequired !== undefined ? data.reasonRequired : props.reasonRequired,
-      });
-    }
-    modalApi.open();
-  },
-  close: () => modalApi.close(),
+  open: openModal,
+  close: closeModal,
 });
 </script>
 
 <template>
-  <Modal :title="modalApi.getData<any>()?.title || title" :class="['w-[700px]']">
+  <a-modal
+    v-model:open="open"
+    :title="props.title"
+    :class="['w-[700px]']"
+    @ok="handleConfirm"
+  >
     <div class="user-select-container">
       <!-- 提示信息 -->
       <div v-if="selectedUsers.length > 0" class="mb-4 text-sm text-gray-600">
@@ -180,7 +191,7 @@ defineExpose({
         :row-selection="{
           selectedRowKeys: selectedUsers.map((u) => u.id),
           onChange: (_, selectedRows) => handleSelectionChange(selectedRows),
-          type: (modalApi.getData<any>()?.multiple || multiple) ? 'checkbox' : 'radio',
+          type: props.multiple ? 'checkbox' : 'radio',
         }"
         :pagination="{ pageSize: 20 }"
         :scroll="{ y: 300 }"
@@ -199,19 +210,19 @@ defineExpose({
       </a-table>
 
       <!-- 原因输入框 -->
-      <div v-if="modalApi.getData<any>()?.showReason || showReason" class="mt-4">
+      <div v-if="props.showReason" class="mt-4">
         <div class="mb-2 text-sm text-gray-600">
-          {{ modalApi.getData<any>()?.reasonLabel || reasonLabel }}
-          <span v-if="modalApi.getData<any>()?.reasonRequired || reasonRequired" class="text-red-500">*</span>
+          {{ props.reasonLabel }}
+          <span v-if="props.reasonRequired" class="text-red-500">*</span>
         </div>
         <a-textarea
           v-model:value="reason"
-          :placeholder="`请输入${modalApi.getData<any>()?.reasonLabel || reasonLabel}`"
+          :placeholder="`请输入${props.reasonLabel}`"
           :rows="3"
         />
       </div>
     </div>
-  </Modal>
+  </a-modal>
 </template>
 
 <style scoped>

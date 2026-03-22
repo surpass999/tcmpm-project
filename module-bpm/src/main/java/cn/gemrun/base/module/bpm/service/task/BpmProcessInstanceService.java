@@ -76,6 +76,14 @@ public interface BpmProcessInstanceService {
     }
 
     /**
+     * 根据主流程实例ID获取子流程实例列表
+     *
+     * @param parentProcessInstanceId 主流程实例ID
+     * @return 子流程实例列表
+     */
+    List<HistoricProcessInstance> getChildProcessInstancesByParentId(String parentProcessInstanceId);
+
+    /**
      * 获得流程实例的分页
      *
      * @param userId    用户编号

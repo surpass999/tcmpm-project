@@ -5,7 +5,7 @@ import type { MallTradeStatisticsApi } from '#/api/mall/statistics/trade';
 
 import { onMounted, ref } from 'vue';
 
-import { DocAlert, Page } from '@vben/common-ui';
+import { Page } from '@vben/common-ui';
 import { fenToYuan } from '@vben/utils';
 
 import { Col, Row } from 'ant-design-vue';
@@ -50,12 +50,6 @@ onMounted(async () => {
 
 <template>
   <Page auto-content-height>
-    <template #doc>
-      <DocAlert
-        title="商城手册（功能开启）"
-        url="https://doc.iocoder.cn/mall/build/"
-      />
-    </template>
 
     <div class="flex flex-col gap-4">
       <!-- 数据对照 -->

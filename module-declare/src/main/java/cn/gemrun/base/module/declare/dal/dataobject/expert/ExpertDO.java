@@ -157,7 +157,6 @@ public class ExpertDO extends BaseDO {
     /**
      * 乐观锁版本号
      */
-    @Version
     private Integer version;
 
     /**

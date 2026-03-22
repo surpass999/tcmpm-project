@@ -3,20 +3,44 @@ import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { DeclareProjectApi } from '#/api/declare/project';
 
 import { getDictOptions } from '@vben/hooks';
+import { DICT_TYPE } from '@vben/constants';
 
 import { getRangePickerDefaultProps } from '#/utils';
 
-/** 项目状态选项（本地配置） */
-const PROJECT_STATUS_OPTIONS = [
-  { label: '初始化', value: 'INITIATION', color: 'default' },
-  { label: '立项中', value: 'FILING', color: 'blue' },
-  { label: '建设中', value: 'CONSTRUCTION', color: 'orange' },
-  { label: '中期评估', value: 'MIDTERM', color: 'purple' },
-  { label: '整改中', value: 'RECTIFICATION', color: 'red' },
-  { label: '验收中', value: 'ACCEPTANCE', color: 'cyan' },
-  { label: '已验收', value: 'ACCEPTED', color: 'green' },
-  { label: '已终止', value: 'TERMINATED', color: 'default' },
+/** 固定状态选项（使用字符串 key） */
+const FIXED_STATUS_OPTIONS = [
+  { label: '初始化', value: 'INITIATION' },
+  { label: '立项中', value: 'FILING' },
+  { label: '建设中', value: 'CONSTRUCTION' },
+  { label: '中期评估', value: 'MIDTERM' },
+  { label: '整改中', value: 'RECTIFICATION' },
+  { label: '验收中', value: 'ACCEPTANCE' },
+  { label: '已验收', value: 'ACCEPTED' },
+  { label: '已终止', value: 'TERMINATED' },
 ];
+
+/** 项目状态选项（固定状态 + 过程类型状态） */
+const PROJECT_STATUS_OPTIONS = [
+  ...FIXED_STATUS_OPTIONS,
+  // 过程类型状态（从字典动态获取）
+  ...(getDictOptions(DICT_TYPE.DECLARE_PROCESS_TYPE, 'number') as any[])
+    .filter((item: { value: number }) => item.value !== 7)
+    .map((item: { value: number; label: string }) => ({
+      label: item.label,
+      value: String(item.value),
+    })),
+];
+
+/** 状态映射表（用于格式化显示） */
+const STATUS_LABEL_MAP: Record<string, string> = {
+  ...Object.fromEntries(FIXED_STATUS_OPTIONS.map((s) => [s.value, s.label])),
+  // 过程类型从字典获取
+  ...Object.fromEntries(
+    (getDictOptions(DICT_TYPE.DECLARE_PROCESS_TYPE, 'number') as any[])
+      .filter((item: { value: number }) => item.value !== 7)
+      .map((item: { value: number; label: string }) => [String(item.value), item.label])
+  ),
+};
 
 /** 搜索表单配置 */
 export function useGridFormSchema(): VbenFormSchema[] {
@@ -98,8 +122,8 @@ export function useGridColumns(): VxeTableGridOptions<DeclareProjectApi.Project>
       title: '项目状态',
       minWidth: 120,
       formatter: ({ cellValue }) => {
-        const status = PROJECT_STATUS_OPTIONS.find((item) => item.value === cellValue);
-        return status ? status.label : cellValue;
+        const label = STATUS_LABEL_MAP[cellValue];
+        return label || cellValue || '-';
       },
     },
     {

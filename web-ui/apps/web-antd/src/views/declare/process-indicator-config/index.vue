@@ -2,6 +2,8 @@
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { ProcessIndicatorConfigApi } from '#/api/declare/process-indicator-config';
 
+import { computed, ref } from 'vue';
+
 import { Page, useVbenModal } from '@vben/common-ui';
 import { message } from 'ant-design-vue';
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
@@ -19,6 +21,9 @@ const [FormModal, formModalApi] = useVbenModal({
   connectedComponent: Form,
   destroyOnClose: true,
 });
+
+// 表格数据引用
+const tableData = ref<ProcessIndicatorConfigApi.ConfigResp[]>([]);
 
 /** 刷新表格 */
 function handleRefresh() {
@@ -50,22 +55,44 @@ async function handleDelete(row: ProcessIndicatorConfigApi.ConfigResp) {
   }
 }
 
+// 表格列定义
+const gridColumns = useGridColumns();
+
+// 计算当前页总分
+const totalMaxScore = computed(() => {
+  if (!tableData.value || tableData.value.length === 0) {
+    return 0;
+  }
+  return tableData.value.reduce((sum, item) => {
+    return sum + (Number(item.maxScore) || 0);
+  }, 0);
+});
+
 const [Grid, gridApi] = useVbenVxeGrid({
   formOptions: {
     schema: useGridFormSchema(),
   },
   gridOptions: {
-    columns: useGridColumns(),
+    columns: gridColumns,
     height: 'auto',
     keepSource: true,
+    pagerConfig: {
+      slots: {
+        home: 'pager-center',
+      },
+    },
     proxyConfig: {
       ajax: {
         query: async ({ page }, formValues) => {
-          return await getProcessIndicatorConfigPage({
+          const res = await getProcessIndicatorConfigPage({
             pageNo: page.currentPage,
             pageSize: page.pageSize,
             ...formValues,
           });
+          // 分页接口返回 { list, total }，同步到 tableData 供底部统计使用
+          const list = (res as any)?.list ?? (Array.isArray(res) ? res : []);
+          tableData.value = list;
+          return res;
         },
       },
     },
@@ -85,6 +112,9 @@ const [Grid, gridApi] = useVbenVxeGrid({
   <Page auto-content-height>
     <FormModal @success="handleRefresh" />
     <Grid table-title="过程指标配置">
+      <template #maxScoreDefault="{ row }">
+        <span>{{ row.maxScore ? `${row.maxScore}分` : '-' }}</span>
+      </template>
       <template #toolbar-tools>
         <TableAction
           :actions="[
@@ -122,6 +152,31 @@ const [Grid, gridApi] = useVbenVxeGrid({
           ]"
         />
       </template>
+      <!-- 使用 pager 左侧插槽在分页行左侧插入本页总分 -->
+      <template #pager-center>
+        <div class="pager-left-info">
+          本页总分：<span class="total-score">{{ totalMaxScore }}分</span>
+        </div>
+      </template>
     </Grid>
   </Page>
 </template>
+
+<style scoped>
+.pager-left-info {
+  margin: 0 auto;
+  margin-right: 20px;
+  align-items: center;
+  font-weight: 500;
+  color: #666;
+  height: 16px;
+  line-height: 16px;
+}
+
+.total-score {
+  font-weight: 700;
+  color: #1677ff;
+  font-size: 16px;
+  margin-left: 4px;
+}
+</style>

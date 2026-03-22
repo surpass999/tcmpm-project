@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static cn.gemrun.base.framework.common.util.collection.CollectionUtils.convertSet;
 import static cn.gemrun.base.framework.common.util.collection.SetUtils.asSet;
 
 /**
@@ -34,8 +35,8 @@ import static cn.gemrun.base.framework.common.util.collection.SetUtils.asSet;
  * 流程变量中需要包含：businessCreatorId（业务创建人ID）
  *
  * 参数格式：
- * - 不传参数：获取业务创建人所在部门的负责人
- * - level数字：获取业务创建人N级上级部门的负责人
+ * - 不传参数或0：获取业务创建人所在部门的所有成员
+ * - 数字(>0)：获取业务创建人N级上级部门的负责人
  *
  * @author Gemini
  */
@@ -61,13 +62,14 @@ public class BpmTaskCandidateBusinessStartUserStrategy extends AbstractBpmTaskCa
     public void validateParam(String param) {
         // 参数可选：
         // - 空：获取业务创建人所在部门的负责人
+        // - 0：获取业务创建人所在部门的所有成员
         // - 数字：获取业务创建人N级上级部门的负责人
         if (StrUtil.isNotBlank(param)) {
             try {
                 Integer level = Integer.parseInt(param);
-                Assert.isTrue(level > 0, "部门层级必须大于0");
+                Assert.isTrue(level >= 0, "部门层级必须大于等于0");
             } catch (NumberFormatException e) {
-                throw new IllegalArgumentException("参数格式错误，应为数字或空，如：2 表示第2级上级部门负责人");
+                throw new IllegalArgumentException("参数格式错误，应为数字或空，如：0 表示本部门所有成员，2 表示第2级上级部门负责人");
             }
         }
     }
@@ -91,8 +93,15 @@ public class BpmTaskCandidateBusinessStartUserStrategy extends AbstractBpmTaskCa
             return new HashSet<>();
         }
 
-        // 3. 根据参数获取部门负责人
-        return getDeptLeaderUsers(dept, param);
+        // 3. 根据参数判断返回什么
+        if (StrUtil.isBlank(param) || "0".equals(param)) {
+            // 返回本部门所有成员（包括业务创建人本人）
+            // 由 BpmTaskCandidateInvoker.removeStartUserIfSkip() 根据配置决定是否移除业务创建人
+            return getDeptMemberUsers(dept);
+        } else {
+            // 返回部门负责人
+            return getDeptLeaderUsers(dept, param);
+        }
     }
 
     @Override
@@ -115,8 +124,14 @@ public class BpmTaskCandidateBusinessStartUserStrategy extends AbstractBpmTaskCa
             return new HashSet<>();
         }
 
-        // 3. 根据参数获取部门负责人
-        return getDeptLeaderUsers(dept, param);
+        // 3. 根据参数判断返回什么
+        if (StrUtil.isBlank(param) || "0".equals(param)) {
+            // 返回本部门所有成员（包括业务创建人本人）
+            return getDeptMemberUsers(dept);
+        } else {
+            // 返回部门负责人
+            return getDeptLeaderUsers(dept, param);
+        }
     }
 
     /**
@@ -183,11 +198,6 @@ public class BpmTaskCandidateBusinessStartUserStrategy extends AbstractBpmTaskCa
             return new HashSet<>();
         }
 
-        // 无参数：返回当前部门负责人
-        if (StrUtil.isBlank(param)) {
-            return dept.getLeaderUserId() != null ? asSet(dept.getLeaderUserId()) : new HashSet<>();
-        }
-
         // 有参数：查找指定层级的部门负责人
         int level = Integer.parseInt(param);
         DeptRespDTO targetDept = getTargetLevelDept(dept, level);
@@ -196,6 +206,22 @@ public class BpmTaskCandidateBusinessStartUserStrategy extends AbstractBpmTaskCa
         }
 
         return asSet(targetDept.getLeaderUserId());
+    }
+
+    /**
+     * 获取部门所有成员（包括业务创建人本人）
+     *
+     * 注意：不需要在这里排除业务创建人
+     * 由 BpmTaskCandidateInvoker.removeStartUserIfSkip() 根据节点配置决定是否移除
+     *
+     * @param dept 部门
+     * @return 用户ID集合
+     */
+    private Set<Long> getDeptMemberUsers(DeptRespDTO dept) {
+        List<AdminUserRespDTO> users = adminUserApi.getUserListByDeptIds(
+                Collections.singletonList(dept.getId())
+        );
+        return convertSet(users, AdminUserRespDTO::getId);
     }
 
     /**

@@ -112,6 +112,9 @@ public class BpmTaskByBusinessRespVO {
         @Schema(description = "是否启用", example = "true")
         private Boolean enable;
 
+        @Schema(description = "业务状态标识", example = "PASS")
+        private String bizStatus;
+
     }
 
 }

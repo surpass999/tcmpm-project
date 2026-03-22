@@ -51,15 +51,22 @@ public class ProjectProcessDO extends BaseDO {
      */
     private String indicatorValues;
 
+
     /**
-     * 状态：0=草稿(DRAFT)，1=已提交(SUBMITTED)，2=审核中(AUDITING)，3=通过(APPROVED)，4=退回(REJECTED)
+     * 附件ID集合
      */
-    private Integer status;
+    private String attachmentIds;
+
+    /**
+     * 状态：数据字典（DRAFT草稿，SUBMITTED已提交，AUDITING审核中，APPROVED通过，REJECTED退回）
+     */
+    private String status;
 
     /**
      * 状态变更原因
      */
     private String statusReason;
+
 
     /**
      * 报告周期开始时间
@@ -97,9 +104,24 @@ public class ProjectProcessDO extends BaseDO {
     private Integer reviewResult;
 
     /**
+     * 流程实例ID
+     */
+    private String processInstanceId;
+
+    /**
      * 所属部门ID（用于数据权限控制）
      */
     @TableField("dept_id")
     private Long deptId;
+
+    /**
+     * 创建人ID（用户ID，用于判断是否为创建人）
+     */
+    private Long creatorId;
+
+    /**
+     * 指标版本（用于记录同步次数）
+     */
+    private Integer version;
 
 }

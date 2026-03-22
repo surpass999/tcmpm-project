@@ -4,7 +4,7 @@ import type { ErpStockCheckApi } from '#/api/erp/stock/check';
 
 import { ref } from 'vue';
 
-import { DocAlert, Page, useVbenModal } from '@vben/common-ui';
+import { Page, useVbenModal } from '@vben/common-ui';
 import { downloadFileFromBlobPart, isEmpty } from '@vben/utils';
 
 import { message } from 'ant-design-vue';
@@ -134,12 +134,6 @@ const [Grid, gridApi] = useVbenVxeGrid({
 
 <template>
   <Page auto-content-height>
-    <template #doc>
-      <DocAlert
-        title="【库存】库存调拨、库存盘点"
-        url="https://doc.iocoder.cn/erp/stock-move-check/"
-      />
-    </template>
 
     <FormModal @success="handleRefresh" />
     <Grid table-title="库存盘点单列表">

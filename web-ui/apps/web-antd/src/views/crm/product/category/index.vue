@@ -4,7 +4,7 @@ import type { CrmProductCategoryApi } from '#/api/crm/product/category';
 
 import { ref } from 'vue';
 
-import { DocAlert, Page, useVbenModal } from '@vben/common-ui';
+import { Page, useVbenModal } from '@vben/common-ui';
 
 import { message } from 'ant-design-vue';
 
@@ -104,12 +104,6 @@ const [Grid, gridApi] = useVbenVxeGrid({
 
 <template>
   <Page auto-content-height>
-    <template #doc>
-      <DocAlert
-        title="【产品】产品管理、产品分类"
-        url="https://doc.iocoder.cn/crm/product/"
-      />
-    </template>
 
     <FormModal @success="handleRefresh" />
     <Grid>

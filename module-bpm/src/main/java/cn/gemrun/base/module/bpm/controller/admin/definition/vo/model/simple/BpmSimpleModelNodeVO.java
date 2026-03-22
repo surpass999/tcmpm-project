@@ -59,6 +59,9 @@ public class BpmSimpleModelNodeVO {
     @Schema(description = "通过比例", example = "100")
     private Integer approveRatio; // 通过比例，当多人审批方式为：多人会签(按通过比例) 需要设置
 
+    @Schema(description = "通过分数", example = "60")
+    private Integer passScore; // 通过分数，当审批方式为评审（按总分）时需要设置
+
     @Schema(description = "表单权限", example = "[]")
     private List<Map<String, String>> fieldsPermission;
 
@@ -242,6 +245,9 @@ public class BpmSimpleModelNodeVO {
 
         @Schema(description = "业务状态标识", example = "PASS")
         private String bizStatus;
+
+        @Schema(description = "整改流程定义 Key（整改按钮专用）", example = "rectify_process")
+        private String rectifyProcessDefinitionKey;
     }
 
     @Schema(description = "条件设置")

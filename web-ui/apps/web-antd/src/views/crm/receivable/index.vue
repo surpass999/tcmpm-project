@@ -5,7 +5,7 @@ import type { CrmReceivableApi } from '#/api/crm/receivable';
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 
-import { DocAlert, Page, useVbenModal } from '@vben/common-ui';
+import { Page, useVbenModal } from '@vben/common-ui';
 import { downloadFileFromBlobPart } from '@vben/utils';
 
 import { Button, message, Tabs } from 'ant-design-vue';
@@ -148,16 +148,6 @@ const [Grid, gridApi] = useVbenVxeGrid({
 
 <template>
   <Page auto-content-height>
-    <template #doc>
-      <DocAlert
-        title="【回款】回款管理、回款计划"
-        url="https://doc.iocoder.cn/crm/receivable/"
-      />
-      <DocAlert
-        title="【通用】数据权限"
-        url="https://doc.iocoder.cn/crm/permission/"
-      />
-    </template>
 
     <FormModal @success="handleRefresh" />
     <Grid>

@@ -26,7 +26,8 @@ public class DeclareIndicatorValueDO extends BaseDO {
     private Long id;
 
     /**
-     * 业务类型：1=备案，2=立项，3=建设过程，4=年度总结，5=中期评估，6=验收申请，7=成果，8=流通交易
+     * 业务类型：1=建设过程，2=半年报，3=年度总结，4=中期评估，5=整改记录，6=验收申请
+     * 与 ProjectProcessDO.processType 保持一致
      */
     private Integer businessType;
 

@@ -87,6 +87,13 @@ public class BpmSequentialMultiInstanceBehavior extends SequentialMultiInstanceB
             super.executeOriginalBehavior(execution, multiInstanceRootExecution, loopCounter);
             return;
         }
+        // 对于 UserTask 节点，父类的 executeOriginalBehavior 会尝试解析 collectionExpression (${coll_userList})
+        // 但我们的多实例审批人通过 BpmTaskCandidateInvoker 在 resolveNrOfInstances 中计算并存储
+        // 所以对于 UserTask 节点，跳过父类方法，直接执行内部行为创建任务
+        if (execution.getCurrentFlowElement() instanceof UserTask) {
+            innerActivityBehavior.execute(execution);
+            return;
+        }
         super.executeOriginalBehavior(execution, multiInstanceRootExecution, loopCounter);
     }
 

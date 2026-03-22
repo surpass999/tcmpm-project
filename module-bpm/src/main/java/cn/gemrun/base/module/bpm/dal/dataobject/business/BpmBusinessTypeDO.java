@@ -38,7 +38,10 @@ public class BpmBusinessTypeDO extends BaseDO {
 
     /**
      * 业务类型标识
-     * 格式：模块:业务:动作，如 declare:filing:create
+     * 格式：
+     * 备案：filing:approval（备案申请）
+     * 项目过程：project_process:type:{1-6}（1-5 为项目过程类型，6 为项目过程结束）
+     * 成果：achievement:submit (成果提交)
      */
     private String businessType;
 

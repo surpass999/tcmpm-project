@@ -9,6 +9,8 @@ import { computed, onMounted, ref } from 'vue';
 import { Descriptions, DescriptionsItem, Progress, Collapse, CollapsePanel, Card, Row, Col, Statistic, Tag } from 'ant-design-vue';
 
 import { formatDateTime } from '@vben/utils';
+import { getDictOptions } from '@vben/hooks';
+import { DICT_TYPE } from '@vben/constants';
 
 import { getFiling } from '#/api/declare/filing';
 import { getIndicatorsByProjectType } from '#/api/declare/indicator';
@@ -169,23 +171,70 @@ function getOptions(valueOptions: string): Array<{ label: string; value: string 
   return parseOptions(valueOptions);
 }
 
-// 项目状态映射（使用字典值）
-const statusMap: Record<string, { text: string; color: string; bg: string; border: string }> = {
+// 固定状态映射（使用字符串 key）
+const fixedStatusMap: Record<string, { text: string; color: string; bg: string; border: string }> = {
   INITIATION: { text: '初始化', color: '#6C737A', bg: '#F3F4F6', border: '#D4D9DF' },
   FILING: { text: '立项中', color: '#1890FF', bg: '#E6F7FF', border: '#91D5FF' },
   CONSTRUCTION: { text: '建设中', color: '#FA8C16', bg: '#FFF7E6', border: '#FFD591' },
   MIDTERM: { text: '中期评估', color: '#722ED1', bg: '#F9F0FF', border: '#D3ADF7' },
   RECTIFICATION: { text: '整改中', color: '#FF4D4F', bg: '#FFF2F0', border: '#FFCCC7' },
   ACCEPTANCE: { text: '验收中', color: '#13C2C2', bg: '#E6FFFB', border: '#87E8DE' },
-  ACCEPTED: { text: '已验收', color: '#52C41A', bg: '#F6FFED', border: '#B7EB8F' },
-  TERMINATED: { text: '已终止', color: '#8C8C8C', bg: '#F5F5F5', border: '#D9D9D9' },
+  ACCEPTED: { text: '已验收', color: 'hsl(var(--primary))', bg: '#F6FFED', border: '#B7EB8F' },
+  TERMINATED: { text: '已终止', color: '#8C8C8C', bg: '#F5F5F5', border: '#D9D9DF' },
 };
 
+// 过程类型映射（使用整数 key，从字典获取名称）
+const processTypeStatusMap = ref<Record<string, { text: string; color: string; bg: string; border: string }>>({});
+
+// 根据过程类型获取样式
+function getStatusStyle(type: number): { color: string; bg: string; border: string } {
+  const styleMap: Record<number, { color: string; bg: string; border: string }> = {
+    1: { color: '#FA8C16', bg: '#FFF7E6', border: '#FFD591' },
+    2: { color: '#1890FF', bg: '#E6F7FF', border: '#91D5FF' },
+    3: { color: '#722ED1', bg: '#F9F0FF', border: '#D3ADF7' },
+    4: { color: '#13C2C2', bg: '#E6FFFB', border: '#87E8DE' },
+    5: { color: '#FF4D4F', bg: '#FFF2F0', border: '#FFCCC7' },
+    6: { color: '#52C41A', bg: '#F6FFED', border: '#B7EB8F' },
+  };
+  return styleMap[type] || { color: '#8C8C8C', bg: '#F5F5F5', border: '#D9D9DF' };
+}
+
+// 加载过程类型字典用于项目状态显示
+function loadProcessTypeStatusMap() {
+  const options = getDictOptions(DICT_TYPE.DECLARE_PROCESS_TYPE, 'number') as any[];
+  const map: Record<string, { text: string; color: string; bg: string; border: string }> = {};
+  options.forEach((item: { value: number; label: string }) => {
+    if (item.value === 7) return;
+    const style = getStatusStyle(item.value);
+    map[String(item.value)] = {
+      text: item.label,
+      ...style,
+    };
+  });
+  processTypeStatusMap.value = map;
+}
+
+// 项目状态（支持字符串和整数 key）
 const projectStatus = computed(() => {
   const status = props.project?.projectStatus;
-  return status !== undefined && status !== null
-    ? statusMap[status] || { text: '未知', color: '#8C8C8C', bg: '#F5F5F5', border: '#D9D9D9' }
-    : { text: '未知', color: '#8C8C8C', bg: '#F5F5F5', border: '#D9D9D9' };
+  if (status === undefined || status === null) {
+    return { text: '未知', color: '#8C8C8C', bg: '#F5F5F5', border: '#D9D9DF' };
+  }
+  const key = String(status);
+
+  // 优先从固定状态映射查找
+  const fixed = fixedStatusMap[key];
+  if (fixed) {
+    return fixed;
+  }
+
+  // 从过程类型映射查找
+  const process = processTypeStatusMap.value[key];
+  if (process) {
+    return process;
+  }
+
+  return { text: key, color: '#8C8C8C', bg: '#F5F5F5', border: '#D9D9DF' };
 });
 
 // 资金执行率
@@ -213,6 +262,7 @@ function formatMoney(value: number | string | undefined) {
 
 // 组件挂载时加载指标数据
 onMounted(() => {
+  loadProcessTypeStatusMap();
   loadIndicators();
 });
 </script>
@@ -252,7 +302,7 @@ onMounted(() => {
             :value="project?.totalInvestment || 0"
             :precision="2"
             suffix="万元"
-            value-style="{ color: '#2A5C45' }"
+            :value-style="{ color: 'hsl(var(--primary))' }"
           >
             <template #prefix>
               <i class="fas fa-coins stat-icon" />
@@ -267,7 +317,7 @@ onMounted(() => {
             :value="project?.centralFundArrive || 0"
             :precision="2"
             suffix="万元"
-            value-style="{ color: '#1890FF' }"
+            :value-style="{ color: '#1890FF' }"
           >
             <template #prefix>
               <i class="fas fa-university stat-icon" style="color: #1890FF" />
@@ -282,10 +332,10 @@ onMounted(() => {
             :value="project?.accumulatedInvestment || 0"
             :precision="2"
             suffix="万元"
-            value-style="{ color: '#52C41A' }"
+            :value-style="{ color: 'hsl(var(--primary))' }"
           >
             <template #prefix>
-              <i class="fas fa-chart-line stat-icon" style="color: #52C41A" />
+              <i class="fas fa-chart-line stat-icon" style="color: hsl(var(--primary))" />
             </template>
           </Statistic>
         </Card>
@@ -296,14 +346,14 @@ onMounted(() => {
             title="资金执行率"
             :value="fundExecutionRate"
             suffix="%"
-            :value-style="{ color: fundExecutionRate >= 70 ? '#52C41A' : '#FA8C16' }"
+            :value-style="{ color: fundExecutionRate >= 70 ? 'hsl(var(--primary))' : '#FA8C16' }"
           >
             <template #prefix>
-              <i class="fas fa-percentage stat-icon" :style="{ color: fundExecutionRate >= 70 ? '#52C41A' : '#FA8C16' }" />
+              <i class="fas fa-percentage stat-icon" :style="{ color: fundExecutionRate >= 70 ? 'hsl(var(--primary))' : '#FA8C16' }" />
             </template>
           </Statistic>
           <div class="execution-bar">
-            <div class="execution-bar-inner" :style="{ width: `${fundExecutionRate}%`, backgroundColor: fundExecutionRate >= 70 ? '#52C41A' : '#FA8C16' }" />
+            <div class="execution-bar-inner" :style="{ width: `${fundExecutionRate}%`, backgroundColor: fundExecutionRate >= 70 ? 'hsl(var(--primary))' : '#FA8C16' }" />
           </div>
         </Card>
       </Col>
@@ -321,9 +371,9 @@ onMounted(() => {
         </div>
         <Progress
           :percent="project?.actualProgress || 0"
-          :stroke-color="project?.actualProgress && project.actualProgress >= 70 ? '#52C41A' : {
-            '0%': '#2A5C45',
-            '100%': '#4A8F72'
+          :stroke-color="project?.actualProgress && project.actualProgress >= 70 ? 'hsl(var(--primary))' : {
+            '0%': 'hsl(var(--primary))',
+            '100%': 'hsl(var(--primary-hover, var(--primary)))'
           }"
           :trail-color="'#E6EEE8'"
           :show-info="false"
@@ -519,7 +569,7 @@ onMounted(() => {
   .project-header {
     margin-bottom: 20px;
     padding: 20px 24px;
-    background: linear-gradient(135deg, #2A5C45 0%, #4A8F72 100%);
+    background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--primary-hover, var(--primary))) 100%);
     border-radius: 12px;
     color: #fff;
 
@@ -579,7 +629,7 @@ onMounted(() => {
       transition: all 0.3s ease;
 
       &:hover {
-        box-shadow: 0 4px 16px rgba(42, 92, 69, 0.15);
+        box-shadow: 0 4px 16px hsl(var(--primary) / 15%);
         transform: translateY(-2px);
       }
 
@@ -598,18 +648,18 @@ onMounted(() => {
 
       .stat-icon {
         font-size: 18px;
-        color: #2A5C45;
+        color: hsl(var(--primary));
         margin-right: 8px;
       }
     }
 
     .indicator-card-highlight {
-      background: linear-gradient(135deg, #F6FFED 0%, #F9F0FF 100%);
+      background: linear-gradient(135deg, hsl(var(--primary) / 5%) 0%, hsl(var(--primary) / 3%) 100%);
     }
 
     .execution-bar {
       height: 6px;
-      background: #E6EEE8;
+      background: hsl(var(--primary) / 10%);
       border-radius: 3px;
       margin-top: 12px;
       overflow: hidden;
@@ -652,14 +702,14 @@ onMounted(() => {
         color: #262626;
 
         i {
-          color: #2A5C45;
+          color: hsl(var(--primary));
         }
       }
 
       .progress-percent {
         font-size: 28px;
         font-weight: 700;
-        color: #2A5C45;
+        color: hsl(var(--primary));
       }
     }
 
@@ -720,7 +770,7 @@ onMounted(() => {
       margin: 0;
 
       i {
-        color: #2A5C45;
+        color: hsl(var(--primary));
       }
     }
 
@@ -748,7 +798,7 @@ onMounted(() => {
       }
 
       .highlight-value {
-        color: #52C41A;
+        color: hsl(var(--primary));
         font-weight: 600;
       }
 
@@ -769,7 +819,7 @@ onMounted(() => {
         gap: 8px;
 
         i {
-          color: #2A5C45;
+          color: hsl(var(--primary));
         }
       }
     }
@@ -800,7 +850,7 @@ onMounted(() => {
         color: #262626;
 
         i {
-          color: #2A5C45;
+          color: hsl(var(--primary));
         }
       }
     }
@@ -834,7 +884,7 @@ onMounted(() => {
 
     .indicator-dot {
       font-size: 6px;
-      color: #2A5C45;
+      color: hsl(var(--primary));
     }
   }
 
@@ -853,7 +903,7 @@ onMounted(() => {
 
     &.number-value {
       font-weight: 600;
-      color: #2A5C45;
+      color: hsl(var(--primary));
     }
 
     &.long-text {
@@ -905,9 +955,9 @@ onMounted(() => {
     transition: all 0.2s ease;
 
     &.option-selected {
-      background: linear-gradient(135deg, #E6F7EF 0%, #D4F0E6 100%);
-      color: #2A5C45;
-      border-color: #2A5C45;
+      background: linear-gradient(135deg, hsl(var(--primary) / 10%) 0%, hsl(var(--primary) / 5%) 100%);
+      color: hsl(var(--primary));
+      border-color: hsl(var(--primary));
       font-weight: 500;
     }
   }

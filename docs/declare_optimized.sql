@@ -223,49 +223,37 @@ CREATE TABLE `declare_project`  (
 -- 3. declare_project_process（项目过程记录表）
 -- ----------------------------
 DROP TABLE IF EXISTS `declare_project_process`;
-CREATE TABLE `declare_project_process`  (
+CREATE TABLE `declare_project_process` (
   `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '过程记录主键（自增）',
   `project_id` bigint(20) NOT NULL COMMENT '关联项目ID（declare_project.id）',
-
-  -- 过程类型：1=建设过程，2=半年报，3=年度总结，4=中期评估，5=整改记录，6=验收申请
+  `process_instance_id` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '流程实例ID',
   `process_type` tinyint(4) NOT NULL COMMENT '过程类型：1=建设过程，2=半年报，3=年度总结，4=中期评估，5=整改记录，6=验收申请',
-  `process_title` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '过程标题（如：2025年上半年建设过程）',
-
-  -- 过程数据（JSON格式，灵活存储）
-  `process_data` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci COMMENT '过程数据JSON',
-  `indicator_values` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci COMMENT '指标值JSON',
-
-  -- 状态：数据字典
+  `process_title` varchar(128) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '过程标题（如：2025年上半年建设过程）',
+  `process_data` text COLLATE utf8mb4_unicode_ci COMMENT '过程数据JSON',
+  `indicator_values` text COLLATE utf8mb4_unicode_ci COMMENT '指标值JSON',
+  `attachment_ids` varchar(1024) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '附件ID集合',
   `status` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '0' COMMENT '状态：数据字典',
-  `status_reason` varchar(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '状态变更原因',
-
-  -- 时间信息
+  `status_reason` varchar(512) COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '状态变更原因',
   `report_period_start` datetime DEFAULT NULL COMMENT '报告周期开始时间',
   `report_period_end` datetime DEFAULT NULL COMMENT '报告周期结束时间',
   `report_time` datetime DEFAULT NULL COMMENT '报告提交时间',
-
-  -- 审核信息
-  `review_opinion` varchar(1024) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '审核意见',
+  `review_opinion` varchar(1024) COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '审核意见',
   `reviewer_id` bigint(20) DEFAULT NULL COMMENT '审核人ID',
   `review_time` datetime DEFAULT NULL COMMENT '审核时间',
   `review_result` tinyint(4) DEFAULT NULL COMMENT '审核结果：1=通过，2=退回',
-
-  -- 通用字段
-  `version` int(11) NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',
-  `delete_reason` varchar(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '删除原因',
-
-  -- 审计字段
-  `creator` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '创建者',
+  `create_name` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '填报人姓名',
+  `dept_id` bigint(20) DEFAULT NULL COMMENT '所属部门ID（用于数据权限控制）',
+  `version` int(11) NOT NULL DEFAULT '0' COMMENT '乐观锁版本号',
+  `delete_reason` varchar(512) COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '删除原因',
+  `creator` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '创建者',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `updater` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '更新者',
+  `updater` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '更新者',
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除（0=否，1=是）',
-  
   PRIMARY KEY (`id`) USING BTREE,
-  INDEX `idx_project_process`(`project_id`, `process_type`) USING BTREE COMMENT '项目ID+过程类型联合索引',
-  INDEX `idx_status`(`status`) USING BTREE COMMENT '状态索引'
-) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '项目过程记录表' ROW_FORMAT = Dynamic;
-
+  KEY `idx_project_process` (`project_id`,`process_type`) USING BTREE COMMENT '项目ID+过程类型联合索引',
+  KEY `idx_status` (`status`) USING BTREE COMMENT '状态索引'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci ROW_FORMAT=DYNAMIC COMMENT='项目过程记录表';
 -- ----------------------------
 -- 4. declare_rectification（项目整改跟踪表）
 -- ----------------------------
@@ -326,24 +314,68 @@ CREATE TABLE `declare_rectification`  (
 -- ----------------------------
 -- 5. declare_achievement（成果信息表）
 -- ----------------------------
+-- 5. declare_achievement（成果与流通合并表）
+-- 说明：合并原 declare_achievement + declare_data_flow + declare_achievement_display
+-- ----------------------------
 DROP TABLE IF EXISTS `declare_achievement`;
 CREATE TABLE `declare_achievement`  (
-  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '成果主键（自增）',
+  -- 基础字段
+  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键（自增）',
+  `process_instance_id` varchar(64) DEFAULT NULL COMMENT '流程实例ID',
   `project_id` bigint(20) NOT NULL COMMENT '关联项目ID（declare_project.id）',
-  `achievement_name` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '成果名称',
+  `dept_id` bigint(20) DEFAULT NULL COMMENT '部门ID',
 
-  -- 成果类型：1=系统功能，2=数据集，3=科研成果，4=管理经验
+  -- 成果基本信息
+  `achievement_name` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '成果名称',
   `achievement_type` tinyint(4) NOT NULL COMMENT '成果类型：1=系统功能，2=数据集，3=科研成果，4=管理经验',
   `application_field` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '应用领域',
   `description` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci COMMENT '成果描述',
+  `effect_description` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci COMMENT '应用效果描述',
+  `replication_value` tinyint(4) DEFAULT NULL COMMENT '可复制性评估：1=高，2=中，3=低',
+  `promotion_scope` tinyint(4) DEFAULT NULL COMMENT '推广范围：1=院内，2=省级，3=全国',
+  `promotion_count` int(11) NOT NULL DEFAULT 0 COMMENT '推广次数',
+  `transform_type` tinyint(4) DEFAULT NULL COMMENT '转化类型：1=标准规范，2=创新模式，3=典型案例',
 
-  -- 审核状态：0=待审核(PENDING)，1=省级通过/待国家局审核(SUBMITTED)，2=国家局审核中(AUDITING)，3=已认定推广(APPROVED)，4=退回(REJECTED)
-  `audit_status` tinyint(4) NOT NULL DEFAULT 0 COMMENT '审核状态：0=待审核，1=省级通过/待国家局审核，2=国家局审核中，3=已认定推广，4=退回',
+  -- 数据流通信息（从 declare_data_flow 合并）
+  `data_name` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '数据名称',
+  `data_description` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci COMMENT '数据描述',
+  `data_type` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '数据类型',
+  `data_source` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '数据来源',
+  `data_volume` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '数据量规模',
+  `data_quality` tinyint(4) DEFAULT NULL COMMENT '数据质量评级：1=优，2=良，3=中，4=差',
+  `share_scope` tinyint(4) DEFAULT NULL COMMENT '共享范围：1=院内，2=省级，3=全国',
+  `flow_type` tinyint(4) DEFAULT NULL COMMENT '流通类型：1=内部使用，2=对外共享，3=交易',
+  `flow_object` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '流通对象',
+  `flow_purpose` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci COMMENT '流通目的',
+  `security_filing_no` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '安全备案编号',
+  `security_filing_time` datetime DEFAULT NULL COMMENT '安全备案时间',
+  `start_time` datetime DEFAULT NULL COMMENT '流通开始时间',
+  `end_time` datetime DEFAULT NULL COMMENT '流通结束时间',
+
+  -- 证书信息（对应指标 601, 602）
+  `certificate_count` int(11) NOT NULL DEFAULT 0 COMMENT '数据产品证书数（指标601）',
+  `property_count` int(11) NOT NULL DEFAULT 0 COMMENT '数据产权登记证数（指标602）',
+
+  -- 交易信息（从 declare_achievement_display 合并，对应指标 603, 604）
+  `transaction_count` int(11) NOT NULL DEFAULT 0 COMMENT '完成交易的数据产品数（指标603）',
+  `transaction_amount` decimal(18,2) NOT NULL DEFAULT 0.00 COMMENT '累计交易金额（万元，指标604）',
+  `transaction_object` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '交易对象',
+  `transaction_time` datetime DEFAULT NULL COMMENT '交易完成时间',
+  `transaction_contract` varchar(1024) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '交易合同路径',
+
+  -- 附件
+  `attachment_ids` varchar(1024) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '附件ID集合',
+
+  -- 审批流状态（由 BPM 控制）
+  `status` tinyint(4) NOT NULL DEFAULT 0 COMMENT '状态：0=草稿，1=已提交，2=审核中，3=已通过，4=退回',
   `audit_opinion` varchar(1024) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '审核意见',
-  `auditor_id` bigint(20) DEFAULT NULL COMMENT '审核人ID（system_users.id）',
+
+  -- 审核相关（保留字段，由审批流回调更新）
+  `audit_status` tinyint(4) NOT NULL DEFAULT 0 COMMENT '审核状态：0=待审核，1=省级通过/待国家局审核，2=国家局审核中，3=已认定推广，4=退回',
+  `auditor_id` bigint(20) DEFAULT NULL COMMENT '审核人ID',
   `audit_time` datetime DEFAULT NULL COMMENT '审核时间',
 
-  -- 推荐状态：0=未推荐(PENDING)，1=已推荐至国家局(SUBMITTED)，2=已纳入推广库(APPROVED)
+  -- 推荐相关（保留字段，由审批流回调更新）
   `recommend_status` tinyint(4) NOT NULL DEFAULT 0 COMMENT '推荐状态：0=未推荐，1=已推荐至国家局，2=已纳入推广库',
   `recommend_opinion` varchar(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '推荐意见',
   `recommender_id` bigint(20) DEFAULT NULL COMMENT '推荐人ID',
@@ -362,24 +394,13 @@ CREATE TABLE `declare_achievement`  (
 
   PRIMARY KEY (`id`) USING BTREE,
   INDEX `idx_project_id`(`project_id`) USING BTREE COMMENT '关联项目ID索引',
+  INDEX `idx_status`(`status`) USING BTREE COMMENT '状态索引',
   INDEX `idx_achievement_type`(`achievement_type`) USING BTREE COMMENT '成果类型索引',
   INDEX `idx_audit_status`(`audit_status`) USING BTREE COMMENT '审核状态索引',
-  INDEX `idx_recommend_status`(`recommend_status`) USING BTREE COMMENT '推荐状态索引'
-) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '成果核心信息表' ROW_FORMAT = Dynamic;
-
--- ----------------------------
--- 补充字段：成果转化表缺失字段（根据需求文档3.6.1补充）
--- ----------------------------
-ALTER TABLE `declare_achievement`
-  ADD COLUMN `effect_description` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci COMMENT '应用效果描述' AFTER `description`,
-  ADD COLUMN `replication_value` tinyint(4) DEFAULT NULL COMMENT '可复制性评估：1=高，2=中，3=低' AFTER `effect_description`,
-  ADD COLUMN `promotion_scope` tinyint(4) DEFAULT NULL COMMENT '推广范围：1=院内，2=省级，3=全国' AFTER `replication_value`,
-  ADD COLUMN `promotion_count` int(11) NOT NULL DEFAULT 0 COMMENT '推广次数' AFTER `promotion_scope`,
-  ADD COLUMN `transform_type` tinyint(4) DEFAULT NULL COMMENT '转化类型：1=标准规范，2=创新模式，3=典型案例' AFTER `promotion_count`;
-
-CREATE INDEX `idx_replication_value` ON `declare_achievement`(`replication_value`);
-CREATE INDEX `idx_promotion_scope` ON `declare_achievement`(`promotion_scope`);
-CREATE INDEX `idx_transform_type` ON `declare_achievement`(`transform_type`);
+  INDEX `idx_recommend_status`(`recommend_status`) USING BTREE COMMENT '推荐状态索引',
+  INDEX `idx_data_quality`(`data_quality`) USING BTREE COMMENT '数据质量索引',
+  INDEX `idx_share_scope`(`share_scope`) USING BTREE COMMENT '共享范围索引'
+) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '成果与流通合并表' ROW_FORMAT = Dynamic;
 
 -- ----------------------------
 -- 6. declare_indicator（指标体系表）
@@ -633,47 +654,45 @@ CREATE TABLE `declare_expert`  (
 -- 说明：评审任务的领域业务表，关联 Flowable 流程任务
 -- ----------------------------
 DROP TABLE IF EXISTS `declare_review_task`;
-CREATE TABLE `declare_review_task`  (
+CREATE TABLE `declare_review_task` (
   `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '任务主键（自增）',
-
   -- 关联 Flowable 流程
-  `process_instance_id` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '流程实例ID',
-  `task_definition_key` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '节点Key（对应DSL的nodeKey）',
-
+  `process_instance_id` varchar(64) DEFAULT '' COMMENT '流程实例ID',
+  `task_definition_key` varchar(64) DEFAULT '' COMMENT '节点Key（对应DSL的nodeKey）',
   -- 业务关联
-  `task_type` tinyint(4) NOT NULL COMMENT '任务类型：1=备案论证，2=中期评估，3=验收评审，4=成果审核',
-  `business_type` tinyint(4) NOT NULL COMMENT '业务类型：1=备案，2=项目，3=成果',
-  `business_id` bigint(20) NOT NULL COMMENT '关联业务ID',
-
+  `task_type` tinyint(4) NOT NULL DEFAULT 0 COMMENT '任务类型：1=备案论证，2=中期评估，3=验收评审，4=成果审核',
+  `business_type` tinyint(4) NOT NULL DEFAULT 0 COMMENT '业务类型：1=备案，2=项目，3=成果',
+  `business_id` bigint(20) NOT NULL DEFAULT 0 COMMENT '关联业务ID',
   -- 任务信息
-  `task_name` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '任务名称',
+  `task_name` varchar(128) NOT NULL DEFAULT '' COMMENT '任务名称',
   `start_time` datetime DEFAULT NULL COMMENT '任务开始时间',
   `end_time` datetime DEFAULT NULL COMMENT '任务截止时间',
-
   -- 专家会签（核心：Flowable 多实例任务）
-  `expert_ids` varchar(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '' COMMENT '参与专家ID集合（逗号分隔）',
-
-  -- 评审专业配置
-  `review_standard` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci COMMENT '评审标准JSON（关联指标体系）',
-  `review_requirement` varchar(1024) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '评审要求',
-
+  `expert_ids` varchar(512) NOT NULL DEFAULT '' COMMENT '参与专家ID集合（逗号分隔）',
+  `expert_count` tinyint(4) DEFAULT 0 COMMENT '专家数量',
+  `indicator_scope` varchar(512) DEFAULT '' COMMENT '评审指标范围（指标ID集合）',
+  -- 评审配置
+  `review_requirement` varchar(1024) DEFAULT '' COMMENT '评审要求说明',
+  `review_standard` text COMMENT '评审标准JSON（关联指标体系）',
   -- 汇总结果
-  `total_score` decimal(6, 2) DEFAULT NULL COMMENT '综合评分',
-  `review_conclusion` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '评审结论',
-
+  `total_score` decimal(6,2) DEFAULT NULL COMMENT '综合评分',
+  `review_conclusion` varchar(256) DEFAULT '' COMMENT '评审结论：通过/需整改/不通过',
+  -- 状态
+  `status` tinyint(4) DEFAULT 0 COMMENT '状态：0=待分配，1=评审中，2=已完成',
   -- 审计字段
-  `creator` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '创建者',
+  `version` int(11) DEFAULT 0 COMMENT '乐观锁版本号',
+  `delete_reason` varchar(256) DEFAULT '' COMMENT '删除原因',
+  `creator` varchar(64) DEFAULT '' COMMENT '创建者',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `updater` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '更新者',
+  `updater` varchar(64) DEFAULT '' COMMENT '更新者',
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除（0=否，1=是）',
-
   PRIMARY KEY (`id`) USING BTREE,
   INDEX `idx_process_instance`(`process_instance_id`) USING BTREE COMMENT '流程实例ID索引',
   INDEX `idx_business`(`business_type`, `business_id`) USING BTREE COMMENT '业务类型+业务ID联合索引',
-  INDEX `idx_task_type`(`task_type`) USING BTREE COMMENT '任务类型索引'
-) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '评审任务表（关联Flowable）' ROW_FORMAT = Dynamic;
-
+  INDEX `idx_task_type`(`task_type`) USING BTREE COMMENT '任务类型索引',
+  INDEX `idx_expert_ids`(`expert_ids`) USING BTREE COMMENT '专家ID集合索引'
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='评审任务表（关联Flowable）' ROW_FORMAT=Dynamic;
 -- ----------------------------
 -- 12. declare_review_result（评审结果表）
 -- ----------------------------
@@ -696,7 +715,7 @@ CREATE TABLE `declare_review_result`  (
   `business_id` bigint(20) NOT NULL COMMENT '关联业务ID',
 
   -- 评审状态：0=待评审(PENDING)，1=已接收(RECEIVED)，2=评审中(REVIEWING)，3=已提交(SUBMITTED)，4=超时(TIMEOUT)
-  `status` tinyint(4) NOT NULL DEFAULT 0 COMMENT '评审状态：0=待评审，1=已接收，2=评审中，3=已提交，4=超时',
+  `status` tinyint(4) NOT NULL DEFAULT 0 COMMENT '评审状态：0=待评审，1=已接收，2=评审中，3=已提交，4=超时，5=拒绝',
 
   -- 利益冲突检测
   `is_conflict` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否存在利益冲突',
@@ -744,7 +763,7 @@ CREATE TABLE `declare_policy`  (
   `policy_summary` varchar(1024) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '政策摘要',
 
   -- 发布单位：1=国家局，2=省局
-  `release_dept` tinyint(4) NOT NULL COMMENT '发布单位：1=国家局，2=省局',
+  `release_dept` varchar(1024) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '发布单位：国家局，省局',
   `release_time` datetime NOT NULL COMMENT '发布时间',
 
   -- 类型：1=政策文件，2=工作通知
@@ -754,8 +773,8 @@ CREATE TABLE `declare_policy`  (
   `target_scope` tinyint(4) NOT NULL DEFAULT 1 COMMENT '目标范围：1=全国，2=全省',
   `target_project_types` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '适用项目类型（逗号分隔，如1,2,3）',
 
-  -- 附件（关联infra_file.id，多个用逗号分隔）
-  `attachment_ids` varchar(1024) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '附件ID集合',
+  -- 附件（多个附件，用逗号分隔）
+  `attachments` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '附件集合',
 
   -- 状态：1=已发布(PUBLISHED)，2=已下架(UNPUBLISHED)
   `status` tinyint(4) NOT NULL DEFAULT 1 COMMENT '状态：1=已发布，2=已下架',
@@ -781,48 +800,6 @@ CREATE TABLE `declare_policy`  (
 -- =====================================================
 -- 第二部分：关联表设计
 -- =====================================================
-
--- ----------------------------
--- 14. declare_attachment（附件关联表）
--- ----------------------------
--- 说明：参考 infra_file 表设计，存储附件与业务的关联关系
--- 实际文件存储在 infra_file 表中，这里只存储关联关系
--- ----------------------------
-DROP TABLE IF EXISTS `declare_attachment`;
-CREATE TABLE `declare_attachment`  (
-  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '关联主键（自增）',
-
-  -- 业务类型：1=备案，2=项目，3=成果，4=评审任务，5=评审结果，6=政策通知
-  `business_type` tinyint(4) NOT NULL COMMENT '业务类型：1=备案，2=项目，3=成果，4=评审任务，5=评审结果，6=政策通知',
-  `business_id` bigint(20) NOT NULL COMMENT '关联业务ID',
-
-  -- 关联到 infra_file 表的文件编号
-  `file_id` bigint(20) NOT NULL COMMENT '文件编号（关联infra_file.id）',
-
-  -- 关联类型：1=主附件，2=支撑材料，3=评审材料，4=成果附件
-  `attach_type` tinyint(4) NOT NULL DEFAULT 1 COMMENT '关联类型：1=主附件，2=支撑材料，3=评审材料，4=成果附件',
-
-  -- 关联指标ID（可选，用于追溯附件对应的指标）
-  `related_indicator_ids` varchar(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '关联指标ID集合（逗号分隔）',
-
-  -- 排序
-  `sort` int(11) NOT NULL DEFAULT 0 COMMENT '排序',
-
-  -- 通用字段
-  `version` int(11) NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',
-  `delete_reason` varchar(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '删除原因',
-
-  -- 审计字段
-  `creator` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '创建者',
-  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `updater` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '更新者',
-  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除（0=否，1=是）',
-  
-  PRIMARY KEY (`id`) USING BTREE,
-  INDEX `idx_business`(`business_type`, `business_id`) USING BTREE COMMENT '业务类型+业务ID联合索引',
-  INDEX `idx_file_id`(`file_id`) USING BTREE COMMENT '文件ID索引'
-) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '附件关联表（关联infra_file使用）' ROW_FORMAT = Dynamic;
 
 -- ----------------------------
 -- 15. declare_review_log（评审操作日志表）
@@ -1031,129 +1008,6 @@ CREATE TABLE `declare_security`  (
 ) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '信息安全备案数据表' ROW_FORMAT = Dynamic;
 
 -- ----------------------------
--- 21. declare_data_flow（数据流通记录表）
--- ----------------------------
--- 说明：记录医院数据流通信息，成果展示需要先有数据流通记录
--- ----------------------------
-DROP TABLE IF EXISTS `declare_data_flow`;
-CREATE TABLE `declare_data_flow`  (
-  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键（自增）',
-  `project_id` bigint(20) NOT NULL COMMENT '关联项目ID（declare_project.id）',
-
-  -- 基本信息
-  `data_name` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '数据名称',
-  `data_description` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci COMMENT '数据描述',
-  `data_type` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '数据类型（如：患者数据、诊疗数据）',
-  `data_source` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '数据来源',
-
-  -- 流通信息
-  `flow_type` tinyint(4) NOT NULL COMMENT '流通类型：1=内部使用，2=对外共享，3=交易',
-  `flow_object` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '流通对象',
-  `flow_purpose` varchar(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '流通目的',
-
-  -- 安全备案
-  `security_filing_no` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '安全备案编号',
-  `security_filing_time` datetime DEFAULT NULL COMMENT '安全备案时间',
-
-  -- 证书信息
-  `certificate_count` int(11) NOT NULL DEFAULT 0 COMMENT '取得数据产品证书数（关联指标601）',
-  `property_count` int(11) NOT NULL DEFAULT 0 COMMENT '取得数据产权登记证数（关联指标602）',
-
-  -- 状态：0=草稿(DRAFT)，1=已提交(SUBMITTED)，2=审核中(AUDITING)，3=已通过(APPROVED)，4=退回(REJECTED)
-  `status` tinyint(4) NOT NULL DEFAULT 0 COMMENT '状态：0=草稿，1=已提交，2=审核中，3=已通过，4=退回',
-  `audit_opinion` varchar(1024) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '审核意见',
-  `auditor_id` bigint(20) DEFAULT NULL COMMENT '审核人ID',
-  `audit_time` datetime DEFAULT NULL COMMENT '审核时间',
-
-  -- 是否已生成成果展示
-  `has_achievement` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否已生成成果展示：0=否，1=是',
-
-  -- 通用字段
-  `version` int(11) NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',
-  `delete_reason` varchar(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '删除原因',
-
-  -- 审计字段
-  `creator` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '创建者',
-  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `updater` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '更新者',
-  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除（0=否，1=是）',
-
-  PRIMARY KEY (`id`) USING BTREE,
-  INDEX `idx_project_id`(`project_id`) USING BTREE COMMENT '项目ID索引',
-  INDEX `idx_status`(`status`) USING BTREE COMMENT '状态索引'
-) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '数据流通记录表' ROW_FORMAT = Dynamic;
-
--- ----------------------------
--- 补充字段：数据流通表缺失字段（根据需求文档3.6/3.7指标分类补充）
--- ----------------------------
-ALTER TABLE `declare_data_flow`
-  ADD COLUMN `data_volume` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '数据量规模（如：100万条、50GB）' AFTER `data_source`,
-  ADD COLUMN `data_quality` tinyint(4) DEFAULT NULL COMMENT '数据质量评级：1=优，2=良，3=中，4=差' AFTER `data_volume`,
-  ADD COLUMN `share_scope` tinyint(4) DEFAULT NULL COMMENT '共享范围：1=院内，2=省级，3=全国' AFTER `data_quality`,
-  ADD COLUMN `start_time` datetime DEFAULT NULL COMMENT '流通开始时间' AFTER `share_scope`,
-  ADD COLUMN `end_time` datetime DEFAULT NULL COMMENT '流通结束时间' AFTER `start_time`;
-
-CREATE INDEX `idx_data_quality` ON `declare_data_flow`(`data_quality`);
-CREATE INDEX `idx_share_scope` ON `declare_data_flow`(`share_scope`);
-
--- ----------------------------
--- 22. declare_achievement_display（成果展示表）
--- ----------------------------
--- 说明：展示数据流通的成果，关联 declare_achievement
--- 流程：declare_achievement -> declare_data_flow -> declare_achievement_display
--- ----------------------------
-DROP TABLE IF EXISTS `declare_achievement_display`;
-CREATE TABLE `declare_achievement_display`  (
-  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键（自增）',
-
-  -- 关联关系
-  `project_id` bigint(20) NOT NULL COMMENT '关联项目ID（declare_project.id）',
-  `data_flow_id` bigint(20) NOT NULL COMMENT '关联数据流通ID（declare_data_flow.id）',
-  `achievement_id` bigint(20) NOT NULL COMMENT '关联成果认定ID（declare_achievement.id）',
-
-  -- 成果信息（冗余存储，便于查询）
-  `achievement_name` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '成果名称',
-  `achievement_type` tinyint(4) NOT NULL COMMENT '成果类型：1=数据产品，2=数据服务，3=解决方案',
-
-  -- 展示内容
-  `achievement_description` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci COMMENT '成果描述',
-  `application_field` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '应用领域',
-
-  -- 交易信息
-  `transaction_count` int(11) NOT NULL DEFAULT 0 COMMENT '完成交易的数据产品数（关联指标603）',
-  `transaction_amount` decimal(18, 2) NOT NULL DEFAULT 0.00 COMMENT '累计交易金额（万元，关联指标604）',
-  `transaction_object` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '交易对象',
-  `transaction_time` datetime DEFAULT NULL COMMENT '交易完成时间',
-  `transaction_contract` varchar(1024) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '交易合同路径',
-
-  -- 推广信息
-  `promotion_scope` tinyint(4) DEFAULT NULL COMMENT '推广范围：1=区域试点(REGIONAL)，2=全国推广(NATIONAL)',
-  `promotion_count` int(11) NOT NULL DEFAULT 0 COMMENT '推广次数',
-
-  -- 状态：0=草稿(DRAFT)，1=已提交(SUBMITTED)，2=审核中(AUDITING)，3=已通过(APPROVED)，4=退回(REJECTED)
-  `status` tinyint(4) NOT NULL DEFAULT 0 COMMENT '状态：0=草稿，1=已提交，2=审核中，3=已通过，4=退回',
-
-  -- 通用字段
-  `version` int(11) NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',
-  `delete_reason` varchar(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '删除原因',
-
-  -- 审计字段
-  `creator` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '创建者',
-  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `updater` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '更新者',
-  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除（0=否，1=是）',
-
-  PRIMARY KEY (`id`) USING BTREE,
-  INDEX `idx_project_id`(`project_id`) USING BTREE COMMENT '项目ID索引',
-  INDEX `idx_data_flow_id`(`data_flow_id`) USING BTREE COMMENT '数据流通ID索引',
-  INDEX `idx_achievement_id`(`achievement_id`) USING BTREE COMMENT '成果ID索引',
-  INDEX `idx_status`(`status`) USING BTREE COMMENT '状态索引',
-  CONSTRAINT `fk_display_achievement` FOREIGN KEY (`achievement_id`) REFERENCES `declare_achievement` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '成果展示表' ROW_FORMAT = Dynamic;
-
--- ----------------------------
 -- 23. declare_exchange（交流活动表）
 -- ----------------------------
 DROP TABLE IF EXISTS `declare_exchange`;
@@ -1233,7 +1087,7 @@ CREATE TABLE `declare_notice_receipt`  (
 ) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '政策通知回执表' ROW_FORMAT = Dynamic;
 
 -- ----------------------------
--- 25. declare_business_process（业务与流程实例关联表）
+-- 25. declare_business_process（业务与流程实例关联表）  已经取消
 -- ----------------------------
 -- 说明：记录业务与流程实例关联信息
 -- ----------------------------
@@ -1296,15 +1150,58 @@ DROP TABLE IF EXISTS `declare_process_indicator_config`;
 CREATE TABLE `declare_process_indicator_config` (
   `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键',
   `process_type` tinyint(4) NOT NULL COMMENT '过程类型(1=建设过程,2=半年报,3=年度总结,4=中期评估,5=整改记录,6=验收申请)',
-  `project_type` tinyint(4) NOT NULL DEFAULT 0 COMMENT '项目类型(0=全部,1=综合型,2=中医电子病历型,3=智慧中药房型,4=名老中医传承型,5=中医临床科研型,6=中医智慧医共体型)',
+  `project_type` tinyint(4) NOT NULL DEFAULT '0' COMMENT '项目类型(0=全部,1=综合型,2=中医电子病历型,3=智慧中药房型,4=名老中医传承型,5=中医临床科研型,6=中医智慧医共体型)',
   `indicator_id` bigint(20) NOT NULL COMMENT '指标ID(关联declare_indicator.id)',
   `is_required` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否必填',
-  `sort` int(11) NOT NULL DEFAULT 0 COMMENT '排序',
+  `sort` int(11) NOT NULL DEFAULT '0' COMMENT '排序',
+  `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除（0=否，1=是）',
+  `delete_reason` varchar(512) COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '删除原因',
+  `max_score` decimal(5,2) DEFAULT '5.00' COMMENT '满分值',
+  `score_ratio_satisfied` decimal(5,4) DEFAULT '1.0000' COMMENT '满足(100%)的比例',
+  `score_ratio_basic` decimal(5,4) DEFAULT '0.7500' COMMENT '基本满足(75%)的比例',
+  `score_ratio_partial` decimal(5,4) DEFAULT '0.5000' COMMENT '部分满足(50%)的比例',
+  `score_ratio_unsatisfied` decimal(5,4) DEFAULT '0.2500' COMMENT '不满足(25%)的比例',
+  `creator` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '创建者',
+  `updater` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '更新者',
+  `version` int(11) NOT NULL DEFAULT '0' COMMENT '乐观锁版本号',
   `create_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `update_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_process_project_indicator` (`process_type`, `project_type`, `indicator_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='流程过程指标配置表';
+  UNIQUE KEY `uk_process_project_indicator` (`process_type`,`project_type`,`indicator_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=23 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='流程过程指标配置表';
+
+
+CREATE TABLE `declare_review_indicator_score` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `review_result_id` bigint(20) NOT NULL COMMENT '关联评审结果ID',
+  `indicator_id` bigint(20) NOT NULL COMMENT '指标ID',
+  `indicator_code` varchar(64) DEFAULT '' COMMENT '指标代号',
+  `expert_id` bigint(20) NOT NULL COMMENT '专家ID',
+  `max_score` decimal(5,2) DEFAULT NULL COMMENT '该指标满分（如30表示30分）',
+  `score` decimal(5,2) DEFAULT NULL COMMENT '实际评分',
+  `score_level` varchar(32) DEFAULT '' COMMENT '评分等级（满足/基本满足/部分满足/不满足）',
+  `score_ratio` decimal(5,4) DEFAULT NULL COMMENT '评分比例（如1.0表示100%，0.75表示75%）',
+  `comment` varchar(512) DEFAULT '' COMMENT '评分说明',
+  `opinion` varchar(1024) DEFAULT '' COMMENT '评审意见（与该指标关联）',
+  `creator` varchar(64) DEFAULT '' COMMENT '创建者',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updater` varchar(64) DEFAULT '' COMMENT '更新者',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` bit(1) NOT NULL DEFAULT b'0',
+  PRIMARY KEY (`id`),
+  KEY `idx_review_result_id` (`review_result_id`),
+  KEY `idx_indicator_id` (`indicator_id`),
+  KEY `idx_expert_id` (`expert_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='评审指标评分表';
+
+
+
+DROP TABLE IF EXISTS declare_training; CREATE TABLE declare_training ( id bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID', name varchar(200) NOT NULL COMMENT '活动名称', type tinyint NOT NULL COMMENT '活动类型：1=推进会，2=专题研讨，3=系统演示，4=业务培训', content text COMMENT '活动详情（富文本）', organizer varchar(200) COMMENT '组织单位', speaker varchar(200) COMMENT '主讲人/嘉宾', start_time datetime NOT NULL COMMENT '开始时间', end_time datetime NOT NULL COMMENT '结束时间', location varchar(200) COMMENT '活动地点', online_link varchar(500) COMMENT '线上参与链接', target_scope tinyint NOT NULL DEFAULT 1 COMMENT '目标范围：1=全国，2=全省', target_provinces varchar(500) COMMENT '目标省份（逗号分隔，如：广东省,浙江省）', registration_deadline datetime COMMENT '报名截止时间', max_participants int COMMENT '最大参与人数（空表示不限）', current_participants int DEFAULT 0 COMMENT '当前报名人数', attachments varchar(1000) COMMENT '附件（多个逗号分隔，存储URL）', meeting_materials text COMMENT '会议资料/培训材料', poster_url varchar(500) COMMENT '活动海报URL', status tinyint NOT NULL DEFAULT 1 COMMENT '状态：1=草稿，2=报名中，3=进行中，4=已结束，5=已取消', publish_time datetime COMMENT '发布时间', publisher_id bigint COMMENT '发布人ID', publisher_name varchar(100) COMMENT '发布人姓名', remark varchar(500) COMMENT '备注', dept_id bigint COMMENT '部门ID', creator varchar(64) DEFAULT '' COMMENT '创建者', create_time datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间', updater varchar(64) DEFAULT '' COMMENT '更新者', update_time datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间', deleted bit(1) DEFAULT b'0' COMMENT '是否删除', tenant_id bigint NOT NULL DEFAULT 1 COMMENT '租户ID', PRIMARY KEY (id), KEY idx_status (status), KEY idx_start_time (start_time), KEY idx_create_time (create_time), KEY idx_tenant_id (tenant_id) ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='培训交流活动表';
+
+
+DROP TABLE IF EXISTS declare_training_registration; CREATE TABLE declare_training_registration ( id bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID', training_id bigint NOT NULL COMMENT '活动ID', user_id bigint NOT NULL COMMENT '用户ID', user_name varchar(100) NOT NULL COMMENT '报名人姓名', organization varchar(200) COMMENT '所属单位', position varchar(100) COMMENT '职位/职称', phone varchar(20) COMMENT '联系电话', email varchar(100) COMMENT '邮箱', status tinyint NOT NULL DEFAULT 1 COMMENT '状态：1=已报名，2=已签到，3=已取消，4=未出席', register_time datetime DEFAULT CURRENT_TIMESTAMP COMMENT '报名时间', sign_in_time datetime COMMENT '签到时间', cancel_time datetime COMMENT '取消时间', feedback text COMMENT '参与反馈', rating tinyint COMMENT '评分（1-5分）', attendance_certificate varchar(100) COMMENT '参与证明编号', remark varchar(500) COMMENT '备注', dept_id bigint COMMENT '部门ID', creator varchar(64) DEFAULT '' COMMENT '创建者', create_time datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间', updater varchar(64) DEFAULT '' COMMENT '更新者', update_time datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间', deleted bit(1) DEFAULT b'0' COMMENT '是否删除', tenant_id bigint NOT NULL DEFAULT 1 COMMENT '租户ID', PRIMARY KEY (id), UNIQUE KEY uk_training_user (training_id, user_id, deleted), KEY idx_user_id (user_id), KEY idx_training_id (training_id), KEY idx_status (status), KEY idx_tenant_id (tenant_id) ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='活动报名表';
+
+
 
 -- =====================================================
 -- 外键约束（如需要可取消注释）
@@ -1355,5 +1252,13 @@ CREATE TABLE `declare_process_indicator_config` (
 
 -- 业务流程表添加 DSL JSON 字段
 ALTER TABLE `bpm_business_process` ADD COLUMN `dsl_json` json DEFAULT NULL COMMENT '当前节点DSL配置JSON' AFTER `current_assign_source`;
+
+-- =====================================================
+-- Training 表字段修改
+-- =====================================================
+-- 修改 poster_url 为 poster_urls（支持多张海报）
+ALTER TABLE `declare_training` CHANGE COLUMN `poster_url` `poster_urls` varchar(1000) DEFAULT NULL COMMENT '活动海报URL列表（多个逗号分隔）';
+
+ALTER TABLE `declare_achievement` CHANGE COLUMN `flow_purpose` `flow_purpose` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci COMMENT '流通目的';
 
 SET FOREIGN_KEY_CHECKS = 1;

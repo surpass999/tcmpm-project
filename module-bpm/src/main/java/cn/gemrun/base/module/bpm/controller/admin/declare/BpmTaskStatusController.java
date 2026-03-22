@@ -50,18 +50,18 @@ public class BpmTaskStatusController {
 
     @PostMapping("/query-by-business")
     @PreAuthorize("isAuthenticated()")
-    @Operation(summary = "根据业务ID查询任务状态", description = "根据业务表分类和业务ID列表，查询当前用户是否有待办/已办任务")
+    @Operation(summary = "根据业务ID查询任务状态", description = "根据业务表分类和业务类型及业务ID列表，查询当前用户是否有待办/已办任务")
     public CommonResult<List<BpmTaskByBusinessRespVO>> getTaskByBusiness(@Valid @RequestBody BpmTaskByBusinessReqVO reqVO) {
         Long userId = getLoginUserId();
-        List<BpmTaskByBusinessRespVO> result = taskStatusService.getTaskByBusiness(userId, reqVO.getTableName(), reqVO.getBusinessIds());
+        List<BpmTaskByBusinessRespVO> result = taskStatusService.getTaskByBusiness(userId, reqVO.getTableName(), reqVO.getBusinessType(), reqVO.getBusinessIds());
         return success(result);
     }
 
     @PostMapping("/process-query-by-business")
     @PreAuthorize("isAuthenticated()")
-    @Operation(summary = "根据业务ID查询流程信息", description = "根据业务表分类和业务ID，查询所有关联的流程实例及节点信息，按创建时间倒序")
+    @Operation(summary = "根据业务ID查询流程信息", description = "根据业务表分类、业务类型和业务ID，查询所有关联的流程实例及节点信息，按创建时间倒序")
     public CommonResult<List<BpmProcessByBusinessRespVO>> getProcessByBusiness(@Valid @RequestBody BpmProcessByBusinessReqVO reqVO) {
-        List<BpmProcessByBusinessRespVO> result = taskStatusService.getProcessByBusiness(reqVO.getTableName(), reqVO.getBusinessId());
+        List<BpmProcessByBusinessRespVO> result = taskStatusService.getProcessByBusiness(reqVO.getTableName(), reqVO.getBusinessType(), reqVO.getBusinessId());
         return success(result);
     }
 

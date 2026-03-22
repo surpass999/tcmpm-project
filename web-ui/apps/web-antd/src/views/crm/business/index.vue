@@ -5,7 +5,7 @@ import type { CrmBusinessApi } from '#/api/crm/business';
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 
-import { DocAlert, Page, useVbenModal } from '@vben/common-ui';
+import { Page, useVbenModal } from '@vben/common-ui';
 import { downloadFileFromBlobPart } from '@vben/utils';
 
 import { Button, message, Tabs } from 'ant-design-vue';
@@ -119,16 +119,6 @@ const [Grid, gridApi] = useVbenVxeGrid({
 
 <template>
   <Page auto-content-height>
-    <template #doc>
-      <DocAlert
-        title="【商机】商机管理、商机状态"
-        url="https://doc.iocoder.cn/crm/business/"
-      />
-      <DocAlert
-        title="【通用】数据权限"
-        url="https://doc.iocoder.cn/crm/permission/"
-      />
-    </template>
 
     <FormModal @success="handleRefresh" />
     <Grid>

@@ -72,7 +72,7 @@ public class ProjectController {
     @GetMapping("/get")
     @Operation(summary = "获得已立项项目核心信息")
     @Parameter(name = "id", description = "编号", required = true, example = "1024")
-    @PreAuthorize("@ss.hasPermission('declare:project:query')")
+    @PreAuthorize("isAuthenticated()")
     public CommonResult<ProjectRespVO> getProject(@RequestParam("id") Long id) {
         return success(projectService.getProject(id));
     }
@@ -91,6 +91,13 @@ public class ProjectController {
     @PreAuthorize("@ss.hasPermission('declare:project:query')")
     public CommonResult<List<ProjectRespVO>> getProjectListByFilingId(@RequestParam("filingId") Long filingId) {
         return success(projectService.getProjectListByFilingId(filingId));
+    }
+
+    @GetMapping("/simple-list")
+    @Operation(summary = "获取项目列表（用于下拉选择）")
+    @PreAuthorize("@ss.hasPermission('declare:project:query')")
+    public CommonResult<List<ProjectRespVO>> getProjectSimpleList() {
+        return success(projectService.getProjectSimpleList());
     }
 
 }

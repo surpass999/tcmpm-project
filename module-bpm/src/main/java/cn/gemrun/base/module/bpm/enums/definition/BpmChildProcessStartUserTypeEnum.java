@@ -17,7 +17,8 @@ import java.util.Arrays;
 public enum BpmChildProcessStartUserTypeEnum implements ArrayValuable<Integer> {
 
     MAIN_PROCESS_START_USER(1, "同主流程发起人"),
-    FROM_FORM(2, "表单");
+    FROM_FORM(2, "表单"),
+    PREVIOUS_APPROVER(3, "上一审批人");
 
     private final Integer type;
     private final String name;

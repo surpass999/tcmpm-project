@@ -2,7 +2,7 @@
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { AiWriteApi } from '#/api/ai/write';
 
-import { DocAlert, Page } from '@vben/common-ui';
+import { Page } from '@vben/common-ui';
 
 import { message } from 'ant-design-vue';
 
@@ -65,9 +65,6 @@ const [Grid, gridApi] = useVbenVxeGrid({
 
 <template>
   <Page auto-content-height>
-    <template #doc>
-      <DocAlert title="AI 写作助手" url="https://doc.iocoder.cn/ai/write/" />
-    </template>
     <Grid table-title="写作管理列表">
       <template #actions="{ row }">
         <TableAction

@@ -14,6 +14,7 @@ import cn.gemrun.base.framework.common.util.object.PageUtils;
 import cn.gemrun.base.framework.datapermission.core.annotation.DataPermission;
 import cn.gemrun.base.framework.web.core.util.WebFrameworkUtils;
 import cn.gemrun.base.module.bpm.api.event.BpmProcessInstanceStatusEvent;
+import cn.gemrun.base.module.bpm.api.event.BpmTaskCreatedEvent;
 import cn.gemrun.base.module.bpm.api.event.BpmTaskStatusEvent;
 import cn.gemrun.base.module.bpm.controller.admin.definition.vo.model.BpmModelMetaInfoVO;
 import cn.gemrun.base.module.bpm.controller.admin.task.vo.task.*;
@@ -629,8 +630,8 @@ public class BpmTaskServiceImpl implements BpmTaskService {
         // 6. 调用 BPM complete 去完成任务
         taskService.complete(task.getId(), variables, true);
 
-        // 7. 发布任务完成事件
-        publishTaskStatusEvent(task, bpmnModel, instance, reqVO);
+        // 7. 发布任务完成事件（传入已合并的流程变量，确保能获取到 businessType）
+        publishTaskStatusEvent(task, bpmnModel, instance, reqVO, processVariables);
 
         // 【加签专属】处理加签任务
         handleParentTaskIfSign(task.getParentTaskId());
@@ -643,19 +644,23 @@ public class BpmTaskServiceImpl implements BpmTaskService {
      * @param bpmnModel      流程模型
      * @param instance       流程实例
      * @param reqVO          审批请求
+     * @param processVariables 已合并的流程变量（包含历史变量和前端传入变量）
      */
-    private void publishTaskStatusEvent(Task task, BpmnModel bpmnModel, ProcessInstance instance, BpmTaskApproveReqVO reqVO) {
-        // 获取按钮配置的 bizStatus
+    private void publishTaskStatusEvent(Task task, BpmnModel bpmnModel, ProcessInstance instance, BpmTaskApproveReqVO reqVO, Map<String, Object> processVariables) {
+        // 获取按钮配置的 bizStatus 和 rectifyProcessDefinitionKey
         String bizStatus = null;
+        String rectifyProcessDefinitionKey = null;
         log.info("[publishTaskStatusEvent] buttonId={}, taskDefinitionKey={}", reqVO.getButtonId(), task.getTaskDefinitionKey());
         if (reqVO.getButtonId() != null) {
             Map<Integer, BpmTaskRespVO.OperationButtonSetting> buttonSettings = BpmnModelUtils.parseButtonsSetting(bpmnModel, task.getTaskDefinitionKey());
             log.info("[publishTaskStatusEvent] buttonSettings={}, buttonId={}", buttonSettings, reqVO.getButtonId());
             if (buttonSettings != null && buttonSettings.get(reqVO.getButtonId()) != null) {
-                bizStatus = buttonSettings.get(reqVO.getButtonId()).getBizStatus();
+                BpmTaskRespVO.OperationButtonSetting buttonSetting = buttonSettings.get(reqVO.getButtonId());
+                bizStatus = buttonSetting.getBizStatus();
+                rectifyProcessDefinitionKey = buttonSetting.getRectifyProcessDefinitionKey();
             }
         }
-        log.info("[publishTaskStatusEvent] bizStatus={}", bizStatus);
+        log.info("[publishTaskStatusEvent] bizStatus={}, rectifyProcessDefinitionKey={}", bizStatus, rectifyProcessDefinitionKey);
         // 构建事件
         BpmTaskStatusEvent event = new BpmTaskStatusEvent(this);
         event.setTaskId(task.getId());
@@ -666,6 +671,16 @@ public class BpmTaskServiceImpl implements BpmTaskService {
         event.setBusinessKey(instance.getBusinessKey());
         event.setReason(reqVO.getReason());
         event.setTaskName(task.getName());
+        event.setButtonId(reqVO.getButtonId());
+        // 从已合并的流程变量中获取 businessType（优先使用流程实例中的变量，因为前端可能未传递）
+        String businessType = processVariables != null
+                ? (String) processVariables.get("businessType") : null;
+        // 如果流程变量中也没有，尝试从流程实例中获取
+        if (businessType == null && instance.getProcessVariables() != null) {
+            businessType = (String) instance.getProcessVariables().get("businessType");
+        }
+        log.info("[publishTaskStatusEvent] businessType={}", businessType);
+        event.setBusinessType(businessType);
 
         // 获取操作人信息
         Long loginUserId = WebFrameworkUtils.getLoginUserId();
@@ -676,6 +691,16 @@ public class BpmTaskServiceImpl implements BpmTaskService {
                 event.setUserName(user.getNickname());
             }
         }
+
+        // 构建 variables 传递给监听器（包含前端传入的流程变量 + 按钮配置的 rectifyProcessDefinitionKey）
+        Map<String, Object> eventVariables = new HashMap<>();
+        if (reqVO.getVariables() != null) {
+            eventVariables.putAll(reqVO.getVariables());
+        }
+        if (StrUtil.isNotEmpty(rectifyProcessDefinitionKey)) {
+            eventVariables.put("rectifyProcessDefinitionKey", rectifyProcessDefinitionKey);
+        }
+        event.setVariables(eventVariables);
 
         taskEventPublisher.sendTaskStatusEvent(event);
     }
@@ -903,12 +928,15 @@ public class BpmTaskServiceImpl implements BpmTaskService {
      * 发布拒绝任务的状态事件
      */
     private void publishTaskStatusEventForReject(Task task, BpmnModel bpmnModel, ProcessInstance instance, BpmTaskRejectReqVO reqVO) {
-        // 获取按钮配置的 bizStatus
+        // 获取按钮配置的 bizStatus 和 rectifyProcessDefinitionKey
         String bizStatus = null;
+        String rectifyProcessDefinitionKey = null;
         if (reqVO.getButtonId() != null) {
             Map<Integer, BpmTaskRespVO.OperationButtonSetting> buttonSettings = BpmnModelUtils.parseButtonsSetting(bpmnModel, task.getTaskDefinitionKey());
             if (buttonSettings != null && buttonSettings.get(reqVO.getButtonId()) != null) {
-                bizStatus = buttonSettings.get(reqVO.getButtonId()).getBizStatus();
+                BpmTaskRespVO.OperationButtonSetting buttonSetting = buttonSettings.get(reqVO.getButtonId());
+                bizStatus = buttonSetting.getBizStatus();
+                rectifyProcessDefinitionKey = buttonSetting.getRectifyProcessDefinitionKey();
             }
         }
 
@@ -922,6 +950,11 @@ public class BpmTaskServiceImpl implements BpmTaskService {
         event.setBusinessKey(instance.getBusinessKey());
         event.setReason(reqVO.getReason());
         event.setTaskName(task.getName());
+        event.setButtonId(reqVO.getButtonId());
+        // 从流程变量中获取 businessType
+        String businessType = instance.getProcessVariables() != null
+                ? (String) instance.getProcessVariables().get("businessType") : null;
+        event.setBusinessType(businessType);
 
         // 获取操作人信息
         Long loginUserId = WebFrameworkUtils.getLoginUserId();
@@ -932,6 +965,13 @@ public class BpmTaskServiceImpl implements BpmTaskService {
                 event.setUserName(user.getNickname());
             }
         }
+
+        // 构建 variables 传递给监听器
+        Map<String, Object> eventVariables = new HashMap<>();
+        if (StrUtil.isNotEmpty(rectifyProcessDefinitionKey)) {
+            eventVariables.put("rectifyProcessDefinitionKey", rectifyProcessDefinitionKey);
+        }
+        event.setVariables(eventVariables);
 
         taskEventPublisher.sendTaskStatusEvent(event);
     }
@@ -1014,12 +1054,15 @@ public class BpmTaskServiceImpl implements BpmTaskService {
      * 发布退回任务的状态事件
      */
     private void publishTaskStatusEventForReturn(Task task, BpmnModel bpmnModel, ProcessInstance instance, BpmTaskReturnReqVO reqVO) {
-        // 获取按钮配置的 bizStatus
+        // 获取按钮配置的 bizStatus 和 rectifyProcessDefinitionKey
         String bizStatus = null;
+        String rectifyProcessDefinitionKey = null;
         if (reqVO.getButtonId() != null) {
             Map<Integer, BpmTaskRespVO.OperationButtonSetting> buttonSettings = BpmnModelUtils.parseButtonsSetting(bpmnModel, task.getTaskDefinitionKey());
             if (buttonSettings != null && buttonSettings.get(reqVO.getButtonId()) != null) {
-                bizStatus = buttonSettings.get(reqVO.getButtonId()).getBizStatus();
+                BpmTaskRespVO.OperationButtonSetting buttonSetting = buttonSettings.get(reqVO.getButtonId());
+                bizStatus = buttonSetting.getBizStatus();
+                rectifyProcessDefinitionKey = buttonSetting.getRectifyProcessDefinitionKey();
             }
         }
 
@@ -1033,6 +1076,11 @@ public class BpmTaskServiceImpl implements BpmTaskService {
         event.setBusinessKey(instance.getBusinessKey());
         event.setReason(reqVO.getReason());
         event.setTaskName(task.getName());
+        event.setButtonId(reqVO.getButtonId());
+        // 从流程变量中获取 businessType
+        String businessType = instance.getProcessVariables() != null
+                ? (String) instance.getProcessVariables().get("businessType") : null;
+        event.setBusinessType(businessType);
 
         // 获取操作人信息
         Long loginUserId = WebFrameworkUtils.getLoginUserId();
@@ -1043,6 +1091,13 @@ public class BpmTaskServiceImpl implements BpmTaskService {
                 event.setUserName(user.getNickname());
             }
         }
+
+        // 构建 variables 传递给监听器
+        Map<String, Object> eventVariables = new HashMap<>();
+        if (StrUtil.isNotEmpty(rectifyProcessDefinitionKey)) {
+            eventVariables.put("rectifyProcessDefinitionKey", rectifyProcessDefinitionKey);
+        }
+        event.setVariables(eventVariables);
 
         taskEventPublisher.sendTaskStatusEvent(event);
     }
@@ -1502,6 +1557,8 @@ public class BpmTaskServiceImpl implements BpmTaskService {
             log.error("[updateTaskStatusWhenCreated][taskId({}) 已经有状态({})]", task.getId(), status);
             return;
         }
+        log.info("[processTaskCreated] 开始处理任务创建: taskId={}, taskKey={}, assignee={}",
+                task.getId(), task.getTaskDefinitionKey(), task.getAssignee());
         updateTaskStatus(task.getId(), BpmTaskStatusEnum.RUNNING.getStatus());
 
         ProcessInstance processInstance = processInstanceService.getProcessInstance(task.getProcessInstanceId());
@@ -1523,7 +1580,22 @@ public class BpmTaskServiceImpl implements BpmTaskService {
                     setting.getUrl(), setting.getHeader(), setting.getBody(), true, setting.getResponse());
         }
 
-        // 3. 处理自动通过的情况，例如说：1）无审批人时，是否自动通过、不通过；2）非【人工审核】时，是否自动通过、不通过
+        // 3. 发布任务创建事件（供业务系统监听，如专家评审任务创建后更新评审任务表）
+        BpmTaskCreatedEvent createdEvent = new BpmTaskCreatedEvent(this);
+        createdEvent.setTaskId(task.getId());
+        createdEvent.setProcessDefinitionKey(processInstance.getProcessDefinitionKey());
+        createdEvent.setProcessInstanceId(processInstance.getId());
+        createdEvent.setTaskDefinitionKey(task.getTaskDefinitionKey());
+        createdEvent.setBusinessKey(processInstance.getBusinessKey());
+        createdEvent.setTaskName(task.getName());
+        createdEvent.setAssignee(task.getAssignee());
+        createdEvent.setBizStatus((String) runtimeService.getVariable(processInstance.getId(), BpmnVariableConstants.PROCESS_INSTANCE_VARIABLE_BIZ_STATUS));
+        log.info("[processTaskCreated] 发布BpmTaskCreatedEvent: taskId={}, taskKey={}, bizStatus={}",
+                task.getId(), task.getTaskDefinitionKey(),
+                runtimeService.getVariable(processInstance.getId(), BpmnVariableConstants.PROCESS_INSTANCE_VARIABLE_BIZ_STATUS));
+        applicationContext.publishEvent(createdEvent);
+
+        // 4. 处理自动通过的情况，例如说：1）无审批人时，是否自动通过、不通过；2）非【人工审核】时，是否自动通过、不通过
         BpmnModel bpmnModel = modelService.getBpmnModelByDefinitionId(processInstance.getProcessDefinitionId());
         FlowElement userTaskElement = BpmnModelUtils.getFlowElementById(bpmnModel, task.getTaskDefinitionKey());
         Integer approveType = BpmnModelUtils.parseApproveType(userTaskElement);
@@ -1546,6 +1618,7 @@ public class BpmTaskServiceImpl implements BpmTaskService {
                         && getTask(task.getId()) == null) {
                     return;
                 }
+                try {
                 // 特殊情况一：【人工审核】审批人为空，根据配置是否要自动通过、自动拒绝
                 if (ObjectUtil.equal(approveType, BpmUserTaskApproveTypeEnum.USER.getType())) {
                     // 如果有审批人、或者拥有人，则说明不满足情况一，不自动通过、不自动拒绝
@@ -1568,6 +1641,10 @@ public class BpmTaskServiceImpl implements BpmTaskService {
                         getSelf().rejectTask(null, new BpmTaskRejectReqVO()
                                 .setId(task.getId()).setReason(BpmReasonEnum.APPROVE_TYPE_AUTO_REJECT.getReason()));
                     }
+                }
+                } catch (Exception e) {
+                    log.warn("[processTaskCreated][afterCompletion 执行异常，taskId={}, error={}]",
+                            task.getId(), e.getMessage());
                 }
             }
 
@@ -1625,6 +1702,7 @@ public class BpmTaskServiceImpl implements BpmTaskService {
                     log.error("[processTaskAssigned][taskId({}) 没有分配到负责人]", task.getId());
                     return;
                 }
+                try {
                 ProcessInstance processInstance = processInstanceService.getProcessInstance(task.getProcessInstanceId());
                 if (processInstance == null) {
                     log.error("[processTaskAssigned][taskId({}) 没有找到流程实例]", task.getId());
@@ -1674,17 +1752,34 @@ public class BpmTaskServiceImpl implements BpmTaskService {
                 }
                 FlowElement userTaskElement = BpmnModelUtils.getFlowElementById(bpmnModel, task.getTaskDefinitionKey());
                 // 判断是否为退回或者驳回：如果是退回或者驳回不走这个策略（使用 local variable）
-                Boolean returnTaskFlag = runtimeService.getVariableLocal(task.getExecutionId(),
-                        String.format(BpmnVariableConstants.PROCESS_INSTANCE_VARIABLE_RETURN_FLAG, task.getTaskDefinitionKey()), Boolean.class);
+                Boolean returnTaskFlag = null;
+                try {
+                    returnTaskFlag = runtimeService.getVariableLocal(task.getExecutionId(),
+                            String.format(BpmnVariableConstants.PROCESS_INSTANCE_VARIABLE_RETURN_FLAG, task.getTaskDefinitionKey()), Boolean.class);
+                } catch (Exception e) {
+                    log.warn("[processTaskAssigned] 获取退回标记失败，execution可能已清理: taskId={}, executionId={}",
+                            task.getId(), task.getExecutionId());
+                }
                 Boolean skipStartUserNodeFlag = Convert.toBool(runtimeService.getVariable(processInstance.getProcessInstanceId(),
                         BpmnVariableConstants.PROCESS_INSTANCE_VARIABLE_SKIP_START_USER_NODE, String.class));
                 if (userTaskElement.getId().equals(START_USER_NODE_ID)
                         && (skipStartUserNodeFlag == null // 目的：一般是“主流程”，发起人节点，自动通过审核
                         || BooleanUtil.isTrue(skipStartUserNodeFlag)) // 目的：一般是“子流程”，发起人节点，按配置自动通过审核
                         && ObjUtil.notEqual(returnTaskFlag, Boolean.TRUE)) {
-                    getSelf().approveTask(Long.valueOf(task.getAssignee()), new BpmTaskApproveReqVO().setId(task.getId())
-                            .setButtonId(1)
-                            .setReason(BpmReasonEnum.ASSIGN_START_USER_APPROVE_WHEN_SKIP_START_USER_NODE.getReason()));
+                    // 防御：检查任务是否已处于完成状态，避兌嵌地事务内重复 approve 导致任务不存在异常
+                    Integer currentStatus = null;
+                    try {
+                        currentStatus = (Integer) runtimeService.getVariableLocal(task.getExecutionId(),
+                                BpmnVariableConstants.TASK_VARIABLE_STATUS);
+                    } catch (Exception e) {
+                        log.warn("[processTaskAssigned] 获取任务状态失败，execution可能已清理: taskId={}, executionId={}",
+                                task.getId(), task.getExecutionId());
+                    }
+                    if (!BpmTaskStatusEnum.isEndStatus(currentStatus)) {
+                        getSelf().approveTask(Long.valueOf(task.getAssignee()), new BpmTaskApproveReqVO().setId(task.getId())
+                                .setButtonId(1)
+                                .setReason(BpmReasonEnum.ASSIGN_START_USER_APPROVE_WHEN_SKIP_START_USER_NODE.getReason()));
+                    }
                     return;
                 }
                 // 当不为发起人节点时，审批人与提交人为同一人时，根据 BpmUserTaskAssignStartUserHandlerTypeEnum 策略进行处理
@@ -1738,6 +1833,10 @@ public class BpmTaskServiceImpl implements BpmTaskService {
                                 task.getId(), task.getAssignee(), ex.getMessage());
                     }
                 });
+                } catch (Exception e) {
+                    log.warn("[processTaskAssigned] afterCompletion 执行异常，taskId={}, error={}",
+                            task.getId(), e.getMessage());
+                }
             }
 
         });

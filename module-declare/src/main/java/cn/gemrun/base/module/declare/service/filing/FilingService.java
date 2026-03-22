@@ -84,4 +84,13 @@ public interface FilingService {
      */
     void updateFilingProcessInstance(Long id, String processInstanceId, String filingStatus);
 
+    /**
+     * 自动从备案创建项目
+     * 当备案国家局审核通过时，自动创建一个项目记录
+     *
+     * @param filingId 备案ID
+     * @return 创建的项目ID
+     */
+    Long autoCreateProjectFromFiling(Long filingId);
+
 }

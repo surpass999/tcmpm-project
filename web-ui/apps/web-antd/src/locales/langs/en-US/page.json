@@ -40,8 +40,7 @@
     },
     "dashboard": {
       "title": "Dashboard",
-      "analytics": "Analytics",
-      "workspace": "Workspace"
+      "business": "Business"
     },
     "tenant": {
       "placeholder": "Please select tenant"

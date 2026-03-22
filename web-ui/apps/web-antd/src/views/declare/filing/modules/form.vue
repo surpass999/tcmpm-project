@@ -706,6 +706,7 @@ const step1FormData = ref({
   projectType: undefined as number | undefined,
   validStartTime: undefined as any,
   validEndTime: undefined as any,
+  planEndTime: undefined as any,
   constructionContent: '',
 });
 
@@ -728,6 +729,9 @@ const formRules = {
   ],
   validEndTime: [
     { required: true, message: '请选择有效期结束时间', trigger: 'change' },
+  ],
+  planEndTime: [
+    { required: true, message: '请选择计划完成时间', trigger: 'change' },
   ],
   constructionContent: [
     { required: true, message: '请输入建设内容', trigger: 'blur' },
@@ -1007,6 +1011,7 @@ const [Modal, modalApi] = useVbenModal({
         projectType: undefined,
         validStartTime: undefined,
         validEndTime: undefined,
+        planEndTime: undefined,
         constructionContent: '',
       };
       return;
@@ -1034,6 +1039,7 @@ const [Modal, modalApi] = useVbenModal({
         // 处理日期类型：将后端返回的字符串转换为 dayjs 对象
         validStartTime: filing.validStartTime ? dayjs(filing.validStartTime) : undefined,
         validEndTime: filing.validEndTime ? dayjs(filing.validEndTime) : undefined,
+        planEndTime: filing.planEndTime ? dayjs(filing.planEndTime) : undefined,
         constructionContent: filing.constructionContent || '',
       };
       console.log('转换后的日期:', step1FormData.value.validStartTime, step1FormData.value.validEndTime);
@@ -1128,6 +1134,15 @@ const [Modal, modalApi] = useVbenModal({
           <a-form-item label="有效期结束时间" name="validEndTime">
             <a-date-picker
               v-model:value="step1FormData.validEndTime"
+              show-time
+              format="YYYY-MM-DD"
+              class="w-full"
+            />
+          </a-form-item>
+
+          <a-form-item label="项目计划完成时间" name="planEndTime">
+            <a-date-picker
+              v-model:value="step1FormData.planEndTime"
               show-time
               format="YYYY-MM-DD"
               class="w-full"

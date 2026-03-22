@@ -94,4 +94,28 @@ public interface ProjectService {
      */
     List<ProjectDO> getProjectsForAcceptanceCheck();
 
+    /**
+     * 获取项目列表（用于下拉选择）
+     * 只返回id和projectName
+     *
+     * @return 项目列表
+     */
+    List<ProjectRespVO> getProjectSimpleList();
+
+    /**
+     * 标记项目已完成验收
+     * 设置 actual_end_time 为当前时间
+     *
+     * @param id 项目ID
+     */
+    void markProjectCompleted(Long id);
+
+    /**
+     * 更新项目进度
+     *
+     * @param id       项目ID
+     * @param progress 进度值（0-100）
+     */
+    void updateProjectProgress(Long id, Integer progress);
+
 }

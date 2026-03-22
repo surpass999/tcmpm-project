@@ -3,7 +3,7 @@ import type { Menu, RawMenu } from './modules/types';
 
 import { nextTick, onMounted, ref } from 'vue';
 
-import { confirm, ContentWrap, DocAlert, Page } from '@vben/common-ui';
+import { confirm, ContentWrap, Page } from '@vben/common-ui';
 import { handleTree } from '@vben/utils';
 
 import { Button, message } from 'ant-design-vue';
@@ -296,9 +296,6 @@ function menuToBackend(menu: any) {
 
 <template>
   <Page auto-content-height>
-    <template #doc>
-      <DocAlert title="公众号菜单" url="https://doc.iocoder.cn/mp/menu/" />
-    </template>
 
     <!-- 搜索工作栏 -->
     <AccountForm class="-mb-15px w-240px" @values-change="onAccountChanged" />

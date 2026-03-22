@@ -2,7 +2,7 @@
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { PayTransferApi } from '#/api/pay/transfer';
 
-import { DocAlert, Page, useVbenModal } from '@vben/common-ui';
+import { Page, useVbenModal } from '@vben/common-ui';
 import { downloadFileFromBlobPart } from '@vben/utils';
 
 import { Tag } from 'ant-design-vue';
@@ -71,9 +71,6 @@ const [Grid, gridApi] = useVbenVxeGrid({
 
 <template>
   <Page auto-content-height>
-    <template #doc>
-      <DocAlert title="转账管理" url="https://doc.iocoder.cn/pay/transfer/" />
-    </template>
 
     <DetailModal @success="handleRefresh" />
     <Grid table-title="转账单列表">

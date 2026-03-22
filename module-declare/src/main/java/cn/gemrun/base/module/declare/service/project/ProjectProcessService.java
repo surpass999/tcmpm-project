@@ -73,7 +73,7 @@ public interface ProjectProcessService {
      * @param id     过程记录ID
      * @param status 状态
      */
-    void updateProjectProcessStatus(Long id, Integer status);
+    void updateProjectProcessStatus(Long id, String status);
 
     /**
      * 检查是否存在指定类型和年份的过程记录
@@ -106,5 +106,13 @@ public interface ProjectProcessService {
     Long createProcessForProject(Long projectId, Integer processType, String title,
                                   java.time.LocalDateTime reportPeriodStart,
                                   java.time.LocalDateTime reportPeriodEnd);
+
+    /**
+     * 根据项目ID查询整改记录列表（包含过程记录和子流程）
+     *
+     * @param projectId 项目ID
+     * @return 整改记录列表
+     */
+    java.util.List<RectificationRecordRespVO> getRectificationRecordList(Long projectId);
 
 }

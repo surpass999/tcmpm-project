@@ -4,19 +4,26 @@ import cn.hutool.core.collection.CollUtil;
 import cn.gemrun.base.framework.common.util.collection.SetUtils;
 import cn.gemrun.base.module.bpm.enums.definition.BpmChildProcessMultiInstanceSourceTypeEnum;
 import cn.gemrun.base.module.bpm.framework.flowable.core.candidate.BpmTaskCandidateInvoker;
+import cn.gemrun.base.module.bpm.framework.flowable.core.enums.BpmnModelConstants;
 import cn.gemrun.base.module.bpm.framework.flowable.core.util.BpmnModelUtils;
 import cn.gemrun.base.module.bpm.framework.flowable.core.util.FlowableUtils;
 import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
 import org.flowable.bpmn.model.Activity;
 import org.flowable.bpmn.model.CallActivity;
 import org.flowable.bpmn.model.FlowElement;
 import org.flowable.bpmn.model.UserTask;
+import org.flowable.bpmn.model.ExtensionElement;
 import org.flowable.engine.delegate.DelegateExecution;
 import org.flowable.engine.impl.bpmn.behavior.AbstractBpmnActivityBehavior;
 import org.flowable.engine.impl.bpmn.behavior.ParallelMultiInstanceBehavior;
 import org.flowable.common.engine.api.delegate.Expression;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -27,6 +34,7 @@ import java.util.Set;
  * @author kemengkai
  * @since 2022-04-21 16:57
  */
+@Slf4j
 @Setter
 public class BpmParallelMultiInstanceBehavior extends ParallelMultiInstanceBehavior {
 
@@ -103,6 +111,110 @@ public class BpmParallelMultiInstanceBehavior extends ParallelMultiInstanceBehav
     @Override
     public void setCollectionElementVariable(String collectionElementVariable) {
         // 保持自定义变量名，忽略解析器写入的单元素变量名
+    }
+
+    /**
+     * 评审（按总分）完成判断 - 通过设置 completionCondition 表达式实现
+     * 此方法在所有实例完成后被调用
+     */
+    public void verifySequentialCompletion(DelegateExecution execution) {
+        // 获取审批方式
+        Integer approveMethod = getApproveMethod(execution);
+
+        // 如果是"评审（按总分）"模式
+        if (approveMethod != null && approveMethod == 5) {
+            evaluateScoreCompletion(execution);
+        }
+    }
+
+    /**
+     * 获取审批方式
+     */
+    private Integer getApproveMethod(DelegateExecution execution) {
+        FlowElement flowElement = execution.getCurrentFlowElement();
+        if (flowElement instanceof UserTask) {
+            UserTask userTask = (UserTask) flowElement;
+            List<ExtensionElement> elements = userTask.getExtensionElements().get(BpmnModelConstants.USER_TASK_APPROVE_METHOD);
+            if (CollUtil.isNotEmpty(elements)) {
+                return Integer.parseInt(elements.get(0).getElementText());
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 获取通过分数
+     */
+    private Integer getPassScore(DelegateExecution execution) {
+        FlowElement flowElement = execution.getCurrentFlowElement();
+        if (flowElement instanceof UserTask) {
+            UserTask userTask = (UserTask) flowElement;
+            List<ExtensionElement> elements = userTask.getExtensionElements().get(BpmnModelConstants.USER_TASK_PASS_SCORE);
+            if (CollUtil.isNotEmpty(elements)) {
+                return Integer.parseInt(elements.get(0).getElementText());
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 评审（按总分）完成判断
+     */
+    @SuppressWarnings("unchecked")
+    private void evaluateScoreCompletion(DelegateExecution execution) {
+        // 1. 获取 passScore 配置
+        Integer passScore = getPassScore(execution);
+        if (passScore == null) {
+            log.warn("[evaluateScoreCompletion] passScore 未配置");
+            return;
+        }
+
+        // 2. 从变量获取评分列表
+        List<Map<String, Object>> scores = getScoresFromVariables(execution);
+
+        // 3. 计算平均分
+        BigDecimal averageScore = calculateAverage(scores);
+
+        // 4. 判断是否达标
+        if (averageScore.compareTo(BigDecimal.valueOf(passScore)) >= 0) {
+            // 达标：设置标记，允许流转
+            execution.setVariable("reviewPass", true);
+            execution.setVariable("reviewAverageScore", averageScore);
+            log.info("[evaluateScoreCompletion] 评分达标: 平均分={}, 通过分数={}", averageScore, passScore);
+        } else {
+            // 不达标：设置标记，阻止流转
+            execution.setVariable("reviewPass", false);
+            execution.setVariable("reviewAverageScore", averageScore);
+            log.info("[evaluateScoreCompletion] 评分未达标: 平均分={}, 通过分数={}", averageScore, passScore);
+        }
+    }
+
+    /**
+     * 从 Flowable 变量获取评分列表
+     */
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> getScoresFromVariables(DelegateExecution execution) {
+        Object scoresObj = execution.getVariable("reviewScores");
+        if (scoresObj == null) {
+            return new ArrayList<>();
+        }
+        return (List<Map<String, Object>>) scoresObj;
+    }
+
+    /**
+     * 计算平均分
+     */
+    private BigDecimal calculateAverage(List<Map<String, Object>> scores) {
+        if (scores == null || scores.isEmpty()) {
+            return BigDecimal.ZERO;
+        }
+
+        BigDecimal total = scores.stream()
+            .filter(s -> s.get("score") != null)
+            .map(s -> new BigDecimal(s.get("score").toString()))
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        return total.divide(BigDecimal.valueOf(scores.size()), 2, RoundingMode.HALF_UP);
     }
 
 }

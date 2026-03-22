@@ -156,6 +156,7 @@ export function useFormFieldsAndStartUser() {
 export type UserTaskFormType = {
   approveMethod: ApproveMethodType;
   approveRatio?: number;
+  passScore?: number; // 通过分数，当审批方式为评审（按总分）时需要设置
   assignEmptyHandlerType?: AssignEmptyHandlerType;
   assignEmptyHandlerUserIds?: number[];
   assignStartUserHandlerType?: AssignStartUserHandlerType;
@@ -244,6 +245,7 @@ export function useNodeForm(nodeType: BpmNodeTypeEnum) {
       candidateStrategy: CandidateStrategy.USER,
       approveMethod: ApproveMethodType.SEQUENTIAL_APPROVE,
       approveRatio: 100,
+      passScore: 60, // 默认通过分数60分
       rejectHandlerType: RejectHandlerType.FINISH_PROCESS,
       assignStartUserHandlerType: AssignStartUserHandlerType.START_USER_AUDIT,
       returnNodeId: '',
@@ -414,7 +416,13 @@ export function useNodeForm(nodeType: BpmNodeTypeEnum) {
       configForm.value?.candidateStrategy === CandidateStrategy.BUSINESS_START_USER
     ) {
       const level = configForm.value.businessStartUserLevel;
-      showText = level ? `业务发起人（第${level}级部门负责人）` : `业务发起人（本部门负责人）`;
+      if (level === 0) {
+        showText = '业务发起人（本部门成员）';
+      } else if (level) {
+        showText = `业务发起人（第${level}级部门负责人）`;
+      } else {
+        showText = '业务发起人（本部门负责人）';
+      }
     }
 
     return showText;

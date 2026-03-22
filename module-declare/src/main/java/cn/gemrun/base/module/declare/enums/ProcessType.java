@@ -19,7 +19,8 @@ public enum ProcessType {
     ANNUAL(3, "年度总结"),
     MIDTERM(4, "中期评估"),
     RECTIFICATION(5, "整改记录"),
-    ACCEPTANCE(6, "验收申请");
+    ACCEPTANCE(6, "验收申请"),
+    ACHIEVEMENT(7, "成果与流通");
 
     /**
      * 类型值

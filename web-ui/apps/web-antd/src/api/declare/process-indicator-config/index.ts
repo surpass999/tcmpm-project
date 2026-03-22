@@ -12,6 +12,12 @@ export namespace ProcessIndicatorConfigApi {
     indicatorId: number;
     isRequired: boolean;
     sort: number;
+    // 分值配置
+    maxScore?: number;
+    scoreRatioSatisfied?: number;
+    scoreRatioBasic?: number;
+    scoreRatioPartial?: number;
+    scoreRatioUnsatisfied?: number;
   }
 
   /** 过程指标配置响应 */
@@ -29,6 +35,33 @@ export namespace ProcessIndicatorConfigApi {
     valueType: number;
     isRequired: boolean;
     sort: number;
+    // 分值配置
+    maxScore?: number;
+    scoreRatioSatisfied?: number;
+    scoreRatioBasic?: number;
+    scoreRatioPartial?: number;
+    scoreRatioUnsatisfied?: number;
+  }
+
+  /** 评分等级选项 */
+  export interface ScoreLevel {
+    label: string;
+    value: string;
+    ratio: number;
+    color: string;
+  }
+
+  /** 指标评分项（评审打分页面用） */
+  export interface IndicatorScoreItem {
+    indicatorId: number;
+    indicatorCode: string;
+    indicatorName: string;
+    maxScore: number;
+    score?: number;
+    scoreLevel?: string;
+    scoreRatio?: number;
+    comment?: string;
+    opinion?: string;
   }
 }
 

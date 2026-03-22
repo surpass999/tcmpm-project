@@ -75,4 +75,29 @@ public class ProcessIndicatorConfigRespVO {
      */
     private Integer sort;
 
+    /**
+     * 满分值
+     */
+    private java.math.BigDecimal maxScore;
+
+    /**
+     * 满足(100%)的比例
+     */
+    private java.math.BigDecimal scoreRatioSatisfied;
+
+    /**
+     * 基本满足(75%)的比例
+     */
+    private java.math.BigDecimal scoreRatioBasic;
+
+    /**
+     * 部分满足(50%)的比例
+     */
+    private java.math.BigDecimal scoreRatioPartial;
+
+    /**
+     * 不满足(25%)的比例
+     */
+    private java.math.BigDecimal scoreRatioUnsatisfied;
+
 }

@@ -48,6 +48,11 @@ import static cn.gemrun.base.framework.common.util.collection.CollectionUtils.co
 @Service
 public class BpmTaskStatusService {
 
+    /**
+     * 整改子流程变量名：父流程实例ID
+     */
+    private static final String PARENT_PROCESS_INSTANCE_ID_VAR = "PARENT_PROCESS_INSTANCE_ID";
+
     @Resource
     private TaskService taskService;
     @Resource
@@ -212,6 +217,8 @@ public class BpmTaskStatusService {
                         BpmTaskBatchStatusRespVO.ButtonSetting buttonSetting = new BpmTaskBatchStatusRespVO.ButtonSetting();
                         buttonSetting.setDisplayName(entry.getValue().getDisplayName());
                         buttonSetting.setEnable(entry.getValue().getEnable());
+                        buttonSetting.setBizStatus(entry.getValue().getBizStatus());
+                        buttonSetting.setRectifyProcessDefinitionKey(entry.getValue().getRectifyProcessDefinitionKey());
                         convertedSettings.put(entry.getKey(), buttonSetting);
                     }
                     todoTask.setButtonSettings(convertedSettings);
@@ -318,17 +325,29 @@ public class BpmTaskStatusService {
      *
      * @param userId       用户ID
      * @param tableName    业务表分类（对应 bpm_business_type.process_category，如 project, filing）
-     * @param businessIds  业务ID列表
+     * @param businessType 业务类型（对应 bpm_business_type.business_type，如 project_process:type:1），可选
+     * @param businessIds 业务ID列表
      * @return 每个业务ID对应的任务状态
      */
-    public List<BpmTaskByBusinessRespVO> getTaskByBusiness(Long userId, String tableName, List<Long> businessIds) {
+    public List<BpmTaskByBusinessRespVO> getTaskByBusiness(Long userId, String tableName, String businessType, List<Long> businessIds) {
         if (CollUtil.isEmpty(businessIds)) {
             return Collections.emptyList();
         }
 
-        // 1. 根据 tableName 查询 bpm_business_type 表获取所有已启用的 processDefinitionKey
-        List<String> processDefinitionKeys = bpmBusinessTypeService.getProcessDefinitionKeysByCategory(tableName);
+        // 1. 根据 businessType 或 tableName 查询 bpm_business_type 表获取已启用的 processDefinitionKey
+        List<String> processDefinitionKeys;
+        if (businessType != null && !businessType.isEmpty()) {
+            // 精确匹配：使用 businessType 查找对应的流程定义Key
+            String processDefinitionKey = bpmBusinessTypeService.getProcessDefinitionKey(businessType);
+            processDefinitionKeys = processDefinitionKey != null ? Collections.singletonList(processDefinitionKey) : Collections.emptyList();
+        } else {
+            // 模糊匹配：使用 tableName（process_category）查找所有已启用的流程定义Key
+            processDefinitionKeys = bpmBusinessTypeService.getProcessDefinitionKeysByCategory(tableName);
+        }
+
         if (CollUtil.isEmpty(processDefinitionKeys)) {
+            log.warn("[getTaskByBusiness] 没有找到有效的流程定义: tableName={}, businessType={}, processDefinitionKeys={}",
+                    tableName, businessType, processDefinitionKeys);
             // 没有关联的流程定义，返回空结果
             return businessIds.stream()
                     .map(businessId -> {
@@ -341,6 +360,9 @@ public class BpmTaskStatusService {
                     })
                     .collect(Collectors.toList());
         }
+
+        log.info("[getTaskByBusiness] 找到流程定义: tableName={}, businessType={}, processDefinitionKeys={}",
+                tableName, businessType, processDefinitionKeys);
 
         // 2. 构建 businessKey 列表
         // 格式: {processDefinitionKey}_{businessId} - 与发起流程时保持一致
@@ -355,18 +377,20 @@ public class BpmTaskStatusService {
             }
         }
 
-        // 3. 批量查询 Flowable 的流程实例（逐个查询 businessKey）
-        // 由于 Flowable API 限制，这里逐个查询
+        // 3. 批量查询主流程实例
         List<org.flowable.engine.runtime.ProcessInstance> processInstances = new ArrayList<>();
+        log.info("[getTaskByBusiness] 开始查询主流程实例: businessKeys={}", businessKeys);
         for (String businessKey : businessKeys) {
-            org.flowable.engine.runtime.ProcessInstance pi = runtimeService
+            List<org.flowable.engine.runtime.ProcessInstance> pis = runtimeService
                     .createProcessInstanceQuery()
                     .processInstanceBusinessKey(businessKey)
-                    .singleResult();
-            if (pi != null) {
-                processInstances.add(pi);
+                    .list();
+            log.debug("[getTaskByBusiness] businessKey={}, 主流程实例数量={}", businessKey, pis.size());
+            if (!pis.isEmpty()) {
+                processInstances.addAll(pis);
             }
         }
+        log.info("[getTaskByBusiness] 主流程实例查询完成: 数量={}", processInstances.size());
 
         // 4. 构建 processInstanceId -> businessId 的映射
         Map<String, Long> processInstanceIdToBusinessId = new HashMap<>();
@@ -377,7 +401,31 @@ public class BpmTaskStatusService {
             }
         }
 
-        // 5. 如果没有流程实例，直接返回空结果
+        // 5. 查询关联的整改子流程实例（通过 PARENT_PROCESS_INSTANCE_ID 关联）
+        List<org.flowable.engine.runtime.ProcessInstance> rectificationInstances;
+        List<String> parentProcessInstanceIds = new ArrayList<>(processInstanceIdToBusinessId.keySet());
+        if (CollUtil.isNotEmpty(parentProcessInstanceIds)) {
+            rectificationInstances = queryRectificationChildProcesses(parentProcessInstanceIds);
+            log.info("[getTaskByBusiness] 查询到整改子流程实例: 数量={}", rectificationInstances.size());
+
+            // 将整改子流程实例添加到映射
+            for (org.flowable.engine.runtime.ProcessInstance rectInstance : rectificationInstances) {
+                String rectBusinessKey = rectInstance.getBusinessKey();
+                if (rectBusinessKey != null) {
+                    String[] parts = rectBusinessKey.split("_");
+                    if (parts.length >= 2) {
+                        Long rectBusinessId = NumberUtils.parseLong(parts[parts.length - 1]);
+                        if (rectBusinessId != null) {
+                            processInstanceIdToBusinessId.put(rectInstance.getId(), rectBusinessId);
+                        }
+                    }
+                }
+            }
+        } else {
+            rectificationInstances = Collections.emptyList();
+        }
+
+        // 6. 如果没有流程实例，直接返回空结果
         if (CollUtil.isEmpty(processInstanceIdToBusinessId)) {
             return businessIds.stream()
                     .map(businessId -> {
@@ -386,20 +434,21 @@ public class BpmTaskStatusService {
                         respVO.setHasTodoTask(false);
                         respVO.setTodoTasks(Collections.emptyList());
                         respVO.setDoneTasks(Collections.emptyList());
+                        respVO.setAllDoneTasks(Collections.emptyList());
                         return respVO;
                     })
                     .collect(Collectors.toList());
         }
 
-        // 6. 批量查询任务状态
-        List<String> processInstanceIds = new ArrayList<>(processInstanceIdToBusinessId.keySet());
-        List<BpmTaskBatchStatusRespVO> batchStatusList = getTaskBatchStatus(userId, processInstanceIds);
+        // 7. 批量查询任务状态
+        List<String> allProcessInstanceIds = new ArrayList<>(processInstanceIdToBusinessId.keySet());
+        List<BpmTaskBatchStatusRespVO> batchStatusList = getTaskBatchStatus(userId, allProcessInstanceIds);
 
-        // 7. 按 businessId 封装结果
+        // 8. 按 businessId 封装结果
         Map<String, BpmTaskBatchStatusRespVO> processInstanceIdToStatus = batchStatusList.stream()
                 .collect(Collectors.toMap(BpmTaskBatchStatusRespVO::getProcessInstanceId, v -> v));
 
-        // 构建返回结果，保持 businessIds 的顺序
+        // 9. 构建返回结果，保持 businessIds 的顺序
         return businessIds.stream()
                 .map(businessId -> {
                     BpmTaskByBusinessRespVO respVO = new BpmTaskByBusinessRespVO();
@@ -417,8 +466,34 @@ public class BpmTaskStatusService {
                     if (matchedProcessInstanceId != null && processInstanceIdToStatus.containsKey(matchedProcessInstanceId)) {
                         BpmTaskBatchStatusRespVO batchStatus = processInstanceIdToStatus.get(matchedProcessInstanceId);
                         respVO.setProcessInstanceId(matchedProcessInstanceId);
-                        respVO.setHasTodoTask(batchStatus.getHasTodoTask());
-                        respVO.setTodoTasks(convertTodoTasksForBusiness(batchStatus.getTodoTasks()));
+
+                        // 合并主流程和整改子流程的待办任务
+                        List<BpmTaskBatchStatusRespVO.TodoTask> allTodoTasks = new ArrayList<>();
+                        if (batchStatus.getTodoTasks() != null) {
+                            allTodoTasks.addAll(batchStatus.getTodoTasks());
+                        }
+
+                        // 查找该业务ID对应的整改子流程任务并合并
+                        for (org.flowable.engine.runtime.ProcessInstance rectInstance : rectificationInstances) {
+                            String rectBusinessKey = rectInstance.getBusinessKey();
+                            if (rectBusinessKey != null) {
+                                String[] parts = rectBusinessKey.split("_");
+                                if (parts.length >= 2) {
+                                    Long rectBusinessId = NumberUtils.parseLong(parts[parts.length - 1]);
+                                    if (rectBusinessId != null && rectBusinessId.equals(businessId)) {
+                                        if (processInstanceIdToStatus.containsKey(rectInstance.getId())) {
+                                            BpmTaskBatchStatusRespVO rectStatus = processInstanceIdToStatus.get(rectInstance.getId());
+                                            if (rectStatus.getTodoTasks() != null) {
+                                                allTodoTasks.addAll(rectStatus.getTodoTasks());
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        respVO.setHasTodoTask(CollUtil.isNotEmpty(allTodoTasks));
+                        respVO.setTodoTasks(convertTodoTasksForBusiness(allTodoTasks));
                         respVO.setDoneTasks(convertDoneTasksForBusiness(batchStatus.getDoneTasks()));
                         respVO.setAllDoneTasks(convertDoneTasksForBusiness(batchStatus.getAllDoneTasks()));
                     } else {
@@ -456,6 +531,7 @@ public class BpmTaskStatusService {
                             BpmTaskByBusinessRespVO.ButtonSetting setting = new BpmTaskByBusinessRespVO.ButtonSetting();
                             setting.setDisplayName(entry.getValue().getDisplayName());
                             setting.setEnable(entry.getValue().getEnable());
+                            setting.setBizStatus(entry.getValue().getBizStatus());
                             buttonSettings.put(entry.getKey(), setting);
                         }
                     }
@@ -499,16 +575,26 @@ public class BpmTaskStatusService {
      * 根据业务ID查询流程信息
      *
      * @param tableName   业务表分类
+     * @param businessType 业务类型（可选）
      * @param businessId 业务ID
      * @return 流程列表，按启动时间倒序
      */
-    public List<BpmProcessByBusinessRespVO> getProcessByBusiness(String tableName, Long businessId) {
+    public List<BpmProcessByBusinessRespVO> getProcessByBusiness(String tableName, String businessType, Long businessId) {
         if (tableName == null || businessId == null) {
             return Collections.emptyList();
         }
 
-        // 1. 根据 tableName 查询 bpm_business_type 表获取所有已启用的 processDefinitionKey
-        List<String> processDefinitionKeys = bpmBusinessTypeService.getProcessDefinitionKeysByCategory(tableName);
+        // 1. 根据 businessType 或 tableName 查询 bpm_business_type 表获取已启用的 processDefinitionKey
+        List<String> processDefinitionKeys;
+        if (businessType != null && !businessType.isEmpty()) {
+            // 精确匹配：使用 businessType 查找对应的流程定义Key
+            String processDefinitionKey = bpmBusinessTypeService.getProcessDefinitionKey(businessType);
+            processDefinitionKeys = processDefinitionKey != null ? Collections.singletonList(processDefinitionKey) : Collections.emptyList();
+        } else {
+            // 模糊匹配：使用 tableName（process_category）查找所有已启用的流程定义Key
+            processDefinitionKeys = bpmBusinessTypeService.getProcessDefinitionKeysByCategory(tableName);
+        }
+
         if (CollUtil.isEmpty(processDefinitionKeys)) {
             return Collections.emptyList();
         }
@@ -641,6 +727,48 @@ public class BpmTaskStatusService {
         vo.setAssigneeUser(task.getAssigneeUser());
         vo.setReason(task.getReason());
         return vo;
+    }
+
+    /**
+     * 查询主流程的整改子流程实例
+     * 通过 PARENT_PROCESS_INSTANCE_ID 变量关联
+     *
+     * @param parentProcessInstanceIds 主流程实例ID列表
+     * @return 整改子流程实例列表
+     */
+    private List<org.flowable.engine.runtime.ProcessInstance> queryRectificationChildProcesses(
+            List<String> parentProcessInstanceIds) {
+        if (CollUtil.isEmpty(parentProcessInstanceIds)) {
+            return Collections.emptyList();
+        }
+
+        try {
+            List<org.flowable.engine.runtime.ProcessInstance> matchedChildren = new ArrayList<>();
+
+            for (String parentId : parentProcessInstanceIds) {
+                // 查询所有包含 PARENT_PROCESS_INSTANCE_ID 变量的运行中流程实例
+                List<org.flowable.engine.runtime.ProcessInstance> childProcesses = runtimeService
+                        .createProcessInstanceQuery()
+                        .variableValueEquals(PARENT_PROCESS_INSTANCE_ID_VAR, parentId)
+                        .list();
+
+                if (CollUtil.isNotEmpty(childProcesses)) {
+                    for (org.flowable.engine.runtime.ProcessInstance child : childProcesses) {
+                        Object actualParentId = runtimeService.getVariable(child.getId(), PARENT_PROCESS_INSTANCE_ID_VAR);
+                        if (actualParentId != null && actualParentId.toString().equals(parentId)) {
+                            matchedChildren.add(child);
+                            log.debug("[queryRectificationChildProcesses] 匹配到整改子流程: childId={}, parentId={}",
+                                    child.getId(), actualParentId);
+                        }
+                    }
+                }
+            }
+
+            return matchedChildren;
+        } catch (Exception e) {
+            log.warn("[queryRectificationChildProcesses] 查询整改子流程失败: parentProcessInstanceIds={}", parentProcessInstanceIds, e);
+            return Collections.emptyList();
+        }
     }
 
 }

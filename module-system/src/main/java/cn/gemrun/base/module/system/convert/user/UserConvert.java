@@ -3,6 +3,8 @@ package cn.gemrun.base.module.system.convert.user;
 import cn.gemrun.base.framework.common.util.collection.CollectionUtils;
 import cn.gemrun.base.framework.common.util.collection.MapUtils;
 import cn.gemrun.base.framework.common.util.object.BeanUtils;
+import cn.gemrun.base.framework.ip.core.Area;
+import cn.gemrun.base.framework.ip.core.utils.AreaUtils;
 import cn.gemrun.base.module.system.controller.admin.dept.vo.dept.DeptSimpleRespVO;
 import cn.gemrun.base.module.system.controller.admin.dept.vo.post.PostSimpleRespVO;
 import cn.gemrun.base.module.system.controller.admin.permission.vo.role.RoleSimpleRespVO;
@@ -33,7 +35,27 @@ public interface UserConvert {
         if (dept != null) {
             userVO.setDeptName(dept.getName());
         }
+        // 填充地区名称
+        fillAreaNames(userVO, user);
         return userVO;
+    }
+
+    /**
+     * 填充省市名称
+     */
+    default void fillAreaNames(UserRespVO userVO, AdminUserDO user) {
+        if (user.getProvinceId() != null) {
+            Area province = AreaUtils.getArea(user.getProvinceId());
+            if (province != null) {
+                userVO.setProvinceName(province.getName());
+            }
+        }
+        if (user.getCityId() != null) {
+            Area city = AreaUtils.getArea(user.getCityId());
+            if (city != null) {
+                userVO.setCityName(city.getName());
+            }
+        }
     }
 
     default List<UserSimpleRespVO> convertSimpleList(List<AdminUserDO> list, Map<Long, DeptDO> deptMap) {

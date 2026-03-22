@@ -67,4 +67,15 @@ public interface DeclareIndicatorMapper extends BaseMapperX<DeclareIndicatorDO> 
                 .eq(DeclareIndicatorDO::getIndicatorCode, indicatorCode));
     }
 
+    /**
+     * 根据指标分类查询指标列表
+     * @param category 指标分类：1=基本情况，2=项目管理，3=系统功能，4=建设成效，5=数据集建设，6=数据交易，7=信息安全
+     * @return 指标列表
+     */
+    default List<DeclareIndicatorDO> selectByCategory(Integer category) {
+        return selectList(new LambdaQueryWrapperX<DeclareIndicatorDO>()
+                .eq(DeclareIndicatorDO::getCategory, category)
+                .orderByAsc(DeclareIndicatorDO::getSort));
+    }
+
 }

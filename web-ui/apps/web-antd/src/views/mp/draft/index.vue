@@ -2,7 +2,7 @@
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { MpDraftApi } from '#/api/mp/draft';
 
-import { confirm, DocAlert, Page, useVbenModal } from '@vben/common-ui';
+import { confirm, Page, useVbenModal } from '@vben/common-ui';
 import { $t } from '@vben/locales';
 
 import { Image, message, Typography } from 'ant-design-vue';
@@ -162,9 +162,6 @@ const [Grid, gridApi] = useVbenVxeGrid({
 
 <template>
   <Page auto-content-height>
-    <template #doc>
-      <DocAlert title="公众号图文" url="https://doc.iocoder.cn/mp/article/" />
-    </template>
 
     <FormModal @success="handleRefresh" />
 

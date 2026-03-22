@@ -5,7 +5,7 @@ import type { MpMaterialApi } from '#/api/mp/material';
 import { provide, ref } from 'vue';
 
 import { useAccess } from '@vben/access';
-import { confirm, DocAlert, Page } from '@vben/common-ui';
+import { confirm, Page } from '@vben/common-ui';
 import { IconifyIcon } from '@vben/icons';
 import { $t } from '@vben/locales';
 
@@ -141,9 +141,6 @@ async function handleDelete(id: number) {
 
 <template>
   <Page auto-content-height>
-    <template #doc>
-      <DocAlert title="公众号素材" url="https://doc.iocoder.cn/mp/material/" />
-    </template>
     <Grid class="material-grid">
       <template #form-accountId>
         <WxAccountSelect @change="handleAccountChange" />

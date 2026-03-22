@@ -56,6 +56,14 @@ public class AdminUserDO extends BaseDO {
      */
     private Long deptId;
     /**
+     * 省份ID（关联system_area.id）
+     */
+    private Integer provinceId;
+    /**
+     * 城市ID（关联system_area.id）
+     */
+    private Integer cityId;
+    /**
      * 岗位编号数组
      */
     @TableField(typeHandler = JacksonTypeHandler.class)

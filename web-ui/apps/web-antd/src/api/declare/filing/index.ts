@@ -2,6 +2,7 @@ import type { PageParam, PageResult } from '@vben/request';
 import type { Dayjs } from 'dayjs';
 
 import { requestClient } from '#/api/request';
+import { BUSINESS_TYPE } from '#/constants/bpm/business-type';
 
 export namespace DeclareFilingApi {
   /** 项目备案核心信息信息 */
@@ -91,10 +92,10 @@ export function exportFiling(params: any) {
 export function submitFiling(id: number, processDefinitionKey?: string) {
   return requestClient.post<string>(
     '/bpm/process/start',
-    { 
-      businessId: id, 
-      businessType: 'filing:approval',
-      processDefinitionKey: processDefinitionKey || undefined 
+    {
+      businessId: id,
+      businessType: BUSINESS_TYPE.FILING,
+      processDefinitionKey: processDefinitionKey || undefined,
     },
   );
 }

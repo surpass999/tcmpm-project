@@ -9,6 +9,7 @@ import { handleTree } from '@vben/utils';
 
 import { z } from '#/adapter/form';
 import { getDeptList } from '#/api/system/dept';
+import { requestClient } from '#/api/request';
 import { getSimplePostList } from '#/api/system/post';
 import { getSimpleRoleList } from '#/api/system/role';
 import { getRangePickerDefaultProps } from '#/utils';
@@ -66,6 +67,63 @@ export function useFormSchema(): VbenFormSchema[] {
         childrenField: 'children',
         placeholder: '请选择归属部门',
         treeDefaultExpandAll: true,
+      },
+    },
+    {
+      fieldName: 'provinceId',
+      label: '所属省份',
+      component: 'ApiSelect',
+      componentProps: {
+        api: async () => {
+          const res = await requestClient.get('/system/area/tree');
+          return (res as any[]).map((p: any) => ({
+            label: p.name,
+            value: p.id,
+          }));
+        },
+        labelField: 'label',
+        valueField: 'value',
+        placeholder: '请选择省份',
+      },
+    },
+    {
+      fieldName: 'cityId',
+      label: '所属城市',
+      component: 'ApiSelect',
+      dependencies: {
+        triggerFields: ['provinceId'],
+        async trigger(values: any, context: any) {
+          const { componentRefMap } = context;
+          if (!values.provinceId) {
+            return;
+          }
+          try {
+            const res = await requestClient.get(
+              `/system/area/province/${values.provinceId}/cities`,
+            );
+            const cities = (res as any[]) || [];
+            const citySelect = componentRefMap?.get?.('cityId') as any;
+            if (citySelect && typeof citySelect.updateParam === 'function') {
+              citySelect.updateParam({ _cities: cities });
+            }
+          } catch (e) {
+            console.warn('获取城市列表失败:', e);
+          }
+        },
+        componentProps: (_context: any, values: any) => {
+          return {
+            placeholder: values.provinceId ? '请选择城市' : '请先选择省份',
+            labelField: 'label',
+            valueField: 'value',
+            api: async (extra: any) => {
+              const cities = extra?._cities || [];
+              return cities.map((c: any) => ({
+                label: c.name,
+                value: c.id,
+              }));
+            },
+          };
+        },
       },
     },
     {
@@ -317,6 +375,16 @@ export function useGridColumns(
       field: 'deptName',
       title: '部门',
       minWidth: 120,
+    },
+    {
+      field: 'provinceName',
+      title: '省份',
+      minWidth: 100,
+    },
+    {
+      field: 'cityName',
+      title: '城市',
+      minWidth: 100,
     },
     {
       field: 'mobile',

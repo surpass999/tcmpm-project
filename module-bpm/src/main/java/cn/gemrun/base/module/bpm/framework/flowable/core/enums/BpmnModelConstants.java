@@ -74,6 +74,11 @@ public interface BpmnModelConstants {
     String USER_TASK_APPROVE_METHOD = "approveMethod";
 
     /**
+     * BPMN UserTask 的扩展属性，用于标记评审（按总分）通过分数
+     */
+    String USER_TASK_PASS_SCORE = "passScore";
+
+    /**
      * BPMN Child Process 的扩展属性，用于标记多实例来源类型
      */
     String CHILD_PROCESS_MULTI_INSTANCE_SOURCE_TYPE = "childProcessMultiInstanceSourceType";
@@ -116,6 +121,11 @@ public interface BpmnModelConstants {
      * BPMN ExtensionElement Attribute, 用于标记按钮业务状态标识
      */
     String BUTTON_SETTING_ELEMENT_BIZ_STATUS_ATTRIBUTE = "bizStatus";
+
+    /**
+     * BPMN ExtensionElement Attribute, 用于标记整改流程定义 Key（整改按钮专用）
+     */
+    String BUTTON_SETTING_ELEMENT_RECTIFY_PROCESS_KEY_ATTRIBUTE = "rectifyProcessDefinitionKey";
 
     /**
      * BPMN ExtensionElement 的扩展属性，用于标记触发器的类型

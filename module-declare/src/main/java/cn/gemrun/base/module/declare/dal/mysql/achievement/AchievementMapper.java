@@ -10,7 +10,7 @@ import org.apache.ibatis.annotations.Mapper;
 import cn.gemrun.base.module.declare.controller.admin.achievement.vo.*;
 
 /**
- * 成果信息 Mapper
+ * 成果与流通 Mapper
  *
  * @author
  */
@@ -23,8 +23,15 @@ public interface AchievementMapper extends BaseMapperX<AchievementDO> {
     default PageResult<AchievementDO> selectPage(AchievementPageReqVO reqVO) {
         LambdaQueryWrapperX<AchievementDO> wrapper = new LambdaQueryWrapperX<>();
         wrapper.eqIfPresent(AchievementDO::getProjectId, reqVO.getProjectId())
+                .eqIfPresent(AchievementDO::getDeptId, reqVO.getDeptId())
                 .likeIfPresent(AchievementDO::getAchievementName, reqVO.getAchievementName())
                 .eqIfPresent(AchievementDO::getAchievementType, reqVO.getAchievementType())
+                .likeIfPresent(AchievementDO::getDataName, reqVO.getDataName())
+                .eqIfPresent(AchievementDO::getDataType, reqVO.getDataType())
+                .eqIfPresent(AchievementDO::getFlowType, reqVO.getFlowType())
+                .eqIfPresent(AchievementDO::getShareScope, reqVO.getShareScope())
+                .eqIfPresent(AchievementDO::getDataQuality, reqVO.getDataQuality())
+                .eqIfPresent(AchievementDO::getStatus, reqVO.getStatus())
                 .eqIfPresent(AchievementDO::getAuditStatus, reqVO.getAuditStatus())
                 .eqIfPresent(AchievementDO::getRecommendStatus, reqVO.getRecommendStatus())
                 .betweenIfPresent(AchievementDO::getCreateTime, reqVO.getCreateTime())
@@ -40,6 +47,28 @@ public interface AchievementMapper extends BaseMapperX<AchievementDO> {
         wrapper.eq(AchievementDO::getProjectId, projectId)
                 .orderByDesc(AchievementDO::getCreateTime);
         return selectList(wrapper);
+    }
+
+    /**
+     * 查询已纳入推广库的成果列表（公开接口）
+     * 筛选条件：recommendStatus=2（已纳入推广库，遴选完成）
+     */
+    default List<AchievementDO> selectPublishedList() {
+        LambdaQueryWrapperX<AchievementDO> wrapper = new LambdaQueryWrapperX<>();
+        wrapper.eq(AchievementDO::getRecommendStatus, 2)
+                .orderByDesc(AchievementDO::getCreateTime);
+        return selectList(wrapper);
+    }
+
+    /**
+     * 查询已纳入推广库的成果详情（公开接口）
+     * 筛选条件：recommendStatus=2（已纳入推广库，遴选完成）
+     */
+    default AchievementDO selectPublishedById(Long id) {
+        LambdaQueryWrapperX<AchievementDO> wrapper = new LambdaQueryWrapperX<>();
+        wrapper.eq(AchievementDO::getId, id)
+                .eq(AchievementDO::getRecommendStatus, 2);
+        return selectOne(wrapper);
     }
 
 }

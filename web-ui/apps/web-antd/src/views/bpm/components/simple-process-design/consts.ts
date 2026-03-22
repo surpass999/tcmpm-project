@@ -41,6 +41,11 @@ export enum ApproveMethodType {
    * 多人依次审批
    */
   SEQUENTIAL_APPROVE = 4,
+
+  /**
+   * 评审（按总分）
+   */
+  SCORE_APPROVE = 5,
 }
 
 export enum NodeId {
@@ -102,6 +107,10 @@ export enum OperationButtonType {
    * 选择审批人（用于审批人自选场景）
    */
   SELECT_APPROVER = 8,
+  /**
+   * 发起整改（用于触发整改子流程）
+   */
+  RECTIFY = 9,
 }
 
 // 审批拒绝类型枚举
@@ -485,6 +494,7 @@ export type ButtonSetting = {
   enable: boolean;
   id: OperationButtonType;
   bizStatus?: string;
+  rectifyProcessDefinitionKey?: string;
 };
 
 /**
@@ -724,6 +734,10 @@ export const APPROVE_METHODS: DictDataType[] = [
     label: '随机挑选一人审批',
     value: ApproveMethodType.RANDOM_SELECT_ONE_APPROVE as any,
   },
+  {
+    label: '评审（可同时审批，总分达到 X 分通过）',
+    value: ApproveMethodType.SCORE_APPROVE as any,
+  },
 ];
 
 export const CONDITION_CONFIG_TYPES: DictDataType[] = [
@@ -797,6 +811,7 @@ OPERATION_BUTTON_NAME.set(OperationButtonType.ADD_SIGN, '加签');
 OPERATION_BUTTON_NAME.set(OperationButtonType.RETURN, '退回');
 OPERATION_BUTTON_NAME.set(OperationButtonType.COPY, '抄送');
 OPERATION_BUTTON_NAME.set(OperationButtonType.SELECT_APPROVER, '选择专家');
+OPERATION_BUTTON_NAME.set(OperationButtonType.RECTIFY, '发起整改');
 
 // 默认的按钮权限设置
 export const DEFAULT_BUTTON_SETTING: ButtonSetting[] = [
@@ -807,6 +822,7 @@ export const DEFAULT_BUTTON_SETTING: ButtonSetting[] = [
   { id: OperationButtonType.ADD_SIGN, displayName: '加签', enable: true },
   { id: OperationButtonType.RETURN, displayName: '退回', enable: true },
   { id: OperationButtonType.SELECT_APPROVER, displayName: '选择专家', enable: false },
+  { id: OperationButtonType.RECTIFY, displayName: '发起整改', enable: false },
 ];
 
 // 办理人默认的按钮权限设置
@@ -830,6 +846,7 @@ export const START_USER_BUTTON_SETTING: ButtonSetting[] = [
 ];
 
 export const MULTI_LEVEL_DEPT: DictDataType[] = [
+  { label: '本部门成员', value: 0 },
   { label: '第 1 级部门', value: 1 },
   { label: '第 2 级部门', value: 2 },
   { label: '第 3 级部门', value: 3 },

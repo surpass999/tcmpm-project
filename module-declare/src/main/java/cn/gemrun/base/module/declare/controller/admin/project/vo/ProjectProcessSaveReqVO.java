@@ -2,6 +2,8 @@ package cn.gemrun.base.module.declare.controller.admin.project.vo;
 
 import java.time.LocalDateTime;
 
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+
 import lombok.Data;
 
 /**
@@ -35,22 +37,25 @@ public class ProjectProcessSaveReqVO {
     /**
      * 报告周期开始时间
      */
+    @JsonDeserialize(using = LocalDateTimeDeserializer.class)
     private LocalDateTime reportPeriodStart;
 
     /**
      * 报告周期结束时间
      */
+    @JsonDeserialize(using = LocalDateTimeDeserializer.class)
     private LocalDateTime reportPeriodEnd;
 
     /**
      * 报告提交时间
      */
+    @JsonDeserialize(using = LocalDateTimeDeserializer.class)
     private LocalDateTime reportTime;
 
     /**
      * 状态
      */
-    private Integer status;
+    private String status;
 
     /**
      * 佐证材料文件ID（逗号分隔）

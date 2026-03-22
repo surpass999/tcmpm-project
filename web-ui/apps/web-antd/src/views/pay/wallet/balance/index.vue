@@ -2,7 +2,7 @@
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { PayWalletApi } from '#/api/pay/wallet/balance';
 
-import { DocAlert, Page, useVbenModal } from '@vben/common-ui';
+import { Page, useVbenModal } from '@vben/common-ui';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 import { getWalletPage } from '#/api/pay/wallet/balance';
@@ -59,9 +59,6 @@ const [Grid, gridApi] = useVbenVxeGrid({
 
 <template>
   <Page auto-content-height>
-    <template #doc>
-      <DocAlert title="钱包余额" url="https://doc.iocoder.cn/pay/build/" />
-    </template>
 
     <DetailModal @reload="handleRefresh" />
     <Grid>

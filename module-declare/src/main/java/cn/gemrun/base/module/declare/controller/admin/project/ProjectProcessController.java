@@ -93,4 +93,12 @@ public class ProjectProcessController {
         return success(projectProcessService.getProjectProcessListByProjectId(projectId));
     }
 
+    @GetMapping("/rectification-list")
+    @Operation(summary = "根据项目ID查询整改记录列表（包含过程记录和子流程）")
+    @Parameter(name = "projectId", description = "项目ID", required = true, example = "1024")
+    @PreAuthorize("@ss.hasPermission('declare:project-process:query')")
+    public CommonResult<List<RectificationRecordRespVO>> getRectificationRecordList(@RequestParam("projectId") Long projectId) {
+        return success(projectProcessService.getRectificationRecordList(projectId));
+    }
+
 }

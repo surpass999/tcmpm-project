@@ -19,13 +19,15 @@ import static cn.gemrun.base.framework.common.pojo.CommonResult.success;
 import cn.gemrun.base.module.declare.controller.admin.achievement.vo.*;
 import cn.gemrun.base.module.declare.dal.dataobject.achievement.AchievementDO;
 import cn.gemrun.base.module.declare.service.achievement.AchievementService;
+import cn.gemrun.base.module.system.api.user.AdminUserApi;
+import cn.gemrun.base.module.system.api.user.dto.AdminUserRespDTO;
 
 /**
- * 成果信息 Controller
+ * 成果与流通 Controller
  *
  * @author
  */
-@Tag(name = "管理后台 - 成果信息")
+@Tag(name = "管理后台 - 成果与流通")
 @RestController
 @RequestMapping("/declare/achievement")
 @Validated
@@ -33,18 +35,20 @@ public class AchievementController {
 
     @Resource
     private AchievementService achievementService;
+    @Resource
+    private AdminUserApi adminUserApi;
 
     // ========== 基础操作 ==========
 
     @PostMapping("/create")
-    @Operation(summary = "创建成果信息")
+    @Operation(summary = "创建成果与流通")
     @PreAuthorize("@ss.hasPermission('declare:achievement:create')")
     public CommonResult<Long> createAchievement(@Valid @RequestBody AchievementSaveReqVO createReqVO) {
         return success(achievementService.createAchievement(createReqVO));
     }
 
     @PutMapping("/update")
-    @Operation(summary = "更新成果信息")
+    @Operation(summary = "更新成果与流通")
     @PreAuthorize("@ss.hasPermission('declare:achievement:update')")
     public CommonResult<Boolean> updateAchievement(@Valid @RequestBody AchievementSaveReqVO updateReqVO) {
         achievementService.updateAchievement(updateReqVO);
@@ -71,31 +75,57 @@ public class AchievementController {
         return success(true);
     }
 
+    @PostMapping("/recommend-to-library")
+    @Operation(summary = "推荐成果至推广库（遴选完成）")
+    @PreAuthorize("@ss.hasPermission('declare:achievement:recommend')")
+    public CommonResult<Boolean> recommendToLibrary(@RequestParam("id") Long id) {
+        achievementService.recommendToLibrary(id);
+        return success(true);
+    }
+
     // ========== 查询操作 ==========
 
     @GetMapping("/get")
-    @Operation(summary = "获得成果信息")
+    @Operation(summary = "获得成果与流通")
     @Parameter(name = "id", description = "编号", required = true, example = "1024")
-    @PreAuthorize("@ss.hasPermission('declare:achievement:query')")
+    @PreAuthorize("isAuthenticated()")
     public CommonResult<AchievementRespVO> getAchievement(@RequestParam("id") Long id) {
         AchievementDO achievement = achievementService.getAchievement(id);
         AchievementRespVO respVO = BeanUtils.toBean(achievement, AchievementRespVO.class);
+        fillCreatorName(respVO);
         return success(respVO);
     }
 
     @GetMapping("/page")
-    @Operation(summary = "获得成果信息分页")
+    @Operation(summary = "获得成果与流通分页")
     @PreAuthorize("@ss.hasPermission('declare:achievement:query')")
     public CommonResult<PageResult<AchievementRespVO>> getAchievementPage(@Valid AchievementPageReqVO pageReqVO) {
         PageResult<AchievementDO> pageResult = achievementService.getAchievementPage(pageReqVO);
         List<AchievementRespVO> voList = BeanUtils.toBean(pageResult.getList(), AchievementRespVO.class);
+        for (AchievementRespVO vo : voList) {
+            fillCreatorName(vo);
+        }
         return success(new PageResult<>(voList, pageResult.getTotal()));
+    }
+
+    private void fillCreatorName(AchievementRespVO vo) {
+        if (vo == null || vo.getCreator() == null) {
+            return;
+        }
+        try {
+            AdminUserRespDTO user = adminUserApi.getUser(vo.getCreator());
+            if (user != null) {
+                vo.setCreatorName(user.getNickname());
+            }
+        } catch (Exception e) {
+            // ignore
+        }
     }
 
     // ========== 删除操作 ==========
 
     @DeleteMapping("/delete")
-    @Operation(summary = "删除成果信息")
+    @Operation(summary = "删除成果与流通")
     @Parameter(name = "id", description = "编号", required = true)
     @PreAuthorize("@ss.hasPermission('declare:achievement:delete')")
     public CommonResult<Boolean> deleteAchievement(@RequestParam("id") Long id) {

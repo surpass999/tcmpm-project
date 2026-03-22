@@ -15,6 +15,9 @@ public class BpmProcessInstanceCreateReqVO {
     @NotEmpty(message = "流程定义编号不能为空")
     private String processDefinitionId;
 
+    @Schema(description = "业务的唯一标识", example = "leave:1")
+    private String businessKey;
+
     @Schema(description = "变量实例（动态表单）")
     private Map<String, Object> variables;
 

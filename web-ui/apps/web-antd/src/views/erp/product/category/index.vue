@@ -4,7 +4,7 @@ import type { ErpProductCategoryApi } from '#/api/erp/product/category';
 
 import { ref } from 'vue';
 
-import { DocAlert, Page, useVbenModal } from '@vben/common-ui';
+import { Page, useVbenModal } from '@vben/common-ui';
 import { downloadFileFromBlobPart } from '@vben/utils';
 
 import { message } from 'ant-design-vue';
@@ -111,12 +111,6 @@ const [Grid, gridApi] = useVbenVxeGrid({
 
 <template>
   <Page auto-content-height>
-    <template #doc>
-      <DocAlert
-        title="【产品】产品信息、分类、单位"
-        url="https://doc.iocoder.cn/erp/product/"
-      />
-    </template>
 
     <FormModal @success="handleRefresh" />
     <Grid table-title="产品分类列表">

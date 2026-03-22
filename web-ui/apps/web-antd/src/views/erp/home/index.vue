@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import { ref } from 'vue';
 
-import { DocAlert, Page } from '@vben/common-ui';
+import { Page } from '@vben/common-ui';
 
 import { Col, Row, Spin } from 'ant-design-vue';
 
@@ -20,12 +20,6 @@ const purchaseChartRef = ref();
 
 <template>
   <Page>
-    <template #doc>
-      <DocAlert
-        title="ERP 手册（功能开启）"
-        url="https://doc.iocoder.cn/erp/build/"
-      />
-    </template>
 
     <Spin :spinning="loading">
       <div class="flex flex-col gap-4">

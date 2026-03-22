@@ -25,6 +25,8 @@ export namespace BpmActionApi {
       isReturned?: boolean;
       isStartNode?: boolean;
       backStrategy?: string;
+      /** 整改流程定义 Key（发起整改按钮时使用） */
+      rectifyProcessDefinitionKey?: string;
       [key: string]: any;
     };
   }
@@ -41,11 +43,14 @@ export function getBpmAction(key: string) {
 }
 
 /** 获取当前用户对指定业务可执行的操作列表 */
-export async function getAvailableActions(businessType: string, businessId: number) {
-  // 使用新的 task-status 接口获取任务状态和按钮
-  const tableName = businessType; // businessType 就是 tableName
+export async function getAvailableActions(businessType: string, businessId: number, processCategory?: string) {
+  // processCategory 对应 bpm_business_type.process_category（如 project, filing）
+  // businessType 对应 bpm_business_type.business_type（如 project_process:type:1）
+  // 如果传入了 processCategory，则使用它作为 tableName，并可选传入 businessType 进行精确查询
+  const tableName = processCategory || businessType;
   const result = await getTaskByBusiness({
     tableName,
+    businessType: processCategory ? businessType : undefined,
     businessIds: [businessId],
   });
 
@@ -60,11 +65,12 @@ export async function getAvailableActions(businessType: string, businessId: numb
     const buttons = todoTask.buttonSettings || {};
 
     // 返回对象格式，供 ActionButtonCmp 使用
-    const actionsMap: Record<number, { displayName: string; enable: boolean }> = {};
+    const actionsMap: Record<number, { displayName: string; enable: boolean; rectifyProcessDefinitionKey?: string }> = {};
     Object.entries(buttons).forEach(([key, setting]: [string, any]) => {
       actionsMap[parseInt(key)] = {
         displayName: setting.displayName,
         enable: setting.enable,
+        rectifyProcessDefinitionKey: setting.rectifyProcessDefinitionKey,
       };
     });
 
@@ -83,11 +89,14 @@ export async function getAvailableActions(businessType: string, businessId: numb
 }
 
 /** 批量获取当前用户对多个业务可执行的操作列表 */
-export async function getAvailableActionsBatch(businessType: string, businessIds: number[]) {
-  // 使用新的 task-status 接口获取任务状态和按钮
-  const tableName = businessType; // businessType 就是 tableName
+export async function getAvailableActionsBatch(businessType: string, businessIds: number[], processCategory?: string) {
+  // processCategory 对应 bpm_business_type.process_category（如 project, filing）
+  // businessType 对应 bpm_business_type.business_type（如 project_process:type:1）
+  // 如果传入了 processCategory，则使用它作为 tableName，并可选传入 businessType 进行精确查询
+  const tableName = processCategory || businessType;
   const result = await getTaskByBusiness({
     tableName,
+    businessType: processCategory ? businessType : undefined,
     businessIds,
   });
 
@@ -115,6 +124,7 @@ export async function getAvailableActionsBatch(businessType: string, businessIds
           businessId,
           vars: {
             reasonRequired: todoTask.reasonRequire,
+            rectifyProcessDefinitionKey: setting.rectifyProcessDefinitionKey,
           },
         }));
       allActions.push(...actions);
@@ -140,6 +150,8 @@ export interface SubmitActionParams {
   targetNodeKey?: string;
   /** 任务ID（由调用方传入） */
   taskId?: string;
+  /** 流程变量（如 rectifyProcessDefinitionKey） */
+  variables?: Record<string, any>;
 }
 
 /**
@@ -147,7 +159,7 @@ export interface SubmitActionParams {
  * 根据操作类型调用不同的后端接口
  */
 export function submitBpmAction(params: SubmitActionParams) {
-  const { actionKey, expertUserIds, targetNodeKey, reason, taskId } = params;
+  const { actionKey, expertUserIds, targetNodeKey, reason, taskId, variables } = params;
 
   // 选择专家：调用 select-expert 接口
   if (expertUserIds && expertUserIds.length > 0) {
@@ -177,6 +189,7 @@ export function submitBpmAction(params: SubmitActionParams) {
         id: taskId,
         reason: reason,
         buttonId: actionId,
+        variables,
       });
     case 2:
       // 拒绝：调用 reject 接口
@@ -184,6 +197,15 @@ export function submitBpmAction(params: SubmitActionParams) {
         id: taskId,
         reason: reason,
         buttonId: actionId,
+        variables,
+      });
+    case 9:
+      // 发起整改：同样调用 approve 接口，由 bizStatus=NEED_RECTIFY 触发子流程
+      return requestClient.put<boolean>('/bpm/declare/task/approve', {
+        id: taskId,
+        reason: reason,
+        buttonId: actionId,
+        variables,
       });
     default:
       console.warn('[BPM] 未知的操作类型:', actionKey);

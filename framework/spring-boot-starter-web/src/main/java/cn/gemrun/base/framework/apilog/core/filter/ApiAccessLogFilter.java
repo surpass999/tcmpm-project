@@ -83,8 +83,28 @@ public class ApiAccessLogFilter extends ApiRequestFilter {
         }
     }
 
+    /**
+     * 判断请求是否应该记录访问日志
+     * 排除文件下载等可能导致URL过长的请求
+     */
+    private boolean shouldLogAccess(String requestUri) {
+        // 排除文件下载请求（/get/ 路径通常用于文件获取）
+        if (requestUri.contains("/get/")) {
+            return false;
+        }
+        // 排除静态资源路径
+        if (requestUri.startsWith("/static/") || requestUri.startsWith("/assets/")) {
+            return false;
+        }
+        return true;
+    }
+
     private void createApiAccessLog(HttpServletRequest request, LocalDateTime beginTime,
                                     Map<String, String> queryString, String requestBody, Exception ex) {
+        // 排除可能导致 URL 过长的请求（如文件下载）
+        if (!shouldLogAccess(request.getRequestURI())) {
+            return;
+        }
         ApiAccessLogCreateReqDTO accessLog = new ApiAccessLogCreateReqDTO();
         try {
             boolean enable = buildApiAccessLog(accessLog, request, beginTime, queryString, requestBody, ex);

@@ -4,7 +4,7 @@ import type { MallCommentApi } from '#/api/mall/product/comment';
 
 import { h } from 'vue';
 
-import { confirm, DocAlert, Page, prompt, useVbenModal } from '@vben/common-ui';
+import { confirm, Page, prompt, useVbenModal } from '@vben/common-ui';
 
 import { message, Rate, Textarea } from 'ant-design-vue';
 
@@ -117,12 +117,6 @@ const [Grid, gridApi] = useVbenVxeGrid({
 
 <template>
   <Page auto-content-height>
-    <template #doc>
-      <DocAlert
-        title="【商品】商品评价"
-        url="https://doc.iocoder.cn/mall/product-comment/"
-      />
-    </template>
     <FormModal @success="handleRefresh" />
     <Grid table-title="评论列表">
       <template #descriptionScores="{ row }">

@@ -19,7 +19,8 @@ public enum BpmUserTaskApproveMethodEnum implements ArrayValuable<Integer> {
     RANDOM(1, "随机挑选一人审批", null),
     RATIO(2, "多人会签(按通过比例)", "${ nrOfCompletedInstances/nrOfInstances >= %s}"), // 会签（按通过比例）
     ANY(3, "多人或签(一人通过或拒绝)", "${ nrOfCompletedInstances > 0 }"), // 或签（通过只需一人，拒绝只需一人）
-    SEQUENTIAL(4, "依次审批", "${ nrOfCompletedInstances >= nrOfInstances }"); // 依次审批
+    SEQUENTIAL(4, "依次审批", "${ nrOfCompletedInstances >= nrOfInstances }"), // 依次审批
+    SCORE(5, "评审（按总分）", null); // 无默认 completionCondition，通过代码判断
 
     /**
      * 审批方式

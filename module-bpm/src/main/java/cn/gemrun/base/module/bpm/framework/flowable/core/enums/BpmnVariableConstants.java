@@ -101,7 +101,16 @@ public class BpmnVariableConstants {
      */
     public static final String TASK_VARIABLE_REASON = "TASK_REASON";
     /**
-     * 任务变量 - 签名图片 URL
+     * 流程实例的变量 - 业务状态
+     * <p>
+     * 对应审批节点按钮配置的 bizStatus，用于传递到流程实例级别的监听器
+     *
+     * @see ProcessInstance#getProcessVariables()
+     */
+    public static final String PROCESS_INSTANCE_VARIABLE_BIZ_STATUS = "BIZ_STATUS";
+
+    /**
+     * 任务的变量 - 签名图片 URL
      */
     public static final String TASK_SIGN_PIC_URL = "TASK_SIGN_PIC_URL";
 
