@@ -2,6 +2,7 @@ node_modules/
 .DS_Store
 .idea/
 .target
+.gitnexus/
 
 # ignore build artifacts
 **/target/
