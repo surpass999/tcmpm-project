@@ -1,0 +1,321 @@
+server:
+  port: 48080
+
+--- #################### 数据库相关配置 ####################
+
+spring:
+  autoconfigure:
+    # noinspection SpringBootApplicationYaml
+    exclude:
+      - com.alibaba.druid.spring.boot.autoconfigure.DruidDataSourceAutoConfigure # 排除 Druid 的自动配置，使用 dynamic-datasource-spring-boot-starter 配置多数据源
+      - org.springframework.ai.vectorstore.qdrant.autoconfigure.QdrantVectorStoreAutoConfiguration # 禁用 AI 模块的 Qdrant，手动创建
+      - org.springframework.ai.vectorstore.milvus.autoconfigure.MilvusVectorStoreAutoConfiguration # 禁用 AI 模块的 Milvus，手动创建
+  datasource:
+    druid: # Druid 【监控】相关的全局配置
+      web-stat-filter:
+        enabled: true
+      stat-view-servlet:
+        enabled: true
+        allow: # 设置白名单，不填则允许所有访问，建议生产环境设置为具体 IP
+        url-pattern: /druid/*
+        login-username: admin # 控制台管理用户名
+        login-password: Druid@Prod2024 # 控制台管理密码（请修改为强密码）
+      filter:
+        stat:
+          enabled: true
+          log-slow-sql: true # 慢 SQL 记录
+          slow-sql-millis: 1000
+          merge-sql: true
+        wall:
+          config:
+            multi-statement-allow: true
+    dynamic: # 多数据源配置
+      druid: # Druid 【连接池】相关的全局配置
+        initial-size: 5 # 初始连接数
+        min-idle: 10 # 最小连接池数量
+        max-active: 50 # 最大连接池数量（生产环境建议调大）
+        max-wait: 60000 # 配置获取连接等待超时的时间，单位：毫秒（1 分钟）
+        time-between-eviction-runs-millis: 30000 # 配置间隔多久才进行一次检测，检测需要关闭的空闲连接，单位：毫秒（30 秒）
+        min-evictable-idle-time-millis: 300000 # 配置一个连接在池中最小生存的时间，单位：毫秒（5 分钟）
+        max-evictable-idle-time-millis: 600000 # 配置一个连接在池中最大生存的时间，单位：毫秒（10 分钟）
+        validation-query: SELECT 1 FROM DUAL # 配置检测连接是否有效
+        validation-query-timeout: 3 # 检测连接超时时间，单位：秒
+        test-while-idle: true # 空闲时检测
+        test-on-borrow: true # 借出时检测
+        test-on-return: false # 归还时不检测
+        pool-prepared-statements: true # 是否开启 PreparedStatement 缓存
+        max-pool-prepared-statement-per-connection-size: 20 # 每个连接缓存的 PreparedStatement 数量
+        keep-alive: true # 开启连接保活，防止连接被 MySQL/网络层意外关闭
+        keep-alive-interval: 30000 # 连接保活检测间隔，单位：毫秒（30 秒）
+        remove-abandoned: true # 启用泄露连接回收
+        remove-abandoned-timeout: 180 # 借用超过 180 秒未归还则强制回收
+      primary: master
+      datasource:
+        master:
+          url: jdbc:mysql://127.0.0.1:3306/tcmpm_db?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&rewriteBatchedStatements=true # MySQL Connector/J 8.X 连接的示例
+          username: tcmpm_db
+          password: 5adfGwcx3spA7dbG
+        slave: # 模拟从库，可根据自己需要修改 # 模拟从库，可根据自己需要修改
+          lazy: true # 开启懒加载，保证启动速度
+          url: jdbc:mysql://127.0.0.1:3306/tcmpm_db?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&rewriteBatchedStatements=true # MySQL Connector/J 8.X 连接的示例
+          username: tcmpm_db
+          password: 5adfGwcx3spA7dbG
+
+  # Redis 配置。生产环境建议开启密码
+  redis:
+    host: 127.0.0.1 # Redis 地址
+    port: 6379 # 端口
+    database: 1 # 数据库索引
+#    password: 123456 # 密码，生产环境建议开启
+
+--- #################### 定时任务相关配置 ####################
+
+# Quartz 配置项，对应 QuartzProperties 配置类
+spring:
+  quartz:
+    auto-startup: true # 生产环境需要开启 Job
+    scheduler-name: schedulerName # Scheduler 名字。默认为 schedulerName
+    job-store-type: jdbc # Job 存储器类型。默认为 memory 表示内存，可选 jdbc 使用数据库。
+    wait-for-jobs-to-complete-on-shutdown: true # 应用关闭时，是否等待定时任务执行完成。默认为 false ，建议设置为 true
+    properties: # 添加 Quartz Scheduler 附加属性，更多可以看 http://www.quartz-scheduler.org/documentation/2.4.0-SNAPSHOT/configuration.html 文档
+      org:
+        quartz:
+          # Scheduler 相关配置
+          scheduler:
+            instanceName: schedulerName
+            instanceId: AUTO # 自动生成 instance ID
+          # JobStore 相关配置
+          jobStore:
+            # JobStore 实现类。可见博客：https://blog.csdn.net/weixin_42458219/article/details/122247162
+            class: org.springframework.scheduling.quartz.LocalDataSourceJobStore
+            isClustered: true # 是集群模式
+            clusterCheckinInterval: 15000 # 集群检查频率，单位：毫秒。默认为 15000，即 15 秒
+            misfireThreshold: 60000 # misfire 阀值，单位：毫秒。
+          # 线程池相关配置
+          threadPool:
+            threadCount: 25 # 线程池大小。默认为 10 。
+            threadPriority: 5 # 线程优先级
+            class: org.quartz.simpl.SimpleThreadPool # 线程池类型
+    jdbc: # 使用 JDBC 的 JobStore 的时候，JDBC 的配置
+      initialize-schema: NEVER # 是否自动使用 SQL 初始化 Quartz 表结构。这里设置成 never ，我们手动创建表结构。
+
+--- #################### 消息队列相关配置 ####################
+
+# rocketmq 配置项，对应 RocketMQProperties 配置类
+rocketmq:
+  name-server: 127.0.0.1:9876 # RocketMQ Namesrv
+
+spring:
+  # RabbitMQ 配置项，对应 RabbitProperties 配置类
+  rabbitmq:
+    host: 127.0.0.1 # RabbitMQ 服务的地址
+    port: 5672 # RabbitMQ 服务的端口
+    username: guest # RabbitMQ 服务的账号
+    password: guest # RabbitMQ 服务的密码
+  # Kafka 配置项，对应 KafkaProperties 配置类
+  kafka:
+    bootstrap-servers: 127.0.0.1:9092 # 指定 Kafka Broker 地址，可以设置多个，以逗号分隔
+
+--- #################### 服务保障相关配置 ####################
+
+# Lock4j 配置项
+lock4j:
+  acquire-timeout: 3000 # 获取分布式锁超时时间，默认为 3000 毫秒
+  expire: 30000 # 分布式锁的超时时间，默认为 30 毫秒
+
+--- #################### 监控相关配置 ####################
+
+# Actuator 监控端点的配置项
+management:
+  endpoints:
+    web:
+      base-path: /actuator # Actuator 提供的 API 接口的根目录。默认为 /actuator
+      exposure:
+        include: 'health,info,metrics' # 生产环境只开放必要的端点
+
+# Spring Boot Admin 配置项
+spring:
+  boot:
+    admin:
+      # Spring Boot Admin Client 客户端的相关配置
+      client:
+        url: http://127.0.0.1:${server.port}/${spring.boot.admin.context-path} # 设置 Spring Boot Admin Server 地址
+        instance:
+          service-host-type: IP # 注册实例时，优先使用 IP [IP, HOST_NAME, CANONICAL_HOST_NAME]
+        username: admin
+        password: admin
+      # Spring Boot Admin Server 服务端的相关配置
+      context-path: /admin # 配置 Spring
+
+--- #################### 日志配置 ####################
+
+logging:
+  level:
+    root: INFO # 生产环境使用 INFO 级别
+    cn.gemrun.base: INFO
+    cn.gemrun.base.module.bpm: INFO
+    org.springframework.aop: INFO
+  file:
+    name: /var/log/${spring.application.name}/${spring.application.name}.log # 日志文件名，全路径（请确保目录存在且有写入权限）
+  logback:
+    rollingpolicy:
+      max-file-size: 100MB # 单个日志文件最大 100MB
+      max-history: 30 # 保留 30 天的日志
+
+--- #################### 接口文档配置（生产环境禁用）####################
+
+springdoc:
+  api-docs:
+    enabled: false # 生产环境禁用 API 文档
+  swagger-ui:
+    enabled: false # 生产环境禁用 Swagger UI
+
+knife4j:
+  enable: false # 生产环境禁用 Knife4j
+
+--- #################### 微信公众号相关配置 ####################
+
+wx: # 参见 https://github.com/Wechat-Group/WxJava/blob/develop/spring-boot-starters/wx-java-mp-spring-boot-starter/README.md 文档
+  mp:
+    # 公众号配置(必填) - 请替换为生产环境真实配置
+    app-id: wx_your_app_id
+    secret: your_app_secret
+    # 存储配置，解决 AccessToken 的跨节点的共享
+    config-storage:
+      type: RedisTemplate # 采用 RedisTemplate 操作 Redis，会自动从 Spring 中获取
+      key-prefix: wx # Redis Key 的前缀
+      http-client-type: HttpClient # 采用 HttpClient 请求微信公众号平台
+  miniapp: # 小程序配置（必填），参见 https://github.com/Wechat-Group/WxJava/blob/develop/spring-boot-starters/wx-java-miniapp-spring-boot-starter/README.md 文档
+    appid: wx_your_miniapp_id
+    secret: your_miniapp_secret
+    config-storage:
+      type: RedisTemplate # 采用 RedisTemplate 操作 Redis，会自动从 Spring 中获取
+      key-prefix: wa # Redis Key 的前缀
+      http-client-type: HttpClient # 采用 HttpClient 请求微信公众号平台
+
+--- #################### 芋道相关配置 ####################
+
+# 芋道配置项，设置当前项目所有自定义的配置
+base:
+  pay:
+    order-notify-url: https://your-domain.com/admin-api/pay/notify/order # 支付渠道的【支付】回调地址（请替换为真实域名）
+    refund-notify-url: https://your-domain.com/admin-api/pay/notify/refund # 支付渠道的【退款】回调地址（请替换为真实域名）
+    transfer-notify-url: https://your-domain.com/admin-api/pay/notify/transfer # 支付渠道的【转账】回调地址（请替换为真实域名）
+  demo: false # 关闭演示模式
+  tencent-lbs-key: your_tencent_lbs_key # QQ 地图的密钥（请替换为真实密钥）
+  # 新添加的内容
+  security:
+    permit-all_urls:
+      - /admin-api/mp/open/** # 微信公众号开放平台，微信回调接口，不需要登录
+      - /admin-api/declare/test # 申报模块测试接口，不需要登录
+  tenant:
+    enable: false
+    ignore-urls:
+      - /jmreport/* # 积木报表，无法携带租户编号
+      - /admin-api/declare/test # 申报模块测试接口
+
+justauth:
+  enabled: true
+  type:
+    DINGTALK: # 钉钉
+      client-id: your_dingtalk_client_id
+      client-secret: your_dingtalk_client_secret
+      ignore-check-redirect-uri: true
+    WECHAT_ENTERPRISE: # 企业微信
+      client-id: your_wecom_client_id
+      client-secret: your_wecom_client_secret
+      agent-id: your_wecom_agent_id
+      ignore-check-redirect-uri: true
+    WECHAT_MINI_PROGRAM: # 微信小程序
+      client-id: ${wx.miniapp.appid}
+      client-secret: ${wx.miniapp.secret}
+      ignore-check-redirect-uri: true
+      ignore-check-state: true # 微信小程序，不会使用到 state，所以不进行校验
+    WECHAT_MP: # 微信公众号
+      client-id: ${wx.mp.app-id}
+      client-secret: ${wx.mp.secret}
+      ignore-check-redirect-uri: true
+    ALIPAY: # 支付宝小程序
+      client-id: your_alipay_client_id
+      client-secret: your_alipay_client_secret
+      alipay-public-key: your_alipay_public_key
+      ignore-check-redirect-uri: true
+      ignore-check-state: true
+  cache:
+    type: REDIS
+    prefix: 'social_auth_state:' # 缓存前缀，目前只对 Redis 缓存生效，默认 JUSTAUTH::STATE::
+    timeout: 24h # 超时时长，目前只对 Redis 缓存生效，默认 3 分钟
+
+--- #################### AI 相关配置（生产环境禁用未使用的服务）####################
+
+spring:
+  ai:
+    vectorstore: # 向量存储
+      redis:
+        initialize-schema: true
+        index-name: knowledge_index # Redis 中向量索引的名称
+        prefix: "knowledge_segment:" # Redis 中存储向量数据的键名前缀
+    qianfan: # 文心一言 - 如需使用请配置真实密钥
+      api-key: # 留空禁用
+      secret-key: # 留空禁用
+    zhipuai: # 智谱 AI - 如需使用请配置真实密钥
+      api-key: # 留空禁用
+    openai: # OpenAI 官方 - 如需使用请配置真实密钥
+      api-key: # 留空禁用
+      base-url: # 留空禁用
+    azure: # OpenAI 微软 - 如需使用请配置真实密钥
+      openai:
+        endpoint: # 留空禁用
+    anthropic: # Anthropic Claude - 如需使用请配置真实密钥
+      api-key: # 留空禁用
+    deepseek: # DeepSeek - 如需使用请配置真实密钥
+      api-key: # 留空禁用
+      chat:
+        options:
+          model: deepseek-chat
+
+base:
+  ai:
+    gemini: # 谷歌 Gemini - 如需使用请配置真实密钥
+      enable: false
+      api-key: # 留空禁用
+    doubao: # 字节豆包 - 如需使用请配置真实密钥
+      enable: false
+      api-key: # 留空禁用
+    hunyuan: # 腾讯混元 - 如需使用请配置真实密钥
+      enable: false
+    siliconflow: # 硅基流动 - 如需使用请配置真实密钥
+      enable: false
+    xinghuo: # 讯飞星火 - 如需使用请配置真实密钥
+      enable: false
+    baichuan: # 百川智能 - 如需使用请配置真实密钥
+      enable: false
+    midjourney: # Midjourney - 如需使用请配置真实密钥
+      enable: false
+    suno: # Suno AI - 如需使用请配置真实密钥
+      enable: false
+    web-search: # 网页搜索 - 如需使用请配置真实密钥
+      enable: false
+
+--- #################### 验证码相关配置 ####################
+
+aj:
+  captcha:
+    jigsaw: classpath:images/jigsaw
+    pic-click: classpath:images/pic-click
+    cache-type: redis # 缓存 local/redis...
+    cache-number: 1000
+    timing-clear: 180
+    type: blockPuzzle
+    water-mark: TCMPM # 右下角水印文字
+    interference-options: 0
+    req-frequency-limit-enable: true # 生产环境开启请求频率限制
+    req-get-lock-limit: 5
+    req-get-lock-seconds: 10
+    req-get-minute-limit: 30
+    req-check-minute-limit: 60
+    req-verify-minute-limit: 60
+
+--- #################### 生产环境调试配置 ####################
+
+debug: false # 关闭调试模式

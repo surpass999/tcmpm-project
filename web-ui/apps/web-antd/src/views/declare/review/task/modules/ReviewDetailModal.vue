@@ -3,7 +3,7 @@ import type { DeclareReviewApi } from '#/api/declare/review';
 
 import { ref, computed } from 'vue';
 
-import { MdiIcon, Page, useVbenModal } from '@vben/common-ui';
+import { Page, useVbenModal } from '@vben/common-ui';
 
 import {
   Button,
@@ -45,7 +45,6 @@ export default {
     Descriptions,
     DescriptionsItem,
     Divider,
-    MdiIcon,
     Page,
     Progress,
     Row,
