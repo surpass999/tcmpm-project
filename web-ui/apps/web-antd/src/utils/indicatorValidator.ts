@@ -129,6 +129,7 @@ export function validate(
     }
     return true;
   });
+  console.log('[validate:入口] filteredRules.length:', filteredRules.length);
 
   // 2. 遍历规则执行验证
   for (const rule of filteredRules) {
@@ -141,9 +142,6 @@ export function validate(
   return results;
 }
 
-/**
- * 执行单条规则验证
- */
 function validateRule(
   rule: JointRule,
   values: IndicatorValuesMap,
@@ -156,6 +154,24 @@ function validateRule(
 
     for (const ruleItem of ruleItems) {
       const action = ruleItem.action || {};
+      const condition = ruleItem.condition;
+
+      // 条件判断：若配置了 not_empty 条件且当前指标为空，则跳过验证
+      if (condition?.operator === 'not_empty') {
+        let condValue: any;
+        if (action.formula && action.formula.length > 0) {
+          condValue = calculateFormula(action.formula, values, idToCode);
+        } else if (action.indicatorCode !== undefined) {
+          condValue = values[action.indicatorCode];
+        } else if (action.indicatorId !== undefined) {
+          const code = idToCode ? idToCode.get(action.indicatorId) : undefined;
+          condValue = code !== undefined ? values[code] : values[action.indicatorId];
+        }
+        const isEmpty = condValue === undefined || condValue === null || condValue === '' || isNaN(Number(condValue));
+        if (isEmpty) {
+          return { valid: true, ruleId: rule.id, ruleName: rule.ruleName ?? '', message: '' };
+        }
+      }
 
       // 获取当前指标的值（保持 undefined/NaN 不被吞掉，交给 compareValues 判断）
       let currentValue: any;
@@ -187,6 +203,14 @@ function validateRule(
         compareValue = v === undefined || v === null ? undefined : Number(v);
       } else {
         compareValue = undefined;
+      }
+
+      // 如果任一操作数为空（且非固定值），跳过验证
+      const currentIsEmpty = currentValue === undefined || currentValue === null || (action.formula?.length === 0 && action.indicatorCode === undefined && action.indicatorId === undefined);
+      const rightIsDynamic = !!(action.compareFormula || action.compareIndicatorCode !== undefined || action.compareIndicatorId !== undefined);
+      const rightIsEmpty = rightIsDynamic && (compareValue === undefined || compareValue === null || (isNaN(Number(compareValue)) && rightIsDynamic));
+      if (currentIsEmpty || rightIsEmpty) {
+        return { valid: true, ruleId: rule.id, ruleName: rule.ruleName ?? '', message: '' };
       }
 
       // 执行比较
@@ -249,9 +273,9 @@ export function calculateFormula(
   formula: FormulaItem[],
   values: IndicatorValuesMap,
   idToCode?: Map<number, string>
-): number {
+): number | undefined {
   if (!formula || formula.length === 0) {
-    return 0;
+    return undefined;
   }
 
   let result: number | undefined;
@@ -294,7 +318,7 @@ export function calculateFormula(
     }
   }
 
-  return result || 0;
+  return result as number;
 }
 
 /**
@@ -349,7 +373,7 @@ export function parseLogicRule(logicRule: string): JointRule[] {
   if (!logicRule || !logicRule.trim()) return [];
 
   const results: JointRule[] = [];
-  const parts = logicRule.split(/\n|；|;/).filter(Boolean);
+  const parts = logicRule.split(/\n|；|;|AND|and|And/).filter(Boolean);
 
   for (let i = 0; i < parts.length; i++) {
     const part = parts[i]!.trim();
@@ -374,6 +398,10 @@ export function parseLogicRule(logicRule: string): JointRule[] {
 
     results.push({
       id: i + 1,
+      ruleName: part,
+      triggerTiming: 'FILL',
+      status: 1,
+      projectType: 0,
       ruleConfig: JSON.stringify({
         rules: [{ id: i + 1, action, name: part }],
       }),
@@ -383,28 +411,33 @@ export function parseLogicRule(logicRule: string): JointRule[] {
   return results;
 }
 
-/** 解析公式一侧（如 '201' 或 '80201+80202'），返回 FormulaItem[] */
+/** 解析公式一侧（如 '[201]' 或 '201' 或 '[80201]+[80202]'），返回 FormulaItem[] */
 function parseFormulaSide(side: string): FormulaItem[] {
-  // 去掉首尾括号和空格
-  const cleaned = side.replace(/^\[|\]$/g, '').trim();
-  if (!cleaned) return [];
+  const raw = side.trim();
+  if (!raw) return [];
 
-  // 按 + 和 - 分割（保留分隔符以便区分正负）
-  // 简单处理：只支持 + 和 -，乘除在后续扩展
-  const tokens = cleaned.split(/(?=\+|-)(?![+-])/);
+  // 如果整个字符串有配对括号，先整体处理
+  if (/^\[.+\]$/.test(raw)) {
+    const code = raw.replace(/^\[|\]$/g, '');
+    const mathOp = code.startsWith('-') ? '-' : '+';
+    return [{ valueType: 'indicator', indicatorCode: code.replace(/^\+|^-|^\[|\]$/g, ''), mathOp }];
+  }
+
+  // 无整体括号，按 + 和 - 分割
+  const tokens = raw.split(/(?=\+|-)(?![+-])/);
   const items: FormulaItem[] = [];
 
   for (const token of tokens) {
     const trimmed = token.trim();
     if (!trimmed) continue;
-    if (/^[+-]?\d+(\.\d+)?$/.test(trimmed)) {
+
+    if (/^\[.+\]$/.test(trimmed)) {
+      // 带括号的指标引用
+      items.push({ valueType: 'indicator', indicatorCode: trimmed.replace(/^\[|\]$/g, ''), mathOp: trimmed.startsWith('-') ? '-' : '+' });
+    } else if (/^[+-]?\d+(\.\d+)?$/.test(trimmed)) {
       items.push({ valueType: 'fixed', value: Number(trimmed.replace(/^\+/, '')), mathOp: trimmed.startsWith('-') ? '-' : '+' });
     } else {
-      items.push({
-        valueType: 'indicator',
-        indicatorCode: trimmed.replace(/^\+|^-|^\[|\]$/g, ''),
-        mathOp: trimmed.startsWith('-') ? '-' : '+',
-      });
+      items.push({ valueType: 'indicator', indicatorCode: trimmed.replace(/^\[|\]$/g, ''), mathOp: trimmed.startsWith('-') ? '-' : '+' });
     }
   }
 

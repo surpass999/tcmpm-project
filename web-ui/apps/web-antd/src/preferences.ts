@@ -18,8 +18,8 @@ export const overridesPreferences = defineOverridesPreferences({
   logo: {
     enable: true,
     fit: 'contain',
-    source: '/static/imgs/logo/horizontal_logo.png',
-    sourceDark: '/static/imgs/logo/horizontal_logo.png',
+    source: '/static/imgs/logo/logo.png',
+    sourceDark: '/static/imgs/logo/logo.png',
   },
   footer: {
     /** 默认关闭 footer 页脚，因为有一定遮挡 */

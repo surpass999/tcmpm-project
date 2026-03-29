@@ -21,9 +21,13 @@
           :data-indicator-id="indicator.id"
           :data-indicator-code="indicator.indicatorCode"
           class="indicator-row"
+          :class="{ 'indicator-row--switch': indicator.valueType === 3 }"
         >
           <!-- 左侧：指标名称 + 输入组件 -->
-          <div class="indicator-main">
+          <div
+            class="indicator-main"
+            :class="{ 'indicator-main--inline': indicator.valueType === 3 || indicator.valueType === 6 || indicator.valueType === 7 }"
+          >
             <!-- 指标标签行 -->
             <div class="indicator-label-row">
               <!-- 指标名称 + 口径提示图标 -->
@@ -74,7 +78,12 @@
             </div>
 
             <!-- 指标输入组件行 -->
-            <div class="indicator-input-row">
+            <div
+              class="indicator-input-row"
+              :class="{
+                'input-row--inline': indicator.valueType === 3 || indicator.valueType === 6 || indicator.valueType === 7,
+              }"
+            >
               <!-- 数字类型 -->
               <a-input-number
                 v-if="indicator.valueType === 1"
@@ -108,14 +117,17 @@
               />
 
               <!-- 布尔类型 -->
-              <a-switch
-                v-else-if="indicator.valueType === 3"
-                v-model:checked="formValues[indicator.indicatorCode]"
-                :disabled="readonly"
-                :checked-children="getBooleanLabels(indicator).true"
-                :un-checked-children="getBooleanLabels(indicator).false"
-                @change="onIndicatorChange(indicator)"
-              />
+              
+                <a-switch
+                  v-else-if="indicator.valueType === 3"
+                  v-model:checked="formValues[indicator.indicatorCode]"
+                  :disabled="readonly"
+                  :checked-children="getBooleanLabels(indicator).true"
+                  :un-checked-children="getBooleanLabels(indicator).false"
+                  class="switch-auto-width"
+                  @change="onIndicatorChange(indicator)"
+                />
+              
 
               <!-- 日期类型 -->
               <a-date-picker
@@ -402,12 +414,12 @@
               <!-- 未知类型 -->
               <span v-else class="text-gray-400 text-sm">暂不支持该类型</span>
 
-              <!-- 错误提示（优先显示联合规则错误，其次显示必填/范围错误） -->
+              <!-- 错误提示 -->
               <div
-                v-if="indicator.id && (jointRuleErrors[indicator.id] || jointRuleErrors[indicator.indicatorCode] || indicatorErrors[indicator.id] || indicatorErrors[indicator.indicatorCode])"
-                class="indicator-error"
-              >
-                {{ jointRuleErrors[indicator.id] || jointRuleErrors[indicator.indicatorCode] || indicatorErrors[indicator.id] || indicatorErrors[indicator.indicatorCode] }}
+              v-if="indicator.id && (jointRuleErrors[String(indicator.id)] || jointRuleErrors[indicator.indicatorCode])"
+              class="indicator-error"
+            >
+              {{ jointRuleErrors[String(indicator.id)] || jointRuleErrors[indicator.indicatorCode] }}
               </div>
             </div>
           </div>
@@ -498,9 +510,6 @@ const indicators = ref<DeclareIndicatorApi.Indicator[]>([]);
 
 /** 填报值 Map（key = indicatorCode） */
 const formValues = reactive<Record<string, any>>({});
-
-/** 指标验证错误 Map（key = indicatorId 数字 或 indicatorCode 字符串） */
-const indicatorErrors = reactive<Record<string, string>>({});
 
 /** 文件列表 Map（key = indicatorCode） */
 const fileListMap = reactive<Record<string, UploadFile[]>>({});
@@ -792,12 +801,10 @@ function parseStoredFileList(value: string | undefined): UploadFile[] {
 
 /** 指标值变化处理 */
 function onIndicatorChange(indicator: DeclareIndicatorApi.Indicator) {
-  // 清除当前字段的错误（同时清除 id 和 code 两种 key）
+  // 只清除当前变化的指标的联合规则错误（不要清除所有指标！）
   if (indicator.id) {
-    delete indicatorErrors[indicator.id];
-    delete jointRuleErrors[indicator.id];
+    delete jointRuleErrors[String(indicator.id)];
   }
-  delete indicatorErrors[indicator.indicatorCode];
   delete jointRuleErrors[indicator.indicatorCode];
 
   // 如果是动态容器，将子字段值同步到 formValues
@@ -808,11 +815,20 @@ function onIndicatorChange(indicator: DeclareIndicatorApi.Indicator) {
   // 任何指标值变化，都触发所有计算指标全量重算（支持依赖链）
   recalculateComputedIndicators();
 
-  // 实时逻辑校验（指标自身的 logicRule）
-  runLogicRuleValidation();
+  // 实时逻辑校验（双重 nextTick 确保 form 值已更新到 formValues）
+  nextTick(() => {
+    nextTick(() => {
+      runLogicRuleValidation();
+      console.log('[onIndicatorChange after runLogicRuleValidation] jointRuleErrors:', JSON.stringify(jointRuleErrors));
+    });
+  });
 
   // 实时联合规则校验
-  nextTick(() => runJointValidation());
+  nextTick(() => {
+    nextTick(() => {
+      runJointValidation();
+    });
+  });
 }
 
 /** 联合验证错误 Map（独立追踪，与必填等独立错误分开） */
@@ -831,59 +847,90 @@ function buildIndicatorMaps() {
   }
   return { idToCode, codeToId };
 }
-
-/** 运行指标自身的逻辑校验（logicRule 字符串，如 201>=20101）并更新 indicatorErrors */
+/** 运行逻辑规则校验并更新 jointRuleErrors */
 function runLogicRuleValidation() {
   const { idToCode, codeToId } = buildIndicatorMaps();
+
+  // 构建 code → value 映射
+  const codeValueMap: Record<string, any> = {};
+  for (const ind of indicators.value) {
+    codeValueMap[ind.indicatorCode] = formValues[ind.indicatorCode];
+  }
 
   for (const indicator of indicators.value) {
     if (!indicator.logicRule?.trim()) continue;
 
     const rules = parseLogicRule(indicator.logicRule);
-    if (rules.length === 0) continue;
-
-    // 构建 code → value 映射
-    const codeValueMap: Record<string, any> = {};
-    for (const ind of indicators.value) {
-      codeValueMap[ind.indicatorCode] = formValues[ind.indicatorCode];
-    }
-
-    const results = validateJointRule(rules as any, codeValueMap, { triggerTiming: 'FILL', idToCode });
-
-    const errKey = indicator.indicatorCode;
-
-    if (results.length === 0) {
-      // 验证通过：清除旧错误
-      delete indicatorErrors[errKey];
-      if (indicator.id) delete indicatorErrors[indicator.id];
+    if (rules.length === 0) {
+      console.log('[调试] 指标', indicator.indicatorCode, 'logicRule:', indicator.logicRule, '解析结果为空');
       continue;
     }
 
-    // 验证失败：取第一条错误信息
-    const first = results[0]!;
-    const errMsg = first.message || '校验失败';
+    const results = validateJointRule(rules as any, codeValueMap, { triggerTiming: 'FILL', idToCode });
+    console.log('[调试] 指标', indicator.indicatorCode, 'logicRule:', indicator.logicRule, 'results.length:', results.length);
 
-    indicatorErrors[errKey] = errMsg;
-    if (indicator.id) indicatorErrors[indicator.id] = errMsg;
+    // 从 logicRule 字符串解析出所有涉及的指标 code（左侧和右侧的都包含）
+    const ruleCodes = new Set<string>();
+    const codeMatches = [...indicator.logicRule.matchAll(/\[([^\]]+)\]/g)];
+    for (const m of codeMatches) ruleCodes.add(m[1]!.trim());
 
-    // 同时清除相关指标的联合规则旧错误
-    const codes: string[] = [...(first.involvedIndicatorCodes || [])];
-    if (first.involvedIndicatorIds) {
-      for (const id of first.involvedIndicatorIds) {
-        const code = idToCode.get(id);
-        if (code && !codes.includes(code)) codes.push(code);
-      }
+    if (results.length === 0) {
+      // 验证通过：只清除当前指标的 code/id key（不要清除其他指标的错误！）
+      const curId = indicator.id !== undefined ? String(indicator.id) : undefined;
+      if (curId !== undefined) delete jointRuleErrors[curId];
+      delete jointRuleErrors[indicator.indicatorCode];
+      continue;
     }
-    for (const code of codes) {
-      delete jointRuleErrors[code];
-      const id = codeToId.get(code);
-      if (id !== undefined) delete jointRuleErrors[id];
-    }
+
+    // 验证失败：只向当前指标的 code/id 写入错误（不在 ruleCodes 循环里跨指标写！）
+    const errMsg = buildLogicRuleMsg(indicator.logicRule, ruleCodes, indicators.value, codeValueMap);
+    const curId = indicator.id !== undefined ? String(indicator.id) : undefined;
+    if (curId !== undefined) jointRuleErrors[curId] = errMsg;
+    jointRuleErrors[indicator.indicatorCode] = errMsg;
+    console.log('[调试] 验证失败，indicator:', indicator.indicatorCode, 'errMsg:', errMsg, '| jointRuleErrors:', JSON.stringify(jointRuleErrors));
   }
 }
 
+/** 根据 logicRule 和涉及的指标代码生成含填报要求的提示语 */
+function buildLogicRuleMsg(logicRule: string, involvedCodes: Set<string>, allIndicators: typeof indicators.value, codeValueMap: Record<string, any>): string {
+  if (!logicRule) return '校验失败';
+
+  const match = logicRule.trim().match(/^(.+?)\s*(>=|<=|>|<|==|!=)\s*(.+)$/);
+  if (!match) return '校验失败';
+
+  const leftRaw = match[1]!.trim();
+  const operator = match[2]!;
+  const rightRaw = match[3]!.trim();
+  const leftCodes = [...leftRaw.matchAll(/\[([^\]]+)\]/g)].map(m => m[1]!.trim());
+  const rightCodes = [...rightRaw.matchAll(/\[([^\]]+)\]/g)].map(m => m[1]!.trim());
+  const allRuleCodes = [...leftCodes, ...rightCodes];
+
+  // 建立 code → 指标名 的映射（优先用 allIndicators，没有的用 code 本身）
+  const codeMap = new Map<string, string>();
+  for (const ind of allIndicators) {
+    if (!codeMap.has(ind.indicatorCode)) {
+      codeMap.set(ind.indicatorCode, ind.indicatorName || ind.indicatorCode);
+    }
+  }
+
+  const opText: Record<string, string> = { '>=': '应大于等于', '<=': '应小于等于', '>': '应大于', '<': '应小于', '==': '应等于', '!=': '不应等于' };
+
+  // 替换 [xxx] → "指标名(实际值)"，没有实际值则显示 "指标名(未填)"
+  const replaceCode = (code: string): string => {
+    const name = codeMap.get(code) || code;
+    const val = codeValueMap[code];
+    const valText = val !== undefined && val !== null && val !== '' ? String(val) : '未填';
+    return `${name}(${valText})`;
+  };
+
+  const msgLeft = leftRaw.replace(/\[([^\]]+)\]/g, (_, c) => replaceCode(c.trim()));
+  const msgRight = rightRaw.replace(/\[([^\]]+)\]/g, (_, c) => replaceCode(c.trim()));
+
+  return `${msgLeft} ${opText[operator] || operator} ${msgRight}`;
+}
+
 /** 运行联合验证并更新 jointRuleErrors（供 onIndicatorChange 实时调用） */
-function runJointValidation() {
+async function runJointValidation() {
   if (jointRules.value.length === 0) return;
 
   const { idToCode, codeToId } = buildIndicatorMaps();
@@ -930,7 +977,7 @@ function runJointValidation() {
       delete jointRuleErrors[code];
     }
     for (const id of allInvolvedIds) {
-      delete jointRuleErrors[id];
+      delete jointRuleErrors[String(id)];
     }
     return;
   }
@@ -955,7 +1002,7 @@ function runJointValidation() {
         jointRuleErrors[code] = result.message;
         const id = codeToId.get(code);
         if (id !== undefined) {
-          jointRuleErrors[id] = result.message;
+          jointRuleErrors[String(id)] = result.message;
         }
       }
       // 从清除集合中移除已报错的指标（保留其错误状态）
@@ -969,7 +1016,7 @@ function runJointValidation() {
     delete jointRuleErrors[code];
   }
   for (const id of allInvolvedIds) {
-    delete jointRuleErrors[id];
+    delete jointRuleErrors[String(id)];
   }
 }
 
@@ -1131,7 +1178,12 @@ function extractValue(record: any, valueType: number): any {
     case 6:
       return record.valueStr || undefined;
     case 3:
-      return record.valueStr || undefined;
+      if (record.valueBool !== undefined && record.valueBool !== null) {
+        return record.valueBool;
+      }
+      if (record.valueStr === 'true') return true;
+      if (record.valueStr === 'false') return false;
+      return undefined;
     case 4:
       return record.valueDate || undefined;
     case 5:
@@ -1276,6 +1328,10 @@ onMounted(async () => {
 
     // 5. 重新计算所有计算指标
     recalculateComputedIndicators();
+
+    // 6. 初始化逻辑校验和联合校验
+    runLogicRuleValidation();
+    runJointValidation();
   } catch (error) {
     console.error('[IndicatorInputTable] 加载指标数据失败:', error);
     message.error('加载指标数据失败');
@@ -1346,8 +1402,8 @@ function validateAll(indicatorsToValidate: DeclareIndicatorApi.Indicator[]): Arr
       const isEmpty = rawValue === undefined || rawValue === null || rawValue === '';
       if (isEmpty) {
         if (indicator.id) {
-          indicatorErrors[indicator.id] = '此项为必填';
-          indicatorErrors[indicator.indicatorCode] = '此项为必填';
+          jointRuleErrors[String(indicator.id)] = '此项为必填';
+          jointRuleErrors[indicator.indicatorCode] = '此项为必填';
           errors.push({ indicatorId: indicator.id, indicatorCode: indicator.indicatorCode, message: `${indicator.indicatorCode} - ${indicator.indicatorName} 为必填项` });
         }
         continue;
@@ -1358,12 +1414,12 @@ function validateAll(indicatorsToValidate: DeclareIndicatorApi.Indicator[]): Arr
     if (vt === 1 && rawValue !== undefined && rawValue !== null && rawValue !== '') {
       const numVal = Number(rawValue);
       if (!isNaN(numVal)) {
-        if (indicator.minValue !== undefined && numVal < indicator.minValue) {
-          indicatorErrors[indicator.indicatorCode] = `不能小于 ${indicator.minValue}`;
+        if ((indicator.minValue != null) && numVal < indicator.minValue) {
+          jointRuleErrors[indicator.indicatorCode] = `不能小于 ${indicator.minValue}`;
           errors.push({ indicatorId: indicator.id!, indicatorCode: indicator.indicatorCode, message: `${indicator.indicatorCode} - ${indicator.indicatorName} 不能小于 ${indicator.minValue}` });
         }
-        if (indicator.maxValue !== undefined && numVal > indicator.maxValue) {
-          indicatorErrors[indicator.indicatorCode] = `不能大于 ${indicator.maxValue}`;
+        if ((indicator.maxValue != null) && numVal > indicator.maxValue) {
+          jointRuleErrors[indicator.indicatorCode] = `不能大于 ${indicator.maxValue}`;
           errors.push({ indicatorId: indicator.id!, indicatorCode: indicator.indicatorCode, message: `${indicator.indicatorCode} - ${indicator.indicatorName} 不能大于 ${indicator.maxValue}` });
         }
       }
@@ -1401,7 +1457,7 @@ function validateAll(indicatorsToValidate: DeclareIndicatorApi.Indicator[]): Arr
             jointRuleErrors[code] = result.message;
             const id = codeToId.get(code);
             if (id !== undefined) {
-              jointRuleErrors[id] = result.message;
+              jointRuleErrors[String(id)] = result.message;
             }
           }
           // 避免重复 push 到 errors 数组
@@ -1514,11 +1570,11 @@ defineExpose({
 
 <style scoped>
 .indicator-form-wrapper {
-  padding: 16px 0;
+  padding: 4px 0;
 }
 
 .indicator-category-section {
-  margin-bottom: 24px;
+  margin-bottom: 32px;
 }
 
 .indicator-category-section:last-child {
@@ -1526,76 +1582,155 @@ defineExpose({
 }
 
 .category-title {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
-  color: #333;
-  margin-bottom: 16px;
-  padding-bottom: 8px;
-  border-bottom: 2px solid #1890ff;
+  color: hsl(var(--foreground));
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  padding-left: 12px;
+  border-bottom: 2px solid hsl(var(--primary));
+  border-left: 4px solid hsl(var(--primary));
+  letter-spacing: 0.3px;
 }
 
 .category-title--level2 {
-  font-size: 15px;
-  font-weight: 600;
-  color: #555;
-  border-bottom: 1px dashed #ccc;
-  margin-top: 16px;
+  font-size: 14px;
+  color: hsl(var(--muted-foreground));
+  border-bottom-color: hsl(var(--primary-light) / 0.5);
+  border-left-color: hsl(var(--primary-light));
 }
 
 .indicator-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 .indicator-row {
   display: grid;
-  grid-template-columns: 1fr 20%;
-  gap: 16px;
-  background: #fafafa;
-  border: 1px solid #f0f0f0;
-  border-radius: 8px;
-  padding: 12px 16px;
-  transition: border-color 0.2s;
-  min-width: 0;
+  grid-template-columns: 1fr 180px;
+  gap: 0;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: 10px;
+  padding: 14px 16px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  position: relative;
+  overflow: hidden;
+}
+
+.indicator-row::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: hsl(var(--primary));
+  border-radius: 10px 0 0 10px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.indicator-row::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: hsl(var(--primary));
+  border-radius: 10px 0 0 10px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.indicator-row::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: hsl(var(--primary));
+  border-radius: 10px 0 0 10px;
+  opacity: 0;
+  transition: opacity 0.2s;
 }
 
 .indicator-row:hover {
-  border-color: #1890ff;
+  border-color: hsl(var(--primary) / 0.4);
+  box-shadow: 0 2px 12px hsl(var(--primary) / 0.08);
+}
+
+.indicator-row:hover::before {
+  opacity: 1;
 }
 
 .indicator-main {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  padding-right: 16px;
+  flex: 1;
+  min-width: 0;
+}
+
+.indicator-main--inline {
+  flex: none;
+  align-self: center;
+}
+
+.indicator-last-value {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  border-left: 1px solid hsl(var(--border));
+  padding-left: 16px;
+  gap: 4px;
+}
+
+/* 开关/radio/checkbox 行：让 grid 列收缩到内容宽度 */
+.indicator-main--inline {
+  flex: none;
+  align-self: center;
 }
 
 .indicator-label-row {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .label-text {
   font-size: 14px;
   font-weight: 500;
-  color: #333;
+  color: hsl(var(--foreground));
+  line-height: 1.4;
 }
 
 .label-text.has-caliber {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  color: #1890ff;
+  color: hsl(var(--primary));
   cursor: pointer;
+  font-weight: 600;
+  transition: color 0.15s;
+}
+
+.label-text.has-caliber:hover {
+  color: hsl(var(--primary-dark));
 }
 
 .caliber-icon {
-  font-size: 14px;
+  font-size: 13px;
   flex-shrink: 0;
+  opacity: 0.7;
 }
 
-/* 口径 Popover 内容 */
 .caliber-popover-content {
   display: flex;
   flex-direction: column;
@@ -1614,36 +1749,72 @@ defineExpose({
 .caliber-label {
   font-size: 12px;
   font-weight: 600;
-  color: #555;
+  color: hsl(var(--muted-foreground));
   line-height: 1.4;
 }
 
 .caliber-value {
   font-size: 13px;
-  color: #333;
+  color: hsl(var(--foreground));
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-all;
 }
 
 .required-tag {
-  font-size: 12px;
-  padding: 0 4px;
+  font-size: 11px;
+  padding: 0 6px;
   height: 20px;
   line-height: 18px;
+  border-radius: 4px;
+  font-weight: 600;
+  background: hsl(var(--destructive) / 0.1);
+  color: hsl(var(--destructive));
+  border-color: hsl(var(--destructive) / 0.2);
 }
 
 .computed-tag {
-  font-size: 12px;
-  padding: 0 4px;
+  font-size: 11px;
+  padding: 0 6px;
   height: 20px;
   line-height: 18px;
+  border-radius: 4px;
+  font-weight: 600;
+  background: hsl(var(--warning) / 0.1);
+  color: hsl(var(--warning));
+  border-color: hsl(var(--warning) / 0.2);
+}
+
+.switch-wrapper {
+  display: inline-flex;
+  align-items: center;
+}
+
+.switch-auto-width {
+  width: auto !important;
 }
 
 .indicator-input-row {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-width: 0;
+}
+
+/* 开关/radio/checkbox 同行显示，不撑满宽度 */
+.input-row--inline {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.input-row--inline :deep(.ant-switch),
+.input-row--inline :deep(.ant-radio-group),
+.input-row--inline :deep(.ant-checkbox-group) {
+  width: auto !important;
+  min-width: 0 !important;
 }
 
 .w-full {
@@ -1651,38 +1822,43 @@ defineExpose({
 }
 
 .indicator-error {
-  color: #ff4d4f;
-  font-size: 12px;
-  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: hsl(var(--destructive));
+  font-size: 12.5px;
+  margin-top: 6px;
+  padding: 6px 10px;
+  background: hsl(var(--destructive) / 0.06);
+  border: 1px solid hsl(var(--destructive) / 0.2);
+  border-radius: 6px;
+  line-height: 1.4;
 }
 
-.text-gray-400 {
-  color: #999;
-  font-size: 13px;
-}
-
-/* 右侧上期值样式 */
 .indicator-last-value {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  border-left: 1px solid #e8e8e8;
+  border-left: 1px solid hsl(var(--border));
   padding-left: 16px;
+  gap: 4px;
 }
 
 .last-value-label {
-  font-size: 12px;
-  color: #999;
-  margin-bottom: 4px;
+  font-size: 11px;
+  color: hsl(var(--muted-foreground));
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
 }
 
 .last-value-content {
   font-size: 16px;
-  font-weight: 500;
-  color: #666;
+  font-weight: 600;
+  color: hsl(var(--success));
+  line-height: 1.2;
 }
 
-/* 文件上传样式 */
 .file-upload-wrapper {
   display: flex;
   flex-direction: column;
@@ -1700,15 +1876,15 @@ defineExpose({
   align-items: center;
   gap: 4px;
   padding: 4px 8px;
-  background: #fff;
-  border: 1px solid #d9d9d9;
-  border-radius: 4px;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: 6px;
   max-width: 200px;
 }
 
 .file-icon {
   flex-shrink: 0;
-  color: #1890ff;
+  color: hsl(var(--primary));
 }
 
 .file-name {
@@ -1717,6 +1893,7 @@ defineExpose({
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 12px;
+  color: hsl(var(--foreground));
 }
 
 .file-delete-btn {
@@ -1725,16 +1902,17 @@ defineExpose({
   border: none;
   background: none;
   cursor: pointer;
-  color: #ff4d4f;
+  color: hsl(var(--destructive));
   display: flex;
   align-items: center;
+  opacity: 0.7;
+  transition: opacity 0.15s;
 }
 
 .file-delete-btn:hover {
-  color: #ff7875;
+  opacity: 1;
 }
 
-/* 动态容器填报样式 */
 .dynamic-container-form {
   display: flex;
   flex-direction: column;
@@ -1751,7 +1929,7 @@ defineExpose({
   min-width: 120px;
   line-height: 32px;
   font-size: 14px;
-  color: #333;
+  color: hsl(var(--foreground));
   flex-shrink: 0;
 }
 
@@ -1760,6 +1938,7 @@ defineExpose({
 }
 
 .text-red-500 {
-  color: #ff4d4f;
+  color: hsl(var(--destructive));
+  font-weight: 600;
 }
 </style>
