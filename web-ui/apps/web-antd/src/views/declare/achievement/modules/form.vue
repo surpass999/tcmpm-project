@@ -1,8 +1,6 @@
 <script lang="ts" setup>
 import type { DeclareAchievementApi } from '#/api/declare/achievement';
-import type { DeclareProjectApi } from '#/api/declare/project';
-
-import { nextTick, ref, onMounted } from 'vue';
+import { nextTick, ref } from 'vue';
 
 import { useVbenModal } from '@vben/common-ui';
 
@@ -24,33 +22,12 @@ import {
   SHARE_SCOPE_OPTIONS,
   TRANSFORM_TYPE_OPTIONS,
 } from '../data';
-import { getProjectSimpleList } from '#/api/declare/project';
 import { uploadFile } from '#/api/infra/file';
 
 const emit = defineEmits(['success']);
 
-// 项目列表数据
-const projectList = ref<DeclareProjectApi.Project[]>([]);
-
-// 加载项目列表
-async function loadProjectList() {
-  try {
-    const res = await getProjectSimpleList();
-    projectList.value = res || [];
-  } catch (error) {
-    console.error('加载项目列表失败:', error);
-    projectList.value = [];
-  }
-}
-
-// 页面加载时获取项目列表
-onMounted(() => {
-  loadProjectList();
-});
-
 // 表单数据 - 使用 reactive 确保对象始终存在
 const formData = ref<DeclareAchievementApi.Achievement>({
-  projectId: undefined,
   achievementName: '',
   achievementType: undefined,
   applicationField: '',
@@ -177,11 +154,6 @@ const [Modal, modalApi] = useVbenModal({
     modalApi.lock();
     try {
       // 简单的必填字段验证
-      if (!formData.value.projectId) {
-        message.error('请选择关联项目');
-        modalApi.unlock();
-        return false;
-      }
       if (!formData.value.achievementName) {
         message.error('请输入成果名称');
         modalApi.unlock();
@@ -257,7 +229,6 @@ const [Modal, modalApi] = useVbenModal({
     if (!isOpen) {
       fileList.value = [];
       formData.value = {
-        projectId: undefined,
         achievementName: '',
         achievementType: undefined,
         applicationField: '',
@@ -289,7 +260,6 @@ const [Modal, modalApi] = useVbenModal({
         console.log('[编辑模式] 设置后的 fileList:', fileList.value);
 
         formData.value = { ...result } || {
-          projectId: undefined,
           achievementName: '',
           achievementType: undefined,
           applicationField: '',
@@ -352,15 +322,6 @@ defineExpose({ setData: modalApi.setData });
               <span class="header-desc">成果的基本信息</span>
             </div>
           </template>
-
-          <a-form-item label="关联项目" name="projectId" class="form-item-highlight">
-            <a-select
-              v-model:value="formData.projectId"
-              placeholder="请选择关联项目"
-              :options="projectList.map(p => ({ label: p.projectName, value: p.id }))"
-              allow-clear
-            />
-          </a-form-item>
 
           <a-form-item label="成果名称" name="achievementName" class="form-item-highlight">
             <a-input v-model:value="formData.achievementName" placeholder="请输入成果名称" allow-clear />

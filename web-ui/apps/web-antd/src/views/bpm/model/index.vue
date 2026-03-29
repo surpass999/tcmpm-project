@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import type { ModelCategoryInfo } from '#/api/bpm/model';
 
-import { onActivated, reactive, ref, useTemplateRef, watch } from 'vue';
+import { onActivated, onMounted, reactive, ref, useTemplateRef, watch } from 'vue';
 
 import { Page, useVbenModal } from '@vben/common-ui';
 import { IconifyIcon } from '@vben/icons';
@@ -26,6 +26,7 @@ const [CategoryFormModal, categoryFormModalApi] = useVbenModal({
 });
 
 const modelListSpinning = ref(false); // 模型列表加载状态
+const isDataLoaded = ref(false); // 数据是否已加载
 
 const saveSortLoading = ref(false); // 保存排序状态
 const categoryGroup = ref<ModelCategoryInfo[]>([]); // 按照 category 分组的数据
@@ -70,14 +71,23 @@ async function getList() {
     }));
     // 重置排序实例
     sortableInstance.value = null;
+    isDataLoaded.value = true;
   } finally {
     modelListSpinning.value = false;
   }
 }
 
-/** 初始化 */
-onActivated(() => {
+/** 初始化 - 同时在 onMounted 和 onActivated 中调用，确保首次和后续访问都能加载数据 */
+onMounted(() => {
   getList();
+});
+
+/** 激活时刷新 */
+onActivated(() => {
+  // 如果数据已加载且分类列表为空，说明可能是从其他页面返回，刷新数据
+  if (isDataLoaded.value && categoryGroup.value.length === 0) {
+    getList();
+  }
 });
 
 /** 新增模型 */
@@ -140,7 +150,7 @@ async function handleCategorySortSubmit() {
 </script>
 
 <template>
-  <Page auto-content-height>
+  <Page>
     <!-- 流程分类表单弹窗 -->
     <CategoryFormModal @success="getList" />
     <Card

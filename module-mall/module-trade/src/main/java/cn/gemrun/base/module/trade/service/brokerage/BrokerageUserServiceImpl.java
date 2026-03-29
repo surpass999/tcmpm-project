@@ -7,11 +7,8 @@ import cn.hutool.core.util.BooleanUtil;
 import cn.hutool.core.util.ObjUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.gemrun.base.framework.common.pojo.PageResult;
-import cn.gemrun.base.framework.common.util.date.LocalDateTimeUtils;
 import cn.gemrun.base.framework.common.util.object.BeanUtils;
 import cn.gemrun.base.framework.mybatis.core.util.MyBatisUtils;
-import cn.gemrun.base.module.member.api.user.MemberUserApi;
-import cn.gemrun.base.module.member.api.user.dto.MemberUserRespDTO;
 import cn.gemrun.base.module.trade.controller.admin.brokerage.vo.user.BrokerageUserCreateReqVO;
 import cn.gemrun.base.module.trade.controller.admin.brokerage.vo.user.BrokerageUserPageReqVO;
 import cn.gemrun.base.module.trade.controller.app.brokerage.vo.user.AppBrokerageUserChildSummaryPageReqVO;
@@ -22,6 +19,7 @@ import cn.gemrun.base.module.trade.convert.brokerage.BrokerageUserConvert;
 import cn.gemrun.base.module.trade.dal.dataobject.brokerage.BrokerageUserDO;
 import cn.gemrun.base.module.trade.dal.dataobject.config.TradeConfigDO;
 import cn.gemrun.base.module.trade.dal.mysql.brokerage.BrokerageUserMapper;
+import cn.gemrun.base.module.trade.dto.MemberUserRespDTO;
 import cn.gemrun.base.module.trade.enums.brokerage.BrokerageBindModeEnum;
 import cn.gemrun.base.module.trade.enums.brokerage.BrokerageEnabledConditionEnum;
 import cn.gemrun.base.module.trade.enums.brokerage.BrokerageRecordBizTypeEnum;
@@ -37,7 +35,6 @@ import java.time.LocalDateTime;
 import java.util.*;
 
 import static cn.gemrun.base.framework.common.exception.util.ServiceExceptionUtil.exception;
-import static cn.gemrun.base.framework.common.util.collection.CollectionUtils.convertMapByFilter;
 import static cn.gemrun.base.module.trade.enums.ErrorCodeConstants.*;
 
 /**
@@ -54,9 +51,6 @@ public class BrokerageUserServiceImpl implements BrokerageUserService {
 
     @Resource
     private TradeConfigService tradeConfigService;
-
-    @Resource
-    private MemberUserApi memberUserApi;
 
     @Override
     public BrokerageUserDO getBrokerageUser(Long id) {
@@ -261,19 +255,16 @@ public class BrokerageUserServiceImpl implements BrokerageUserService {
         if (CollUtil.isEmpty(childIds)) {
             return PageResult.empty();
         }
-        // 1.2 根据昵称过滤下级用户
-        List<MemberUserRespDTO> users = memberUserApi.getUserList(childIds);
-        Map<Long, MemberUserRespDTO> userMap = convertMapByFilter(users,
-                user -> StrUtil.contains(user.getNickname(), pageReqVO.getNickname()),
-                MemberUserRespDTO::getId);
-        if (CollUtil.isEmpty(userMap)) {
+        // 1.2 会员模块已移除，无法根据昵称过滤下级用户，直接返回空结果
+        if (StrUtil.isNotBlank(pageReqVO.getNickname())) {
             return PageResult.empty();
         }
+        Map<Long, MemberUserRespDTO> userMap = Collections.emptyMap();
 
         // 2. 分页查询
         IPage<AppBrokerageUserChildSummaryRespVO> pageResult = brokerageUserMapper.selectSummaryPageByUserId(
                 MyBatisUtils.buildPage(pageReqVO), BrokerageRecordBizTypeEnum.ORDER.getType(),
-                BrokerageRecordStatusEnum.SETTLEMENT.getStatus(), userMap.keySet(), pageReqVO.getSortingField()
+                BrokerageRecordStatusEnum.SETTLEMENT.getStatus(), childIds, pageReqVO.getSortingField()
         );
 
         // 3. 拼接数据并返回
@@ -305,25 +296,18 @@ public class BrokerageUserServiceImpl implements BrokerageUserService {
     /**
      * 判断是否为新用户
      * <p>
-     * 标准：注册时间在 30 秒内的，都算新用户
-     * <p>
-     * 疑问：为什么通过这样的方式实现？
-     * 回答：因为注册在 member 模块，希望它和 trade 模块解耦，所以只能用这种约定的逻辑。
+     * 会员模块已移除，无法判断注册时间，始终返回 false
      *
      * @param userId 用户编号
      * @return 是否新用户
      */
     private boolean isNewRegisterUser(Long userId) {
-        MemberUserRespDTO user = memberUserApi.getUser(userId);
-        return user != null && LocalDateTimeUtils.afterNow(user.getCreateTime().plusSeconds(30));
+        // 会员模块已移除，无法获取用户注册时间，无法判断是否新用户
+        return false;
     }
 
     private void validateCanBindUser(BrokerageUserDO user, Long bindUserId) {
-        // 1.1 校验推广人是否存在
-        MemberUserRespDTO bindUserInfo = memberUserApi.getUser(bindUserId);
-        if (bindUserInfo == null) {
-            throw exception(BROKERAGE_USER_NOT_EXISTS);
-        }
+        // 1.1 会员模块已移除，跳过推广人存在性校验，直接使用分销用户表校验
         // 1.2 校验要绑定的用户有无推广资格
         BrokerageUserDO bindUser = getOrCreateBrokerageUser(bindUserId);
         if (bindUser == null || BooleanUtil.isFalse(bindUser.getBrokerageEnabled())) {

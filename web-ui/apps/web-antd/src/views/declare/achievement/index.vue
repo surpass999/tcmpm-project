@@ -19,7 +19,6 @@ import { useBpmApproval } from '#/composables/useBpmApproval';
 import ApprovalModal from '#/components/bpm/ApprovalModal.vue';
 import ReturnModal from '#/components/bpm/ReturnModal.vue';
 import UserSelectModal from '#/components/bpm/UserSelectModal.vue';
-import ExpertSelectModalCmp from '#/components/bpm/ExpertSelectModal.vue';
 import { $t } from '#/locales';
 
 import Form from './modules/form.vue';
@@ -106,26 +105,7 @@ const {
     returnModalRef.value?.open({ taskId, title: '退回' });
     return true;
   },
-  onOpenExpertSelect: (taskId: string) => {
-    // 使用专家选择弹窗
-    openExpertSelectModal(taskId);
-    return true;
-  },
 });
-
-// ========== 专家选择弹窗相关 ==========
-const expertSelectVisible = ref(false);
-const currentExpertTaskId = ref<string>('');
-
-function openExpertSelectModal(taskId: string) {
-  currentExpertTaskId.value = taskId;
-  expertSelectVisible.value = true;
-}
-
-async function handleExpertSelectConfirm(experts: any[]) {
-  await handleSelectExpert(currentExpertTaskId.value, experts);
-  expertSelectVisible.value = false;
-}
 
 /** 获取行操作按钮列表 */
 function getRowActions(row: DeclareAchievementApi.Achievement) {
@@ -351,11 +331,6 @@ const [Grid, gridApi] = useVbenVxeGrid({
     <UserSelectModal
       ref="userSelectModalRef"
       @confirm="(users, reason) => handleUserSelectConfirm(users, reason)"
-    />
-    <!-- 专家选择弹窗 -->
-    <ExpertSelectModalCmp
-      v-model:open="expertSelectVisible"
-      @confirm="handleExpertSelectConfirm"
     />
     <Grid table-title="成果信息列表">
       <template #toolbar-tools>

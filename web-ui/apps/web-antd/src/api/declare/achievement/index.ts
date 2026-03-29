@@ -9,7 +9,6 @@ export namespace DeclareAchievementApi {
     // 基础字段
     id: number;
     processInstanceId?: string;
-    projectId?: number;
     deptId?: number;
     projectName?: string;
 

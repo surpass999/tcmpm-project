@@ -1,7 +1,6 @@
 package cn.gemrun.base.module.promotion.dal.dataobject.kefu;
 
 import cn.gemrun.base.framework.mybatis.core.dataobject.BaseDO;
-import cn.gemrun.base.module.member.api.user.dto.MemberUserRespDTO;
 import cn.gemrun.base.module.promotion.enums.kefu.KeFuMessageContentTypeEnum;
 import com.baomidou.mybatisplus.annotation.KeySequence;
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -33,7 +32,7 @@ public class KeFuConversationDO extends BaseDO {
     /**
      * 会话所属用户
      *
-     * 关联 {@link MemberUserRespDTO#getId()}
+     * 关联用户编号
      */
     private Long userId;
 

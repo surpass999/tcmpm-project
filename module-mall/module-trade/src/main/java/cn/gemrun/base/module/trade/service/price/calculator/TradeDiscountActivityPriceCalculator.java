@@ -2,11 +2,6 @@ package cn.gemrun.base.module.trade.service.price.calculator;
 
 import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.core.util.StrUtil;
-import cn.gemrun.base.framework.common.enums.CommonStatusEnum;
-import cn.gemrun.base.module.member.api.level.MemberLevelApi;
-import cn.gemrun.base.module.member.api.level.dto.MemberLevelRespDTO;
-import cn.gemrun.base.module.member.api.user.MemberUserApi;
-import cn.gemrun.base.module.member.api.user.dto.MemberUserRespDTO;
 import cn.gemrun.base.module.promotion.api.discount.DiscountActivityApi;
 import cn.gemrun.base.module.promotion.api.discount.dto.DiscountProductRespDTO;
 import cn.gemrun.base.module.promotion.enums.common.PromotionDiscountTypeEnum;
@@ -39,10 +34,6 @@ public class TradeDiscountActivityPriceCalculator implements TradePriceCalculato
 
     @Resource
     private DiscountActivityApi discountActivityApi;
-    @Resource
-    private MemberLevelApi memberLevelApi;
-    @Resource
-    private MemberUserApi memberUserApi;
 
     @Override
     public void calculate(TradePriceCalculateReqBO param, TradePriceCalculateRespBO result) {
@@ -55,42 +46,28 @@ public class TradeDiscountActivityPriceCalculator implements TradePriceCalculato
         List<DiscountProductRespDTO> discountProducts = discountActivityApi.getMatchDiscountProductListBySkuIds(
                 convertSet(result.getItems(), TradePriceCalculateRespBO.OrderItem::getSkuId));
         Map<Long, DiscountProductRespDTO> discountProductMap = convertMap(discountProducts, DiscountProductRespDTO::getSkuId);
-        // 1.2 获得会员等级
-        MemberLevelRespDTO level = getMemberLevel(param.getUserId());
 
-        // 2. 计算每个 SKU 的优惠金额
+        // 2. 计算每个 SKU 的优惠金额（会员模块已移除，只计算限时折扣优惠）
         result.getItems().forEach(orderItem -> {
             if (!orderItem.getSelected()) {
                 return;
             }
-            // 2.1 计算限时折扣的优惠金额
+            // 计算限时折扣的优惠金额
             DiscountProductRespDTO discountProduct = discountProductMap.get(orderItem.getSkuId());
             Integer discountPrice = calculateActivityPrice(discountProduct, orderItem);
-            // 2.2 计算 VIP 优惠金额
-            Integer vipPrice = calculateVipPrice(level, orderItem);
-            if (discountPrice <= 0 && vipPrice <= 0) {
+            if (discountPrice <= 0) {
                 return;
             }
 
-            // 3. 选择优惠金额多的
-            if (discountPrice > vipPrice) {
-                TradePriceCalculatorHelper.addPromotion(result, orderItem,
-                        discountProduct.getActivityId(), discountProduct.getActivityName(), PromotionTypeEnum.DISCOUNT_ACTIVITY.getType(),
-                        StrUtil.format("限时折扣：省 {} 元", formatPrice(discountPrice)),
-                        discountPrice);
-                // 更新 SKU 优惠金额
-                orderItem.setDiscountPrice(orderItem.getDiscountPrice() + discountPrice);
-            } else {
-                assert level != null;
-                TradePriceCalculatorHelper.addPromotion(result, orderItem,
-                        level.getId(), level.getName(), PromotionTypeEnum.MEMBER_LEVEL.getType(),
-                        String.format("会员等级折扣：省 %s 元", formatPrice(vipPrice)),
-                        vipPrice);
-                // 更新 SKU 的优惠金额
-                orderItem.setVipPrice(vipPrice);
-            }
+            // 记录优惠明细
+            TradePriceCalculatorHelper.addPromotion(result, orderItem,
+                    discountProduct.getActivityId(), discountProduct.getActivityName(), PromotionTypeEnum.DISCOUNT_ACTIVITY.getType(),
+                    StrUtil.format("限时折扣：省 {} 元", formatPrice(discountPrice)),
+                    discountPrice);
+            // 更新 SKU 优惠金额
+            orderItem.setDiscountPrice(orderItem.getDiscountPrice() + discountPrice);
 
-            // 4. 分摊优惠
+            // 分摊优惠
             TradePriceCalculatorHelper.recountPayPrice(orderItem);
             TradePriceCalculatorHelper.recountAllPrice(result);
         });
@@ -100,14 +77,11 @@ public class TradeDiscountActivityPriceCalculator implements TradePriceCalculato
      * 获得用户的等级
      *
      * @param userId 用户编号
-     * @return 用户等级
+     * @return 用户等级（会员模块已移除，始终返回 null）
      */
-    public MemberLevelRespDTO getMemberLevel(Long userId) {
-        MemberUserRespDTO user = memberUserApi.getUser(userId);
-        if (user == null || user.getLevelId() == null || user.getLevelId() <= 0) {
-            return null;
-        }
-        return memberLevelApi.getMemberLevel(user.getLevelId());
+    public Object getMemberLevel(Long userId) {
+        // 会员模块已移除，无法获取会员等级
+        return null;
     }
 
     /**
@@ -134,21 +108,16 @@ public class TradeDiscountActivityPriceCalculator implements TradePriceCalculato
     }
 
     /**
-     * 计算会员 VIP 的优惠价格
+     * 计算会员 VIP 的优惠价格（会员模块已移除，始终返回 0）
      *
      * @param level 会员等级
      * @param orderItem 交易项
      * @return 优惠价格
      */
-    public Integer calculateVipPrice(MemberLevelRespDTO level,
+    public Integer calculateVipPrice(Object level,
                                       TradePriceCalculateRespBO.OrderItem orderItem) {
-        if (level == null
-                || CommonStatusEnum.isDisable(level.getStatus())
-                || level.getDiscountPercent() == null) {
-            return 0;
-        }
-        Integer newPrice = calculateRatePrice(orderItem.getPayPrice(), level.getDiscountPercent().doubleValue());
-        return orderItem.getPayPrice() - newPrice;
+        // 会员模块已移除，无法计算 VIP 优惠
+        return 0;
     }
 
 }

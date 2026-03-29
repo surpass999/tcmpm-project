@@ -4,7 +4,7 @@ import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.gemrun.base.framework.common.pojo.PageResult;
 import cn.gemrun.base.framework.common.util.number.MoneyUtils;
-import cn.gemrun.base.module.member.api.user.dto.MemberUserRespDTO;
+import cn.gemrun.base.module.trade.dto.MemberUserRespDTO;
 import cn.gemrun.base.module.trade.controller.admin.brokerage.vo.record.BrokerageRecordRespVO;
 import cn.gemrun.base.module.trade.controller.app.brokerage.vo.user.AppBrokerageUserRankByPriceRespVO;
 import cn.gemrun.base.module.trade.dal.dataobject.brokerage.BrokerageRecordDO;

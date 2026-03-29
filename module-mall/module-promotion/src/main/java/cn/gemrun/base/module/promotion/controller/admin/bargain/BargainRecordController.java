@@ -3,8 +3,6 @@ package cn.gemrun.base.module.promotion.controller.admin.bargain;
 import cn.hutool.core.collection.CollUtil;
 import cn.gemrun.base.framework.common.pojo.CommonResult;
 import cn.gemrun.base.framework.common.pojo.PageResult;
-import cn.gemrun.base.module.member.api.user.MemberUserApi;
-import cn.gemrun.base.module.member.api.user.dto.MemberUserRespDTO;
 import cn.gemrun.base.module.promotion.controller.admin.bargain.vo.recrod.BargainRecordPageItemRespVO;
 import cn.gemrun.base.module.promotion.controller.admin.bargain.vo.recrod.BargainRecordPageReqVO;
 import cn.gemrun.base.module.promotion.convert.bargain.BargainRecordConvert;
@@ -23,6 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import javax.annotation.Resource;
 import javax.validation.Valid;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -42,9 +41,6 @@ public class BargainRecordController {
     @Resource
     private BargainHelpService bargainHelpService;
 
-    @Resource
-    private MemberUserApi memberUserApi;
-
     @GetMapping("/page")
     @Operation(summary = "获得砍价记录分页")
     @PreAuthorize("@ss.hasPermission('promotion:bargain-record:query')")
@@ -54,14 +50,12 @@ public class BargainRecordController {
             return success(PageResult.empty(pageResult.getTotal()));
         }
 
-        // 拼接数据
-        Map<Long, MemberUserRespDTO> userMap = memberUserApi.getUserMap(
-                convertSet(pageResult.getList(), BargainRecordDO::getUserId));
+        // 拼接数据 - userMap removed, cannot depend on member module
         List<BargainActivityDO> activityList = bargainActivityService.getBargainActivityList(
                 convertSet(pageResult.getList(), BargainRecordDO::getActivityId));
         Map<Long, Integer> helpCountMap = bargainHelpService.getBargainHelpUserCountMapByRecord(
                 convertSet(pageResult.getList(), BargainRecordDO::getId));
-        return success(BargainRecordConvert.INSTANCE.convertPage(pageResult, helpCountMap, activityList, userMap));
+        return success(BargainRecordConvert.INSTANCE.convertPage(pageResult, helpCountMap, activityList, Collections.emptyMap()));
     }
 
 }

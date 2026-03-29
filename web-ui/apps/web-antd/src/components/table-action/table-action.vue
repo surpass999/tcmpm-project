@@ -41,6 +41,13 @@ const props = defineProps({
 
 const { hasAccessByCodes } = useAccess();
 
+/** 将 auth 字段规范化为数组，兼容字符串/空值等情况 */
+function normalizeAuthCodes(auth: ActionItem['auth']): string[] {
+  if (Array.isArray(auth)) return auth;
+  if (typeof auth === 'string' && auth) return [auth];
+  return [];
+}
+
 /** 检查是否显示 */
 function isIfShow(action: ActionItem): boolean {
   const ifShow = action.ifShow;
@@ -52,8 +59,8 @@ function isIfShow(action: ActionItem): boolean {
     isIfShow = ifShow(action);
   }
   if (isIfShow) {
-    isIfShow =
-      hasAccessByCodes(action.auth || []) || (action.auth || []).length === 0;
+    const codes = normalizeAuthCodes(action.auth);
+    isIfShow = codes.length === 0 || hasAccessByCodes(codes);
   }
   return isIfShow;
 }
@@ -187,8 +194,8 @@ watch(
     <Dropdown v-if="getDropdownList.length > 0" :trigger="['hover']">
       <slot name="more">
         <Button type="link">
+          {{ $t('page.action.more') }}
           <template #icon>
-            {{ $t('page.action.more') }}
             <IconifyIcon icon="lucide:ellipsis-vertical" />
           </template>
         </Button>

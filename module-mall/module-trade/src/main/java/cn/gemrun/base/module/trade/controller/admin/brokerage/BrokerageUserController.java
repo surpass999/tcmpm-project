@@ -2,11 +2,10 @@ package cn.gemrun.base.module.trade.controller.admin.brokerage;
 
 import cn.gemrun.base.framework.common.pojo.CommonResult;
 import cn.gemrun.base.framework.common.pojo.PageResult;
-import cn.gemrun.base.module.member.api.user.MemberUserApi;
-import cn.gemrun.base.module.member.api.user.dto.MemberUserRespDTO;
 import cn.gemrun.base.module.trade.controller.admin.brokerage.vo.user.*;
 import cn.gemrun.base.module.trade.convert.brokerage.BrokerageUserConvert;
 import cn.gemrun.base.module.trade.dal.dataobject.brokerage.BrokerageUserDO;
+import cn.gemrun.base.module.trade.dto.MemberUserRespDTO;
 import cn.gemrun.base.module.trade.enums.brokerage.BrokerageRecordBizTypeEnum;
 import cn.gemrun.base.module.trade.enums.brokerage.BrokerageRecordStatusEnum;
 import cn.gemrun.base.module.trade.enums.brokerage.BrokerageWithdrawStatusEnum;
@@ -24,6 +23,7 @@ import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
 import javax.validation.Valid;
+import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
 
@@ -44,9 +44,6 @@ public class BrokerageUserController {
     private BrokerageRecordService brokerageRecordService;
     @Resource
     private BrokerageWithdrawService brokerageWithdrawService;
-
-    @Resource
-    private MemberUserApi memberUserApi;
 
     @PostMapping("/create")
     @Operation(summary = "创建分销用户")
@@ -87,7 +84,7 @@ public class BrokerageUserController {
         BrokerageUserDO brokerageUser = brokerageUserService.getBrokerageUser(id);
         // TODO @疯狂：是不是搞成一个统一的 convert？
         BrokerageUserRespVO respVO = BrokerageUserConvert.INSTANCE.convert(brokerageUser);
-        return success(BrokerageUserConvert.INSTANCE.copyTo(memberUserApi.getUser(id), respVO));
+        return success(BrokerageUserConvert.INSTANCE.copyTo(null, respVO));
     }
 
     @GetMapping("/page")
@@ -99,7 +96,7 @@ public class BrokerageUserController {
 
         // 查询用户信息
         Set<Long> userIds = convertSet(pageResult.getList(), BrokerageUserDO::getId);
-        Map<Long, MemberUserRespDTO> userMap = memberUserApi.getUserMap(userIds);
+        Map<Long, MemberUserRespDTO> userMap = Collections.emptyMap();
         // 合计分佣的推广订单
         Map<Long, UserBrokerageSummaryRespBO> brokerageOrderSummaryMap = brokerageRecordService.getUserBrokerageSummaryMapByUserId(
                 userIds, BrokerageRecordBizTypeEnum.ORDER.getType(), BrokerageRecordStatusEnum.SETTLEMENT.getStatus());

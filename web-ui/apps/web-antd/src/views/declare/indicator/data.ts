@@ -3,6 +3,22 @@ import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 
 import { DICT_TYPE } from '@vben/constants';
 import { getDictObj, getDictOptions } from '@vben/hooks';
+import { getIndicatorGroupList } from '#/api/declare/indicator-group';
+
+/** 分组ID -> 完整路径缓存（如 "一级分组-二级分组"） */
+let groupFullPathCache: Map<number, string> = new Map();
+
+/** 构建分组路径缓存（模块加载时主动预热，formatter 保持同步） */
+getIndicatorGroupList().then((list: any[]) => {
+  const idToName = new Map(list.map((g) => [g.id, g.groupName]));
+  for (const g of list) {
+    if (g.parentId && g.parentId !== 0 && idToName.has(g.parentId)) {
+      groupFullPathCache.set(g.id, `${idToName.get(g.parentId)}-${g.groupName}`);
+    } else {
+      groupFullPathCache.set(g.id, g.groupName);
+    }
+  }
+});
 
 /** 列表的搜索表单 */
 export function useGridFormSchema(): VbenFormSchema[] {
@@ -23,16 +39,6 @@ export function useGridFormSchema(): VbenFormSchema[] {
       componentProps: {
         placeholder: '请输入指标名称',
         allowClear: true,
-      },
-    },
-    {
-      fieldName: 'category',
-      label: '指标分类',
-      component: 'Select',
-      componentProps: {
-        placeholder: '请选择指标分类',
-        allowClear: true,
-        options: getDictOptions(DICT_TYPE.DECLARE_INDICATOR_CATEGORY, 'number'),
       },
     },
     {
@@ -57,7 +63,32 @@ export function useGridFormSchema(): VbenFormSchema[] {
         allowClear: true,
       },
     },
+    {
+      fieldName: 'groupId',
+      label: '分组',
+      component: 'ApiTreeSelect',
+      componentProps: {
+        placeholder: '请选择分组',
+        allowClear: true,
+        api: async () => {
+          const { getIndicatorGroupTree } = await import('#/api/declare/indicator-group');
+          const tree = await getIndicatorGroupTree();
+          return transformGroupTree(tree);
+        },
+      },
+    },
   ];
+}
+
+/** 转换分组树结构：以适配 ApiTreeSelect（fieldNames: label/value/children） */
+function transformGroupTree(
+  list: any[],
+): { label: string; value: number; children?: any[] }[] {
+  return list.map((item) => ({
+    label: item.groupName,
+    value: item.id,
+    children: item.children?.length ? transformGroupTree(item.children) : undefined,
+  }));
 }
 
 /** 列表的字段 */
@@ -95,16 +126,6 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       minWidth: 80,
     },
     {
-      field: 'category',
-      title: '分类',
-      minWidth: 100,
-      sortable: true,
-      cellRender: {
-        name: 'CellDict',
-        props: { type: DICT_TYPE.DECLARE_INDICATOR_CATEGORY },
-      },
-    },
-    {
       field: 'valueType',
       title: '值类型',
       minWidth: 100,
@@ -132,6 +153,15 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       title: '项目类型',
       minWidth: 100,
       formatter: projectTypeFormatter,
+    },
+    {
+      field: 'groupId',
+      title: '分组',
+      minWidth: 140,
+      formatter: ({ cellValue }) => {
+        if (!cellValue) return '-';
+        return groupFullPathCache.get(cellValue) || String(cellValue);
+      },
     },
     {
       field: 'businessType',
@@ -185,16 +215,6 @@ export function useModalFormSchema(): VbenFormSchema[] {
       component: 'Input',
       componentProps: {
         placeholder: '如：人、万元、次',
-      },
-    },
-    {
-      fieldName: 'category',
-      label: '指标分类',
-      component: 'Select',
-      rules: 'required',
-      componentProps: {
-        placeholder: '请选择指标分类',
-        options: getDictOptions(DICT_TYPE.DECLARE_INDICATOR_CATEGORY, 'number'),
       },
     },
     {

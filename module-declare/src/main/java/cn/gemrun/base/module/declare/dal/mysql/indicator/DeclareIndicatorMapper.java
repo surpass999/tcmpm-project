@@ -36,9 +36,9 @@ public interface DeclareIndicatorMapper extends BaseMapperX<DeclareIndicatorDO> 
                     .like(DeclareIndicatorDO::getIndicatorName, searchKey));
         }
         
-        wrapper.eqIfPresent(DeclareIndicatorDO::getCategory, reqVO.getCategory())
-                .eqIfPresent(DeclareIndicatorDO::getProjectType, reqVO.getProjectType())
+        wrapper.eqIfPresent(DeclareIndicatorDO::getProjectType, reqVO.getProjectType())
                 .eqIfPresent(DeclareIndicatorDO::getBusinessType, reqVO.getBusinessType())
+                .eqIfPresent(DeclareIndicatorDO::getGroupId, reqVO.getGroupId())
                 .orderByDesc(DeclareIndicatorDO::getId);
         
         return selectPage(reqVO, wrapper);
@@ -51,14 +51,14 @@ public interface DeclareIndicatorMapper extends BaseMapperX<DeclareIndicatorDO> 
                         .eq(DeclareIndicatorDO::getProjectType, projectType)
                         .or()
                         .eq(DeclareIndicatorDO::getProjectType, COMPREHENSIVE_PROJECT_TYPE))  // 通用类型适用于所有项目类型
-                .orderByAsc(DeclareIndicatorDO::getCategory)
+                .orderByAsc(DeclareIndicatorDO::getProjectType)
                 .orderByAsc(DeclareIndicatorDO::getSort));
     }
 
     default List<DeclareIndicatorDO> selectByBusinessType(String businessType) {
         return selectList(new LambdaQueryWrapperX<DeclareIndicatorDO>()
                 .like(DeclareIndicatorDO::getBusinessType, businessType)
-                .orderByAsc(DeclareIndicatorDO::getCategory)
+                .orderByAsc(DeclareIndicatorDO::getProjectType)
                 .orderByAsc(DeclareIndicatorDO::getSort));
     }
 
@@ -68,13 +68,13 @@ public interface DeclareIndicatorMapper extends BaseMapperX<DeclareIndicatorDO> 
     }
 
     /**
-     * 根据指标分类查询指标列表
-     * @param category 指标分类：1=基本情况，2=项目管理，3=系统功能，4=建设成效，5=数据集建设，6=数据交易，7=信息安全
+     * 根据分组ID查询指标列表
+     * @param groupId 分组ID
      * @return 指标列表
      */
-    default List<DeclareIndicatorDO> selectByCategory(Integer category) {
+    default List<DeclareIndicatorDO> selectByGroupId(Long groupId) {
         return selectList(new LambdaQueryWrapperX<DeclareIndicatorDO>()
-                .eq(DeclareIndicatorDO::getCategory, category)
+                .eq(DeclareIndicatorDO::getGroupId, groupId)
                 .orderByAsc(DeclareIndicatorDO::getSort));
     }
 

@@ -9,7 +9,6 @@ export namespace DeclareIndicatorApi {
     indicatorCode: string;
     indicatorName: string;
     unit: string;
-    category: number;
     caliberId?: number;
     logicRule: string;
     calculationRule: string;
@@ -24,6 +23,7 @@ export namespace DeclareIndicatorApi {
     childrenIndicatorCodes: string;
     projectType?: number;
     businessType: string;
+    groupId?: number;
     createTime?: string;
 
     // ========== 口径字段 ==========
@@ -45,7 +45,6 @@ export namespace DeclareIndicatorApi {
     indicatorCode: string;
     indicatorName: string;
     unit: string;
-    category: number;
     caliberId?: number;
     logicRule: string;
     calculationRule: string;
@@ -60,6 +59,7 @@ export namespace DeclareIndicatorApi {
     childrenIndicatorCodes: string;
     projectType?: number;
     businessType: string;
+    groupId?: number;
   }
 }
 
@@ -67,7 +67,6 @@ export namespace DeclareIndicatorApi {
 export async function getIndicatorPage(params: PageParam & {
   indicatorCode?: string;
   indicatorName?: string;
-  category?: number;
   projectType?: number;
   businessType?: string;
 }) {
@@ -118,4 +117,41 @@ export async function getIndicatorsForListDisplay(businessType: string) {
   return requestClient.get<DeclareIndicatorApi.Indicator[]>(
     `/declare/indicator/list-for-list-display?businessType=${businessType}`
   );
+}
+
+/** 获取上期填报值（businessType 默认为 3：进度类型） */
+export async function getLastPeriodValues(hospitalId: number, reportYear: number, reportBatch: number, businessType: number = 3) {
+  return requestClient.get<Record<string, string>>(
+    `/declare/indicator-value/last-period-values?hospitalId=${hospitalId}&reportYear=${reportYear}&reportBatch=${reportBatch}&businessType=${businessType}`,
+  );
+}
+
+/** 指标值类型 */
+export interface IndicatorValue {
+  indicatorId: number;
+  indicatorCode: string;
+  valueType: number;
+  valueNum?: string;
+  valueStr?: string;
+  valueBool?: boolean;
+  valueDate?: string;
+  valueDateStart?: string;
+  valueDateEnd?: string;
+  valueText?: string;
+}
+
+/** 获取进度填报的指标值列表（businessType 默认为 3：进度类型） */
+export async function getProgressReportIndicatorValues(reportId: number, businessType: number = 3) {
+  return requestClient.get<IndicatorValue[]>(
+    `/declare/indicator-value/progress-report-values?reportId=${reportId}&businessType=${businessType}`,
+  );
+}
+
+/** 保存进度填报指标值 */
+export async function saveProgressReportIndicatorValues(reportId: number, values: IndicatorValue[]) {
+  return requestClient.post('/declare/indicator-value/save', {
+    businessType: 3,
+    businessId: reportId,
+    values,
+  });
 }

@@ -1,6 +1,8 @@
 package cn.gemrun.base.module.declare.service.indicator;
 
 import cn.gemrun.base.module.declare.dal.dataobject.indicator.DeclareIndicatorValueDO;
+import cn.gemrun.base.module.declare.dal.mysql.DeclareProgressReportMapper;
+import cn.gemrun.base.module.declare.dal.dataobject.progress.DeclareProgressReportDO;
 import cn.gemrun.base.module.declare.dal.mysql.indicator.DeclareIndicatorValueMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -105,6 +107,57 @@ public class DeclareIndicatorValueServiceImpl implements DeclareIndicatorValueSe
         }
     }
 
+    @Resource
+    private DeclareProgressReportMapper progressReportMapper;
+
+    @Override
+    public Map<String, String> getLastPeriodIndicatorValues(Long hospitalId, Integer reportYear, Integer reportBatch, Integer businessType) {
+        if (businessType == null) {
+            businessType = 3; // 进度填报默认 businessType
+        }
+        // 计算上期：同一年度，上一批次
+        int lastBatch = reportBatch - 1;
+        if (lastBatch < 1) {
+            return new HashMap<>();
+        }
+
+        // 查询上期填报记录
+        DeclareProgressReportDO lastReport = progressReportMapper.selectByHospitalAndPeriod(hospitalId, reportYear, lastBatch);
+        if (lastReport == null) {
+            return new HashMap<>();
+        }
+
+        // 根据传入的 businessType 查询（移除硬编码的 1，改为参数化）
+        List<DeclareIndicatorValueDO> values = indicatorValueMapper.selectByBusiness(businessType, lastReport.getId());
+        Map<String, String> result = new HashMap<>();
+        for (DeclareIndicatorValueDO value : values) {
+            String displayValue = getDisplayValue(value);
+            if (displayValue != null) {
+                result.put(value.getIndicatorCode(), displayValue);
+            }
+        }
+        return result;
+    }
+
+    private String getDisplayValue(DeclareIndicatorValueDO value) {
+        if (value.getValueNum() != null) {
+            return value.getValueNum().toPlainString();
+        }
+        if (value.getValueStr() != null) {
+            return value.getValueStr();
+        }
+        if (value.getValueBool() != null) {
+            return value.getValueBool() ? "1" : "0";
+        }
+        if (value.getValueDate() != null) {
+            return value.getValueDate().toString();
+        }
+        if (value.getValueText() != null) {
+            return value.getValueText();
+        }
+        return null;
+    }
+
     @Override
     public void updateIndicatorValue(Long id, Object value) {
         DeclareIndicatorValueDO existing = indicatorValueMapper.selectById(id);
@@ -174,6 +227,21 @@ public class DeclareIndicatorValueServiceImpl implements DeclareIndicatorValueSe
                 break;
             case 5: // 长文本
                 indicatorValue.setValueText(value.toString());
+                break;
+            case 12: // 动态容器 - 将复杂对象序列化为 JSON 字符串
+                if (value instanceof Map) {
+                    try {
+                        com.fasterxml.jackson.databind.ObjectMapper mapper =
+                            new com.fasterxml.jackson.databind.ObjectMapper();
+                        indicatorValue.setValueStr(mapper.writeValueAsString(value));
+                    } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+                        indicatorValue.setValueStr(value.toString());
+                    }
+                } else if (value instanceof String) {
+                    indicatorValue.setValueStr((String) value);
+                } else {
+                    indicatorValue.setValueStr(value.toString());
+                }
                 break;
             default:
                 log.warn("未知值类型: {}", valueType);

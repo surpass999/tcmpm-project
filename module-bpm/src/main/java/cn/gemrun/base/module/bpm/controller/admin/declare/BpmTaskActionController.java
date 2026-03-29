@@ -2,28 +2,19 @@ package cn.gemrun.base.module.bpm.controller.admin.declare;
 
 import cn.gemrun.base.framework.common.pojo.CommonResult;
 import cn.gemrun.base.module.bpm.controller.admin.task.vo.task.*;
-import cn.gemrun.base.module.bpm.framework.flowable.core.util.BpmnModelUtils;
 import cn.gemrun.base.module.bpm.service.task.BpmProcessInstanceService;
 import cn.gemrun.base.module.bpm.service.task.BpmTaskService;
 import cn.gemrun.base.module.bpm.service.definition.BpmModelService;
 import cn.gemrun.base.module.system.service.user.AdminUserService;
-import cn.gemrun.base.module.system.dal.dataobject.user.AdminUserDO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import org.flowable.bpmn.model.BpmnModel;
-import org.flowable.bpmn.model.FlowNode;
-import org.flowable.engine.runtime.ProcessInstance;
-import org.flowable.task.api.Task;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
 import javax.validation.Valid;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
 
 import static cn.gemrun.base.framework.common.pojo.CommonResult.success;
 import static cn.gemrun.base.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId;
@@ -121,64 +112,6 @@ public class BpmTaskActionController {
     @PreAuthorize("isAuthenticated()")
     public CommonResult<Boolean> setNextAssignees(@Valid @RequestBody BpmTaskNextAssigneesReqVO reqVO) {
         taskService.setNextAssignees(getLoginUserId(), reqVO);
-        return success(true);
-    }
-
-    @PutMapping("/select-expert")
-    @Operation(summary = "选择专家", description = "简化接口，用于审批人选择专家，设置完下一个节点审批人后自动通过当前任务")
-    @PreAuthorize("isAuthenticated()")
-    public CommonResult<Boolean> selectExpert(@Valid @RequestBody SelectExpertReqVO reqVO) {
-        Long userId = getLoginUserId();
-
-        // 1. 获取任务信息
-        Task task = taskService.getTask(reqVO.getId());
-        if (task == null) {
-            throw new RuntimeException("任务不存在");
-        }
-
-        // 2. 获取流程实例
-        ProcessInstance instance = processInstanceService.getProcessInstance(task.getProcessInstanceId());
-        if (instance == null) {
-            throw new RuntimeException("流程实例不存在");
-        }
-
-        // 3. 获取 BPMN 模型和当前节点
-        BpmnModel bpmnModel = modelService.getBpmnModelByDefinitionId(task.getProcessDefinitionId());
-        org.flowable.bpmn.model.FlowElement flowElement = bpmnModel.getFlowElement(task.getTaskDefinitionKey());
-
-        // 4. 获取下一个节点列表
-        Map<String, Object> variables = instance.getProcessVariables() != null
-                ? new HashMap<>(instance.getProcessVariables())
-                : new HashMap<>();
-        List<FlowNode> nextFlowNodes = BpmnModelUtils.getNextFlowNodes(flowElement, bpmnModel, variables);
-
-        if (nextFlowNodes == null || nextFlowNodes.isEmpty()) {
-            throw new RuntimeException("无法获取下一个流程节点");
-        }
-
-        // 5. 将选择的专家设置到下一个节点
-        Map<String, List<Long>> nextAssignees = new HashMap<>();
-        for (FlowNode nextNode : nextFlowNodes) {
-            nextAssignees.put(nextNode.getId(), reqVO.getUserIds());
-        }
-
-        // 6. 获取用户昵称
-        List<AdminUserDO> users = adminUserService.getUserList(reqVO.getUserIds());
-        String userNames = users.stream()
-                .map(AdminUserDO::getNickname)
-                .collect(Collectors.joining(", "));
-
-        // 7. 构建通过任务请求，同时设置下一个节点的审批人
-        BpmTaskApproveReqVO approveReqVO = new BpmTaskApproveReqVO();
-        approveReqVO.setId(reqVO.getId());
-        approveReqVO.setNextAssignees(nextAssignees);
-        approveReqVO.setReason("设置专家审批人: " + userNames);
-        // 修复：如果前端未传 buttonId，默认设置为 8（选择专家按钮），使监听器能正确处理专家任务记录
-        approveReqVO.setButtonId(reqVO.getButtonId() != null ? reqVO.getButtonId() : 8);
-
-        // 8. 调用通过任务接口，完成当前任务并流转到下一个节点
-        taskService.approveTask(userId, approveReqVO);
-
         return success(true);
     }
 

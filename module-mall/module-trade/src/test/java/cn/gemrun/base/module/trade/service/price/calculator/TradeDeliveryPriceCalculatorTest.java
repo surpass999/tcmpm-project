@@ -2,8 +2,6 @@ package cn.gemrun.base.module.trade.service.price.calculator;
 
 import cn.hutool.core.map.MapUtil;
 import cn.gemrun.base.framework.test.core.ut.BaseMockitoUnitTest;
-import cn.gemrun.base.module.member.api.address.MemberAddressApi;
-import cn.gemrun.base.module.member.api.address.dto.MemberAddressRespDTO;
 import cn.gemrun.base.module.trade.dal.dataobject.config.TradeConfigDO;
 import cn.gemrun.base.module.trade.enums.delivery.DeliveryExpressChargeModeEnum;
 import cn.gemrun.base.module.trade.enums.delivery.DeliveryTypeEnum;
@@ -38,9 +36,6 @@ public class TradeDeliveryPriceCalculatorTest  extends BaseMockitoUnitTest {
 
     @InjectMocks
     private TradeDeliveryPriceCalculator calculator;
-
-    @Mock
-    private MemberAddressApi addressApi;
 
     @Mock
     private DeliveryExpressTemplateService deliveryExpressTemplateService;

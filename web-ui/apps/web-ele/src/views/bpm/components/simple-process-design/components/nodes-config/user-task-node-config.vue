@@ -58,7 +58,6 @@ import {
   TimeUnitType,
   TRANSACTOR_DEFAULT_BUTTON_SETTING,
 } from '../../consts';
-import { getSimpleProcessDefinitionList } from '#/api/bpm/definition';
 import {
   useNodeForm,
   useNodeName,
@@ -115,23 +114,6 @@ const { nodeName, showInput, clickIcon, changeNodeName, inputRef } =
 
 // 激活的 Tab 标签页
 const activeTabName = ref('user');
-
-// 流程定义列表（用于整改按钮下拉选择）
-const processDefinitionOptions = ref<{ key: string; label: string }[]>([]);
-
-async function loadProcessDefinitionOptions() {
-  try {
-    const result = await getSimpleProcessDefinitionList();
-    if (result && Array.isArray(result)) {
-      const currentModelKey = props.flowNode?.key || '';
-      processDefinitionOptions.value = result
-        .filter((item) => item.key && item.key !== currentModelKey)
-        .map((item) => ({ key: item.key!, label: item.name || item.key! }));
-    }
-  } catch (e) {
-    console.warn('加载流程定义列表失败', e);
-  }
-}
 
 // 表单字段权限设置
 const {
@@ -387,7 +369,6 @@ function showUserTaskNodeConfig(node: SimpleFlowNode) {
     node?.approveType === undefined ? ApproveType.USER : node.approveType;
   // 如果审批类型不是人工审批返回
   if (approveType.value !== ApproveType.USER) {
-    loadProcessDefinitionOptions();
     drawerApi.open();
     return;
   }
@@ -460,8 +441,6 @@ function showUserTaskNodeConfig(node: SimpleFlowNode) {
   configForm.value.reasonRequire = node?.reasonRequire ?? false;
   // 8. 跳过表达式
   configForm.value.skipExpression = node?.skipExpression ?? '';
-  // 9. 加载流程定义列表（用于整改按钮下拉选择）
-  loadProcessDefinitionOptions();
   drawerApi.open();
 }
 
@@ -1093,10 +1072,9 @@ onMounted(() => {
 
           <!-- 表头 -->
           <ElRow class="border border-gray-200 px-4 py-3">
-            <ElCol :span="6" class="font-bold">操作按钮</ElCol>
-            <ElCol :span="8" class="font-bold">显示名称</ElCol>
+            <ElCol :span="9" class="font-bold">操作按钮</ElCol>
+            <ElCol :span="9" class="font-bold">显示名称</ElCol>
             <ElCol :span="5" class="font-bold">业务状态</ElCol>
-            <ElCol :span="4" class="font-bold">整改流程定义Key</ElCol>
             <ElCol :span="1" class="flex items-center justify-center font-bold">
               启用
             </ElCol>
@@ -1105,10 +1083,10 @@ onMounted(() => {
           <!-- 表格内容 -->
           <div v-for="(item, index) in buttonsSetting" :key="index">
             <ElRow class="border border-t-0 border-gray-200 px-4 py-2">
-              <ElCol :span="6" class="flex items-center truncate">
+              <ElCol :span="9" class="flex items-center truncate">
                 {{ OPERATION_BUTTON_NAME.get(item.id) }}
               </ElCol>
-              <ElCol :span="8" class="flex items-center">
+              <ElCol :span="9" class="flex items-center">
                 <ElInput
                   v-if="btnDisplayNameEdit[index]"
                   :ref="(el: any) => setInputRef(el, index)"
@@ -1133,23 +1111,6 @@ onMounted(() => {
                   v-model="item.bizStatus"
                   placeholder="如: PASS, REJECT"
                 />
-              </ElCol>
-              <!-- 整改流程定义 Key 列（仅整改按钮显示） -->
-              <ElCol :span="4" class="flex items-center">
-                <ElSelect
-                  v-if="item.id === OperationButtonType.RECTIFY"
-                  v-model="item.rectifyProcessDefinitionKey"
-                  placeholder="选择整改流程"
-                  clearable
-                  class="w-full"
-                >
-                  <ElOption
-                    v-for="opt in processDefinitionOptions"
-                    :key="opt.key"
-                    :label="opt.label"
-                    :value="opt.key"
-                  />
-                </ElSelect>
               </ElCol>
               <ElCol :span="1" class="flex items-center justify-center">
                 <ElSwitch v-model="item.enable" />

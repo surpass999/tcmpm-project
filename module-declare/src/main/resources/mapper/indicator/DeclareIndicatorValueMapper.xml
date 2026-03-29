@@ -2,15 +2,15 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="cn.gemrun.base.module.declare.dal.mysql.indicator.DeclareIndicatorValueMapper">
 
-    <!-- 根据业务类型、业务ID和指标分类查询指标值列表 -->
-    <!-- 通过 INNER JOIN 关联 declare_indicator 表获取分类信息 -->
+    <!-- 根据业务类型、业务ID和分组查询指标值列表 -->
+    <!-- 通过 INNER JOIN 关联 declare_indicator 表获取分组信息 -->
     <select id="selectByBusinessAndCategory" resultType="cn.gemrun.base.module.declare.dal.dataobject.indicator.DeclareIndicatorValueDO">
         SELECT div.*
         FROM declare_indicator_value div
         INNER JOIN declare_indicator di ON div.indicator_id = di.id
         WHERE div.business_type = #{businessType}
           AND div.business_id = #{businessId}
-          AND di.category = #{category}
+          AND di.group_id = #{groupId}
     </select>
 
     <!-- 根据业务类型、业务ID和指标代号列表查询指标值列表 -->

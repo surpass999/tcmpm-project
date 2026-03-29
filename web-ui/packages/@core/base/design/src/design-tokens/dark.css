@@ -32,9 +32,11 @@
   --muted-foreground: 240 5% 64.9%;
 
   /* 主题颜色 */
-
-  /* --primary: 245 82% 67%; */
+  --primary: 155 32% 43%;
   --primary-foreground: 0 0% 98%;
+  --primary-dark: 155 40% 22%;
+  --primary-light: 155 28% 58%;
+  --primary-glow: 155 45% 65%;
 
   /* Used for destructive actions such as <Button variant="destructive"> */
 
@@ -121,6 +123,11 @@
   --secondary-foreground: 210 20% 98%;
   --muted: 215 27.9% 16.9%;
   --muted-foreground: 217.9 10.6% 64.9%;
+  --primary: 262.1 83% 58%;
+  --primary-foreground: 210 20% 98%;
+  --primary-dark: 262.1 83% 45%;
+  --primary-light: 262.1 83% 72%;
+  --primary-glow: 262.1 83% 80%;
   --accent: 215 27.9% 16.9%;
   --accent-foreground: 210 20% 98%;
   --destructive: 359.21 68.47% 56.47%;
@@ -142,7 +149,11 @@
   --card-foreground: 0 0% 95%;
   --popover: 0 0% 9%;
   --popover-foreground: 0 0% 95%;
+  --primary: 346.8 77% 50%;
   --primary-foreground: 355.7 100% 97.3%;
+  --primary-dark: 346.8 77% 38%;
+  --primary-light: 346.8 77% 65%;
+  --primary-glow: 346.8 77% 75%;
   --secondary: 240 3.7% 15.9%;
   --secondary-foreground: 0 0% 98%;
   --muted: 0 0% 15%;
@@ -168,7 +179,11 @@
   --card-foreground: 0 0% 98%;
   --popover: 0 0% 3.9%;
   --popover-foreground: 0 0% 98%;
+  --primary: 346.8 72% 50%;
   --primary-foreground: 0 85.7% 97.3%;
+  --primary-dark: 346.8 72% 38%;
+  --primary-light: 346.8 72% 65%;
+  --primary-glow: 346.8 72% 75%;
   --secondary: 0 0% 14.9%;
   --secondary-foreground: 0 0% 98%;
   --muted: 0 0% 14.9%;
@@ -194,7 +209,11 @@
   --card-foreground: 210 40% 98%;
   --popover: 222.2 84% 4.9%;
   --popover-foreground: 210 40% 98%;
+  --primary: 221.2 83.2% 53%;
   --primary-foreground: 210 20% 98%;
+  --primary-dark: 221.2 83.2% 40%;
+  --primary-light: 221.2 83.2% 68%;
+  --primary-glow: 221.2 83.2% 78%;
   --secondary: 217.2 32.6% 17.5%;
   --secondary-foreground: 210 40% 98%;
   --muted: 217.2 32.6% 17.5%;
@@ -220,7 +239,11 @@
   --card-foreground: 210 40% 98%;
   --popover: 222.2 84% 4.9%;
   --popover-foreground: 210 40% 98%;
+  --primary: 221.2 83% 53%;
   --primary-foreground: 210 20% 98%;
+  --primary-dark: 221.2 83% 40%;
+  --primary-light: 221.2 83% 68%;
+  --primary-glow: 221.2 83% 78%;
   --secondary: 217.2 32.6% 17.5%;
   --secondary-foreground: 210 40% 98%;
   --muted: 217.2 32.6% 17.5%;
@@ -246,7 +269,11 @@
   --card-foreground: 0 0% 95%;
   --popover: 0 0% 9%;
   --popover-foreground: 0 0% 95%;
+  --primary: 155 32% 43%;
   --primary-foreground: 210 20% 98%;
+  --primary-dark: 155 40% 28%;
+  --primary-light: 155 28% 58%;
+  --primary-glow: 155 45% 65%;
   --secondary: 240 3.7% 15.9%;
   --secondary-foreground: 0 0% 98%;
   --muted: 0 0% 15%;
@@ -272,7 +299,11 @@
   --card-foreground: 0 0% 95%;
   --popover: 0 0% 9%;
   --popover-foreground: 0 0% 95%;
+  --primary: 142.1 76.2% 36%;
   --primary-foreground: 210 20% 98%;
+  --primary-dark: 142.1 76.2% 24%;
+  --primary-light: 142.1 76.2% 52%;
+  --primary-glow: 142.1 76.2% 65%;
   --secondary: 240 3.7% 15.9%;
   --secondary-foreground: 0 0% 98%;
   --muted: 0 0% 15%;
@@ -298,7 +329,11 @@
   --card-foreground: 60 9.1% 97.8%;
   --popover: 20 14.3% 4.1%;
   --popover-foreground: 60 9.1% 97.8%;
+  --primary: 24.6 95% 53%;
   --primary-foreground: 60 9.1% 97.8%;
+  --primary-dark: 24.6 95% 40%;
+  --primary-light: 24.6 95% 68%;
+  --primary-glow: 24.6 95% 78%;
   --secondary: 12 6.5% 15.1%;
   --secondary-foreground: 60 9.1% 97.8%;
   --muted: 12 6.5% 15.1%;
@@ -324,7 +359,11 @@
   --card-foreground: 60 9.1% 97.8%;
   --popover: 20 14.3% 4.1%;
   --popover-foreground: 60 9.1% 97.8%;
+  --primary: 35.5 92% 50%;
   --primary-foreground: 26 83.3% 14.1%;
+  --primary-dark: 35.5 92% 38%;
+  --primary-light: 35.5 92% 65%;
+  --primary-glow: 35.5 92% 75%;
   --secondary: 12 6.5% 15.1%;
   --secondary-foreground: 60 9.1% 97.8%;
   --muted: 12 6.5% 15.1%;
@@ -350,7 +389,11 @@
   --card-foreground: 0 0% 98%;
   --popover: 240 10% 3.9%;
   --popover-foreground: 0 0% 98%;
+  --primary: 240 5.9% 50%;
   --primary-foreground: 240 5.9% 10%;
+  --primary-dark: 240 5.9% 38%;
+  --primary-light: 240 5.9% 65%;
+  --primary-glow: 240 5.9% 75%;
   --secondary: 240 3.7% 15.9%;
   --secondary-foreground: 0 0% 98%;
   --muted: 240 3.7% 15.9%;
@@ -376,7 +419,11 @@
   --card-foreground: 0 0% 98%;
   --popover: 0 0% 3.9%;
   --popover-foreground: 0 0% 98%;
+  --primary: 0 0% 50%;
   --primary-foreground: 0 0% 9%;
+  --primary-dark: 0 0% 38%;
+  --primary-light: 0 0% 65%;
+  --primary-glow: 0 0% 75%;
   --secondary: 0 0% 14.9%;
   --secondary-foreground: 0 0% 98%;
   --muted: 0 0% 14.9%;
@@ -402,7 +449,11 @@
   --card-foreground: 210 40% 98%;
   --popover: 222.2 84% 4.9%;
   --popover-foreground: 210 40% 98%;
+  --primary: 212.7 27% 60%;
   --primary-foreground: 222.2 47.4% 11.2%;
+  --primary-dark: 212.7 27% 48%;
+  --primary-light: 212.7 27% 72%;
+  --primary-glow: 212.7 27% 82%;
   --secondary: 217.2 32.6% 17.5%;
   --secondary-foreground: 210 40% 98%;
   --muted: 217.2 32.6% 17.5%;
@@ -428,7 +479,11 @@
   --card-foreground: 210 20% 98%;
   --popover: 224 71.4% 4.1%;
   --popover-foreground: 210 20% 98%;
+  --primary: 224.4 12.2% 60%;
   --primary-foreground: 220.9 39.3% 11%;
+  --primary-dark: 224.4 12.2% 48%;
+  --primary-light: 224.4 12.2% 72%;
+  --primary-glow: 224.4 12.2% 82%;
   --secondary: 215 27.9% 16.9%;
   --secondary-foreground: 210 20% 98%;
   --muted: 215 27.9% 16.9%;

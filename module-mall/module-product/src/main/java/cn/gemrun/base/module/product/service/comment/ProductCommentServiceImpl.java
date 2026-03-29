@@ -1,8 +1,6 @@
 package cn.gemrun.base.module.product.service.comment;
 
 import cn.gemrun.base.framework.common.pojo.PageResult;
-import cn.gemrun.base.module.member.api.user.MemberUserApi;
-import cn.gemrun.base.module.member.api.user.dto.MemberUserRespDTO;
 import cn.gemrun.base.module.product.api.comment.dto.ProductCommentCreateReqDTO;
 import cn.gemrun.base.module.product.controller.admin.comment.vo.ProductCommentCreateReqVO;
 import cn.gemrun.base.module.product.controller.admin.comment.vo.ProductCommentPageReqVO;
@@ -45,9 +43,6 @@ public class ProductCommentServiceImpl implements ProductCommentService {
     @Lazy
     private ProductSkuService productSkuService;
 
-    @Resource
-    private MemberUserApi memberUserApi;
-
     @Override
     public void createComment(ProductCommentCreateReqVO createReqVO) {
         // 校验 SKU
@@ -68,11 +63,8 @@ public class ProductCommentServiceImpl implements ProductCommentService {
         ProductSpuDO spu = validateSpu(sku.getSpuId());
         // 校验评论
         validateCommentExists(createReqDTO.getUserId(), createReqDTO.getOrderItemId());
-        // 获取用户详细信息
-        MemberUserRespDTO user = memberUserApi.getUser(createReqDTO.getUserId());
-
         // 创建评论
-        ProductCommentDO comment = ProductCommentConvert.INSTANCE.convert(createReqDTO, spu, sku, user);
+        ProductCommentDO comment = ProductCommentConvert.INSTANCE.convert(createReqDTO, spu, sku, null);
         productCommentMapper.insert(comment);
         return comment.getId();
     }

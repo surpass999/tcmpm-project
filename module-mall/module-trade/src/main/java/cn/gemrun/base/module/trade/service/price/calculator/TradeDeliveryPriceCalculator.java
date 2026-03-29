@@ -5,10 +5,9 @@ import cn.hutool.core.lang.Assert;
 import cn.hutool.core.util.StrUtil;
 import cn.gemrun.base.framework.common.enums.CommonStatusEnum;
 import cn.gemrun.base.framework.common.util.collection.CollectionUtils;
-import cn.gemrun.base.module.member.api.address.MemberAddressApi;
-import cn.gemrun.base.module.member.api.address.dto.MemberAddressRespDTO;
 import cn.gemrun.base.module.trade.dal.dataobject.config.TradeConfigDO;
 import cn.gemrun.base.module.trade.dal.dataobject.delivery.DeliveryPickUpStoreDO;
+import cn.gemrun.base.module.trade.dto.MemberAddressRespDTO;
 import cn.gemrun.base.module.trade.enums.delivery.DeliveryExpressChargeModeEnum;
 import cn.gemrun.base.module.trade.enums.delivery.DeliveryTypeEnum;
 import cn.gemrun.base.module.trade.service.config.TradeConfigService;
@@ -40,9 +39,6 @@ import static cn.gemrun.base.module.trade.enums.ErrorCodeConstants.*;
 @Order(TradePriceCalculator.ORDER_DELIVERY)
 @Slf4j
 public class TradeDeliveryPriceCalculator implements TradePriceCalculator {
-
-    @Resource
-    private MemberAddressApi addressApi;
 
     @Resource
     private DeliveryPickUpStoreService deliveryPickUpStoreService;
@@ -87,8 +83,10 @@ public class TradeDeliveryPriceCalculator implements TradePriceCalculator {
             // 价格计算时，如果为空就不算~最终下单，会校验该字段不允许空
             return;
         }
-        MemberAddressRespDTO address = addressApi.getAddress(param.getAddressId(), param.getUserId());
-        Assert.notNull(address, "收件人({})的地址，不能为空", param.getUserId());
+        // 会员模块已移除，无法获取用户地址信息，使用地址ID作为区域标识
+        MemberAddressRespDTO address = new MemberAddressRespDTO();
+        address.setId(param.getAddressId());
+        address.setAreaId(param.getAddressId()); // 临时使用addressId作为areaId
 
         // 情况一：全局包邮
         if (isGlobalExpressFree(result)) {

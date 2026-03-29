@@ -33,6 +33,12 @@ public class BpmTaskByBusinessRespVO {
     @Schema(description = "所有已完成的任务列表（用于审批记录展示）")
     private List<DoneTask> allDoneTasks;
 
+    @Schema(description = "是否有整改子流程待办任务")
+    private Boolean hasRectificationTodoTask;
+
+    @Schema(description = "整改子流程待办任务列表")
+    private List<TodoTask> rectificationTodoTasks;
+
     @Data
     @Schema(description = "待办任务信息")
     public static class TodoTask {

@@ -647,9 +647,8 @@ public class BpmTaskServiceImpl implements BpmTaskService {
      * @param processVariables 已合并的流程变量（包含历史变量和前端传入变量）
      */
     private void publishTaskStatusEvent(Task task, BpmnModel bpmnModel, ProcessInstance instance, BpmTaskApproveReqVO reqVO, Map<String, Object> processVariables) {
-        // 获取按钮配置的 bizStatus 和 rectifyProcessDefinitionKey
+        // 获取按钮配置的 bizStatus
         String bizStatus = null;
-        String rectifyProcessDefinitionKey = null;
         log.info("[publishTaskStatusEvent] buttonId={}, taskDefinitionKey={}", reqVO.getButtonId(), task.getTaskDefinitionKey());
         if (reqVO.getButtonId() != null) {
             Map<Integer, BpmTaskRespVO.OperationButtonSetting> buttonSettings = BpmnModelUtils.parseButtonsSetting(bpmnModel, task.getTaskDefinitionKey());
@@ -657,10 +656,16 @@ public class BpmTaskServiceImpl implements BpmTaskService {
             if (buttonSettings != null && buttonSettings.get(reqVO.getButtonId()) != null) {
                 BpmTaskRespVO.OperationButtonSetting buttonSetting = buttonSettings.get(reqVO.getButtonId());
                 bizStatus = buttonSetting.getBizStatus();
-                rectifyProcessDefinitionKey = buttonSetting.getRectifyProcessDefinitionKey();
             }
         }
-        log.info("[publishTaskStatusEvent] bizStatus={}, rectifyProcessDefinitionKey={}", bizStatus, rectifyProcessDefinitionKey);
+        // 自动完成场景（buttonId 为 null）时，从流程变量中回源 bizStatus
+        if (bizStatus == null && processVariables != null) {
+            Object bizStatusObj = processVariables.get("bizStatus");
+            if (bizStatusObj != null) {
+                bizStatus = bizStatusObj.toString();
+            }
+        }
+        log.info("[publishTaskStatusEvent] bizStatus={}", bizStatus);
         // 构建事件
         BpmTaskStatusEvent event = new BpmTaskStatusEvent(this);
         event.setTaskId(task.getId());
@@ -692,13 +697,14 @@ public class BpmTaskServiceImpl implements BpmTaskService {
             }
         }
 
-        // 构建 variables 传递给监听器（包含前端传入的流程变量 + 按钮配置的 rectifyProcessDefinitionKey）
+        // 构建 variables 传递给监听器
+        // 合并 processVariables（启动流程时设置的初始变量，如 bizStatus）和 reqVO.getVariables（审批时传入的变量）
         Map<String, Object> eventVariables = new HashMap<>();
+        if (processVariables != null) {
+            eventVariables.putAll(processVariables);
+        }
         if (reqVO.getVariables() != null) {
             eventVariables.putAll(reqVO.getVariables());
-        }
-        if (StrUtil.isNotEmpty(rectifyProcessDefinitionKey)) {
-            eventVariables.put("rectifyProcessDefinitionKey", rectifyProcessDefinitionKey);
         }
         event.setVariables(eventVariables);
 
@@ -928,15 +934,13 @@ public class BpmTaskServiceImpl implements BpmTaskService {
      * 发布拒绝任务的状态事件
      */
     private void publishTaskStatusEventForReject(Task task, BpmnModel bpmnModel, ProcessInstance instance, BpmTaskRejectReqVO reqVO) {
-        // 获取按钮配置的 bizStatus 和 rectifyProcessDefinitionKey
+        // 获取按钮配置的 bizStatus
         String bizStatus = null;
-        String rectifyProcessDefinitionKey = null;
         if (reqVO.getButtonId() != null) {
             Map<Integer, BpmTaskRespVO.OperationButtonSetting> buttonSettings = BpmnModelUtils.parseButtonsSetting(bpmnModel, task.getTaskDefinitionKey());
             if (buttonSettings != null && buttonSettings.get(reqVO.getButtonId()) != null) {
                 BpmTaskRespVO.OperationButtonSetting buttonSetting = buttonSettings.get(reqVO.getButtonId());
                 bizStatus = buttonSetting.getBizStatus();
-                rectifyProcessDefinitionKey = buttonSetting.getRectifyProcessDefinitionKey();
             }
         }
 
@@ -968,9 +972,6 @@ public class BpmTaskServiceImpl implements BpmTaskService {
 
         // 构建 variables 传递给监听器
         Map<String, Object> eventVariables = new HashMap<>();
-        if (StrUtil.isNotEmpty(rectifyProcessDefinitionKey)) {
-            eventVariables.put("rectifyProcessDefinitionKey", rectifyProcessDefinitionKey);
-        }
         event.setVariables(eventVariables);
 
         taskEventPublisher.sendTaskStatusEvent(event);
@@ -1054,16 +1055,18 @@ public class BpmTaskServiceImpl implements BpmTaskService {
      * 发布退回任务的状态事件
      */
     private void publishTaskStatusEventForReturn(Task task, BpmnModel bpmnModel, ProcessInstance instance, BpmTaskReturnReqVO reqVO) {
-        // 获取按钮配置的 bizStatus 和 rectifyProcessDefinitionKey
+        // 获取按钮配置的 bizStatus
         String bizStatus = null;
-        String rectifyProcessDefinitionKey = null;
         if (reqVO.getButtonId() != null) {
             Map<Integer, BpmTaskRespVO.OperationButtonSetting> buttonSettings = BpmnModelUtils.parseButtonsSetting(bpmnModel, task.getTaskDefinitionKey());
             if (buttonSettings != null && buttonSettings.get(reqVO.getButtonId()) != null) {
                 BpmTaskRespVO.OperationButtonSetting buttonSetting = buttonSettings.get(reqVO.getButtonId());
                 bizStatus = buttonSetting.getBizStatus();
-                rectifyProcessDefinitionKey = buttonSetting.getRectifyProcessDefinitionKey();
             }
+        }
+        // 如果按钮配置的 bizStatus 为空，则退回到发起人节点时默认设置为 DRAFT
+        if (bizStatus == null && START_USER_NODE_ID.equals(reqVO.getTargetTaskDefinitionKey())) {
+            bizStatus = "DRAFT";
         }
 
         // 构建事件
@@ -1094,9 +1097,6 @@ public class BpmTaskServiceImpl implements BpmTaskService {
 
         // 构建 variables 传递给监听器
         Map<String, Object> eventVariables = new HashMap<>();
-        if (StrUtil.isNotEmpty(rectifyProcessDefinitionKey)) {
-            eventVariables.put("rectifyProcessDefinitionKey", rectifyProcessDefinitionKey);
-        }
         event.setVariables(eventVariables);
 
         taskEventPublisher.sendTaskStatusEvent(event);
@@ -1859,6 +1859,13 @@ public class BpmTaskServiceImpl implements BpmTaskService {
         // 获取任务状态和审批意见
         Integer taskStatus = (Integer) task.getTaskLocalVariables().get(BpmnVariableConstants.TASK_VARIABLE_STATUS);
         String reason = (String) task.getTaskLocalVariables().get(BpmnVariableConstants.TASK_VARIABLE_REASON);
+
+        // 跳过退回任务：退回场景下，publishTaskStatusEventForReturn 已经发布了 BpmTaskStatusEvent
+        // 如果这里再发一个，会导致业务监听器收到重复事件
+        if (BpmTaskStatusEnum.RETURN.getStatus().equals(taskStatus)) {
+            log.info("[processTaskCompleted][taskId({}) 任务状态为退回，跳过发布 BpmTaskStatusEvent]", task.getId());
+            return;
+        }
 
         // 发布任务完成事件
         BpmTaskStatusEvent event = new BpmTaskStatusEvent(this);

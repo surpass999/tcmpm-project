@@ -74,7 +74,6 @@ const taskColumns = [
 
 // 快速业务入口
 const quickEntries = [
-  { name: '备案管理', icon: 'file-text' },
   { name: '项目填报', icon: 'edit' },
   { name: '年度总结', icon: 'book' },
   { name: '中期评估', icon: 'bar-chart' },
@@ -84,7 +83,6 @@ const quickEntries = [
 
 function goToQuickEntry(name: string) {
   const pathMap: Record<string, string> = {
-    '备案管理': '/filing',
     '项目填报': '/project',
     '年度总结': '/project',
     '中期评估': '/review',

@@ -3,7 +3,6 @@ package cn.gemrun.base.module.promotion.convert.bargain;
 import cn.gemrun.base.framework.common.pojo.PageResult;
 import cn.gemrun.base.framework.common.util.collection.CollectionUtils;
 import cn.gemrun.base.framework.common.util.collection.MapUtils;
-import cn.gemrun.base.module.member.api.user.dto.MemberUserRespDTO;
 import cn.gemrun.base.module.product.api.spu.dto.ProductSpuRespDTO;
 import cn.gemrun.base.module.promotion.controller.admin.bargain.vo.recrod.BargainRecordPageItemRespVO;
 import cn.gemrun.base.module.promotion.controller.app.bargain.vo.record.AppBargainRecordDetailRespVO;
@@ -34,13 +33,13 @@ public interface BargainRecordConvert {
     default PageResult<BargainRecordPageItemRespVO> convertPage(PageResult<BargainRecordDO> page,
                                                                 Map<Long, Integer> helpCountMap,
                                                                 List<BargainActivityDO> activityList,
-                                                                Map<Long, MemberUserRespDTO> userMap) {
+                                                                Map userMap) {
         PageResult<BargainRecordPageItemRespVO> pageResult = convertPage(page);
         // 拼接数据
         Map<Long, BargainActivityDO> activityMap = convertMap(activityList, BargainActivityDO::getId);
         pageResult.getList().forEach(record -> {
             MapUtils.findAndThen(userMap, record.getUserId(),
-                    user -> record.setNickname(user.getNickname()).setAvatar(user.getAvatar()));
+                    user -> record.setNickname((String) user).setAvatar((String) user));
             record.setActivity(BargainActivityConvert.INSTANCE.convert(activityMap.get(record.getActivityId())))
                     .setHelpCount(helpCountMap.getOrDefault(record.getId(), 0));
         });
@@ -70,13 +69,11 @@ public interface BargainRecordConvert {
     PageResult<AppBargainRecordRespVO> convertPage02(PageResult<BargainRecordDO> page);
 
     default AppBargainRecordSummaryRespVO convert(Integer successUserCount, List<BargainRecordDO> successList,
-                                                  List<BargainActivityDO> activityList, Map<Long, MemberUserRespDTO> userMap) {
+                                                  List<BargainActivityDO> activityList, Map userMap) {
         AppBargainRecordSummaryRespVO summary = new AppBargainRecordSummaryRespVO().setSuccessUserCount(successUserCount);
         Map<Long, BargainActivityDO> activityMap = convertMap(activityList, BargainActivityDO::getId);
         summary.setSuccessList(CollectionUtils.convertList(successList, record -> {
             AppBargainRecordSummaryRespVO.Record recordVO = new AppBargainRecordSummaryRespVO.Record();
-            MapUtils.findAndThen(userMap, record.getUserId(),
-                    user -> recordVO.setNickname(user.getNickname()).setAvatar(user.getAvatar()));
             MapUtils.findAndThen(activityMap, record.getActivityId(),
                     activity -> recordVO.setActivityName(activity.getName()));
             return recordVO;

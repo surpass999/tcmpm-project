@@ -31,6 +31,10 @@ public class DeclareIndicatorServiceImpl implements DeclareIndicatorService {
      * 值类型：多选
      */
     private static final Integer VALUE_TYPE_CHECKBOX = 7;
+    /**
+     * 值类型：动态容器
+     */
+    private static final Integer VALUE_TYPE_DYNAMIC_CONTAINER = 12;
 
     @Resource
     private DeclareIndicatorMapper indicatorMapper;
@@ -88,6 +92,56 @@ public class DeclareIndicatorServiceImpl implements DeclareIndicatorService {
                 throw ServiceExceptionUtil.exception(ErrorCodeConstants.INDICATOR_VALUE_OPTIONS_REQUIRED);
             }
         }
+
+        // 动态容器指标校验
+        if (VALUE_TYPE_DYNAMIC_CONTAINER.equals(valueType)) {
+            validateDynamicIndicatorFields(reqVO.getValueOptions());
+        }
+    }
+
+    /**
+     * 校验动态容器指标的子字段定义
+     */
+    private void validateDynamicIndicatorFields(String valueOptions) {
+        if (!StringUtils.hasText(valueOptions)) {
+            throw ServiceExceptionUtil.exception(ErrorCodeConstants.DYNAMIC_INDICATOR_FIELDS_REQUIRED);
+        }
+
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            com.fasterxml.jackson.databind.JsonNode fields = mapper.readTree(valueOptions);
+
+            if (!fields.isArray() || fields.isEmpty()) {
+                throw ServiceExceptionUtil.exception(ErrorCodeConstants.DYNAMIC_INDICATOR_FIELDS_REQUIRED);
+            }
+
+            java.util.Set<String> fieldCodes = new java.util.HashSet<>();
+            java.util.List<String> validFieldTypes = java.util.Arrays.asList(
+                "text", "number", "textarea", "radio", "checkbox",
+                "select", "multiSelect", "date", "dateRange"
+            );
+
+            for (com.fasterxml.jackson.databind.JsonNode field : fields) {
+                String fieldCode = field.has("fieldCode") ? field.get("fieldCode").asText() : null;
+                String fieldType = field.has("fieldType") ? field.get("fieldType").asText() : null;
+
+                if (!StringUtils.hasText(fieldCode)) {
+                    throw ServiceExceptionUtil.exception(ErrorCodeConstants.DYNAMIC_INDICATOR_FIELD_CODE_EMPTY);
+                }
+
+                if (!fieldCodes.add(fieldCode)) {
+                    throw ServiceExceptionUtil.exception(
+                        ErrorCodeConstants.DYNAMIC_INDICATOR_FIELD_CODE_DUPLICATE, fieldCode);
+                }
+
+                if (!StringUtils.hasText(fieldType) || !validFieldTypes.contains(fieldType)) {
+                    throw ServiceExceptionUtil.exception(
+                        ErrorCodeConstants.DYNAMIC_INDICATOR_FIELD_TYPE_INVALID, fieldType);
+                }
+            }
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw ServiceExceptionUtil.exception(ErrorCodeConstants.DYNAMIC_INDICATOR_FIELD_FORMAT_ERROR);
+        }
     }
 
     @Override
@@ -138,6 +192,11 @@ public class DeclareIndicatorServiceImpl implements DeclareIndicatorService {
     public Map<Long, DeclareIndicatorDO> getIndicatorMap(Set<Long> ids) {
         List<DeclareIndicatorDO> list = getIndicatorList(ids);
         return list.stream().collect(Collectors.toMap(DeclareIndicatorDO::getId, v -> v, (v1, v2) -> v1));
+    }
+
+    @Override
+    public List<DeclareIndicatorDO> getIndicatorsByGroupId(Long groupId) {
+        return indicatorMapper.selectByGroupId(groupId);
     }
 
 }

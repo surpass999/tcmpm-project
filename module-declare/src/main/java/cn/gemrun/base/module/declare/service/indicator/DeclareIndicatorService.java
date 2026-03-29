@@ -65,4 +65,9 @@ public interface DeclareIndicatorService {
      */
     Map<Long, DeclareIndicatorDO> getIndicatorMap(Set<Long> ids);
 
+    /**
+     * 根据分组ID查询指标列表
+     */
+    List<DeclareIndicatorDO> getIndicatorsByGroupId(Long groupId);
+
 }

@@ -22,7 +22,6 @@ import {
   createBrokerageUser,
   getBrokerageUser,
 } from '#/api/mall/trade/brokerage/user';
-import { getUser } from '#/api/member/user';
 import { DictTag } from '#/components/dict-tag';
 
 import { useCreateFormSchema } from '../data';
@@ -102,8 +101,7 @@ async function handleSearchUser(id: number, userType: string) {
     return;
   }
 
-  const userData =
-    userType === '分销员' ? await getUser(id) : await getBrokerageUser(id);
+  const userData = await getBrokerageUser(id);
   if (!userData) {
     message.warning(`${userType}不存在`);
     return;

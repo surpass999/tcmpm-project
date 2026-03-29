@@ -25,12 +25,6 @@
     </dependency>
     <dependency>
       <groupId>cn.gemrun</groupId>
-      <artifactId>module-member</artifactId>
-      <version>2025.12-jdk8-SNAPSHOT</version>
-      <scope>compile</scope>
-    </dependency>
-    <dependency>
-      <groupId>cn.gemrun</groupId>
       <artifactId>module-declare</artifactId>
       <version>2025.12-jdk8-SNAPSHOT</version>
       <scope>compile</scope>

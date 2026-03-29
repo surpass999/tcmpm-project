@@ -8,7 +8,6 @@
 - `server`：后端入口工程（主启动类、全局配置、聚合业务模块）。  
 - `module-system`：系统功能（用户/角色/菜单/权限/租户/日志等）。  
 - `module-infra`：基础设施（代码生成、文件服务、配置管理、WebSocket、消息队列、监控接入等）。  
-- `module-member`：会员中心（会员管理/等级/积分等）。  
 - `module-mall`：商城核心（商品、库存、订单、促销等）。  
 - `module-pay`：支付接入（支付订单、退款、回调处理、多渠道适配）。  
 - `module-bpm`：工作流（基于 Flowable，支持 BPMN/轻设计器/会签/驳回等）。  
@@ -88,7 +87,7 @@
 
 开发建议
 - 在 IDE（如 IntelliJ IDEA）导入 Maven 项目后，使用 `server` 的 `BaseServerApplication` 主类运行，设置 VM 参数或 Program args：`-Dspring.profiles.active=dev`，并启用 Build -> "Build project automatically" 与 DevTools 实现热重载。  
-- 若项目模块较多、启动慢，可先只编译必要模块（`mvn -pl module-infra,module-system,module-member -am package`），再运行 `server`。
+- 若项目模块较多、启动慢，可先只编译必要模块（`mvn -pl module-infra,module-system,module-mall -am package`），再运行 `server`。
 
 贡献与文档
 - 仓库内 `docs/` 包含模块说明与使用说明（请查看 `docs/项目模块说明.md`）。  

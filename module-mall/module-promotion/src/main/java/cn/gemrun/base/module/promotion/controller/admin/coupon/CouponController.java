@@ -4,8 +4,6 @@ import cn.hutool.core.collection.CollUtil;
 import cn.gemrun.base.framework.common.pojo.CommonResult;
 import cn.gemrun.base.framework.common.pojo.PageResult;
 import cn.gemrun.base.framework.common.util.collection.MapUtils;
-import cn.gemrun.base.module.member.api.user.MemberUserApi;
-import cn.gemrun.base.module.member.api.user.dto.MemberUserRespDTO;
 import cn.gemrun.base.module.promotion.controller.admin.coupon.vo.coupon.CouponPageItemRespVO;
 import cn.gemrun.base.module.promotion.controller.admin.coupon.vo.coupon.CouponPageReqVO;
 import cn.gemrun.base.module.promotion.controller.admin.coupon.vo.coupon.CouponSendReqVO;
@@ -21,10 +19,8 @@ import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
 import javax.validation.Valid;
-import java.util.Map;
 
 import static cn.gemrun.base.framework.common.pojo.CommonResult.success;
-import static cn.gemrun.base.framework.common.util.collection.CollectionUtils.convertSet;
 
 @Tag(name = "管理后台 - 优惠劵")
 @RestController
@@ -34,8 +30,6 @@ public class CouponController {
 
     @Resource
     private CouponService couponService;
-    @Resource
-    private MemberUserApi memberUserApi;
 
     @DeleteMapping("/delete")
     @Operation(summary = "回收优惠劵")
@@ -52,14 +46,7 @@ public class CouponController {
     public CommonResult<PageResult<CouponPageItemRespVO>> getCouponPage(@Valid CouponPageReqVO pageVO) {
         PageResult<CouponDO> pageResult = couponService.getCouponPage(pageVO);
         PageResult<CouponPageItemRespVO> pageResulVO = CouponConvert.INSTANCE.convertPage(pageResult);
-        if (CollUtil.isEmpty(pageResulVO.getList())) {
-            return success(pageResulVO);
-        }
-
-        // 读取用户信息，进行拼接
-        Map<Long, MemberUserRespDTO> userMap = memberUserApi.getUserMap(convertSet(pageResult.getList(), CouponDO::getUserId));
-        pageResulVO.getList().forEach(itemRespVO -> MapUtils.findAndThen(userMap, itemRespVO.getUserId(),
-                userRespDTO -> itemRespVO.setNickname(userRespDTO.getNickname())));
+        // userMap removed - cannot depend on member module
         return success(pageResulVO);
     }
 

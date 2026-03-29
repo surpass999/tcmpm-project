@@ -1,0 +1,255 @@
+<script data-app-loading="inject-theme-vars">
+  /**
+   * 在首屏样式计算前，从 localStorage 恢复与登录后一致的主题主色（HSL 三值，无 hsl() 包裹）
+   * 避免仅用 :root 默认值、随后又被用户偏好里的红色等覆盖造成「进度条一直红」的错觉
+   */
+  (function () {
+    function parseStored(raw) {
+      if (!raw) return null;
+      try {
+        var o = JSON.parse(raw);
+        if (o && Object.prototype.hasOwnProperty.call(o, 'value')) return o.value;
+        return o;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    /** #rrggbb -> "H S% L%" */
+    function hexToHslComponents(hex) {
+      if (!hex || typeof hex !== 'string') return null;
+      hex = hex.replace(/^#/, '').trim();
+      if (hex.length === 3) {
+        hex = hex
+          .split('')
+          .map(function (c) {
+            return c + c;
+          })
+          .join('');
+      }
+      if (!/^[0-9a-fA-F]{6}$/.test(hex)) return null;
+      var r = parseInt(hex.slice(0, 2), 16) / 255;
+      var g = parseInt(hex.slice(2, 4), 16) / 255;
+      var b = parseInt(hex.slice(4, 6), 16) / 255;
+      var max = Math.max(r, g, b);
+      var min = Math.min(r, g, b);
+      var h = 0;
+      var s = 0;
+      var l = (max + min) / 2;
+      if (max !== min) {
+        var d = max - min;
+        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+        switch (max) {
+          case r:
+            h = (g - b) / d + (g < b ? 6 : 0);
+            break;
+          case g:
+            h = (b - r) / d + 2;
+            break;
+          default:
+            h = (r - g) / d + 4;
+        }
+        h /= 6;
+      }
+      return (
+        Math.round(h * 360) +
+        ' ' +
+        Math.round(s * 1000) / 10 +
+        '% ' +
+        Math.round(l * 1000) / 10 +
+        '%'
+      );
+    }
+
+    function darkerHsl(hslStr, amount) {
+      var parts = hslStr.trim().split(/\s+/);
+      if (parts.length < 3) return hslStr;
+      var l = parseFloat(parts[2]);
+      if (Number.isNaN(l)) return hslStr;
+      l = Math.max(0, l - (amount || 12));
+      return parts[0] + ' ' + parts[1] + ' ' + l + '%';
+    }
+
+    function lighterHsl(hslStr, amount) {
+      var parts = hslStr.trim().split(/\s+/);
+      if (parts.length < 3) return hslStr;
+      var l = parseFloat(parts[2]);
+      if (Number.isNaN(l)) return hslStr;
+      l = Math.min(100, l + (amount || 8));
+      return parts[0] + ' ' + parts[1] + ' ' + l + '%';
+    }
+
+    /** 与 design-tokens 中各内置主题主色一致（HSL 三值） */
+    var PRESET = {
+      default: ['155 32% 43%', '155 40% 28%', '155 45% 60%'],
+      green: ['155 32% 43%', '155 40% 28%', '155 45% 60%'],
+      gemrun: ['155 36% 29%', '155 42% 22%', '155 40% 55%'],
+      violet: ['262.1 83.3% 57.8%', '262.1 83% 45%', '262.1 83% 72%'],
+      pink: ['346.8 77.2% 49.8%', '346.8 77% 38%', '346.8 77% 65%'],
+      rose: ['346.8 77.2% 49.8%', '346.8 77% 38%', '346.8 77% 65%'],
+      'sky-blue': ['221.2 83.2% 53.3%', '221.2 83% 40%', '221.2 83% 68%'],
+      'deep-blue': ['221.2 83% 53.3%', '221.2 83% 40%', '221.2 83% 68%'],
+      orange: ['24.6 95% 53.1%', '24.6 95% 40%', '24.6 95% 68%'],
+      yellow: ['42 84% 61%', '42 84% 48%', '42 84% 72%'],
+      zinc: ['240 5.9% 10%', '240 5.9% 6%', '240 5.9% 22%'],
+      neutral: ['0 0% 9%', '0 0% 6%', '0 0% 20%'],
+      slate: ['222.2 47.4% 11.2%', '222.2 47% 8%', '215 25% 35%'],
+      gray: ['220.9 39.3% 11%', '224 71.4% 8%', '217 19% 27%'],
+      'deep-green': ['142.1 76.2% 36.3%', '142.1 76% 28%', '142.1 76% 48%'],
+    };
+
+    var root = document.documentElement;
+    var primary = '155 32% 43%';
+    var primaryDark = '155 40% 28%';
+    var primaryGlow = '155 45% 60%';
+
+    try {
+      var prefs = null;
+      for (var i = 0; i < localStorage.length; i++) {
+        var key = localStorage.key(i);
+        if (!key || !key.endsWith('-preferences')) continue;
+        if (key.indexOf('preferences-theme') !== -1) continue;
+        if (key.indexOf('preferences-locale') !== -1) continue;
+        prefs = parseStored(localStorage.getItem(key));
+        if (prefs && prefs.theme) break;
+        prefs = null;
+      }
+
+      if (prefs && prefs.theme) {
+        var t = prefs.theme;
+        var cp = t.colorPrimary;
+        if (cp && typeof cp === 'string') {
+          var fromHex = hexToHslComponents(cp);
+          if (fromHex) {
+            primary = fromHex;
+            primaryDark = darkerHsl(fromHex, 14);
+            primaryGlow = lighterHsl(fromHex, 10);
+          }
+        } else if (t.builtinType && PRESET[t.builtinType]) {
+          var triplet = PRESET[t.builtinType];
+          primary = triplet[0];
+          primaryDark = triplet[1];
+          primaryGlow = triplet[2];
+        }
+      }
+    } catch (e) {}
+
+    root.style.setProperty('--primary', primary);
+    root.style.setProperty('--primary-dark', primaryDark);
+    root.style.setProperty('--primary-glow', primaryGlow);
+  })();
+</script>
+<style data-app-loading="inject-css">
+  /* 若上面脚本未执行，仍保留兜底（智慧中医默认绿） */
+  :root {
+    --background: 220 33% 98%;
+    --foreground: 210 6% 21%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --primary: 155 32% 43%;
+    --primary-dark: 155 40% 28%;
+    --primary-glow: 155 45% 60%;
+    --primary-foreground: 0 0% 98%;
+    --border: 240 5.9% 90%;
+  }
+
+  html {
+    line-height: 1.15;
+  }
+
+  .loading {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    pointer-events: none;
+    background-color: hsl(var(--background));
+  }
+
+  .loading.hidden {
+    visibility: hidden;
+    opacity: 0;
+    transition: all 0.6s ease-out;
+  }
+
+  .loading .brand-logo {
+    width: auto;
+    height: 72px;
+    max-width: min(90vw, 420px);
+    object-fit: contain;
+    animation: logo-breathe 1.8s ease-in-out infinite;
+  }
+
+  @keyframes logo-breathe {
+    0%,
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.92;
+      transform: scale(0.98);
+    }
+  }
+
+  .loading .title {
+    margin-top: 28px;
+    max-width: min(92vw, 640px);
+    padding: 0 16px;
+    font-size: clamp(18px, 4vw, 26px);
+    font-weight: 600;
+    line-height: 1.35;
+    text-align: center;
+    color: hsl(var(--foreground));
+    letter-spacing: 0.06em;
+  }
+
+  .loading .progress-line {
+    width: min(200px, 50vw);
+    height: 3px;
+    margin-top: 32px;
+    overflow: hidden;
+    background: hsl(var(--border));
+    border-radius: 2px;
+  }
+
+  .loading .progress-line::after {
+    display: block;
+    width: 40%;
+    height: 100%;
+    content: '';
+    background: linear-gradient(
+      90deg,
+      hsl(var(--primary-dark)),
+      hsl(var(--primary))
+    );
+    border-radius: 2px;
+    animation: progress-slide 1.2s ease-in-out infinite;
+  }
+
+  @keyframes progress-slide {
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(350%);
+    }
+  }
+</style>
+<div class="loading" id="__app-loading__">
+  <img
+    class="brand-logo"
+    src="/static/imgs/logo/logo.png"
+    alt=""
+    decoding="async"
+  />
+  <div class="title"><%= VITE_APP_TITLE %></div>
+  <div class="progress-line" aria-hidden="true"></div>
+</div>

@@ -103,14 +103,6 @@ export enum OperationButtonType {
    * 转办
    */
   TRANSFER = 3,
-  /**
-   * 选择审批人（用于审批人自选场景）
-   */
-  SELECT_APPROVER = 8,
-  /**
-   * 发起整改（用于触发整改子流程）
-   */
-  RECTIFY = 9,
 }
 
 // 审批拒绝类型枚举
@@ -494,7 +486,6 @@ export type ButtonSetting = {
   enable: boolean;
   id: OperationButtonType;
   bizStatus?: string;
-  rectifyProcessDefinitionKey?: string;
 };
 
 /**
@@ -810,8 +801,6 @@ OPERATION_BUTTON_NAME.set(OperationButtonType.DELEGATE, '委派');
 OPERATION_BUTTON_NAME.set(OperationButtonType.ADD_SIGN, '加签');
 OPERATION_BUTTON_NAME.set(OperationButtonType.RETURN, '退回');
 OPERATION_BUTTON_NAME.set(OperationButtonType.COPY, '抄送');
-OPERATION_BUTTON_NAME.set(OperationButtonType.SELECT_APPROVER, '选择专家');
-OPERATION_BUTTON_NAME.set(OperationButtonType.RECTIFY, '发起整改');
 
 // 默认的按钮权限设置
 export const DEFAULT_BUTTON_SETTING: ButtonSetting[] = [
@@ -821,8 +810,6 @@ export const DEFAULT_BUTTON_SETTING: ButtonSetting[] = [
   { id: OperationButtonType.DELEGATE, displayName: '委派', enable: true },
   { id: OperationButtonType.ADD_SIGN, displayName: '加签', enable: true },
   { id: OperationButtonType.RETURN, displayName: '退回', enable: true },
-  { id: OperationButtonType.SELECT_APPROVER, displayName: '选择专家', enable: false },
-  { id: OperationButtonType.RECTIFY, displayName: '发起整改', enable: false },
 ];
 
 // 办理人默认的按钮权限设置
@@ -846,7 +833,6 @@ export const START_USER_BUTTON_SETTING: ButtonSetting[] = [
 ];
 
 export const MULTI_LEVEL_DEPT: DictDataType[] = [
-  { label: '本部门成员', value: 0 },
   { label: '第 1 级部门', value: 1 },
   { label: '第 2 级部门', value: 2 },
   { label: '第 3 级部门', value: 3 },
@@ -862,6 +848,27 @@ export const MULTI_LEVEL_DEPT: DictDataType[] = [
   { label: '第 13 级部门', value: 13 },
   { label: '第 14 级部门', value: 14 },
   { label: '第 15 级部门', value: 15 },
+];
+
+// 业务发起人策略的部门层级选项，参照基准为业务创建人所在部门
+// value=0 表示业务创建人本部门所有成员；数字表示向上 N 级的部门负责人
+export const BUSINESS_START_USER_LEVEL: DictDataType[] = [
+  { label: '业务创建人本部门所有成员', value: 0 },
+  { label: '第 1 级上级部门负责人', value: 1 },
+  { label: '第 2 级上级部门负责人', value: 2 },
+  { label: '第 3 级上级部门负责人', value: 3 },
+  { label: '第 4 级上级部门负责人', value: 4 },
+  { label: '第 5 级上级部门负责人', value: 5 },
+  { label: '第 6 级上级部门负责人', value: 6 },
+  { label: '第 7 级上级部门负责人', value: 7 },
+  { label: '第 8 级上级部门负责人', value: 8 },
+  { label: '第 9 级上级部门负责人', value: 9 },
+  { label: '第 10 级上级部门负责人', value: 10 },
+  { label: '第 11 级上级部门负责人', value: 11 },
+  { label: '第 12 级上级部门负责人', value: 12 },
+  { label: '第 13 级上级部门负责人', value: 13 },
+  { label: '第 14 级上级部门负责人', value: 14 },
+  { label: '第 15 级上级部门负责人', value: 15 },
 ];
 
 export const DELAY_TYPE = [

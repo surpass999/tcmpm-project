@@ -1,0 +1,616 @@
+package cn.gemrun.base.module.declare.service.progress.impl;
+
+import cn.gemrun.base.module.declare.dal.dataobject.hospital.DeclareHospitalDO;
+import cn.gemrun.base.module.declare.dal.dataobject.indicator.DeclareIndicatorDO;
+import cn.gemrun.base.module.declare.dal.dataobject.indicator.DeclareIndicatorGroupDO;
+import cn.gemrun.base.module.declare.dal.dataobject.indicator.DeclareIndicatorValueDO;
+import cn.gemrun.base.module.declare.dal.dataobject.progress.DeclareProgressReportDO;
+import cn.gemrun.base.module.declare.dal.mysql.DeclareHospitalMapper;
+import cn.gemrun.base.module.declare.dal.mysql.DeclareProgressReportMapper;
+import cn.gemrun.base.module.declare.dal.mysql.indicator.DeclareIndicatorGroupMapper;
+import cn.gemrun.base.module.declare.dal.mysql.indicator.DeclareIndicatorValueMapper;
+import cn.gemrun.base.module.declare.enums.NationalReportStatusEnum;
+import cn.gemrun.base.module.declare.enums.ProvinceStatusEnum;
+import cn.gemrun.base.module.declare.enums.ReportStatusEnum;
+import cn.gemrun.base.module.declare.service.indicator.DeclareIndicatorService;
+import cn.gemrun.base.module.declare.service.indicator.DeclareIndicatorValueService;
+import cn.gemrun.base.module.declare.service.progress.DeclareProgressReportService;
+import cn.gemrun.base.module.declare.service.progress.DeclareReportWindowService;
+import cn.gemrun.base.module.declare.service.project.ProjectTypeService;
+import cn.gemrun.base.module.declare.vo.progress.*;
+import cn.gemrun.base.framework.security.core.util.SecurityFrameworkUtils;
+import cn.gemrun.base.module.system.api.user.AdminUserApi;
+import cn.gemrun.base.module.system.api.user.dto.AdminUserRespDTO;
+import cn.gemrun.base.framework.mybatis.core.query.LambdaQueryWrapperX;
+import cn.gemrun.base.module.bpm.api.task.BpmProcessInstanceApi;
+import cn.gemrun.base.module.bpm.api.task.dto.BpmProcessInstanceCreateReqDTO;
+import cn.hutool.core.util.StrUtil;
+import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.validation.annotation.Validated;
+
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+@Service
+@Validated
+@RequiredArgsConstructor
+public class DeclareProgressReportServiceImpl implements DeclareProgressReportService {
+
+    private final DeclareProgressReportMapper progressReportMapper;
+    private final DeclareHospitalMapper hospitalMapper;
+    private final DeclareIndicatorValueService indicatorValueService;
+    private final DeclareIndicatorValueMapper indicatorValueMapper;
+    private final DeclareIndicatorService indicatorService;
+    private final DeclareIndicatorGroupMapper indicatorGroupMapper;
+    @Lazy
+    private final DeclareReportWindowService reportWindowService;
+    private final ProjectTypeService projectTypeService;
+    private final AdminUserApi adminUserApi;
+    private final BpmProcessInstanceApi processInstanceApi;
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Long createReport(DeclareProgressReportCreateReqVO reqVO) {
+        // 从当前登录用户获取 deptId
+        Long userId = SecurityFrameworkUtils.getLoginUserId();
+        AdminUserRespDTO user = adminUserApi.getUser(userId);
+        Long deptId = user != null ? user.getDeptId() : null;
+
+        DeclareHospitalDO hospital = hospitalMapper.selectByDeptId(deptId);
+        if (hospital == null) {
+            throw new RuntimeException("医院信息不存在，请确认当前用户已关联医院部门");
+        }
+
+        DeclareProgressReportDO report = DeclareProgressReportDO.builder()
+                .reportYear(reqVO.getReportYear())
+                .reportBatch(reqVO.getReportBatch())
+                .hospitalId(hospital.getId())
+                .deptId(deptId)
+                .hospitalName(hospital.getHospitalName())
+                .provinceCode(hospital.getProvinceCode())
+                .provinceName(hospital.getProvinceName())
+                .reportStatus(ReportStatusEnum.DRAFT.getStatus())
+                .provinceStatus(ProvinceStatusEnum.NOT_SUBMITTED.getStatus())
+                .nationalReportStatus(NationalReportStatusEnum.NOT_REPORTED.getStatus())
+                .build();
+        progressReportMapper.insert(report);
+
+        // 初始化指标骨架记录（businessType=3：进度填报）
+        initIndicatorSkeletons(report.getId(), userId);
+
+        return report.getId();
+    }
+
+    /**
+     * 为新报告初始化所有指标的骨架记录
+     */
+    private void initIndicatorSkeletons(Long reportId, Long userId) {
+        List<DeclareIndicatorDO> indicators = indicatorService.getIndicatorsByBusinessType("process");
+        if (indicators == null || indicators.isEmpty()) {
+            return;
+        }
+        LocalDateTime now = LocalDateTime.now();
+        List<DeclareIndicatorValueDO> skeletons = indicators.stream()
+                .map(ind -> {
+                    DeclareIndicatorValueDO skeleton = new DeclareIndicatorValueDO();
+                    skeleton.setBusinessType(3);
+                    skeleton.setBusinessId(reportId);
+                    skeleton.setIndicatorId(ind.getId());
+                    skeleton.setIndicatorCode(ind.getIndicatorCode());
+                    skeleton.setValueType(ind.getValueType());
+                    skeleton.setFillerId(userId);
+                    skeleton.setFillTime(now);
+                    skeleton.setIsValid(true);
+                    return skeleton;
+                })
+                .collect(Collectors.toList());
+        indicatorValueMapper.insertBatch(skeletons);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Long saveReport(DeclareProgressReportSaveReqVO reqVO) {
+        Long userId = SecurityFrameworkUtils.getLoginUserId();
+        Long reportId;
+
+        if (reqVO.getId() == null) {
+            // 新建报告
+            DeclareProgressReportCreateReqVO createReq = new DeclareProgressReportCreateReqVO();
+            createReq.setReportYear(reqVO.getReportYear());
+            createReq.setReportBatch(reqVO.getReportBatch());
+            reportId = createReport(createReq);
+        } else {
+            // 更新报告状态
+            reportId = reqVO.getId();
+            DeclareProgressReportDO report = progressReportMapper.selectById(reportId);
+            if (report == null) {
+                throw new RuntimeException("填报记录不存在");
+            }
+            if (reqVO.getReportStatus() != null) {
+                report.setReportStatus(reqVO.getReportStatus());
+            }
+            progressReportMapper.updateById(report);
+        }
+
+        // 保存指标值（businessType=3：进度填报）
+        if (reqVO.getValues() != null && !reqVO.getValues().isEmpty()) {
+            List<DeclareIndicatorValueDO> valueDOs = new ArrayList<>();
+            for (DeclareProgressReportSaveReqVO.IndicatorValueItem item : reqVO.getValues()) {
+                if (item.getValue() == null || item.getValue().toString().trim().isEmpty()) {
+                    continue; // 跳过空值
+                }
+                DeclareIndicatorValueDO valueDO = new DeclareIndicatorValueDO();
+                valueDO.setIndicatorId(item.getIndicatorId());
+                valueDO.setIndicatorCode(item.getIndicatorCode());
+                valueDO.setValueType(item.getValueType());
+                setValueByType(valueDO, item.getValueType(), item.getValue());
+                valueDOs.add(valueDO);
+            }
+            if (!valueDOs.isEmpty()) {
+                indicatorValueService.batchSaveIndicatorValues(3, reportId, valueDOs, userId);
+            }
+        }
+
+        return reportId;
+    }
+
+    /**
+     * 根据值类型设置值
+     */
+    private void setValueByType(DeclareIndicatorValueDO valueDO, Integer valueType, Object value) {
+        if (value == null) return;
+        String strValue = value.toString();
+        if (valueType == 1 || valueType == 5) {
+            // 数字型
+            try {
+                valueDO.setValueNum(new java.math.BigDecimal(strValue));
+            } catch (NumberFormatException e) {
+                valueDO.setValueStr(strValue);
+            }
+        } else if (valueType == 2 || valueType == 6) {
+            // 字符串 / 多行文本
+            valueDO.setValueStr(strValue);
+        } else if (valueType == 3) {
+            // 日期
+            try {
+                valueDO.setValueDate(LocalDateTime.parse(strValue));
+            } catch (Exception e) {
+                valueDO.setValueStr(strValue);
+            }
+        } else if (valueType == 5) {
+            // 长文本（textarea）
+            valueDO.setValueText(strValue);
+        } else {
+            valueDO.setValueStr(strValue);
+        }
+    }
+
+    @Override
+    public DeclareProgressReportVO getReport(Long id) {
+        DeclareProgressReportDO report = progressReportMapper.selectById(id);
+        if (report == null) {
+            return null;
+        }
+        return convertToVO(report);
+    }
+
+    @Override
+    public List<DeclareProgressReportVO> getReportListByHospital(Long hospitalId, Integer reportYear) {
+        // 直接用 hospitalId 查询，数据权限框架会基于 dept_id 自动过滤
+        // - 医院用户：hospitalId 即为医院ID，对应报表的 dept_id 也在其数据权限范围内
+        // - 省级用户：数据权限过滤后无结果（省级 dept_id 与医院 dept_id 不一致）
+        LambdaQueryWrapperX<DeclareProgressReportDO> wrapper = new LambdaQueryWrapperX<DeclareProgressReportDO>()
+                // .eq(hospitalId != null, DeclareProgressReportDO::getHospitalId, hospitalId)
+                // .eq(reportYear != null, DeclareProgressReportDO::getReportYear, reportYear)
+                .orderByDesc(DeclareProgressReportDO::getCreateTime);
+        return progressReportMapper.selectList(wrapper).stream()
+                .map(this::convertToVO)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<DeclareProgressReportVO> getReportListByProvince(String provinceCode, Integer reportYear) {
+        LambdaQueryWrapperX<DeclareProgressReportDO> wrapper = new LambdaQueryWrapperX<DeclareProgressReportDO>()
+                .eq(DeclareProgressReportDO::getProvinceCode, provinceCode)
+                .eq(reportYear != null, DeclareProgressReportDO::getReportYear, reportYear)
+                .orderByDesc(DeclareProgressReportDO::getCreateTime);
+        return progressReportMapper.selectList(wrapper).stream()
+                .map(this::convertToVO)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<DeclareProgressReportVO> getProvincePendingList(String provinceCode) {
+        LambdaQueryWrapperX<DeclareProgressReportDO> wrapper = new LambdaQueryWrapperX<DeclareProgressReportDO>()
+                .eq(DeclareProgressReportDO::getProvinceCode, provinceCode)
+                .eq(DeclareProgressReportDO::getProvinceStatus, ProvinceStatusEnum.AUDITING.getStatus())
+                .orderByDesc(DeclareProgressReportDO::getCreateTime);
+        return progressReportMapper.selectList(wrapper).stream()
+                .map(this::convertToVO)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<DeclareProgressReportVO> getProvinceApprovedList(String provinceCode) {
+        LambdaQueryWrapperX<DeclareProgressReportDO> wrapper = new LambdaQueryWrapperX<DeclareProgressReportDO>()
+                .eq(DeclareProgressReportDO::getProvinceCode, provinceCode)
+                .eq(DeclareProgressReportDO::getProvinceStatus, ProvinceStatusEnum.APPROVED.getStatus())
+                .eq(DeclareProgressReportDO::getNationalReportStatus, NationalReportStatusEnum.NOT_REPORTED.getStatus())
+                .orderByDesc(DeclareProgressReportDO::getCreateTime);
+        return progressReportMapper.selectList(wrapper).stream()
+                .map(this::convertToVO)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void submitReport(Long id) {
+        DeclareProgressReportDO report = progressReportMapper.selectById(id);
+        if (report == null) {
+            throw new RuntimeException("填报记录不存在");
+        }
+        // 检查是否已有流程实例（防止重复提交）
+        if (StrUtil.isNotBlank(report.getHospitalProcessInstanceId())) {
+            throw new RuntimeException("该填报记录已提交审核，请勿重复提交");
+        }
+
+        // 构建流程创建请求
+        BpmProcessInstanceCreateReqDTO createReqDTO = new BpmProcessInstanceCreateReqDTO();
+        createReqDTO.setProcessDefinitionKey("progressReportApprove");
+        createReqDTO.setBusinessKey("progressReportApprove_" + id);
+
+        // 流程变量
+        Map<String, Object> variables = new HashMap<>();
+        variables.put("businessType", "progress_report:submit");
+        variables.put("businessCreatorId", SecurityFrameworkUtils.getLoginUserId());
+        variables.put("title", String.format("%s - %d年第%d期进度填报",
+                report.getHospitalName(), report.getReportYear(), report.getReportBatch()));
+        variables.put("reportId", report.getId());
+        variables.put("hospitalId", report.getHospitalId());
+        variables.put("hospitalName", report.getHospitalName());
+        variables.put("provinceCode", report.getProvinceCode());
+        variables.put("bizStatus", "HOSPITAL_SUBMITTED");
+        createReqDTO.setVariables(variables);
+
+        // 调用 BPM 系统创建流程实例
+        String processInstanceId = processInstanceApi.createProcessInstance(
+                SecurityFrameworkUtils.getLoginUserId(), createReqDTO);
+
+        // 更新业务表：保存流程实例ID，推进状态
+        // 注意：reportStatus 后续由 DeclareProgressReportTaskStatusListener 监听 BPM 事件后自动更新
+        report.setHospitalProcessInstanceId(processInstanceId);
+        report.setReportStatus(ReportStatusEnum.SUBMITTED.getStatus());
+        progressReportMapper.updateById(report);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void hospitalAudit(DeclareProgressReportAuditReqVO reqVO) {
+        // 此方法已废弃，医院审核统一通过 BPM 任务审批接口处理
+        // 审核结果由 DeclareProgressReportTaskStatusListener 监听 BPM 事件后自动更新
+        DeclareProgressReportDO report = progressReportMapper.selectById(reqVO.getId());
+        if (report == null) {
+            throw new RuntimeException("填报记录不存在");
+        }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void provinceAudit(DeclareProgressReportAuditReqVO reqVO) {
+        // 此方法已废弃，省级审核统一通过 BPM 任务审批接口处理
+        // 审核结果由 DeclareProgressReportTaskStatusListener 监听 BPM 事件后自动更新
+        DeclareProgressReportDO report = progressReportMapper.selectById(reqVO.getId());
+        if (report == null) {
+            throw new RuntimeException("填报记录不存在");
+        }
+    }
+
+    @Override
+    public void saveIndicatorValues(Long reportId, List<Long> indicatorIds, List<String> values) {
+        if (indicatorIds == null || indicatorIds.isEmpty()) {
+            return;
+        }
+        Long userId = SecurityFrameworkUtils.getLoginUserId();
+        List<DeclareIndicatorValueDO> valueDOs = new ArrayList<>();
+        for (int i = 0; i < indicatorIds.size(); i++) {
+            Long indicatorId = indicatorIds.get(i);
+            String value = (values != null && i < values.size()) ? values.get(i) : null;
+            if (value == null || value.trim().isEmpty()) {
+                continue;
+            }
+            DeclareIndicatorValueDO valueDO = new DeclareIndicatorValueDO();
+            valueDO.setIndicatorId(indicatorId);
+            // indicatorCode 为空，由 batchSaveIndicatorValues 根据 existing 数据补全
+            valueDO.setValueType(1); // 默认数字类型
+            valueDO.setValueStr(value);
+            valueDOs.add(valueDO);
+        }
+        if (!valueDOs.isEmpty()) {
+            indicatorValueService.batchSaveIndicatorValues(3, reportId, valueDOs, userId);
+        }
+    }
+
+    @Override
+    public List<DeclareProgressReportVO> getReportHistory(Long hospitalId, Integer reportYear) {
+        return getReportListByHospital(hospitalId, reportYear);
+    }
+
+    @Override
+    public boolean isInReportWindow(Long hospitalId) {
+        // 填报时间窗口与用户无关，直接判断是否有开放的窗口
+        return reportWindowService.isAnyWindowOpen();
+    }
+
+    @Override
+    public boolean isOverLimit(Long hospitalId, Integer reportYear) {
+        if (hospitalId == null) {
+            return false;
+        }
+        long count = progressReportMapper.countByHospitalAndYear(hospitalId, reportYear);
+        return count >= 4;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteReport(Long id) {
+        DeclareProgressReportDO report = progressReportMapper.selectById(id);
+        if (report == null) {
+            throw new RuntimeException("填报记录不存在");
+        }
+        // 仅允许删除草稿或已保存状态
+        if (!ReportStatusEnum.DRAFT.getStatus().equals(report.getReportStatus())
+                && !ReportStatusEnum.SAVED.getStatus().equals(report.getReportStatus())) {
+            throw new RuntimeException("仅草稿和已保存状态可删除");
+        }
+        // 先删除关联的指标值（进度填报的 businessType 为 3）
+        indicatorValueService.deleteIndicatorValues(3, id);
+        // 再删除主记录
+        progressReportMapper.deleteById(id);
+    }
+
+    private DeclareProgressReportVO convertToVO(DeclareProgressReportDO report) {
+        // 查询医院信息以获取 projectType 和其他字段
+        Integer projectType = null;
+        String projectTypeName = null;
+        String unifiedSocialCreditCode = null;
+        String medicalLicenseNo = null;
+        if (report.getHospitalId() != null) {
+            DeclareHospitalDO hospital = hospitalMapper.selectById(report.getHospitalId());
+            if (hospital != null) {
+                projectType = hospital.getProjectType();
+                projectTypeName = projectTypeService.getProjectTypeTitle(projectType);
+                unifiedSocialCreditCode = hospital.getUnifiedSocialCreditCode();
+                medicalLicenseNo = hospital.getMedicalLicenseNo();
+            }
+        }
+        return DeclareProgressReportVO.builder()
+                .id(report.getId())
+                .hospitalProcessInstanceId(report.getHospitalProcessInstanceId())
+                .reportYear(report.getReportYear())
+                .reportBatch(report.getReportBatch())
+                .hospitalId(report.getHospitalId())
+                .deptId(report.getDeptId())
+                .hospitalName(report.getHospitalName())
+                .provinceCode(report.getProvinceCode())
+                .provinceName(report.getProvinceName())
+                .reportStatus(report.getReportStatus())
+                .reportStatusName(getReportStatusName(report.getReportStatus()))
+                .provinceStatus(report.getProvinceStatus())
+                .provinceStatusName(getProvinceStatusName(report.getProvinceStatus()))
+                .nationalReportStatus(report.getNationalReportStatus())
+                .nationalReportStatusName(report.getNationalReportStatus() == 1 ? "已上报" : "未上报")
+                .nationalReportTime(report.getNationalReportTime())
+                .nationalReporterName(report.getNationalReporterName())
+                .projectType(projectType)
+                .projectTypeName(projectTypeName)
+                .unifiedSocialCreditCode(unifiedSocialCreditCode)
+                .medicalLicenseNo(medicalLicenseNo)
+                .createTime(report.getCreateTime())
+                .updateTime(report.getUpdateTime())
+                .build();
+    }
+
+    private String getReportStatusName(String status) {
+        if (status == null) return "";
+        ReportStatusEnum enumValue = ReportStatusEnum.getByStatus(status);
+        if (enumValue != null) {
+            return enumValue.getName();
+        }
+        // BPM返回的状态不在枚举中，直接返回状态值
+        return status;
+    }
+
+    private String getProvinceStatusName(Integer status) {
+        if (status == null) return "";
+        for (ProvinceStatusEnum e : ProvinceStatusEnum.values()) {
+            if (e.getStatus().equals(status)) {
+                return e.getName();
+            }
+        }
+        return "";
+    }
+
+    /**
+     * 将 deptId 转换为 hospitalId
+     * 前端传入的 hospitalId 实际上是用户的 deptId
+     */
+
+    @Override
+    public DeclareCompareDataVO getCompareData(Long reportIdA, Long reportIdB) {
+        // 1. 获取两条申报记录的基础信息
+        DeclareProgressReportDO reportA = progressReportMapper.selectById(reportIdA);
+        DeclareProgressReportDO reportB = progressReportMapper.selectById(reportIdB);
+
+        if (reportA == null) {
+            throw new RuntimeException("申报记录 A 不存在");
+        }
+        if (reportB == null) {
+            throw new RuntimeException("申报记录 B 不存在");
+        }
+
+        // 2. 校验项目类型一致，不一致则抛业务异常
+        Integer projectTypeA = null;
+        Integer projectTypeB = null;
+        String projectTypeNameA = null;
+        String projectTypeNameB = null;
+
+        DeclareHospitalDO hospitalA = hospitalMapper.selectById(reportA.getHospitalId());
+        DeclareHospitalDO hospitalB = hospitalMapper.selectById(reportB.getHospitalId());
+
+        if (hospitalA != null) {
+            projectTypeA = hospitalA.getProjectType();
+            projectTypeNameA = projectTypeService.getProjectTypeTitle(projectTypeA);
+        }
+        if (hospitalB != null) {
+            projectTypeB = hospitalB.getProjectType();
+            projectTypeNameB = projectTypeService.getProjectTypeTitle(projectTypeB);
+        }
+
+        if (!java.util.Objects.equals(projectTypeA, projectTypeB)) {
+            throw new RuntimeException("所选两条记录项目类型不一致，无法对比。【记录A：" + projectTypeNameA + "，记录B：" + projectTypeNameB + "】");
+        }
+
+        // 3. 获取该项目的指标定义列表（按一级分组 + 二级分组 + 指标代号排序）
+        List<DeclareIndicatorDO> indicatorList =
+                indicatorService.getIndicatorsByProjectType(projectTypeA, "process");
+
+        // 4. 获取两条记录的指标值映射 (businessType=3=进度填报, businessId=reportId)
+        Map<String, DeclareIndicatorValueDO> valueMapA =
+                indicatorValueService.getIndicatorValueMap(3, reportIdA);
+        Map<String, DeclareIndicatorValueDO> valueMapB =
+                indicatorValueService.getIndicatorValueMap(3, reportIdB);
+
+        // 5. 构建 groupId -> DeclareIndicatorGroupDO 映射表（含一级和二级分组）
+        Map<Long, DeclareIndicatorGroupDO> groupMap = new HashMap<>();
+        if (projectTypeA != null) {
+            List<DeclareIndicatorGroupDO> allGroups = indicatorGroupMapper.selectByProjectType(projectTypeA);
+            for (DeclareIndicatorGroupDO g : allGroups) {
+                groupMap.put(g.getId(), g);
+            }
+        }
+
+        // 6. 遍历指标定义，组装每行的 A/B 值和差异类型
+        List<DeclareCompareIndicatorRowVO> rows = new ArrayList<>();
+        for (DeclareIndicatorDO indicator : indicatorList) {
+            DeclareCompareIndicatorRowVO row = DeclareCompareIndicatorRowVO.builder()
+                    .indicatorId(indicator.getId())
+                    .indicatorCode(indicator.getIndicatorCode())
+                    .indicatorName(indicator.getIndicatorName())
+                    .unit(indicator.getUnit())
+                    .valueType(indicator.getValueType())
+                    .valueOptions(indicator.getValueOptions())
+                    .groupId(indicator.getGroupId())
+                    .build();
+
+            // 通过 groupId 查找二级分组，再找一级分组名称
+            DeclareIndicatorGroupDO group2 = groupMap.get(indicator.getGroupId());
+            if (group2 != null) {
+                row.setGroupName(group2.getGroupName());
+                DeclareIndicatorGroupDO group1 = groupMap.get(group2.getParentId());
+                if (group1 != null) {
+                    row.setParentGroupName(group1.getGroupName());
+                }
+            }
+
+            DeclareIndicatorValueDO valA = valueMapA.get(indicator.getIndicatorCode());
+            DeclareIndicatorValueDO valB = valueMapB.get(indicator.getIndicatorCode());
+
+            row.setValueA(extractValue(valA, indicator.getValueType()));
+            row.setValueB(extractValue(valB, indicator.getValueType()));
+            row.setDiffType(computeDiffType(row.getValueA(), row.getValueB(), indicator.getValueType()));
+
+            rows.add(row);
+        }
+
+        // 7. 按一级分组名称 + 二级分组名称 + 指标代号排序，确保顺序一致
+        rows.sort(java.util.Comparator
+                .comparing(DeclareCompareIndicatorRowVO::getParentGroupName,
+                        java.util.Comparator.nullsLast(String::compareTo))
+                .thenComparing(DeclareCompareIndicatorRowVO::getGroupName,
+                        java.util.Comparator.nullsLast(String::compareTo))
+                .thenComparing(DeclareCompareIndicatorRowVO::getIndicatorCode,
+                        java.util.Comparator.nullsLast(String::compareTo)));
+
+        // 8. 组装返回 VO
+        DeclareProgressReportVO voA = convertToVO(reportA);
+        DeclareProgressReportVO voB = convertToVO(reportB);
+
+        DeclareCompareDataVO result = new DeclareCompareDataVO();
+        result.setReportA(voA);
+        result.setReportB(voB);
+        result.setIndicators(rows);
+        return result;
+    }
+
+    /**
+     * 从 IndicatorValueDO 中提取对应类型的值对象
+     */
+    private Object extractValue(DeclareIndicatorValueDO val, Integer valueType) {
+        if (val == null) return null;
+        if (val.getValueNum() != null && valueType == 1) {
+            return val.getValueNum();
+        }
+        if (val.getValueStr() != null && !val.getValueStr().isEmpty()) {
+            if (valueType == 1) {
+                try {
+                    return new java.math.BigDecimal(val.getValueStr());
+                } catch (NumberFormatException e) {
+                    return val.getValueStr();
+                }
+            }
+            return val.getValueStr();
+        }
+        if (val.getValueBool() != null && valueType == 3) {
+            return val.getValueBool();
+        }
+        if (val.getValueDate() != null && valueType == 4) {
+            return val.getValueDate();
+        }
+        if ((val.getValueDateStart() != null || val.getValueDateEnd() != null) && valueType == 8) {
+            Map<String, Object> range = new HashMap<>();
+            range.put("start", val.getValueDateStart());
+            range.put("end", val.getValueDateEnd());
+            return range;
+        }
+        if (val.getValueText() != null && valueType == 5) {
+            return val.getValueText();
+        }
+        return null;
+    }
+
+    /**
+     * 计算差异类型
+     */
+    private String computeDiffType(Object valA, Object valB, Integer valueType) {
+        boolean hasA = valA != null && !"".equals(String.valueOf(valA));
+        boolean hasB = valB != null && !"".equals(String.valueOf(valB));
+        if (!hasA && !hasB) return "none";
+
+        if (!hasA || !hasB) return "different";
+
+        // 数字类型: 比较大小
+        if (valueType == 1) {
+            try {
+                double a = Double.parseDouble(String.valueOf(valA));
+                double b = Double.parseDouble(String.valueOf(valB));
+                if (b > a) return "up";
+                if (b < a) return "down";
+                return "equal";
+            } catch (NumberFormatException e) {
+                boolean equal = String.valueOf(valA).equals(String.valueOf(valB));
+                return equal ? "equal" : "different";
+            }
+        }
+
+        // 其他类型: 比较字符串相等
+        boolean equal = String.valueOf(valA).equals(String.valueOf(valB));
+        return equal ? "equal" : "different";
+    }
+}

@@ -2,14 +2,13 @@ package cn.gemrun.base.module.trade.controller.admin.brokerage;
 
 import cn.gemrun.base.framework.common.pojo.CommonResult;
 import cn.gemrun.base.framework.common.pojo.PageResult;
-import cn.gemrun.base.module.member.api.user.MemberUserApi;
-import cn.gemrun.base.module.member.api.user.dto.MemberUserRespDTO;
 import cn.gemrun.base.module.pay.api.notify.dto.PayTransferNotifyReqDTO;
 import cn.gemrun.base.module.trade.controller.admin.brokerage.vo.withdraw.BrokerageWithdrawPageReqVO;
 import cn.gemrun.base.module.trade.controller.admin.brokerage.vo.withdraw.BrokerageWithdrawRejectReqVO;
 import cn.gemrun.base.module.trade.controller.admin.brokerage.vo.withdraw.BrokerageWithdrawRespVO;
 import cn.gemrun.base.module.trade.convert.brokerage.BrokerageWithdrawConvert;
 import cn.gemrun.base.module.trade.dal.dataobject.brokerage.BrokerageWithdrawDO;
+import cn.gemrun.base.module.trade.dto.MemberUserRespDTO;
 import cn.gemrun.base.module.trade.enums.brokerage.BrokerageWithdrawStatusEnum;
 import cn.gemrun.base.module.trade.service.brokerage.BrokerageWithdrawService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -23,6 +22,7 @@ import org.springframework.web.bind.annotation.*;
 import javax.annotation.Resource;
 import javax.annotation.security.PermitAll;
 import javax.validation.Valid;
+import java.util.Collections;
 import java.util.Map;
 
 import static cn.gemrun.base.framework.common.pojo.CommonResult.success;
@@ -38,9 +38,6 @@ public class BrokerageWithdrawController {
 
     @Resource
     private BrokerageWithdrawService brokerageWithdrawService;
-
-    @Resource
-    private MemberUserApi memberUserApi;
 
     @PutMapping("/approve")
     @Operation(summary = "通过申请")
@@ -77,8 +74,7 @@ public class BrokerageWithdrawController {
         PageResult<BrokerageWithdrawDO> pageResult = brokerageWithdrawService.getBrokerageWithdrawPage(pageVO);
 
         // 拼接信息
-        Map<Long, MemberUserRespDTO> userMap = memberUserApi.getUserMap(
-                convertSet(pageResult.getList(), BrokerageWithdrawDO::getUserId));
+        Map<Long, MemberUserRespDTO> userMap = Collections.emptyMap();
         return success(BrokerageWithdrawConvert.INSTANCE.convertPage(pageResult, userMap));
     }
 

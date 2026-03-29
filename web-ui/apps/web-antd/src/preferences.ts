@@ -15,6 +15,12 @@ export const overridesPreferences = defineOverridesPreferences({
     name: import.meta.env.VITE_APP_TITLE,
     enableRefreshToken: true,
   },
+  logo: {
+    enable: true,
+    fit: 'contain',
+    source: '/static/imgs/logo/horizontal_logo.png',
+    sourceDark: '/static/imgs/logo/horizontal_logo.png',
+  },
   footer: {
     /** 默认关闭 footer 页脚，因为有一定遮挡 */
     enable: false,
@@ -22,6 +28,10 @@ export const overridesPreferences = defineOverridesPreferences({
   },
   copyright: {
     companyName: import.meta.env.VITE_APP_TITLE,
-    companySiteLink: 'https://gitee.com/basecode/base-ui-admin-vben',
+    companySiteLink: '#',
+  },
+  widget: {
+    timezone: false,
   },
 });
+

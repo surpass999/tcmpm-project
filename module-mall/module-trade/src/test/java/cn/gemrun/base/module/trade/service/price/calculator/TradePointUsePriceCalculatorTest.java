@@ -1,10 +1,6 @@
 package cn.gemrun.base.module.trade.service.price.calculator;
 
 import cn.gemrun.base.framework.test.core.ut.BaseMockitoUnitTest;
-import cn.gemrun.base.module.member.api.config.MemberConfigApi;
-import cn.gemrun.base.module.member.api.config.dto.MemberConfigRespDTO;
-import cn.gemrun.base.module.member.api.user.MemberUserApi;
-import cn.gemrun.base.module.member.api.user.dto.MemberUserRespDTO;
 import cn.gemrun.base.module.promotion.enums.common.PromotionTypeEnum;
 import cn.gemrun.base.module.trade.enums.order.TradeOrderTypeEnum;
 import cn.gemrun.base.module.trade.service.price.bo.TradePriceCalculateReqBO;
@@ -33,11 +29,6 @@ public class TradePointUsePriceCalculatorTest extends BaseMockitoUnitTest {
 
     @InjectMocks
     private TradePointUsePriceCalculator tradePointUsePriceCalculator;
-
-    @Mock
-    private MemberConfigApi memberConfigApi;
-    @Mock
-    private MemberUserApi memberUserApi;
 
     @Test
     public void testCalculate_success() {

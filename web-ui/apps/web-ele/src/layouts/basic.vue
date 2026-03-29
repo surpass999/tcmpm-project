@@ -7,11 +7,10 @@ import { computed, onMounted, ref, watch } from 'vue';
 
 import { useAccess } from '@vben/access';
 import { AuthenticationLoginExpiredModal, useVbenModal } from '@vben/common-ui';
-import { VBEN_DOC_URL, VBEN_GITHUB_URL } from '@vben/constants';
+import { VBEN_GITHUB_URL } from '@vben/constants';
 import { isTenantEnable, useTabs, useWatermark } from '@vben/hooks';
 import {
   AntdProfileOutlined,
-  BookOpenText,
   CircleHelp,
   SvgGithubIcon,
 } from '@vben/icons';
@@ -64,16 +63,6 @@ const menus = computed(() => [
     icon: AntdProfileOutlined,
     text: $t('ui.widgets.profile'),
   },
-  {
-    handler: () => {
-      openWindow(VBEN_DOC_URL, {
-        target: '_blank',
-      });
-    },
-    icon: BookOpenText,
-    text: $t('ui.widgets.document'),
-  },
-  {
     handler: () => {
       openWindow(VBEN_GITHUB_URL, {
         target: '_blank',

@@ -8,8 +8,6 @@ import cn.gemrun.base.framework.common.enums.CommonStatusEnum;
 import cn.gemrun.base.framework.common.enums.UserTypeEnum;
 import cn.gemrun.base.framework.common.pojo.PageResult;
 import cn.gemrun.base.framework.common.util.json.JsonUtils;
-import cn.gemrun.base.module.member.api.user.MemberUserApi;
-import cn.gemrun.base.module.member.api.user.dto.MemberUserRespDTO;
 import cn.gemrun.base.module.product.api.sku.ProductSkuApi;
 import cn.gemrun.base.module.product.api.sku.dto.ProductSkuRespDTO;
 import cn.gemrun.base.module.product.api.spu.ProductSpuApi;
@@ -65,8 +63,6 @@ public class CombinationRecordServiceImpl implements CombinationRecordService {
     @Resource
     private CombinationRecordMapper combinationRecordMapper;
 
-    @Resource
-    private MemberUserApi memberUserApi;
     @Resource
     private ProductSpuApi productSpuApi;
     @Resource
@@ -161,10 +157,9 @@ public class CombinationRecordServiceImpl implements CombinationRecordService {
                 reqDTO.getActivityId(), reqDTO.getHeadId(), reqDTO.getSkuId(), reqDTO.getCount());
 
         // 2. 组合数据创建拼团记录
-        MemberUserRespDTO user = memberUserApi.getUser(reqDTO.getUserId());
         ProductSpuRespDTO spu = productSpuApi.getSpu(reqDTO.getSpuId());
         ProductSkuRespDTO sku = productSkuApi.getSku(reqDTO.getSkuId());
-        CombinationRecordDO record = CombinationActivityConvert.INSTANCE.convert(reqDTO, keyValue.getKey(), user, spu, sku);
+        CombinationRecordDO record = CombinationActivityConvert.INSTANCE.convert(reqDTO, keyValue.getKey(), null, spu, sku);
         // 2.1. 如果是团长需要设置 headId 为 CombinationRecordDO#HEAD_ID_GROUP
         if (record.getHeadId() == null) {
             record.setStartTime(LocalDateTime.now())

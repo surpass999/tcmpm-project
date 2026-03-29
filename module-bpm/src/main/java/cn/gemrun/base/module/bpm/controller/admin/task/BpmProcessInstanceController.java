@@ -204,7 +204,8 @@ public class BpmProcessInstanceController {
     @GetMapping("/get-approval-detail")
     @Operation(summary = "获得审批详情")
     @Parameter(name = "id", description = "流程实例的编号", required = true)
-    @PreAuthorize("@ss.hasPermission('bpm:process-instance:query')")
+//     @PreAuthorize("@ss.hasPermission('bpm:process-instance:query')")
+    @PreAuthorize("isAuthenticated()")
     @SuppressWarnings("unchecked")
     public CommonResult<BpmApprovalDetailRespVO> getApprovalDetail(@Valid BpmApprovalDetailReqVO reqVO) {
         if (StrUtil.isNotEmpty(reqVO.getProcessVariablesStr())) {
@@ -215,7 +216,8 @@ public class BpmProcessInstanceController {
 
     @GetMapping("/get-next-approval-nodes")
     @Operation(summary = "获取下一个执行的流程节点")
-    @PreAuthorize("@ss.hasPermission('bpm:process-instance:query')")
+//     @PreAuthorize("@ss.hasPermission('bpm:process-instance:query')")
+    @PreAuthorize("isAuthenticated()")
     @SuppressWarnings("unchecked")
     public CommonResult<List<BpmApprovalDetailRespVO.ActivityNode>> getNextApprovalNodes(@Valid BpmApprovalDetailReqVO reqVO) {
         if (StrUtil.isNotEmpty(reqVO.getProcessVariablesStr())) {

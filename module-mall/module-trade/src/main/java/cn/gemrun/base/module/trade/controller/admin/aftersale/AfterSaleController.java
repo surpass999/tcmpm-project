@@ -4,8 +4,6 @@ import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.gemrun.base.framework.common.pojo.CommonResult;
 import cn.gemrun.base.framework.common.pojo.PageResult;
-import cn.gemrun.base.module.member.api.user.MemberUserApi;
-import cn.gemrun.base.module.member.api.user.dto.MemberUserRespDTO;
 import cn.gemrun.base.module.pay.api.notify.dto.PayRefundNotifyReqDTO;
 import cn.gemrun.base.module.trade.controller.admin.aftersale.vo.*;
 import cn.gemrun.base.module.trade.convert.aftersale.AfterSaleConvert;
@@ -13,6 +11,7 @@ import cn.gemrun.base.module.trade.dal.dataobject.aftersale.AfterSaleDO;
 import cn.gemrun.base.module.trade.dal.dataobject.aftersale.AfterSaleLogDO;
 import cn.gemrun.base.module.trade.dal.dataobject.order.TradeOrderDO;
 import cn.gemrun.base.module.trade.dal.dataobject.order.TradeOrderItemDO;
+import cn.gemrun.base.module.trade.dto.MemberUserRespDTO;
 import cn.gemrun.base.module.trade.service.aftersale.AfterSaleLogService;
 import cn.gemrun.base.module.trade.service.aftersale.AfterSaleService;
 import cn.gemrun.base.module.trade.service.order.TradeOrderQueryService;
@@ -28,6 +27,7 @@ import org.springframework.web.bind.annotation.*;
 import javax.annotation.Resource;
 import javax.annotation.security.PermitAll;
 import javax.validation.Valid;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -51,8 +51,6 @@ public class AfterSaleController {
     private TradeOrderUpdateService tradeOrderUpdateService;
     @Resource
     private AfterSaleLogService afterSaleLogService;
-    @Resource
-    private MemberUserApi memberUserApi;
 
     @GetMapping("/page")
     @Operation(summary = "获得售后订单分页")
@@ -65,8 +63,7 @@ public class AfterSaleController {
         }
 
         // 查询会员
-        Map<Long, MemberUserRespDTO> memberUsers = memberUserApi.getUserMap(
-                convertSet(pageResult.getList(), AfterSaleDO::getUserId));
+        Map<Long, MemberUserRespDTO> memberUsers = Collections.emptyMap();
         return success(AfterSaleConvert.INSTANCE.convertPage(pageResult, memberUsers));
     }
 
@@ -86,7 +83,7 @@ public class AfterSaleController {
         // 查询订单项
         TradeOrderItemDO orderItem = tradeOrderQueryService.getOrderItem(afterSale.getOrderItemId());
         // 拼接数据
-        MemberUserRespDTO user = memberUserApi.getUser(afterSale.getUserId());
+        MemberUserRespDTO user = null;
         List<AfterSaleLogDO> logs = afterSaleLogService.getAfterSaleLogList(afterSale.getId());
         return success(AfterSaleConvert.INSTANCE.convert(afterSale, order, orderItem, user, logs));
     }

@@ -2,7 +2,6 @@ package cn.gemrun.base.module.trade.service.price;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.gemrun.base.framework.common.util.object.BeanUtils;
-import cn.gemrun.base.module.member.api.level.dto.MemberLevelRespDTO;
 import cn.gemrun.base.module.product.api.sku.ProductSkuApi;
 import cn.gemrun.base.module.product.api.sku.dto.ProductSkuRespDTO;
 import cn.gemrun.base.module.product.api.spu.ProductSpuApi;
@@ -106,8 +105,8 @@ public class TradePriceServiceImpl implements TradePriceService {
         // 1.1 获得 SPU 与 SKU 的映射
         List<ProductSkuRespDTO> allSkuList = productSkuApi.getSkuListBySpuId(spuIds);
         Map<Long, List<ProductSkuRespDTO>> spuIdAndSkuListMap = convertMultiMap(allSkuList, ProductSkuRespDTO::getSpuId);
-        // 1.2 获得会员等级
-        MemberLevelRespDTO level = discountActivityPriceCalculator.getMemberLevel(userId);
+        // 1.2 获得会员等级（会员模块已移除，始终为 null）
+        Object level = discountActivityPriceCalculator.getMemberLevel(userId);
         // 1.3 获得限时折扣活动
         Map<Long, DiscountProductRespDTO> skuIdAndDiscountMap = convertMap(
                 discountActivityApi.getMatchDiscountProductListBySkuIds(convertSet(allSkuList, ProductSkuRespDTO::getId)),

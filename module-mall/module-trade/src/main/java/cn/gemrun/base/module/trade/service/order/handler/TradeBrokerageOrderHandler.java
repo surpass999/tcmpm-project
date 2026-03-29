@@ -2,8 +2,6 @@ package cn.gemrun.base.module.trade.service.order.handler;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.lang.Assert;
-import cn.gemrun.base.module.member.api.user.MemberUserApi;
-import cn.gemrun.base.module.member.api.user.dto.MemberUserRespDTO;
 import cn.gemrun.base.module.product.api.sku.ProductSkuApi;
 import cn.gemrun.base.module.product.api.sku.dto.ProductSkuRespDTO;
 import cn.gemrun.base.module.product.api.spu.ProductSpuApi;
@@ -12,6 +10,7 @@ import cn.gemrun.base.module.trade.convert.order.TradeOrderConvert;
 import cn.gemrun.base.module.trade.dal.dataobject.brokerage.BrokerageUserDO;
 import cn.gemrun.base.module.trade.dal.dataobject.order.TradeOrderDO;
 import cn.gemrun.base.module.trade.dal.dataobject.order.TradeOrderItemDO;
+import cn.gemrun.base.module.trade.dto.MemberUserRespDTO;
 import cn.gemrun.base.module.trade.enums.brokerage.BrokerageRecordBizTypeEnum;
 import cn.gemrun.base.module.trade.service.brokerage.BrokerageRecordService;
 import cn.gemrun.base.module.trade.service.brokerage.BrokerageUserService;
@@ -32,8 +31,6 @@ import static cn.gemrun.base.framework.common.util.collection.CollectionUtils.co
 @Component
 public class TradeBrokerageOrderHandler implements TradeOrderHandler {
 
-    @Resource
-    private MemberUserApi memberUserApi;
     @Resource
     private ProductSpuApi productSpuApi;
     @Resource
@@ -100,7 +97,8 @@ public class TradeBrokerageOrderHandler implements TradeOrderHandler {
      * @param orderItems 订单项
      */
     protected void addBrokerage(Long userId, List<TradeOrderItemDO> orderItems) {
-        MemberUserRespDTO user = memberUserApi.getUser(userId);
+        // 会员模块已移除，用户信息不可用
+        MemberUserRespDTO user = null;
         Assert.notNull(user);
         Map<Long, ProductSpuRespDTO> spusMap = productSpuApi.getSpuMap(convertList(orderItems, TradeOrderItemDO::getSpuId));
         Map<Long, ProductSkuRespDTO> skusMap = productSkuApi.getSkuMap(convertList(orderItems, TradeOrderItemDO::getSkuId));

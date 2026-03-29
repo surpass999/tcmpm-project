@@ -6,8 +6,8 @@ import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.extra.spring.SpringUtil;
 import cn.gemrun.base.framework.common.pojo.PageResult;
-import cn.gemrun.base.module.member.api.user.MemberUserApi;
-import cn.gemrun.base.module.member.api.user.dto.MemberUserRespDTO;
+import cn.gemrun.base.module.trade.dto.MemberAddressRespDTO;
+import cn.gemrun.base.module.trade.dto.MemberUserRespDTO;
 import cn.gemrun.base.module.trade.controller.admin.order.vo.TradeOrderPageReqVO;
 import cn.gemrun.base.module.trade.controller.admin.order.vo.TradeOrderSummaryRespVO;
 import cn.gemrun.base.module.trade.controller.app.order.vo.AppTradeOrderPageReqVO;
@@ -31,7 +31,6 @@ import javax.annotation.Resource;
 import java.util.*;
 
 import static cn.gemrun.base.framework.common.exception.util.ServiceExceptionUtil.exception;
-import static cn.gemrun.base.framework.common.util.collection.CollectionUtils.convertSet;
 import static cn.gemrun.base.module.trade.enums.ErrorCodeConstants.EXPRESS_NOT_EXISTS;
 import static cn.gemrun.base.module.trade.enums.ErrorCodeConstants.ORDER_NOT_FOUND;
 
@@ -53,11 +52,6 @@ public class TradeOrderQueryServiceImpl implements TradeOrderQueryService {
 
     @Resource
     private DeliveryExpressService deliveryExpressService;
-
-    @Resource
-    private MemberUserApi memberUserApi;
-
-    // =================== Order ===================
 
     @Override
     public TradeOrderDO getOrder(Long id) {
@@ -100,23 +94,11 @@ public class TradeOrderQueryServiceImpl implements TradeOrderQueryService {
     }
 
     private Set<Long> buildQueryConditionUserIds(TradeOrderPageReqVO reqVO) {
-        // 获得 userId 相关的查询
-        Set<Long> userIds = new HashSet<>();
-        if (StrUtil.isNotEmpty(reqVO.getUserMobile())) {
-            MemberUserRespDTO user = memberUserApi.getUserByMobile(reqVO.getUserMobile());
-            if (user == null) { // 没查询到用户，说明肯定也没他的订单
-                return null;
-            }
-            userIds.add(user.getId());
+        // 会员模块已移除，无法通过手机号或昵称查询用户，过滤条件不生效
+        if (StrUtil.isNotEmpty(reqVO.getUserMobile()) || StrUtil.isNotEmpty(reqVO.getUserNickname())) {
+            return Collections.emptySet();
         }
-        if (StrUtil.isNotEmpty(reqVO.getUserNickname())) {
-            List<MemberUserRespDTO> users = memberUserApi.getUserListByNickname(reqVO.getUserNickname());
-            if (CollUtil.isEmpty(users)) { // 没查询到用户，说明肯定也没他的订单
-                return null;
-            }
-            userIds.addAll(convertSet(users, MemberUserRespDTO::getId));
-        }
-        return userIds;
+        return null;
     }
 
     @Override

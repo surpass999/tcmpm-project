@@ -13,8 +13,8 @@ import cn.hutool.extra.spring.SpringUtil;
 import cn.gemrun.base.framework.common.enums.UserTypeEnum;
 import cn.gemrun.base.framework.common.util.json.JsonUtils;
 import cn.gemrun.base.framework.common.util.number.MoneyUtils;
-import cn.gemrun.base.module.member.api.address.MemberAddressApi;
-import cn.gemrun.base.module.member.api.address.dto.MemberAddressRespDTO;
+import cn.gemrun.base.module.trade.dto.MemberAddressRespDTO;
+import cn.gemrun.base.module.trade.dto.MemberUserRespDTO;
 import cn.gemrun.base.module.pay.api.order.PayOrderApi;
 import cn.gemrun.base.module.pay.api.order.dto.PayOrderCreateReqDTO;
 import cn.gemrun.base.module.pay.api.order.dto.PayOrderRespDTO;
@@ -117,8 +117,6 @@ public class TradeOrderUpdateServiceImpl implements TradeOrderUpdateService {
     @Resource
     private PayOrderApi payOrderApi;
     @Resource
-    private MemberAddressApi addressApi;
-    @Resource
     private ProductCommentApi productCommentApi;
     @Resource
     public SocialClientApi socialClientApi;
@@ -134,11 +132,8 @@ public class TradeOrderUpdateServiceImpl implements TradeOrderUpdateService {
 
     @Override
     public AppTradeOrderSettlementRespVO settlementOrder(Long userId, AppTradeOrderSettlementReqVO settlementReqVO) {
-        // 1. 获得收货地址
-        MemberAddressRespDTO address = getAddress(userId, settlementReqVO.getAddressId());
-        if (address != null) {
-            settlementReqVO.setAddressId(address.getId());
-        }
+        // 1. 获得收货地址（会员模块已移除，地址查询不可用）
+        MemberAddressRespDTO address = null;
 
         // 2. 计算价格
         TradePriceCalculateRespBO calculateRespBO = calculatePrice(userId, settlementReqVO);
@@ -152,13 +147,11 @@ public class TradeOrderUpdateServiceImpl implements TradeOrderUpdateService {
      *
      * @param userId    用户编号
      * @param addressId 地址编号
-     * @return 地址
+     * @return 地址（会员模块已移除，始终返回 null）
      */
     private MemberAddressRespDTO getAddress(Long userId, Long addressId) {
-        if (addressId != null) {
-            return addressApi.getAddress(addressId, userId);
-        }
-        return addressApi.getDefaultAddress(userId);
+        // 会员模块已移除，无法获取收货地址
+        return null;
     }
 
     /**
@@ -220,10 +213,13 @@ public class TradeOrderUpdateServiceImpl implements TradeOrderUpdateService {
         // 物流信息
         order.setDeliveryType(createReqVO.getDeliveryType());
         if (Objects.equals(createReqVO.getDeliveryType(), DeliveryTypeEnum.EXPRESS.getType())) {
-            MemberAddressRespDTO address = addressApi.getAddress(createReqVO.getAddressId(), userId);
-            Assert.notNull(address, "地址({}) 不能为空", createReqVO.getAddressId()); // 价格计算时，已经计算
-            order.setReceiverName(address.getName()).setReceiverMobile(address.getMobile())
-                    .setReceiverAreaId(address.getAreaId()).setReceiverDetailAddress(address.getDetailAddress());
+            // 会员模块已移除，收件人信息由前端直接传入
+            Assert.notBlank(createReqVO.getReceiverName(), "收件人名称不能为空");
+            Assert.notBlank(createReqVO.getReceiverMobile(), "收件人手机不能为空");
+            Assert.notNull(createReqVO.getReceiverAreaId(), "收件人地区编号不能为空");
+            Assert.notBlank(createReqVO.getReceiverDetailAddress(), "收件人详细地址不能为空");
+            order.setReceiverName(createReqVO.getReceiverName()).setReceiverMobile(createReqVO.getReceiverMobile())
+                    .setReceiverAreaId(createReqVO.getReceiverAreaId()).setReceiverDetailAddress(createReqVO.getReceiverDetailAddress());
         } else if (Objects.equals(createReqVO.getDeliveryType(), DeliveryTypeEnum.PICK_UP.getType())) {
             order.setReceiverName(createReqVO.getReceiverName()).setReceiverMobile(createReqVO.getReceiverMobile());
             order.setPickUpVerifyCode(RandomUtil.randomNumbers(8)); // 随机一个核销码，长度为 8 位

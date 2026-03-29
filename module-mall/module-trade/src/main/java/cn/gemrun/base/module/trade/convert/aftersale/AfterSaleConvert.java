@@ -1,9 +1,9 @@
 package cn.gemrun.base.module.trade.convert.aftersale;
 
 import cn.gemrun.base.framework.common.pojo.PageResult;
-import cn.gemrun.base.module.member.api.user.dto.MemberUserRespDTO;
 import cn.gemrun.base.module.pay.api.refund.dto.PayRefundCreateReqDTO;
 import cn.gemrun.base.module.product.api.property.dto.ProductPropertyValueDetailRespDTO;
+import cn.gemrun.base.module.trade.dto.MemberUserRespDTO;
 import cn.gemrun.base.module.trade.controller.admin.aftersale.vo.AfterSaleDetailRespVO;
 import cn.gemrun.base.module.trade.controller.admin.aftersale.vo.AfterSaleRespPageItemVO;
 import cn.gemrun.base.module.trade.controller.admin.aftersale.vo.log.AfterSaleLogRespVO;

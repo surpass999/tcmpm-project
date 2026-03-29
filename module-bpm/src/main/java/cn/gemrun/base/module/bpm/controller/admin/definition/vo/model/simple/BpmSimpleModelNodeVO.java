@@ -245,9 +245,6 @@ public class BpmSimpleModelNodeVO {
 
         @Schema(description = "业务状态标识", example = "PASS")
         private String bizStatus;
-
-        @Schema(description = "整改流程定义 Key（整改按钮专用）", example = "rectify_process")
-        private String rectifyProcessDefinitionKey;
     }
 
     @Schema(description = "条件设置")

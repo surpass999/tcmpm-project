@@ -2,12 +2,11 @@ package cn.gemrun.base.module.trade.controller.admin.brokerage;
 
 import cn.gemrun.base.framework.common.pojo.CommonResult;
 import cn.gemrun.base.framework.common.pojo.PageResult;
-import cn.gemrun.base.module.member.api.user.MemberUserApi;
-import cn.gemrun.base.module.member.api.user.dto.MemberUserRespDTO;
 import cn.gemrun.base.module.trade.controller.admin.brokerage.vo.record.BrokerageRecordPageReqVO;
 import cn.gemrun.base.module.trade.controller.admin.brokerage.vo.record.BrokerageRecordRespVO;
 import cn.gemrun.base.module.trade.convert.brokerage.BrokerageRecordConvert;
 import cn.gemrun.base.module.trade.dal.dataobject.brokerage.BrokerageRecordDO;
+import cn.gemrun.base.module.trade.dto.MemberUserRespDTO;
 import cn.gemrun.base.module.trade.service.brokerage.BrokerageRecordService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -21,6 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import javax.annotation.Resource;
 import javax.validation.Valid;
+import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
 
@@ -36,9 +36,6 @@ public class BrokerageRecordController {
 
     @Resource
     private BrokerageRecordService brokerageRecordService;
-
-    @Resource
-    private MemberUserApi memberUserApi;
 
     @GetMapping("/get")
     @Operation(summary = "获得佣金记录")
@@ -58,7 +55,7 @@ public class BrokerageRecordController {
         // 查询用户信息
         Set<Long> userIds = convertSet(pageResult.getList(), BrokerageRecordDO::getUserId);
         userIds.addAll(convertList(pageResult.getList(), BrokerageRecordDO::getSourceUserId));
-        Map<Long, MemberUserRespDTO> userMap = memberUserApi.getUserMap(userIds);
+        Map<Long, MemberUserRespDTO> userMap = Collections.emptyMap();
         // 拼接数据
         return success(BrokerageRecordConvert.INSTANCE.convertPage(pageResult, userMap));
     }

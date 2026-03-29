@@ -123,11 +123,6 @@ public interface BpmnModelConstants {
     String BUTTON_SETTING_ELEMENT_BIZ_STATUS_ATTRIBUTE = "bizStatus";
 
     /**
-     * BPMN ExtensionElement Attribute, 用于标记整改流程定义 Key（整改按钮专用）
-     */
-    String BUTTON_SETTING_ELEMENT_RECTIFY_PROCESS_KEY_ATTRIBUTE = "rectifyProcessDefinitionKey";
-
-    /**
      * BPMN ExtensionElement 的扩展属性，用于标记触发器的类型
      */
     String TRIGGER_TYPE = "triggerType";

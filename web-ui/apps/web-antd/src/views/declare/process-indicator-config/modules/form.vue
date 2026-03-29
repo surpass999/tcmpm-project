@@ -15,22 +15,33 @@ import {
   updateProcessIndicatorConfig,
 } from '#/api/declare/process-indicator-config';
 import { getIndicatorPage } from '#/api/declare/indicator';
+import { getProjectTypeSimpleList } from '#/api/declare/project-type';
 import { $t } from '#/locales';
 
 /** 过程类型选项 - 从字典获取 */
 const processTypeOptions = getDictOptions(DICT_TYPE.DECLARE_PROCESS_TYPE, 'number');
 
-/** 项目类型选项 - 从字典获取，并在前面添加"通用类型"选项 */
-const projectTypeOptions = [
-  { label: '通用类型', value: 0 },
-  ...getDictOptions(DICT_TYPE.DECLARE_PROJECT_TYPE, 'number'),
-];
+/** 项目类型选项 - 从 API 加载 */
+const projectTypeOptions = ref<{ label: string; value: number }[]>([]);
+
+/** 加载项目类型选项 */
+const loadProjectTypeOptions = async () => {
+  try {
+    const list = await getProjectTypeSimpleList();
+    projectTypeOptions.value = list.map((item) => ({
+      label: item.title || item.name,
+      value: item.typeValue,
+    }));
+  } catch {
+    projectTypeOptions.value = [];
+  }
+};
 
 const emit = defineEmits(['success']);
 
 const formData = ref<ProcessIndicatorConfigApi.ConfigSaveParams>({
   processType: undefined,
-  projectType: 0,
+  projectType: undefined,
   indicatorId: undefined,
   isRequired: false,
   sort: 0,
@@ -78,6 +89,9 @@ const [Modal, modalApi] = useVbenModal({
   async onOpenChange(isOpen: boolean) {
     if (!isOpen) return;
 
+    // 加载项目类型选项
+    await loadProjectTypeOptions();
+
     const data = modalApi.getData<ProcessIndicatorConfigApi.ConfigResp>();
 
     if (data?.id) {
@@ -101,7 +115,7 @@ const [Modal, modalApi] = useVbenModal({
       // 新增模式
       formData.value = {
         processType: undefined,
-        projectType: 0,
+        projectType: undefined,
         indicatorId: undefined,
         isRequired: false,
         sort: 0,

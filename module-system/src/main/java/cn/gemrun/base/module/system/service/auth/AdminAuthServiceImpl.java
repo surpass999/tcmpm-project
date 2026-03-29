@@ -22,7 +22,6 @@ import cn.gemrun.base.module.system.enums.logger.LoginResultEnum;
 import cn.gemrun.base.module.system.enums.oauth2.OAuth2ClientConstants;
 import cn.gemrun.base.module.system.enums.sms.SmsSceneEnum;
 import cn.gemrun.base.module.system.service.logger.LoginLogService;
-import cn.gemrun.base.module.system.service.member.MemberService;
 import cn.gemrun.base.module.system.service.oauth2.OAuth2TokenService;
 import cn.gemrun.base.module.system.service.social.SocialUserService;
 import cn.gemrun.base.module.system.service.user.AdminUserService;
@@ -61,8 +60,6 @@ public class AdminAuthServiceImpl implements AdminAuthService {
     private OAuth2TokenService oauth2TokenService;
     @Resource
     private SocialUserService socialUserService;
-    @Resource
-    private MemberService memberService;
     @Resource
     private Validator validator;
     @Resource
@@ -245,7 +242,8 @@ public class AdminAuthServiceImpl implements AdminAuthService {
         if (ObjectUtil.equal(getUserType().getValue(), userType)) {
             reqDTO.setUsername(getUsername(userId));
         } else {
-            reqDTO.setUsername(memberService.getMemberUserMobile(userId));
+            // 会员模块已移除，无法获取会员手机号
+            reqDTO.setUsername(null);
         }
         reqDTO.setUserAgent(ServletUtils.getUserAgent());
         reqDTO.setUserIp(ServletUtils.getClientIP());

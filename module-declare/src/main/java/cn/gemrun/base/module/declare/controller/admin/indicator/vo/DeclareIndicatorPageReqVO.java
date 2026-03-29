@@ -24,11 +24,6 @@ public class DeclareIndicatorPageReqVO extends PageParam {
     private String indicatorName;
 
     /**
-     * 指标分类
-     */
-    private Integer category;
-
-    /**
      * 适用项目类型
      */
     private Integer projectType;
@@ -37,5 +32,10 @@ public class DeclareIndicatorPageReqVO extends PageParam {
      * 适用业务类型
      */
     private String businessType;
+
+    /**
+     * 分组ID
+     */
+    private Long groupId;
 
 }

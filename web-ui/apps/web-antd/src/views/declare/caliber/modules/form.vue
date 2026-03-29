@@ -205,7 +205,7 @@ const [Modal, modalApi] = useVbenModal({
       }
     } else {
       formData.value = {};
-}
+    }
   },
   async onConfirm() {
     const indicatorId = selectedIndicatorId.value;

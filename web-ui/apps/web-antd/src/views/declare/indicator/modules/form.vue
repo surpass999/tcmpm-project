@@ -1,17 +1,19 @@
 <script lang="ts" setup>
 import type { DeclareIndicatorApi } from '#/api/declare/indicator';
-import { computed, reactive, ref, watch } from 'vue';
+import { computed, reactive, ref, watch, nextTick } from 'vue';
 import { PlusOutlined } from '@vben/icons';
 import { useVbenModal } from '@vben/common-ui';
 import { message } from 'ant-design-vue';
+import { DICT_TYPE } from '@vben/constants';
+import { getDictOptions } from '@vben/hooks';
 import {
   createIndicator,
   getIndicator,
   updateIndicator,
 } from '#/api/declare/indicator';
+import { getIndicatorGroupTreeByProjectType } from '#/api/declare/indicator-group';
+import { getProjectTypeSimpleList } from '#/api/declare/project-type';
 import { $t } from '#/locales';
-import { DICT_TYPE } from '@vben/constants';
-import { getDictOptions } from '@vben/hooks';
 
 // 选项定义项
 interface OptionItem {
@@ -19,6 +21,41 @@ interface OptionItem {
   label: string;
   key: string;
 }
+
+// 动态容器子字段定义
+interface DynamicField {
+  key: string;
+  fieldCode: string;
+  fieldLabel: string;
+  fieldType: string;
+  required: boolean;
+  sort: number;
+  options: { value: string; label: string }[];
+  maxLength?: number;
+  placeholder?: string;
+  showSearch?: boolean;
+  minSelect?: number;
+  maxSelect?: number;
+  format?: string;
+  layout?: string;
+  rows?: number;
+  precision?: number;
+  prefix?: string;
+  suffix?: string;
+}
+
+// 子字段类型选项
+const fieldTypeOptions = [
+  { value: 'text', label: '文本输入' },
+  { value: 'number', label: '数字输入' },
+  { value: 'textarea', label: '多行文本' },
+  { value: 'radio', label: '单选' },
+  { value: 'checkbox', label: '多选' },
+  { value: 'select', label: '下拉单选' },
+  { value: 'multiSelect', label: '下拉多选' },
+  { value: 'date', label: '日期' },
+  { value: 'dateRange', label: '日期区间' },
+];
 
 // 值类型配置项
 interface ConfigItem {
@@ -42,6 +79,11 @@ const showValueOptions = computed(() => {
   return [6, 7, 10, 11].includes(currentValueType.value);
 });
 
+// 是否为动态容器类型
+const isDynamicContainer = computed(() => {
+  return currentValueType.value === 12;
+});
+
 // 是否显示最小/最大值（数字类型显示）
 const showMinMaxValue = computed(() => {
   return currentValueType.value === 1;
@@ -60,8 +102,33 @@ const handleValueTypeChange = (value: number) => {
 // 选项列表
 const optionsList = reactive<OptionItem[]>([]);
 
+// 动态容器子字段列表
+const dynamicFields = reactive<DynamicField[]>([]);
+
 // 扩展配置对象
 const extraConfigData = reactive<Record<string, any>>({});
+
+// 分组扁平时钟数据（treeDataSimpleMode 更可靠，避免嵌套结构更新时的渲染问题）
+const flattenGroupTreeData = ref<{ id: number; pId: number; label: string; value: number }[]>([]);
+
+// 用于强制刷新 tree-select 的 key（解决 groupId 在 treeData 加载完成前已有值导致不回显的问题）
+const treeSelectKey = ref(0);
+
+// 项目类型选项（从 API 加载）
+const projectTypeOptions = ref<{ label: string; value: number }[]>([]);
+
+// 加载项目类型选项
+const loadProjectTypeOptions = async () => {
+  try {
+    const list = await getProjectTypeSimpleList();
+    projectTypeOptions.value = list.map((item) => ({
+      label: item.title || item.name,
+      value: item.typeValue,
+    }));
+  } catch {
+    projectTypeOptions.value = [];
+  }
+};
 
 // 值类型配置显示（所有值类型1-11都显示配置区域）
 const showValueTypeConfig = computed(() => {
@@ -194,8 +261,77 @@ const handleRemoveOption = (key: string) => {
   }
 };
 
+// 添加子字段
+const handleAddField = () => {
+  dynamicFields.push({
+    key: `field_${Date.now()}`,
+    fieldCode: '',
+    fieldLabel: '',
+    fieldType: 'text',
+    required: false,
+    sort: dynamicFields.length + 1,
+    options: [],
+  });
+};
+
+// 删除子字段
+const handleRemoveField = (key: string) => {
+  const index = dynamicFields.findIndex((item) => item.key === key);
+  if (index > -1) {
+    dynamicFields.splice(index, 1);
+  }
+};
+
+// 添加子字段选项
+const handleAddFieldOption = (fieldKey: string) => {
+  const field = dynamicFields.find((item) => item.key === fieldKey);
+  if (field) {
+    field.options.push({ value: '', label: '' });
+  }
+};
+
+// 删除子字段选项
+const handleRemoveFieldOption = (fieldKey: string, optionIndex: number) => {
+  const field = dynamicFields.find((item) => item.key === fieldKey);
+  if (field && optionIndex >= 0 && optionIndex < field.options.length) {
+    field.options.splice(optionIndex, 1);
+  }
+};
+
 // 将选项列表转换为JSON字符串
 const convertOptionsToJson = () => {
+  // 动态容器类型：序列化子字段定义
+  if (currentValueType.value === 12) {
+    if (dynamicFields.length === 0) {
+      formData.value!.valueOptions = '';
+      return;
+    }
+    const validFields = dynamicFields
+      .filter((field) => field.fieldCode && field.fieldLabel && field.fieldType)
+      .map((field) => ({
+        fieldCode: field.fieldCode,
+        fieldLabel: field.fieldLabel,
+        fieldType: field.fieldType,
+        required: field.required ?? false,
+        sort: field.sort ?? 0,
+        options: field.options?.filter((opt) => opt.value && opt.label) ?? [],
+        maxLength: field.maxLength,
+        placeholder: field.placeholder,
+        showSearch: field.showSearch,
+        minSelect: field.minSelect,
+        maxSelect: field.maxSelect,
+        format: field.format,
+        layout: field.layout,
+        rows: field.rows,
+        precision: field.precision,
+        prefix: field.prefix,
+        suffix: field.suffix,
+      }));
+    formData.value!.valueOptions = JSON.stringify(validFields);
+    return;
+  }
+
+  // 普通选项类型
   if (optionsList.length === 0) {
     formData.value!.valueOptions = '';
     return;
@@ -209,11 +345,41 @@ const convertOptionsToJson = () => {
 // 将JSON字符串解析为选项列表
 const parseJsonToOptions = (jsonStr: string) => {
   optionsList.length = 0;
+  dynamicFields.length = 0;
   if (!jsonStr) return;
   try {
     const parsed = JSON.parse(jsonStr);
-    if (Array.isArray(parsed)) {
-      parsed.forEach((item) => {
+    if (!Array.isArray(parsed)) return;
+
+    // 判断是动态容器子字段还是普通选项（通过是否有 fieldCode 判断）
+    const firstItem = parsed[0];
+    if (firstItem && 'fieldCode' in firstItem) {
+      // 动态容器子字段定义
+      parsed.forEach((item: any) => {
+        dynamicFields.push({
+          key: `field_${Date.now()}_${Math.random()}`,
+          fieldCode: item.fieldCode ?? '',
+          fieldLabel: item.fieldLabel ?? '',
+          fieldType: item.fieldType ?? 'text',
+          required: item.required ?? false,
+          sort: item.sort ?? 0,
+          options: item.options ?? [],
+          maxLength: item.maxLength,
+          placeholder: item.placeholder,
+          showSearch: item.showSearch,
+          minSelect: item.minSelect,
+          maxSelect: item.maxSelect,
+          format: item.format,
+          layout: item.layout,
+          rows: item.rows,
+          precision: item.precision,
+          prefix: item.prefix,
+          suffix: item.suffix,
+        });
+      });
+    } else {
+      // 普通选项
+      parsed.forEach((item: any) => {
         optionsList.push({
           value: String(item.value),
           label: item.label,
@@ -226,11 +392,38 @@ const parseJsonToOptions = (jsonStr: string) => {
   }
 };
 
+// 加载分组数据（扁平时钟格式，避免嵌套结构更新时的渲染问题）
+const loadGroupTreeData = async (projectType?: number) => {
+  try {
+    const tree = await getIndicatorGroupTreeByProjectType(projectType);
+    // 转换为扁平时钟格式，id/pId/value 都用 number
+    const flatten: { id: number; pId: number; label: string; value: number }[] = [];
+    tree.forEach((item) => {
+      flatten.push({
+        id: Number(item.id),
+        pId: Number(item.parentId) || 0,
+        label: item.groupName,
+        value: Number(item.id),
+      });
+      (item.children || []).forEach((child: any) => {
+        flatten.push({
+          id: Number(child.id),
+          pId: Number(item.id),
+          label: child.groupName,
+          value: Number(child.id),
+        });
+      });
+    });
+    flattenGroupTreeData.value = flatten;
+  } catch {
+    flattenGroupTreeData.value = [];
+  }
+};
+
 // 表单字段配置
 const formRules = {
   indicatorCode: [{ required: true, message: '请输入指标代号' }],
   indicatorName: [{ required: true, message: '请输入指标名称' }],
-  category: [{ required: true, message: '请选择指标分类' }],
   valueType: [{ required: true, message: '请选择值类型' }],
 };
 
@@ -270,7 +463,8 @@ const [Modal, modalApi] = useVbenModal({
       formData.value = undefined;
       return;
     }
-    // 加载数据
+    // 加载项目类型选项
+    await loadProjectTypeOptions();
     const data = modalApi.getData<DeclareIndicatorApi.IndicatorSaveParams>();
     if (!data || !data.id) {
       formData.value = {
@@ -278,7 +472,6 @@ const [Modal, modalApi] = useVbenModal({
         indicatorCode: '',
         indicatorName: '',
         unit: '',
-        category: 1,
         valueType: 1,
         valueOptions: '',
         isRequired: false,
@@ -288,26 +481,32 @@ const [Modal, modalApi] = useVbenModal({
         logicRule: '',
         calculationRule: '',
         childrenIndicatorCodes: '',
-        projectType: 0,
+        projectType: undefined,
         extraConfig: '',
       };
-      // 初始化值类型
       currentValueType.value = 1;
-      // 清空选项列表
       optionsList.length = 0;
-      // 初始化扩展配置
+      dynamicFields.length = 0;
       formData.value.extraConfig = '';
+      // 新建模式下先加载全部分组树
+      await loadGroupTreeData();
       return;
     }
     modalApi.lock();
     try {
-      formData.value = await getIndicator(data.id);
-      // 更新值类型
-      currentValueType.value = formData.value?.valueType || 1;
-      // 解析选项
+      // 1. 先获取指标详情（含正确的 projectType 和 groupId）
+      const res = await getIndicator(data.id);
+      formData.value = res;
+      currentValueType.value = res?.valueType || 1;
       parseJsonToOptions(formData.value?.valueOptions || '');
-      // 解析扩展配置
       parseJsonToExtraConfig(formData.value?.extraConfig || '');
+      // 2. 按指标的 projectType 加载分组树
+      await loadGroupTreeData(res?.projectType);
+      // 3. 树加载完成后等待 DOM 更新，再递增 key 强制 tree-select 重渲染
+      if (res?.groupId) {
+        await nextTick();
+        treeSelectKey.value++;
+      }
     } finally {
       modalApi.unlock();
     }
@@ -322,6 +521,28 @@ watch(
     if (![6, 7, 10, 11].includes(newVal)) {
       optionsList.length = 0;
     }
+    // 清空动态容器子字段（当值类型不是动态容器时）
+    if (newVal !== 12) {
+      dynamicFields.length = 0;
+    }
+  },
+);
+
+// 监听适用项目类型变化，重新加载分组
+watch(
+  () => formData.value?.projectType,
+  (newProjectType, oldProjectType) => {
+    // 只在 projectType 从一个有值变为另一个有值时才清空 groupId（用户切换项目类型）
+    // 初始加载编辑数据时 oldProjectType 是 undefined，此时不应清空 groupId
+    if (
+      newProjectType !== undefined &&
+      oldProjectType !== undefined &&
+      newProjectType !== oldProjectType &&
+      formData.value
+    ) {
+      formData.value.groupId = undefined;
+    }
+    loadGroupTreeData(newProjectType);
   },
 );
 </script>
@@ -353,20 +574,6 @@ watch(
           v-model:value="formData.unit"
           :placeholder="showUnit ? '如：人、万元、次' : '用于展示前缀/后缀'"
         />
-      </a-form-item>
-      <a-form-item label="指标分类" name="category">
-        <a-select
-          v-model:value="formData.category"
-          placeholder="请选择指标分类"
-        >
-          <a-select-option
-            v-for="item in getDictOptions(DICT_TYPE.DECLARE_INDICATOR_CATEGORY, 'number')"
-            :key="item.value"
-            :value="Number(item.value)"
-          >
-            {{ item.label }}
-          </a-select-option>
-        </a-select>
       </a-form-item>
       <a-form-item label="值类型" name="valueType">
         <a-select
@@ -432,35 +639,195 @@ watch(
           </div>
         </div>
       </a-form-item>
-      <!-- 选项定义 - 直接在值类型下方 -->
-      <a-form-item v-if="showValueOptions" label="选项定义">
-        <div class="space-y-2 w-full">
-          <div
-            v-for="option in optionsList"
-            :key="option.key"
-            class="flex items-center gap-2"
-          >
-            <a-input
-              v-model:value="option.value"
-              placeholder="值"
-              class="w-32"
-            />
-            <a-input
-              v-model:value="option.label"
-              placeholder="标签"
-              class="flex-1"
-            />
-            <a-button
-              type="text"
-              danger
-              @click="handleRemoveOption(option.key)"
-            >
-              删除
-            </a-button>
+      <!-- 动态容器子字段定义 -->
+      <a-form-item v-if="isDynamicContainer" label="子字段定义">
+        <div class="dynamic-container w-full">
+          <div v-if="dynamicFields.length === 0" class="text-gray-400 text-sm mb-2">
+            请点击下方按钮添加子字段
           </div>
-          <a-button type="dashed" class="w-full" @click="handleAddOption">
+          <div
+            v-for="field in dynamicFields"
+            :key="field.key"
+            class="dynamic-field-card mb-4"
+          >
+            <!-- 子字段基本信息行 -->
+            <div class="flex items-start gap-2 mb-2">
+              <a-input
+                v-model:value="field.fieldCode"
+                placeholder="字段编码"
+                class="w-32"
+              />
+              <a-input
+                v-model:value="field.fieldLabel"
+                placeholder="字段名称"
+                class="flex-1"
+              />
+              <a-select
+                v-model:value="field.fieldType"
+                placeholder="字段类型"
+                class="w-28"
+              >
+                <a-select-option
+                  v-for="opt in fieldTypeOptions"
+                  :key="opt.value"
+                  :value="opt.value"
+                >
+                  {{ opt.label }}
+                </a-select-option>
+              </a-select>
+              <a-switch v-model:checked="field.required" />
+              <span class="text-gray-400 text-xs whitespace-nowrap">必填</span>
+              <a-button
+                type="text"
+                danger
+                @click="handleRemoveField(field.key)"
+              >
+                删除字段
+              </a-button>
+            </div>
+
+            <!-- 根据子字段类型显示不同配置 -->
+            <div class="pl-2 border-l-2 border-blue-200 space-y-2">
+              <!-- 单选/多选/下拉类型：需要配置选项 -->
+              <div
+                v-if="['radio', 'checkbox', 'select', 'multiSelect'].includes(field.fieldType)"
+                class="space-y-2"
+              >
+                <div class="text-gray-500 text-xs">选项列表</div>
+                <div
+                  v-for="(opt, optIndex) in field.options"
+                  :key="optIndex"
+                  class="flex items-center gap-2"
+                >
+                  <a-input
+                    v-model:value="opt.value"
+                    placeholder="值"
+                    class="w-24"
+                  />
+                  <a-input
+                    v-model:value="opt.label"
+                    placeholder="标签"
+                    class="flex-1"
+                  />
+                  <a-button
+                    type="text"
+                    danger
+                    size="small"
+                    @click="handleRemoveFieldOption(field.key, optIndex)"
+                  >
+                    ×
+                  </a-button>
+                </div>
+                <a-button
+                  type="dashed"
+                  size="small"
+                  @click="handleAddFieldOption(field.key)"
+                >
+                  <PlusOutlined />
+                  添加选项
+                </a-button>
+              </div>
+
+              <!-- 文本/多行文本：可配置最大长度、占位符 -->
+              <div
+                v-if="field.fieldType === 'text' || field.fieldType === 'textarea'"
+                class="flex items-center gap-2"
+              >
+                <a-input
+                  v-model:value="field.maxLength"
+                  placeholder="最大字符数"
+                  type="number"
+                  class="w-32"
+                />
+                <a-input
+                  v-model:value="field.placeholder"
+                  placeholder="占位提示文字"
+                  class="flex-1"
+                />
+                <a-input-number
+                  v-if="field.fieldType === 'textarea'"
+                  v-model:value="field.rows"
+                  placeholder="行数"
+                  :min="2"
+                  :max="10"
+                  class="w-20"
+                />
+              </div>
+
+              <!-- 数字类型：可配置精度、前缀、后缀 -->
+              <div
+                v-if="field.fieldType === 'number'"
+                class="flex items-center gap-2"
+              >
+                <a-input-number
+                  v-model:value="field.precision"
+                  placeholder="精度"
+                  :min="0"
+                  :max="6"
+                  class="w-20"
+                />
+                <a-input
+                  v-model:value="field.prefix"
+                  placeholder="前缀"
+                  class="w-20"
+                />
+                <a-input
+                  v-model:value="field.suffix"
+                  placeholder="后缀"
+                  class="w-20"
+                />
+              </div>
+
+              <!-- 日期类型：可配置格式 -->
+              <div
+                v-if="field.fieldType === 'date' || field.fieldType === 'dateRange'"
+                class="flex items-center gap-2"
+              >
+                <a-select
+                  v-model:value="field.format"
+                  placeholder="日期格式"
+                  class="flex-1"
+                  allow-clear
+                >
+                  <a-select-option value="YYYY-MM-DD">年-月-日</a-select-option>
+                  <a-select-option value="YYYY-MM-DD HH:mm">年-月-日 时:分</a-select-option>
+                  <a-select-option value="YYYY-MM">年-月</a-select-option>
+                  <a-select-option value="YYYY">年</a-select-option>
+                </a-select>
+              </div>
+
+              <!-- 下拉单选：可配置是否显示搜索 -->
+              <div
+                v-if="field.fieldType === 'select'"
+                class="flex items-center gap-2"
+              >
+                <a-switch v-model:checked="field.showSearch" />
+                <span class="text-gray-400 text-xs">支持搜索</span>
+              </div>
+
+              <!-- 多选/下拉多选：可配置最少/最多选择数 -->
+              <div
+                v-if="field.fieldType === 'checkbox' || field.fieldType === 'multiSelect'"
+                class="flex items-center gap-2"
+              >
+                <a-input-number
+                  v-model:value="field.minSelect"
+                  placeholder="最少选"
+                  :min="0"
+                  class="w-24"
+                />
+                <a-input-number
+                  v-model:value="field.maxSelect"
+                  placeholder="最多选"
+                  :min="1"
+                  class="w-24"
+                />
+              </div>
+            </div>
+          </div>
+          <a-button type="dashed" class="w-full" @click="handleAddField">
             <PlusOutlined />
-            添加选项
+            添加子字段
           </a-button>
         </div>
       </a-form-item>
@@ -489,15 +856,36 @@ watch(
           v-model:value="formData.projectType"
           placeholder="请选择适用项目类型"
         >
-          <a-select-option :value="0">全部项目</a-select-option>
           <a-select-option
-            v-for="item in getDictOptions(DICT_TYPE.DECLARE_PROJECT_TYPE, 'number')"
-            :key="item.value"
-            :value="Number(item.value)"
+            v-for="option in projectTypeOptions"
+            :key="option.value"
+            :value="option.value"
           >
-            {{ item.label }}
+            {{ option.label }}
           </a-select-option>
         </a-select>
+      </a-form-item>
+      <a-form-item label="指标分组" name="groupId">
+        <a-tree-select
+          v-model:value="formData.groupId"
+          :treeData="flattenGroupTreeData"
+          :key="treeSelectKey"
+          treeDataSimpleMode
+          :placeholder="
+            !formData.projectType
+              ? '请先选择适用项目类型'
+              : '请选择指标分组'
+          "
+          allowClear
+          style="width: 100%"
+          :disabled="!formData.projectType"
+        />
+        <div
+          v-if="!formData.projectType"
+          class="text-gray-400 text-xs mt-1"
+        >
+          请先选择适用项目类型以加载可选的指标分组
+        </div>
       </a-form-item>
       <a-form-item label="适用业务类型" name="businessType">
         <a-input
@@ -539,3 +927,21 @@ watch(
     </a-form>
   </Modal>
 </template>
+
+<style scoped>
+/* 动态容器子字段样式 */
+.dynamic-container {
+  width: 100%;
+}
+
+.dynamic-field-card {
+  background: #fafafa;
+  border: 1px solid #e8e8e8;
+  border-radius: 6px;
+  padding: 12px;
+}
+
+.dynamic-field-card:hover {
+  border-color: #1890ff;
+}
+</style>

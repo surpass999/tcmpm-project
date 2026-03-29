@@ -3,7 +3,7 @@ package cn.gemrun.base.module.trade.convert.brokerage;
 import cn.hutool.core.map.MapUtil;
 import cn.hutool.core.util.ObjUtil;
 import cn.gemrun.base.framework.common.pojo.PageResult;
-import cn.gemrun.base.module.member.api.user.dto.MemberUserRespDTO;
+import cn.gemrun.base.module.trade.dto.MemberUserRespDTO;
 import cn.gemrun.base.module.trade.controller.admin.brokerage.vo.user.BrokerageUserRespVO;
 import cn.gemrun.base.module.trade.controller.app.brokerage.vo.user.AppBrokerageUserChildSummaryRespVO;
 import cn.gemrun.base.module.trade.controller.app.brokerage.vo.user.AppBrokerageUserMySummaryRespVO;

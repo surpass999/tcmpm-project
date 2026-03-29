@@ -2,8 +2,6 @@ package cn.gemrun.base.module.promotion.controller.app.bargain;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.gemrun.base.framework.common.pojo.CommonResult;
-import cn.gemrun.base.module.member.api.user.MemberUserApi;
-import cn.gemrun.base.module.member.api.user.dto.MemberUserRespDTO;
 import cn.gemrun.base.module.promotion.controller.app.bargain.vo.help.AppBargainHelpCreateReqVO;
 import cn.gemrun.base.module.promotion.controller.app.bargain.vo.help.AppBargainHelpRespVO;
 import cn.gemrun.base.module.promotion.convert.bargain.BargainHelpConvert;
@@ -18,10 +16,8 @@ import org.springframework.web.bind.annotation.*;
 import javax.annotation.Resource;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 
 import static cn.gemrun.base.framework.common.pojo.CommonResult.success;
-import static cn.gemrun.base.framework.common.util.collection.CollectionUtils.convertSet;
 import static cn.gemrun.base.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId;
 
 @Tag(name = "用户 App - 砍价助力")
@@ -32,9 +28,6 @@ public class AppBargainHelpController {
 
     @Resource
     private BargainHelpService bargainHelpService;
-
-    @Resource
-    private MemberUserApi memberUserApi;
 
     @PostMapping("/create")
     @Operation(summary = "创建砍价助力", description = "给拼团记录砍一刀") // 返回结果为砍价金额，单位：分
@@ -53,10 +46,8 @@ public class AppBargainHelpController {
         }
         helps.sort((o1, o2) -> o2.getCreateTime().compareTo(o1.getCreateTime())); // 倒序展示
 
-        // 拼接数据
-        Map<Long, MemberUserRespDTO> userMap = memberUserApi.getUserMap(
-                convertSet(helps, BargainHelpDO::getUserId));
-        return success(BargainHelpConvert.INSTANCE.convertList(helps, userMap));
+        // 拼接数据 - userMap removed, cannot depend on member module
+        return success(BargainHelpConvert.INSTANCE.convertList(helps, Collections.emptyMap()));
     }
 
 }

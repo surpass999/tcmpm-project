@@ -13,7 +13,6 @@ import cn.gemrun.base.module.system.dal.dataobject.sms.SmsTemplateDO;
 import cn.gemrun.base.module.system.dal.dataobject.user.AdminUserDO;
 import cn.gemrun.base.module.system.mq.message.sms.SmsSendMessage;
 import cn.gemrun.base.module.system.mq.producer.sms.SmsProducer;
-import cn.gemrun.base.module.system.service.member.MemberService;
 import cn.gemrun.base.module.system.service.user.AdminUserService;
 import org.assertj.core.util.Lists;
 import org.junit.jupiter.api.Assertions;
@@ -40,8 +39,6 @@ public class SmsSendServiceImplTest extends BaseMockitoUnitTest {
 
     @Mock
     private AdminUserService adminUserService;
-    @Mock
-    private MemberService memberService;
     @Mock
     private SmsChannelService smsChannelService;
     @Mock
@@ -97,9 +94,8 @@ public class SmsSendServiceImplTest extends BaseMockitoUnitTest {
         String templateCode = randomString();
         Map<String, Object> templateParams = MapUtil.<String, Object>builder().put("code", "1234")
                 .put("op", "login").build();
-        // mock memberService 的方法
+        // 会员模块已移除，直接提供手机号
         String mobile = "15601691300";
-        when(memberService.getMemberUserMobile(eq(userId))).thenReturn(mobile);
 
         // mock SmsTemplateService 的方法
         SmsTemplateDO template = randomPojo(SmsTemplateDO.class, o -> {

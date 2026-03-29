@@ -64,6 +64,17 @@ public interface DeclareIndicatorValueService {
     void deleteIndicatorValues(Integer businessType, Long businessId);
 
     /**
+     * 获取填报指标值（上期）
+     *
+     * @param hospitalId 医院ID
+     * @param reportYear  填报年度
+     * @param reportBatch 填报批次
+     * @param businessType 业务类型（默认为3：进度填报）
+     * @return 上期指标值 Map（key=indicatorCode, value=valueNum）
+     */
+    Map<String, String> getLastPeriodIndicatorValues(Long hospitalId, Integer reportYear, Integer reportBatch, Integer businessType);
+
+    /**
      * 更新指标值
      *
      * @param id     指标值ID

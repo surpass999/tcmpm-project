@@ -3,8 +3,6 @@ package cn.gemrun.base.module.trade.service.order;
 import cn.hutool.core.util.IdUtil;
 import cn.gemrun.base.framework.common.enums.CommonStatusEnum;
 import cn.gemrun.base.framework.test.core.ut.BaseDbUnitTest;
-import cn.gemrun.base.module.member.api.address.MemberAddressApi;
-import cn.gemrun.base.module.member.api.user.MemberUserApi;
 import cn.gemrun.base.module.pay.api.order.PayOrderApi;
 import cn.gemrun.base.module.pay.api.order.dto.PayOrderRespDTO;
 import cn.gemrun.base.module.pay.enums.order.PayOrderStatusEnum;
@@ -68,8 +66,6 @@ public class TradeOrderUpdateServiceTest extends BaseDbUnitTest {
     private TradeOrderItemMapper tradeOrderItemMapper;
 
     @MockBean
-    private MemberUserApi memberUserApi;
-    @MockBean
     private ProductSpuApi productSpuApi;
     @MockBean
     private ProductSkuApi productSkuApi;
@@ -79,8 +75,6 @@ public class TradeOrderUpdateServiceTest extends BaseDbUnitTest {
 //    private PriceApi priceApi;
     @MockBean
     private PayOrderApi payOrderApi;
-    @MockBean
-    private MemberAddressApi addressApi;
     @MockBean
     private CouponApi couponApi;
 

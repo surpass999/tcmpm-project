@@ -32,13 +32,7 @@
             <version>${revision}</version>
         </dependency>
 
-        <!-- 会员中心。默认注释，保证编译速度 -->
-       <dependency>
-           <groupId>cn.gemrun</groupId>
-           <artifactId>module-member</artifactId>
-           <version>${revision}</version>
-       </dependency>
-       <!-- 申报模块。默认注释，保证编译速度 -->
+        <!-- 申报模块。默认注释，保证编译速度 -->
        <dependency>
            <groupId>cn.gemrun</groupId>
            <artifactId>module-declare</artifactId>

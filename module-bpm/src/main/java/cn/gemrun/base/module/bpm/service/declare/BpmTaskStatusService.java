@@ -106,6 +106,7 @@ public class BpmTaskStatusService {
                 .processInstanceIdIn(processInstanceIds)
                 .taskAssignee(userId.toString())
                 .finished()
+                .includeTaskLocalVariables()
                 .orderByHistoricTaskInstanceEndTime().desc()
                 .list();
 
@@ -113,6 +114,7 @@ public class BpmTaskStatusService {
         List<HistoricTaskInstance> allDoneTasks = historyService.createHistoricTaskInstanceQuery()
                 .processInstanceIdIn(processInstanceIds)
                 .finished()
+                .includeTaskLocalVariables()
                 .orderByHistoricTaskInstanceEndTime().desc()
                 .list();
 
@@ -218,7 +220,6 @@ public class BpmTaskStatusService {
                         buttonSetting.setDisplayName(entry.getValue().getDisplayName());
                         buttonSetting.setEnable(entry.getValue().getEnable());
                         buttonSetting.setBizStatus(entry.getValue().getBizStatus());
-                        buttonSetting.setRectifyProcessDefinitionKey(entry.getValue().getRectifyProcessDefinitionKey());
                         convertedSettings.put(entry.getKey(), buttonSetting);
                     }
                     todoTask.setButtonSettings(convertedSettings);
@@ -356,6 +357,9 @@ public class BpmTaskStatusService {
                         respVO.setHasTodoTask(false);
                         respVO.setTodoTasks(Collections.emptyList());
                         respVO.setDoneTasks(Collections.emptyList());
+                        respVO.setAllDoneTasks(Collections.emptyList());
+                        respVO.setHasRectificationTodoTask(false);
+                        respVO.setRectificationTodoTasks(Collections.emptyList());
                         return respVO;
                     })
                     .collect(Collectors.toList());
@@ -377,27 +381,44 @@ public class BpmTaskStatusService {
             }
         }
 
-        // 3. 批量查询主流程实例
-        List<org.flowable.engine.runtime.ProcessInstance> processInstances = new ArrayList<>();
+        // 3. 批量查询主流程实例（包含运行中 + 已结束）
+        // 注意：流程结束后实例从 runtime 表移到 history 表，必须同时查询两表
+        List<String> allProcessInstanceIds = new ArrayList<>();
+        Map<String, Long> processInstanceIdToBusinessId = new HashMap<>();
         log.info("[getTaskByBusiness] 开始查询主流程实例: businessKeys={}", businessKeys);
         for (String businessKey : businessKeys) {
-            List<org.flowable.engine.runtime.ProcessInstance> pis = runtimeService
+            // 查询运行中的流程实例
+            List<org.flowable.engine.runtime.ProcessInstance> runningPis = runtimeService
                     .createProcessInstanceQuery()
                     .processInstanceBusinessKey(businessKey)
                     .list();
-            log.debug("[getTaskByBusiness] businessKey={}, 主流程实例数量={}", businessKey, pis.size());
-            if (!pis.isEmpty()) {
-                processInstances.addAll(pis);
+            log.debug("[getTaskByBusiness] businessKey={}, 运行中流程实例数量={}", businessKey, runningPis.size());
+            for (org.flowable.engine.runtime.ProcessInstance pi : runningPis) {
+                allProcessInstanceIds.add(pi.getId());
+            }
+
+            // 查询已结束的流程实例（Flowable 流程结束后实例进入 history 表）
+            List<org.flowable.engine.history.HistoricProcessInstance> endedPis = historyService
+                    .createHistoricProcessInstanceQuery()
+                    .processInstanceBusinessKey(businessKey)
+                    .list();
+            log.debug("[getTaskByBusiness] businessKey={}, 已结束流程实例数量={}", businessKey, endedPis.size());
+            for (org.flowable.engine.history.HistoricProcessInstance hpi : endedPis) {
+                allProcessInstanceIds.add(hpi.getId());
             }
         }
-        log.info("[getTaskByBusiness] 主流程实例查询完成: 数量={}", processInstances.size());
+        log.info("[getTaskByBusiness] 主流程实例查询完成: 总数={}", allProcessInstanceIds.size());
 
         // 4. 构建 processInstanceId -> businessId 的映射
-        Map<String, Long> processInstanceIdToBusinessId = new HashMap<>();
-        for (org.flowable.engine.runtime.ProcessInstance pi : processInstances) {
-            String businessKey = pi.getBusinessKey();
-            if (businessKey != null && businessKeyToBusinessId.containsKey(businessKey)) {
-                processInstanceIdToBusinessId.put(pi.getId(), businessKeyToBusinessId.get(businessKey));
+        // 通过 historyService 查询每个实例的 businessKey（runtime 流程查不到时，历史表仍可查到）
+        for (String processInstanceId : allProcessInstanceIds) {
+            org.flowable.engine.history.HistoricProcessInstance hpi = historyService
+                    .createHistoricProcessInstanceQuery()
+                    .processInstanceId(processInstanceId)
+                    .singleResult();
+            if (hpi != null && hpi.getBusinessKey() != null
+                    && businessKeyToBusinessId.containsKey(hpi.getBusinessKey())) {
+                processInstanceIdToBusinessId.put(processInstanceId, businessKeyToBusinessId.get(hpi.getBusinessKey()));
             }
         }
 
@@ -435,13 +456,14 @@ public class BpmTaskStatusService {
                         respVO.setTodoTasks(Collections.emptyList());
                         respVO.setDoneTasks(Collections.emptyList());
                         respVO.setAllDoneTasks(Collections.emptyList());
+                        respVO.setHasRectificationTodoTask(false);
+                        respVO.setRectificationTodoTasks(Collections.emptyList());
                         return respVO;
                     })
                     .collect(Collectors.toList());
         }
 
         // 7. 批量查询任务状态
-        List<String> allProcessInstanceIds = new ArrayList<>(processInstanceIdToBusinessId.keySet());
         List<BpmTaskBatchStatusRespVO> batchStatusList = getTaskBatchStatus(userId, allProcessInstanceIds);
 
         // 8. 按 businessId 封装结果
@@ -469,6 +491,7 @@ public class BpmTaskStatusService {
 
                         // 合并主流程和整改子流程的待办任务
                         List<BpmTaskBatchStatusRespVO.TodoTask> allTodoTasks = new ArrayList<>();
+                        List<BpmTaskBatchStatusRespVO.TodoTask> rectificationTasks = new ArrayList<>();
                         if (batchStatus.getTodoTasks() != null) {
                             allTodoTasks.addAll(batchStatus.getTodoTasks());
                         }
@@ -485,6 +508,7 @@ public class BpmTaskStatusService {
                                             BpmTaskBatchStatusRespVO rectStatus = processInstanceIdToStatus.get(rectInstance.getId());
                                             if (rectStatus.getTodoTasks() != null) {
                                                 allTodoTasks.addAll(rectStatus.getTodoTasks());
+                                                rectificationTasks.addAll(rectStatus.getTodoTasks());
                                             }
                                         }
                                     }
@@ -496,11 +520,15 @@ public class BpmTaskStatusService {
                         respVO.setTodoTasks(convertTodoTasksForBusiness(allTodoTasks));
                         respVO.setDoneTasks(convertDoneTasksForBusiness(batchStatus.getDoneTasks()));
                         respVO.setAllDoneTasks(convertDoneTasksForBusiness(batchStatus.getAllDoneTasks()));
+                        respVO.setHasRectificationTodoTask(CollUtil.isNotEmpty(rectificationTasks));
+                        respVO.setRectificationTodoTasks(convertTodoTasksForBusiness(rectificationTasks));
                     } else {
                         respVO.setHasTodoTask(false);
                         respVO.setTodoTasks(Collections.emptyList());
                         respVO.setDoneTasks(Collections.emptyList());
                         respVO.setAllDoneTasks(Collections.emptyList());
+                        respVO.setHasRectificationTodoTask(false);
+                        respVO.setRectificationTodoTasks(Collections.emptyList());
                     }
 
                     return respVO;
@@ -670,7 +698,7 @@ public class BpmTaskStatusService {
                 }
 
                 // 设置流程状态
-                respVO.setStatus(approvalDetail.getStatus() != null && approvalDetail.getStatus() == 1 ? "ENDED" : "RUNNING");
+                respVO.setStatus(approvalDetail.getStatus() != null && approvalDetail.getStatus() == 1 ? "RUNNING" : "ENDED");
 
                 // 设置时间信息
                 if (approvalDetail.getProcessInstance() != null) {

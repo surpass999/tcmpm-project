@@ -3,7 +3,7 @@ package cn.gemrun.base.module.trade.dal.dataobject.order;
 import cn.gemrun.base.framework.common.enums.TerminalEnum;
 import cn.gemrun.base.framework.mybatis.core.dataobject.BaseDO;
 import cn.gemrun.base.framework.mybatis.core.type.LongListTypeHandler;
-import cn.gemrun.base.module.member.api.user.dto.MemberUserRespDTO;
+import cn.gemrun.base.module.trade.dto.MemberUserRespDTO;
 import cn.gemrun.base.module.trade.dal.dataobject.brokerage.BrokerageUserDO;
 import cn.gemrun.base.module.trade.dal.dataobject.delivery.DeliveryExpressDO;
 import cn.gemrun.base.module.trade.dal.dataobject.delivery.DeliveryPickUpStoreDO;

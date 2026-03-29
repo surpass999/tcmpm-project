@@ -2,21 +2,17 @@ package cn.gemrun.base.module.trade.service.order.handler;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.lang.Assert;
-import cn.gemrun.base.module.member.api.user.MemberUserApi;
-import cn.gemrun.base.module.member.api.user.dto.MemberUserRespDTO;
 import cn.gemrun.base.module.promotion.api.point.PointActivityApi;
 import cn.gemrun.base.module.trade.dal.dataobject.order.TradeOrderDO;
 import cn.gemrun.base.module.trade.dal.dataobject.order.TradeOrderItemDO;
 import cn.gemrun.base.module.trade.enums.order.TradeOrderStatusEnum;
 import cn.gemrun.base.module.trade.enums.order.TradeOrderTypeEnum;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.Resource;
 import java.util.List;
 import java.util.Objects;
-
-import static cn.gemrun.base.framework.common.exception.util.ServiceExceptionUtil.exception;
-import static cn.gemrun.base.module.trade.enums.ErrorCodeConstants.ORDER_CREATE_FAIL_INSUFFICIENT_USER_POINTS;
 
 /**
  * 积分商城活动订单的 {@link TradeOrderHandler} 实现类
@@ -24,12 +20,11 @@ import static cn.gemrun.base.module.trade.enums.ErrorCodeConstants.ORDER_CREATE_
  * @author HUIHUI
  */
 @Component
+@Slf4j
 public class TradePointOrderHandler implements TradeOrderHandler {
 
     @Resource
     private PointActivityApi pointActivityApi;
-    @Resource
-    private MemberUserApi memberUserApi;
 
     @Override
     public void beforeOrderCreate(TradeOrderDO order, List<TradeOrderItemDO> orderItems) {
@@ -38,11 +33,7 @@ public class TradePointOrderHandler implements TradeOrderHandler {
         }
         // 明确校验一下
         Assert.isTrue(orderItems.size() == 1, "积分商城活动兑换商品兑换时，只允许选择一个商品");
-        // 校验用户剩余积分是否足够兑换商品
-        MemberUserRespDTO user = memberUserApi.getUser(order.getUserId());
-        if (user.getPoint() < order.getUsePoint()) {
-            throw exception(ORDER_CREATE_FAIL_INSUFFICIENT_USER_POINTS);
-        }
+        // 会员模块已移除，无法校验积分，直接跳过积分校验
 
         // 扣减积分商城活动的库存
         pointActivityApi.updatePointStockDecr(order.getPointActivityId(),

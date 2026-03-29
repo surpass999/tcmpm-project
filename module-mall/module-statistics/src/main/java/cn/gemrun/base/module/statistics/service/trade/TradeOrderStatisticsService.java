@@ -2,7 +2,7 @@ package cn.gemrun.base.module.statistics.service.trade;
 
 import cn.gemrun.base.module.statistics.controller.admin.common.vo.DataComparisonRespVO;
 import cn.gemrun.base.module.statistics.controller.admin.trade.vo.*;
-import cn.gemrun.base.module.statistics.service.member.bo.MemberAreaStatisticsRespBO;
+import cn.gemrun.base.module.statistics.service.trade.bo.MemberAreaStatisticsRespBO;
 import cn.gemrun.base.module.statistics.service.trade.bo.TradeOrderSummaryRespBO;
 
 import java.time.LocalDateTime;

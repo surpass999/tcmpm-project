@@ -8,7 +8,7 @@ import cn.gemrun.base.module.statistics.controller.admin.trade.vo.TradeOrderTren
 import cn.gemrun.base.module.statistics.controller.admin.trade.vo.TradeOrderTrendRespVO;
 import cn.gemrun.base.module.statistics.dal.mysql.trade.TradeOrderStatisticsMapper;
 import cn.gemrun.base.module.statistics.enums.TimeRangeTypeEnum;
-import cn.gemrun.base.module.statistics.service.member.bo.MemberAreaStatisticsRespBO;
+import cn.gemrun.base.module.statistics.service.trade.bo.MemberAreaStatisticsRespBO;
 import cn.gemrun.base.module.statistics.service.trade.bo.TradeOrderSummaryRespBO;
 import org.springframework.stereotype.Service;
 import org.springframework.validation.annotation.Validated;

@@ -5,8 +5,6 @@ import cn.hutool.core.lang.Assert;
 import cn.gemrun.base.framework.common.pojo.CommonResult;
 import cn.gemrun.base.framework.common.pojo.PageParam;
 import cn.gemrun.base.framework.common.pojo.PageResult;
-import cn.gemrun.base.module.member.api.user.MemberUserApi;
-import cn.gemrun.base.module.member.api.user.dto.MemberUserRespDTO;
 import cn.gemrun.base.module.product.api.spu.ProductSpuApi;
 import cn.gemrun.base.module.product.api.spu.dto.ProductSpuRespDTO;
 import cn.gemrun.base.module.promotion.controller.app.bargain.vo.record.AppBargainRecordCreateReqVO;
@@ -33,7 +31,6 @@ import javax.annotation.Resource;
 import javax.annotation.security.PermitAll;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 
 import static cn.gemrun.base.framework.common.pojo.CommonResult.success;
 import static cn.gemrun.base.framework.common.util.collection.CollectionUtils.convertSet;
@@ -55,8 +52,6 @@ public class AppBargainRecordController {
     @Resource
     private TradeOrderApi tradeOrderApi;
     @Resource
-    private MemberUserApi memberUserApi;
-    @Resource
     private ProductSpuApi productSpuApi;
 
     @GetMapping("/get-summary")
@@ -75,10 +70,8 @@ public class AppBargainRecordController {
                 BargainRecordStatusEnum.SUCCESS.getStatus(), 7);
         List<BargainActivityDO> activityList = bargainActivityService.getBargainActivityList(
                 convertSet(successList, BargainRecordDO::getActivityId));
-        Map<Long, MemberUserRespDTO> userMap = memberUserApi.getUserMap(
-                convertSet(successList, BargainRecordDO::getUserId));
-        // 拼接返回
-        return success(BargainRecordConvert.INSTANCE.convert(successUserCount, successList, activityList, userMap));
+        // 拼接返回 - userMap removed, cannot depend on member module
+        return success(BargainRecordConvert.INSTANCE.convert(successUserCount, successList, activityList, Collections.emptyMap()));
     }
 
     @GetMapping("/get-detail")

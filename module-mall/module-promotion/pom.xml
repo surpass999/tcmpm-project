@@ -39,12 +39,6 @@
             <artifactId>module-infra</artifactId>
             <version>${revision}</version>
         </dependency>
-        <dependency>
-            <groupId>cn.gemrun</groupId>
-            <artifactId>module-member</artifactId>
-            <version>${revision}</version>
-        </dependency>
-
 
         <!-- Web 相关 -->
         <dependency>

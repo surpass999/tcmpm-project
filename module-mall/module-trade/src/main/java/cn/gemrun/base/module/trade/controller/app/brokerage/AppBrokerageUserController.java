@@ -3,12 +3,11 @@ package cn.gemrun.base.module.trade.controller.app.brokerage;
 import cn.hutool.core.date.LocalDateTimeUtil;
 import cn.gemrun.base.framework.common.pojo.CommonResult;
 import cn.gemrun.base.framework.common.pojo.PageResult;
-import cn.gemrun.base.module.member.api.user.MemberUserApi;
-import cn.gemrun.base.module.member.api.user.dto.MemberUserRespDTO;
 import cn.gemrun.base.module.trade.controller.app.brokerage.vo.user.*;
 import cn.gemrun.base.module.trade.convert.brokerage.BrokerageRecordConvert;
 import cn.gemrun.base.module.trade.convert.brokerage.BrokerageUserConvert;
 import cn.gemrun.base.module.trade.dal.dataobject.brokerage.BrokerageUserDO;
+import cn.gemrun.base.module.trade.dto.MemberUserRespDTO;
 import cn.gemrun.base.module.trade.enums.brokerage.BrokerageRecordBizTypeEnum;
 import cn.gemrun.base.module.trade.enums.brokerage.BrokerageRecordStatusEnum;
 import cn.gemrun.base.module.trade.enums.brokerage.BrokerageWithdrawStatusEnum;
@@ -50,8 +49,6 @@ public class AppBrokerageUserController {
     private BrokerageRecordService brokerageRecordService;
     @Resource
     private BrokerageWithdrawService brokerageWithdrawService;
-    @Resource
-    private MemberUserApi memberUserApi;
 
     @GetMapping("/get")
     @Operation(summary = "获得个人分销信息")
@@ -102,7 +99,7 @@ public class AppBrokerageUserController {
         // 分页查询
         PageResult<AppBrokerageUserRankByUserCountRespVO> pageResult = brokerageUserService.getBrokerageUserRankPageByUserCount(pageReqVO);
         // 拼接数据
-        Map<Long, MemberUserRespDTO> userMap = memberUserApi.getUserMap(convertSet(pageResult.getList(), AppBrokerageUserRankByUserCountRespVO::getId));
+        Map<Long, MemberUserRespDTO> userMap = Collections.emptyMap();
         return success(BrokerageUserConvert.INSTANCE.convertPage03(pageResult, userMap));
     }
 
@@ -112,7 +109,7 @@ public class AppBrokerageUserController {
         // 分页查询
         PageResult<AppBrokerageUserRankByPriceRespVO> pageResult = brokerageRecordService.getBrokerageUserChildSummaryPageByPrice(pageReqVO);
         // 拼接数据
-        Map<Long, MemberUserRespDTO> userMap = memberUserApi.getUserMap(convertSet(pageResult.getList(), AppBrokerageUserRankByPriceRespVO::getId));
+        Map<Long, MemberUserRespDTO> userMap = Collections.emptyMap();
         return success(BrokerageRecordConvert.INSTANCE.convertPage03(pageResult, userMap));
     }
 

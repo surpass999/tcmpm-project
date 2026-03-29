@@ -40,11 +40,6 @@
         </dependency>
         <dependency>
             <groupId>cn.gemrun</groupId>
-            <artifactId>module-member</artifactId>
-            <version>${revision}</version>
-        </dependency>
-        <dependency>
-            <groupId>cn.gemrun</groupId>
             <artifactId>module-system</artifactId>
             <version>${revision}</version>
         </dependency>

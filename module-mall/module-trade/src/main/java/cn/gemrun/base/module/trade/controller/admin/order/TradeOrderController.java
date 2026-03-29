@@ -3,13 +3,12 @@ package cn.gemrun.base.module.trade.controller.admin.order;
 import cn.hutool.core.collection.CollUtil;
 import cn.gemrun.base.framework.common.pojo.CommonResult;
 import cn.gemrun.base.framework.common.pojo.PageResult;
-import cn.gemrun.base.module.member.api.user.MemberUserApi;
-import cn.gemrun.base.module.member.api.user.dto.MemberUserRespDTO;
 import cn.gemrun.base.module.trade.controller.admin.order.vo.*;
 import cn.gemrun.base.module.trade.convert.order.TradeOrderConvert;
 import cn.gemrun.base.module.trade.dal.dataobject.order.TradeOrderDO;
 import cn.gemrun.base.module.trade.dal.dataobject.order.TradeOrderItemDO;
 import cn.gemrun.base.module.trade.dal.dataobject.order.TradeOrderLogDO;
+import cn.gemrun.base.module.trade.dto.MemberUserRespDTO;
 import cn.gemrun.base.module.trade.service.order.TradeOrderLogService;
 import cn.gemrun.base.module.trade.service.order.TradeOrderQueryService;
 import cn.gemrun.base.module.trade.service.order.TradeOrderUpdateService;
@@ -22,6 +21,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -46,9 +46,6 @@ public class TradeOrderController {
     @Resource
     private TradeOrderLogService tradeOrderLogService;
 
-    @Resource
-    private MemberUserApi memberUserApi;
-
     @GetMapping("/page")
     @Operation(summary = "获得交易订单分页")
     @PreAuthorize("@ss.hasPermission('trade:order:query')")
@@ -62,7 +59,7 @@ public class TradeOrderController {
         // 查询用户信息
         Set<Long> userIds = CollUtil.unionDistinct(convertList(pageResult.getList(), TradeOrderDO::getUserId),
                 convertList(pageResult.getList(), TradeOrderDO::getBrokerageUserId, Objects::nonNull));
-        Map<Long, MemberUserRespDTO> userMap = memberUserApi.getUserMap(userIds);
+        Map<Long, MemberUserRespDTO> userMap = Collections.emptyMap();
         // 查询订单项
         List<TradeOrderItemDO> orderItems = tradeOrderQueryService.getOrderItemListByOrderId(
                 convertSet(pageResult.getList(), TradeOrderDO::getId));
@@ -91,9 +88,8 @@ public class TradeOrderController {
         List<TradeOrderItemDO> orderItems = tradeOrderQueryService.getOrderItemListByOrderId(id);
 
         // 拼接数据
-        MemberUserRespDTO user = memberUserApi.getUser(order.getUserId());
-        MemberUserRespDTO brokerageUser = order.getBrokerageUserId() != null ?
-                memberUserApi.getUser(order.getBrokerageUserId()) : null;
+        MemberUserRespDTO user = null;
+        MemberUserRespDTO brokerageUser = null;
         List<TradeOrderLogDO> orderLogs = tradeOrderLogService.getOrderLogListByOrderId(id);
         return success(TradeOrderConvert.INSTANCE.convert(order, orderItems, orderLogs, user, brokerageUser));
     }

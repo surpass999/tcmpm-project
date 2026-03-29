@@ -46,11 +46,10 @@ export function getBpmAction(key: string) {
 export async function getAvailableActions(businessType: string, businessId: number, processCategory?: string) {
   // processCategory 对应 bpm_business_type.process_category（如 project, filing）
   // businessType 对应 bpm_business_type.business_type（如 project_process:type:1）
-  // 如果传入了 processCategory，则使用它作为 tableName，并可选传入 businessType 进行精确查询
-  const tableName = processCategory || businessType;
+  // 两个参数都传给后端，后端根据 businessType 构造正确的 businessKey 查找流程实例
   const result = await getTaskByBusiness({
-    tableName,
-    businessType: processCategory ? businessType : undefined,
+    tableName: processCategory || businessType,
+    businessType,
     businessIds: [businessId],
   });
 
@@ -65,11 +64,12 @@ export async function getAvailableActions(businessType: string, businessId: numb
     const buttons = todoTask.buttonSettings || {};
 
     // 返回对象格式，供 ActionButtonCmp 使用
-    const actionsMap: Record<number, { displayName: string; enable: boolean; rectifyProcessDefinitionKey?: string }> = {};
+    const actionsMap: Record<number, { displayName: string; enable: boolean; bizStatus?: string; rectifyProcessDefinitionKey?: string }> = {};
     Object.entries(buttons).forEach(([key, setting]: [string, any]) => {
       actionsMap[parseInt(key)] = {
         displayName: setting.displayName,
         enable: setting.enable,
+        bizStatus: setting.bizStatus,
         rectifyProcessDefinitionKey: setting.rectifyProcessDefinitionKey,
       };
     });
@@ -80,6 +80,7 @@ export async function getAvailableActions(businessType: string, businessId: numb
       taskInfo: {
         taskId: todoTask.taskId,
         processInstanceId: taskStatus.processInstanceId,
+        reasonRequire: todoTask.reasonRequire,
       },
     };
   }
@@ -122,6 +123,9 @@ export async function getAvailableActionsBatch(businessType: string, businessIds
           taskId: todoTask.taskId,
           processInstanceId: taskStatus.processInstanceId,
           businessId,
+          // 绕过 TableAction 的 hasAccessByCodes 权限校验（BPM 操作不需要权限码）
+          auth: [] as string[],
+          bizStatus: setting.bizStatus,
           vars: {
             reasonRequired: todoTask.reasonRequire,
             rectifyProcessDefinitionKey: setting.rectifyProcessDefinitionKey,

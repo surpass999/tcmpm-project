@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.gemrun.base.module.declare.dal.mysql.HospitalTagRelationMapper">
+
+    <insert id="batchInsert" parameterType="java.util.List">
+        INSERT INTO declare_hospital_tag_relation (hospital_code, tag_id, creator, create_time)
+        VALUES
+        <foreach collection="relations" item="item" separator=",">
+            (#{item.hospitalCode}, #{item.tagId}, #{item.creator}, NOW())
+        </foreach>
+    </insert>
+
+</mapper>

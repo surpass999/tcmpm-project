@@ -2,8 +2,6 @@ package cn.gemrun.base.module.promotion.controller.admin.kefu;
 
 import cn.gemrun.base.framework.common.pojo.CommonResult;
 import cn.gemrun.base.framework.common.util.object.BeanUtils;
-import cn.gemrun.base.module.member.api.user.MemberUserApi;
-import cn.gemrun.base.module.member.api.user.dto.MemberUserRespDTO;
 import cn.gemrun.base.module.promotion.controller.admin.kefu.vo.conversation.KeFuConversationRespVO;
 import cn.gemrun.base.module.promotion.controller.admin.kefu.vo.conversation.KeFuConversationUpdatePinnedReqVO;
 import cn.gemrun.base.module.promotion.dal.dataobject.kefu.KeFuConversationDO;
@@ -18,11 +16,8 @@ import org.springframework.web.bind.annotation.*;
 import javax.annotation.Resource;
 import javax.validation.Valid;
 import java.util.List;
-import java.util.Map;
 
 import static cn.gemrun.base.framework.common.pojo.CommonResult.success;
-import static cn.gemrun.base.framework.common.util.collection.CollectionUtils.convertSet;
-import static cn.gemrun.base.framework.common.util.collection.MapUtils.findAndThen;
 
 @Tag(name = "管理后台 - 客服会话")
 @RestController
@@ -32,8 +27,6 @@ public class KeFuConversationController {
 
     @Resource
     private KeFuConversationService conversationService;
-    @Resource
-    private MemberUserApi memberUserApi;
 
     @GetMapping("/get")
     @Operation(summary = "获得客服会话")
@@ -45,13 +38,8 @@ public class KeFuConversationController {
             return success(null);
         }
 
-        // 拼接数据
-        KeFuConversationRespVO result = BeanUtils.toBean(conversation, KeFuConversationRespVO.class);
-        MemberUserRespDTO memberUser = memberUserApi.getUser(conversation.getUserId());
-        if (memberUser != null) {
-            result.setUserAvatar(memberUser.getAvatar()).setUserNickname(memberUser.getNickname());
-        }
-        return success(result);
+        // 拼接数据 - member user info removed, cannot depend on member module
+        return success(BeanUtils.toBean(conversation, KeFuConversationRespVO.class));
     }
 
     @PutMapping("/update-conversation-pinned")
@@ -78,11 +66,7 @@ public class KeFuConversationController {
         // 查询会话列表
         List<KeFuConversationRespVO> respList = BeanUtils.toBean(conversationService.getKefuConversationList(),
                 KeFuConversationRespVO.class);
-
-        // 拼接数据
-        Map<Long, MemberUserRespDTO> userMap = memberUserApi.getUserMap(convertSet(respList, KeFuConversationRespVO::getUserId));
-        respList.forEach(item-> findAndThen(userMap, item.getUserId(),
-                memberUser-> item.setUserAvatar(memberUser.getAvatar()).setUserNickname(memberUser.getNickname())));
+        // userMap removed - cannot depend on member module
         return success(respList);
     }
 

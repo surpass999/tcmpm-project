@@ -1,6 +1,5 @@
 <script lang="ts" setup>
 import type { DataComparisonRespVO } from '#/api/mall/statistics/common';
-import type { MallMemberStatisticsApi } from '#/api/mall/statistics/member';
 import type { MallTradeStatisticsApi } from '#/api/mall/statistics/trade';
 
 import { onMounted, ref } from 'vue';
@@ -10,13 +9,9 @@ import { fenToYuan } from '@vben/utils';
 
 import { ElCol, ElRow } from 'element-plus';
 
-import { getUserCountComparison } from '#/api/mall/statistics/member';
 import { getOrderComparison } from '#/api/mall/statistics/trade';
 
-import MemberFunnelCard from '../statistics/member/modules/funnel-card.vue';
-import MemberTerminalCard from '../statistics/member/modules/terminal-card.vue';
 import ComparisonCard from './modules/comparison-card.vue';
-import MemberStatisticsCard from './modules/member-statistics-card.vue';
 import OperationDataCard from './modules/operation-data-card.vue';
 import ShortcutCard from './modules/shortcut-card.vue';
 import TradeTrendCard from './modules/trade-trend-card.vue';
@@ -27,23 +22,16 @@ defineOptions({ name: 'MallHome' });
 const loading = ref(true); // 加载中
 const orderComparison =
   ref<DataComparisonRespVO<MallTradeStatisticsApi.TradeOrderSummaryRespVO>>(); // 交易对照数据
-const userComparison =
-  ref<DataComparisonRespVO<MallMemberStatisticsApi.MemberCountRespVO>>(); // 用户对照数据
 
 /** 查询交易对照卡片数据 */
 async function loadOrderComparison() {
   orderComparison.value = await getOrderComparison();
 }
 
-/** 查询会员用户数量对照卡片数据 */
-async function loadUserCountComparison() {
-  userComparison.value = await getUserCountComparison();
-}
-
 /** 初始化 */
 onMounted(async () => {
   loading.value = true;
-  await Promise.all([loadOrderComparison(), loadUserCountComparison()]);
+  await loadOrderComparison();
   loading.value = false;
 });
 </script>
@@ -60,7 +48,7 @@ onMounted(async () => {
     <div class="flex flex-col gap-4">
       <!-- 数据对照 -->
       <ElRow :gutter="16">
-        <ElCol :md="6" :sm="12" :xs="24">
+        <ElCol :md="8" :sm="12" :xs="24">
           <ComparisonCard
             tag="今日"
             title="销售额"
@@ -72,15 +60,7 @@ onMounted(async () => {
             "
           />
         </ElCol>
-        <ElCol :md="6" :sm="12" :xs="24">
-          <ComparisonCard
-            tag="今日"
-            title="用户访问量"
-            :value="userComparison?.value?.visitUserCount || 0"
-            :reference="userComparison?.reference?.visitUserCount || 0"
-          />
-        </ElCol>
-        <ElCol :md="6" :sm="12" :xs="24">
+        <ElCol :md="8" :sm="12" :xs="24">
           <ComparisonCard
             tag="今日"
             title="订单量"
@@ -88,12 +68,16 @@ onMounted(async () => {
             :reference="orderComparison?.reference?.orderPayCount || 0"
           />
         </ElCol>
-        <ElCol :md="6" :sm="12" :xs="24">
+        <ElCol :md="8" :sm="12" :xs="24">
           <ComparisonCard
             tag="今日"
-            title="新增用户"
-            :value="userComparison?.value?.registerUserCount || 0"
-            :reference="userComparison?.reference?.registerUserCount || 0"
+            title="支付金额"
+            prefix="￥"
+            :decimals="2"
+            :value="fenToYuan(orderComparison?.value?.orderPayPrice || 0)"
+            :reference="
+              fenToYuan(orderComparison?.reference?.orderPayPrice || 0)
+            "
           />
         </ElCol>
       </ElRow>
@@ -106,19 +90,8 @@ onMounted(async () => {
           <OperationDataCard />
         </ElCol>
       </ElRow>
-      <!-- 会员概览和会员终端 -->
-      <ElRow :gutter="16">
-        <ElCol :md="18" :sm="24" :xs="24">
-          <MemberFunnelCard />
-        </ElCol>
-        <ElCol :md="6" :sm="24" :xs="24">
-          <MemberTerminalCard />
-        </ElCol>
-      </ElRow>
       <!-- 交易量趋势 -->
       <TradeTrendCard />
-      <!-- 会员统计 -->
-      <MemberStatisticsCard />
     </div>
   </Page>
 </template>

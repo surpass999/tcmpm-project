@@ -6,8 +6,6 @@ import cn.hutool.extra.spring.SpringUtil;
 import cn.gemrun.base.framework.common.enums.UserTypeEnum;
 import cn.gemrun.base.framework.common.util.object.BeanUtils;
 import cn.gemrun.base.module.infra.api.websocket.WebSocketSenderApi;
-import cn.gemrun.base.module.member.api.user.MemberUserApi;
-import cn.gemrun.base.module.member.api.user.dto.MemberUserRespDTO;
 import cn.gemrun.base.module.promotion.controller.admin.kefu.vo.message.KeFuMessageListReqVO;
 import cn.gemrun.base.module.promotion.controller.admin.kefu.vo.message.KeFuMessageRespVO;
 import cn.gemrun.base.module.promotion.controller.admin.kefu.vo.message.KeFuMessageSendReqVO;
@@ -49,8 +47,6 @@ public class KeFuMessageServiceImpl implements KeFuMessageService {
     @Resource
     private AdminUserApi adminUserApi;
     @Resource
-    private MemberUserApi memberUserApi;
-    @Resource
     private WebSocketSenderApi webSocketSenderApi;
 
     @Override
@@ -86,11 +82,8 @@ public class KeFuMessageServiceImpl implements KeFuMessageService {
         // 1.2 保存消息
         keFuMessageMapper.insert(kefuMessage);
 
-        // 2. 更新会话消息冗余
-        conversationService.updateConversationLastMessage(kefuMessage);
-        // 3. 通知所有管理员更新对话
-        MemberUserRespDTO user = memberUserApi.getUser(kefuMessage.getSenderId());
-        KeFuMessageRespVO message = BeanUtils.toBean(kefuMessage, KeFuMessageRespVO.class).setSenderAvatar(user.getAvatar());
+        // 2. 通知所有管理员更新对话
+        KeFuMessageRespVO message = BeanUtils.toBean(kefuMessage, KeFuMessageRespVO.class);
         getSelf().sendAsyncMessageToAdmin(KEFU_MESSAGE_TYPE, message);
         getSelf().sendAsyncMessageToMember(conversation.getUserId(), KEFU_MESSAGE_TYPE, message);
         return kefuMessage.getId();
@@ -131,9 +124,7 @@ public class KeFuMessageServiceImpl implements KeFuMessageService {
         if (UserTypeEnum.ADMIN.getValue().equals(receiverType)) {
             adminUserApi.validateUser(receiverId);
         }
-        if (UserTypeEnum.MEMBER.getValue().equals(receiverType)) {
-            memberUserApi.validateUser(receiverId);
-        }
+        // Member validation removed - cannot depend on member module
     }
 
     @Async

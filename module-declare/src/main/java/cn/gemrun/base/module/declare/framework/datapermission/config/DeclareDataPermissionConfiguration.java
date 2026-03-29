@@ -1,10 +1,6 @@
 package cn.gemrun.base.module.declare.framework.datapermission.config;
 
 import cn.gemrun.base.framework.datapermission.core.rule.dept.DeptDataPermissionRuleCustomizer;
-import cn.gemrun.base.module.declare.dal.dataobject.filing.FilingDO;
-import cn.gemrun.base.module.declare.dal.dataobject.project.ProjectProcessDO;
-import cn.gemrun.base.module.declare.dal.dataobject.project.ProjectDO;
-
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -19,10 +15,8 @@ public class DeclareDataPermissionConfiguration {
     @Bean
     public DeptDataPermissionRuleCustomizer declareDeptDataPermissionRuleCustomizer() {
         return rule -> {
-            // 备案表 - 按部门过滤（使用数据库列名 dept_id）
-            rule.addDeptColumn(FilingDO.class, "dept_id");
-            rule.addDeptColumn(ProjectProcessDO.class, "dept_id");
-            rule.addDeptColumn(ProjectDO.class, "dept_id");
+            // 进度报表 - 按部门过滤（使用 dept_id 而非 hospital_id，因为数据权限框架需要用部门ID进行过滤）
+            rule.addDeptColumn("declare_progress_report", "dept_id");
         };
     }
 

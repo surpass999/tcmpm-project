@@ -38,8 +38,9 @@ const selectedNode = ref<string | null>(null);
 // 退回原因
 const reason = ref('');
 
-// 记录当前的 taskId
+// 记录当前的 taskId 和 buttonId
 const currentTaskId = ref<string>('');
+const currentButtonId = ref<number | undefined>(undefined);
 
 // 加载可退回节点
 async function loadReturnNodes(taskId: string) {
@@ -55,23 +56,17 @@ async function loadReturnNodes(taskId: string) {
   }
 }
 
-// 打开弹窗
-function handleOpen(isOpen: boolean) {
-  if (isOpen) {
-    // 重置状态
-    selectedNode.value = null;
-    reason.value = '';
-
-    // 加载可退回节点
-    if (currentTaskId.value) {
-      loadReturnNodes(currentTaskId.value);
-    }
-  }
-}
-
 // 暴露打开弹窗的方法
-function openModal(data: { taskId: string; title?: string }) {
+function openModal(data: { taskId: string; buttonId?: string; title?: string }) {
+  // 重置状态
+  selectedNode.value = null;
+  reason.value = '';
   currentTaskId.value = data.taskId;
+  currentButtonId.value = data.buttonId ? parseInt(data.buttonId) : undefined;
+
+  // 立即加载可退回节点（不再依赖 watch 异步触发）
+  void loadReturnNodes(data.taskId);
+
   open.value = true;
 }
 
@@ -102,6 +97,7 @@ async function handleConfirm() {
       id: currentTaskId.value,
       targetTaskDefinitionKey: selectedNode.value,
       reason: reason.value,
+      buttonId: currentButtonId.value,
     });
     message.success('退回成功');
     open.value = false;
@@ -113,11 +109,6 @@ async function handleConfirm() {
     loading.value = false;
   }
 }
-
-// 监听 open 变化
-import { watch } from 'vue';
-watch(() => open.value, handleOpen);
-
 defineExpose({
   open: openModal,
   close: closeModal,

@@ -65,7 +65,7 @@ const defaultPreferences: Preferences = {
   logo: {
     enable: true,
     fit: 'contain',
-    source: 'https://unpkg.com/@vbenjs/static-source@0.1.7/source/logo-v1.webp',
+    source: '/static/imgs/logo/logo.png',
   },
   navigation: {
     accordion: true,
@@ -116,7 +116,7 @@ const defaultPreferences: Preferences = {
     colorWarning: 'hsl(42 84% 61%)',
     mode: 'light',
     radius: '0.5',
-    fontSize: 16,
+    fontSize: 18,
     semiDarkHeader: false,
     semiDarkSidebar: false,
   },
@@ -135,7 +135,7 @@ const defaultPreferences: Preferences = {
     refresh: true,
     sidebarToggle: true,
     themeToggle: true,
-    timezone: true,
+    timezone: false,
   },
 };
 

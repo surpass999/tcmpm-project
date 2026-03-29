@@ -15,7 +15,6 @@
         <!-- 各种 module 拓展 -->
         <module>module-system</module>
         <module>module-infra</module>
-       <module>module-member</module>
        <module>module-declare</module>
        <module>module-bpm</module>
 <!--        <module>module-report</module>-->

@@ -5,7 +5,6 @@ import cn.gemrun.base.framework.common.pojo.PageResult;
 import cn.gemrun.base.framework.common.util.collection.CollectionUtils;
 import cn.gemrun.base.framework.common.util.collection.MapUtils;
 import cn.gemrun.base.framework.common.util.object.BeanUtils;
-import cn.gemrun.base.module.member.api.user.dto.MemberUserRespDTO;
 import cn.gemrun.base.module.product.api.sku.dto.ProductSkuRespDTO;
 import cn.gemrun.base.module.product.api.spu.dto.ProductSpuRespDTO;
 import cn.gemrun.base.module.promotion.api.combination.dto.CombinationRecordCreateReqDTO;
@@ -117,12 +116,11 @@ public interface CombinationActivityConvert {
     }
 
     default CombinationRecordDO convert(CombinationRecordCreateReqDTO reqDTO,
-                                        CombinationActivityDO activity, MemberUserRespDTO user,
+                                        CombinationActivityDO activity, Object user,
                                         ProductSpuRespDTO spu, ProductSkuRespDTO sku) {
         return convert(reqDTO).setVirtualGroup(false)
                 .setStatus(CombinationRecordStatusEnum.IN_PROGRESS.getStatus()) // 创建后默认状态为进行中
                 .setUserSize(activity.getUserSize()).setUserCount(1) // 默认就是 1 插入后会接着更新一次所有的拼团记录
-                .setNickname(user.getNickname()).setAvatar(user.getAvatar()) // 用户信息
                 .setSpuName(spu.getName()).setPicUrl(ObjectUtil.defaultIfBlank(sku.getPicUrl(), spu.getPicUrl())); // 商品信息
     }
 

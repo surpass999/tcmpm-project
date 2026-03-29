@@ -27,8 +27,11 @@ function useAccess() {
    * @param codes
    */
   function hasAccessByCodes(codes: string[]) {
+    // 防御性容错：确保 codes 是数组，避免调用方传入字符串或其他类型
+    if (!Array.isArray(codes) || codes.length === 0) {
+      return true;
+    }
     const userCodesSet = new Set(accessStore.accessCodes);
-
     const intersection = codes.filter((item) => userCodesSet.has(item));
     return intersection.length > 0;
   }

@@ -1,6 +1,7 @@
 package cn.gemrun.base.module.declare.dal.dataobject.indicator;
 
 import cn.gemrun.base.framework.mybatis.core.dataobject.BaseDO;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
@@ -36,11 +37,6 @@ public class DeclareIndicatorDO extends BaseDO {
      * 计量单位（人、万元、次等）
      */
     private String unit;
-
-    /**
-     * 指标分类：1=基本情况，2=项目管理，3=系统功能，4=建设成效，5=数据集建设，6=数据交易，7=信息安全
-     */
-    private Integer category;
 
     /**
      * 逻辑校验关系（如201>=20101、802>=80201+80202）
@@ -106,5 +102,10 @@ public class DeclareIndicatorDO extends BaseDO {
      * 扩展配置（JSON格式，各值类型不同）
      */
     private String extraConfig;
+
+    /**
+     * 所属分组ID
+     */
+    private Long groupId;
 
 }

@@ -4,7 +4,7 @@ import cn.gemrun.base.framework.mybatis.core.mapper.BaseMapperX;
 import cn.gemrun.base.module.statistics.controller.admin.trade.vo.TradeOrderSummaryRespVO;
 import cn.gemrun.base.module.statistics.controller.admin.trade.vo.TradeOrderTrendRespVO;
 import cn.gemrun.base.module.statistics.dal.dataobject.trade.TradeStatisticsDO;
-import cn.gemrun.base.module.statistics.service.member.bo.MemberAreaStatisticsRespBO;
+import cn.gemrun.base.module.statistics.service.trade.bo.MemberAreaStatisticsRespBO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 

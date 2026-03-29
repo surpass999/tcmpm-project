@@ -23,7 +23,6 @@ import {
   createBrokerageUser,
   getBrokerageUser,
 } from '#/api/mall/trade/brokerage/user';
-import { getUser } from '#/api/member/user';
 import { DictTag } from '#/components/dict-tag';
 
 import { useCreateFormSchema } from '../data';
@@ -103,17 +102,12 @@ async function handleSearchUser(id: number, userType: string) {
     return;
   }
 
-  const userData =
-    userType === '分销员' ? await getUser(id) : await getBrokerageUser(id);
+  const userData = await getBrokerageUser(id);
   if (!userData) {
     ElMessage.warning(`${userType}不存在`);
     return;
   }
-  if (userType === '分销员') {
-    user.value = userData as MallBrokerageUserApi.BrokerageUser;
-  } else {
-    bindUser.value = userData as MallBrokerageUserApi.BrokerageUser;
-  }
+  user.value = userData as MallBrokerageUserApi.BrokerageUser;
 }
 </script>
 

@@ -58,17 +58,21 @@ const [Grid, gridApi] = useVbenVxeGrid({
     columns: useGridColumns(),
     height: 'auto',
     keepSource: true,
-    proxyConfig: {
-      ajax: {
-        query: async ({ page }, formValues) => {
-          return await getIndicatorPage({
-            pageNo: page.currentPage,
-            pageSize: page.pageSize,
-            ...formValues,
-          });
+      proxyConfig: {
+        ajax: {
+          query: async ({ page }, formValues) => {
+            const res = await getIndicatorPage({
+              pageNo: page.currentPage,
+              pageSize: page.pageSize,
+              ...formValues,
+            });
+            return {
+              list: res?.list ?? res ?? [],
+              total: res?.total ?? 0,
+            };
+          },
         },
       },
-    },
     rowConfig: {
       keyField: 'id',
       isHover: true,

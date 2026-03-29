@@ -1,7 +1,6 @@
 package cn.gemrun.base.module.product.convert.comment;
 
 import cn.gemrun.base.framework.common.util.object.BeanUtils;
-import cn.gemrun.base.module.member.api.user.dto.MemberUserRespDTO;
 import cn.gemrun.base.module.product.api.comment.dto.ProductCommentCreateReqDTO;
 import cn.gemrun.base.module.product.controller.admin.comment.vo.ProductCommentCreateReqVO;
 import cn.gemrun.base.module.product.dal.dataobject.comment.ProductCommentDO;

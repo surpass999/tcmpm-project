@@ -6,7 +6,7 @@ import { preferences } from '@vben/preferences';
 import { $t } from '#/locales';
 
 const BasicLayout = () => import('#/layouts/basic.vue');
-const AuthPageLayout = () => import('#/layouts/auth.vue');
+const AuthPageLayout = () => import('#/layouts/auth-vertical.vue');
 /** 全局404页面 */
 const fallbackNotFoundRoute: RouteRecordRaw = {
   component: () => import('#/views/_core/fallback/not-found.vue'),

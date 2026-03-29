@@ -98,10 +98,6 @@ export enum OperationButtonType {
    * 转办
    */
   TRANSFER = 3,
-  /**
-   * 发起整改（用于触发整改子流程）
-   */
-  RECTIFY = 8,
 }
 
 // 审批拒绝类型枚举
@@ -473,7 +469,6 @@ export type ButtonSetting = {
   enable: boolean;
   id: OperationButtonType;
   bizStatus?: string;
-  rectifyProcessDefinitionKey?: string;
 };
 
 /**
@@ -783,7 +778,6 @@ OPERATION_BUTTON_NAME.set(OperationButtonType.DELEGATE, '委派');
 OPERATION_BUTTON_NAME.set(OperationButtonType.ADD_SIGN, '加签');
 OPERATION_BUTTON_NAME.set(OperationButtonType.RETURN, '退回');
 OPERATION_BUTTON_NAME.set(OperationButtonType.COPY, '抄送');
-OPERATION_BUTTON_NAME.set(OperationButtonType.RECTIFY, '发起整改');
 
 // 默认的按钮权限设置
 export const DEFAULT_BUTTON_SETTING: ButtonSetting[] = [
@@ -793,7 +787,6 @@ export const DEFAULT_BUTTON_SETTING: ButtonSetting[] = [
   { id: OperationButtonType.DELEGATE, displayName: '委派', enable: true },
   { id: OperationButtonType.ADD_SIGN, displayName: '加签', enable: true },
   { id: OperationButtonType.RETURN, displayName: '退回', enable: true },
-  { id: OperationButtonType.RECTIFY, displayName: '发起整改', enable: false },
 ];
 
 // 办理人默认的按钮权限设置

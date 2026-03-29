@@ -31,11 +31,6 @@ public class DeclareIndicatorRespVO {
     private String unit;
 
     /**
-     * 指标分类：1=基本情况，2=项目管理，3=系统功能，4=建设成效，5=数据集建设，6=数据交易，7=信息安全
-     */
-    private Integer category;
-
-    /**
      * 关联指标口径ID
      */
     private Long caliberId;
@@ -129,6 +124,11 @@ public class DeclareIndicatorRespVO {
      * 扩展配置（JSON格式，各值类型不同）
      */
     private String extraConfig;
+
+    /**
+     * 所属分组ID
+     */
+    private Long groupId;
 
     /**
      * 创建时间

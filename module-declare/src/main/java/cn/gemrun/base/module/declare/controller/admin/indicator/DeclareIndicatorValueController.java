@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.*;
 import javax.annotation.Resource;
 import javax.validation.Valid;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 指标值 Controller
@@ -68,6 +69,34 @@ public class DeclareIndicatorValueController {
             @RequestParam("businessId") Long businessId) {
         indicatorValueService.deleteIndicatorValues(businessType, businessId);
         return CommonResult.success(true);
+    }
+
+    @GetMapping("/last-period-values")
+    @Operation(summary = "获取上期指标值（用于填报参考）")
+    @Parameter(name = "hospitalId", description = "医院ID", required = true)
+    @Parameter(name = "reportYear", description = "填报年度", required = true)
+    @Parameter(name = "reportBatch", description = "填报批次", required = true)
+    @Parameter(name = "businessType", description = "业务类型", required = false)
+    @PreAuthorize("isAuthenticated()")
+    public CommonResult<Map<String, String>> getLastPeriodIndicatorValues(
+            @RequestParam("hospitalId") Long hospitalId,
+            @RequestParam("reportYear") Integer reportYear,
+            @RequestParam("reportBatch") Integer reportBatch,
+            @RequestParam(value = "businessType", required = false, defaultValue = "3") Integer businessType) {
+        return CommonResult.success(
+                indicatorValueService.getLastPeriodIndicatorValues(hospitalId, reportYear, reportBatch, businessType));
+    }
+
+    @GetMapping("/progress-report-values")
+    @Operation(summary = "获取进度填报的指标值列表")
+    @Parameter(name = "reportId", description = "填报记录ID", required = true)
+    @Parameter(name = "businessType", description = "业务类型：3=进度填报", required = false)
+    @PreAuthorize("isAuthenticated()")
+    public CommonResult<List<DeclareIndicatorValueRespVO>> getProgressReportIndicatorValues(
+            @RequestParam("reportId") Long reportId,
+            @RequestParam(value = "businessType", required = false, defaultValue = "3") Integer businessType) {
+        List<DeclareIndicatorValueDO> list = indicatorValueService.getIndicatorValues(businessType, reportId);
+        return CommonResult.success(BeanUtils.toBean(list, DeclareIndicatorValueRespVO.class));
     }
 
 }

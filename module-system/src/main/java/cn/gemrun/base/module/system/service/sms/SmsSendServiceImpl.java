@@ -16,7 +16,6 @@ import cn.gemrun.base.module.system.dal.dataobject.sms.SmsTemplateDO;
 import cn.gemrun.base.module.system.dal.dataobject.user.AdminUserDO;
 import cn.gemrun.base.module.system.mq.message.sms.SmsSendMessage;
 import cn.gemrun.base.module.system.mq.producer.sms.SmsProducer;
-import cn.gemrun.base.module.system.service.member.MemberService;
 import cn.gemrun.base.module.system.service.user.AdminUserService;
 import com.google.common.annotations.VisibleForTesting;
 import lombok.extern.slf4j.Slf4j;
@@ -41,8 +40,6 @@ public class SmsSendServiceImpl implements SmsSendService {
 
     @Resource
     private AdminUserService adminUserService;
-    @Resource
-    private MemberService memberService;
     @Resource
     private SmsChannelService smsChannelService;
     @Resource
@@ -74,13 +71,9 @@ public class SmsSendServiceImpl implements SmsSendService {
 
     @Override
     public Long sendSingleSmsToMember(String mobile, Long userId, String templateCode, Map<String, Object> templateParams) {
-        // 如果 mobile 为空，则加载用户编号对应的手机号
+        // 如果 mobile 为空，会员模块已移除，跳过短信发送
         if (StrUtil.isEmpty(mobile)) {
-            mobile = memberService.getMemberUserMobile(userId);
-        }
-        // 如果手机号仍然为空，跳过发送（用户可能没有设置手机号）
-        if (StrUtil.isEmpty(mobile)) {
-            log.warn("[sendSingleSmsToMember] 用户({}) 手机号为空，跳过短信发送", userId);
+            log.warn("[sendSingleSmsToMember] 会员模块已移除，跳过短信发送");
             return null;
         }
         // 执行发送

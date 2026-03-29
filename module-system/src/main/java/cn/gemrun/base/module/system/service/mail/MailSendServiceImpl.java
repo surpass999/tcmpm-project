@@ -12,7 +12,6 @@ import cn.gemrun.base.module.system.dal.dataobject.mail.MailTemplateDO;
 import cn.gemrun.base.module.system.dal.dataobject.user.AdminUserDO;
 import cn.gemrun.base.module.system.mq.message.mail.MailSendMessage;
 import cn.gemrun.base.module.system.mq.producer.mail.MailProducer;
-import cn.gemrun.base.module.system.service.member.MemberService;
 import cn.gemrun.base.module.system.service.user.AdminUserService;
 import com.google.common.annotations.VisibleForTesting;
 import lombok.extern.slf4j.Slf4j;
@@ -41,8 +40,6 @@ public class MailSendServiceImpl implements MailSendService {
 
     @Resource
     private AdminUserService adminUserService;
-    @Resource
-    private MemberService memberService;
 
     @Resource
     private MailAccountService mailAccountService;
@@ -112,7 +109,8 @@ public class MailSendServiceImpl implements MailSendService {
             }
         }
         if (UserTypeEnum.MEMBER.getValue().equals(userType)) {
-            return memberService.getMemberUserEmail(userId);
+            // 会员模块已移除，无法获取会员邮箱
+            return null;
         }
         return null;
     }

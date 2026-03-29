@@ -9,8 +9,6 @@ import cn.hutool.core.util.StrUtil;
 import cn.hutool.extra.spring.SpringUtil;
 import cn.gemrun.base.framework.common.pojo.PageResult;
 import cn.gemrun.base.framework.common.util.date.LocalDateTimeUtils;
-import cn.gemrun.base.module.member.api.user.MemberUserApi;
-import cn.gemrun.base.module.member.api.user.dto.MemberUserRespDTO;
 import cn.gemrun.base.module.promotion.controller.admin.coupon.vo.coupon.CouponPageReqVO;
 import cn.gemrun.base.module.promotion.convert.coupon.CouponConvert;
 import cn.gemrun.base.module.promotion.dal.dataobject.coupon.CouponDO;
@@ -51,9 +49,6 @@ public class CouponServiceImpl implements CouponService {
 
     @Resource
     private CouponMapper couponMapper;
-
-    @Resource
-    private MemberUserApi memberUserApi;
 
     @Override
     public void useCoupon(Long id, Long userId, Long orderId) {
@@ -326,14 +321,7 @@ public class CouponServiceImpl implements CouponService {
 
     @Override
     public PageResult<CouponDO> getCouponPage(CouponPageReqVO pageReqVO) {
-        // 获得用户编号
-        if (StrUtil.isNotEmpty(pageReqVO.getNickname())) {
-            List<MemberUserRespDTO> users = memberUserApi.getUserListByNickname(pageReqVO.getNickname());
-            if (CollUtil.isEmpty(users)) {
-                return PageResult.empty();
-            }
-            pageReqVO.setUserIds(convertSet(users, MemberUserRespDTO::getId));
-        }
+        // 昵称搜索已移除 - cannot depend on member module
         // 分页查询
         return couponMapper.selectPage(pageReqVO);
     }

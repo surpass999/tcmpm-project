@@ -3,8 +3,6 @@ package cn.gemrun.base.module.trade.service.price.calculator;
 import cn.hutool.core.lang.Assert;
 import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.core.util.StrUtil;
-import cn.gemrun.base.module.member.api.user.MemberUserApi;
-import cn.gemrun.base.module.member.api.user.dto.MemberUserRespDTO;
 import cn.gemrun.base.module.promotion.api.point.PointActivityApi;
 import cn.gemrun.base.module.promotion.api.point.dto.PointValidateJoinRespDTO;
 import cn.gemrun.base.module.promotion.enums.common.PromotionTypeEnum;
@@ -33,8 +31,6 @@ public class TradePointActivityPriceCalculator implements TradePriceCalculator {
 
     @Resource
     private PointActivityApi pointActivityApi;
-    @Resource
-    private MemberUserApi memberUserApi;
 
     @Resource
     private TradeOrderQueryService tradeOrderQueryService;
@@ -45,14 +41,8 @@ public class TradePointActivityPriceCalculator implements TradePriceCalculator {
         if (ObjectUtil.notEqual(result.getType(), TradeOrderTypeEnum.POINT.getType())) {
             return;
         }
-        // 1.2 初始化积分
-        MemberUserRespDTO user = memberUserApi.getUser(param.getUserId());
-        result.setTotalPoint(user.getPoint()).setUsePoint(0);
-
-        // 1.3 校验用户积分余额
-        if (user.getPoint() == null || user.getPoint() <= 0) {
-            return;
-        }
+        // 会员模块已移除，无法获取用户积分信息
+        result.setTotalPoint(0).setUsePoint(0);
 
         Assert.isTrue(param.getItems().size() == 1, "积分商城兑换商品时，只允许选择一个商品");
         // 2. 校验是否可以参与积分商城活动

@@ -417,7 +417,7 @@ export function useNodeForm(nodeType: BpmNodeTypeEnum) {
     ) {
       const level = configForm.value.businessStartUserLevel;
       if (level === 0) {
-        showText = '业务发起人（本部门成员）';
+        showText = '业务发起人（业务创建人本部门所有成员）';
       } else if (level) {
         showText = `业务发起人（第${level}级部门负责人）`;
       } else {

@@ -311,15 +311,12 @@ public class BpmnModelUtils {
     public static void addButtonsSetting(List<BpmSimpleModelNodeVO.OperationButtonSetting> buttonsSetting, UserTask userTask) {
         if (CollUtil.isNotEmpty(buttonsSetting)) {
             List<Map<String, String>> list = CollectionUtils.convertList(buttonsSetting, item -> {
-                Map<String, String> settingMap = Maps.newHashMapWithExpectedSize(5);
+                Map<String, String> settingMap = Maps.newHashMapWithExpectedSize(4);
                 settingMap.put(BUTTON_SETTING_ELEMENT_ID_ATTRIBUTE, String.valueOf(item.getId()));
                 settingMap.put(BUTTON_SETTING_ELEMENT_DISPLAY_NAME_ATTRIBUTE, item.getDisplayName());
                 settingMap.put(BUTTON_SETTING_ELEMENT_ENABLE_ATTRIBUTE, String.valueOf(item.getEnable()));
                 if (StrUtil.isNotEmpty(item.getBizStatus())) {
                     settingMap.put(BUTTON_SETTING_ELEMENT_BIZ_STATUS_ATTRIBUTE, item.getBizStatus());
-                }
-                if (StrUtil.isNotEmpty(item.getRectifyProcessDefinitionKey())) {
-                    settingMap.put(BUTTON_SETTING_ELEMENT_RECTIFY_PROCESS_KEY_ATTRIBUTE, item.getRectifyProcessDefinitionKey());
                 }
                 return settingMap;
             });
@@ -349,13 +346,11 @@ public class BpmnModelUtils {
             String displayName = element.getAttributeValue(null, BUTTON_SETTING_ELEMENT_DISPLAY_NAME_ATTRIBUTE);
             String enable = element.getAttributeValue(null, BUTTON_SETTING_ELEMENT_ENABLE_ATTRIBUTE);
             String bizStatus = element.getAttributeValue(null, BUTTON_SETTING_ELEMENT_BIZ_STATUS_ATTRIBUTE);
-            String rectifyProcessDefinitionKey = element.getAttributeValue(null, BUTTON_SETTING_ELEMENT_RECTIFY_PROCESS_KEY_ATTRIBUTE);
             if (StrUtil.isNotEmpty(id)) {
                 BpmTaskRespVO.OperationButtonSetting setting = new BpmTaskRespVO.OperationButtonSetting();
                 setting.setDisplayName(displayName);
                 setting.setEnable(Boolean.parseBoolean(enable));
                 setting.setBizStatus(bizStatus);
-                setting.setRectifyProcessDefinitionKey(rectifyProcessDefinitionKey);
                 buttonSettings.put(Integer.valueOf(id), setting);
             }
         });

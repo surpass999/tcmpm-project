@@ -63,7 +63,7 @@ services:
         NODE_ENV:
           ENV=${NODE_ENV:-production}
           PUBLIC_PATH=${PUBLIC_PATH:-/}
-          VUE_APP_TITLE=${VUE_APP_TITLE:-Gemrun 基础系统}
+          VUE_APP_TITLE=${VUE_APP_TITLE:-智慧中医医院试点项目过程管理平台}
           VUE_APP_BASE_API=${VUE_APP_BASE_API:-/prod-api}
           VUE_APP_APP_NAME=${VUE_APP_APP_NAME:-/}
           VUE_APP_TENANT_ENABLE=${VUE_APP_TENANT_ENABLE:-true}

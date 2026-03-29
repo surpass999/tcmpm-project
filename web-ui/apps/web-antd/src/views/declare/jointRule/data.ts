@@ -1,12 +1,31 @@
 import type { VbenFormSchema } from '#/adapter/form';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 
-import { DICT_TYPE } from '@vben/constants';
-import { getDictObj, getDictOptions } from '@vben/hooks';
+import { getProjectTypeSimpleList } from '#/api/declare/project-type';
 
 import {
   TRIGGER_TIMING_OPTIONS,
 } from './types';
+
+// 项目类型选项（从 API 加载）
+let PROJECT_TYPE_OPTIONS: { label: string; value: number }[] = [];
+
+// 加载项目类型选项（同步方式，在模块初始化时加载）
+getProjectTypeSimpleList()
+  .then((list) => {
+    PROJECT_TYPE_OPTIONS = list.map((item) => ({
+      label: item.title || item.name,
+      value: item.typeValue,
+    }));
+  })
+  .catch(() => {
+    PROJECT_TYPE_OPTIONS = [];
+  });
+
+/** 获取项目类型选项 */
+export function getProjectTypeOptions() {
+  return PROJECT_TYPE_OPTIONS;
+}
 
 /** 列表的搜索表单 */
 export function useGridFormSchema(): VbenFormSchema[] {
@@ -27,10 +46,7 @@ export function useGridFormSchema(): VbenFormSchema[] {
       componentProps: {
         placeholder: '请选择项目类型',
         allowClear: true,
-        options: [
-          { label: '全部', value: 0 },
-          ...getDictOptions(DICT_TYPE.DECLARE_PROJECT_TYPE, 'number'),
-        ],
+        options: getProjectTypeOptions(),
       },
     },
     {
@@ -53,9 +69,8 @@ export function useGridFormSchema(): VbenFormSchema[] {
 export function useGridColumns(): VxeTableGridOptions['columns'] {
   // 项目类型格式化
   const projectTypeFormatter = ({ cellValue }: { cellValue: any }) => {
-    if (cellValue === 0 || cellValue === '0') return '全部';
-    const dict = getDictObj(DICT_TYPE.DECLARE_PROJECT_TYPE, String(cellValue));
-    return dict?.label || cellValue;
+    const option = PROJECT_TYPE_OPTIONS.find((item) => item.value === cellValue);
+    return option?.label || cellValue || '-';
   };
 
   // 触发时机格式化

@@ -170,14 +170,17 @@ const formSchema = computed((): VbenFormSchema[] => {
 </script>
 
 <template>
-  <div>
+  <div class="gov-auth-form">
     <AuthenticationLogin
       ref="loginRef"
       :form-schema="formSchema"
       :loading="authStore.loginLoading"
+      sub-title="请输入账号与密码登录系统，请妥善保管账户信息，勿向他人泄露。"
       :show-code-login="false"
       :show-qrcode-login="false"
       :show-third-party-login="false"
+      :show-register="false"
+      title="账户登录"
       @submit="handleLogin"
       @third-login="handleThirdLogin"
     />
@@ -193,3 +196,91 @@ const formSchema = computed((): VbenFormSchema[] => {
     />
   </div>
 </template>
+
+<style scoped>
+/* 与顶部红头统一的政企风登录区（仅本页） */
+.gov-auth-form :deep(h2) {
+  margin-bottom: 0.5rem !important;
+  font-size: 1.25rem !important;
+  font-weight: 600 !important;
+  line-height: 1.4 !important;
+  color: hsl(var(--foreground)) !important;
+  letter-spacing: 0.06em;
+}
+
+.gov-auth-form :deep(.text-muted-foreground) {
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: hsl(var(--muted-foreground)) !important;
+}
+
+/* 收紧标题区块与表单的间距 */
+.gov-auth-form :deep(.mb-7) {
+  margin-bottom: 1.25rem !important;
+}
+
+/* 主按钮：跟随当前主题主色 */
+.gov-auth-form :deep(button.inline-flex.w-full) {
+  height: 40px;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  border-radius: 4px;
+  border: none;
+  background: linear-gradient(180deg, hsl(var(--primary)) 0%, hsl(var(--primary-dark)) 100%) !important;
+  color: hsl(var(--primary-foreground)) !important;
+  box-shadow: 0 2px 6px hsl(var(--primary) / 0.35);
+}
+
+.gov-auth-form :deep(button.inline-flex.w-full:hover) {
+  background: linear-gradient(180deg, hsl(var(--primary-light)) 0%, hsl(var(--primary)) 100%) !important;
+}
+
+.gov-auth-form :deep(button.inline-flex.w-full:disabled) {
+  opacity: 0.65;
+}
+
+/* 链接：跟随主色 */
+.gov-auth-form :deep(.vben-link) {
+  color: hsl(var(--primary)) !important;
+}
+
+.gov-auth-form :deep(.vben-link:hover) {
+  color: hsl(var(--primary-light)) !important;
+}
+
+/* Ant Design 输入框：跟随边框色 */
+.gov-auth-form :deep(.ant-input),
+.gov-auth-form :deep(.ant-input-affix-wrapper) {
+  background-color: hsl(var(--input-background)) !important;
+  border-color: hsl(var(--input)) !important;
+  border-radius: 4px !important;
+}
+
+.gov-auth-form :deep(.ant-input-affix-wrapper:not(.ant-input-affix-wrapper-disabled):hover),
+.gov-auth-form :deep(.ant-input:hover) {
+  border-color: hsl(var(--primary)) !important;
+}
+
+.gov-auth-form :deep(.ant-input-affix-wrapper-focused),
+.gov-auth-form :deep(.ant-input:focus),
+.gov-auth-form :deep(.ant-input-focused) {
+  border-color: hsl(var(--primary)) !important;
+  box-shadow: 0 0 0 2px hsl(var(--primary) / 0.15) !important;
+}
+
+.gov-auth-form :deep(.ant-select:not(.ant-select-disabled):hover .ant-select-selector) {
+  border-color: hsl(var(--primary)) !important;
+}
+
+.gov-auth-form :deep(.ant-select-focused .ant-select-selector) {
+  border-color: hsl(var(--primary)) !important;
+  box-shadow: 0 0 0 2px hsl(var(--primary) / 0.15) !important;
+}
+
+.gov-auth-form :deep(.ant-select-selector) {
+  background-color: hsl(var(--input-background)) !important;
+  border-color: hsl(var(--input)) !important;
+  border-radius: 4px !important;
+}
+</style>

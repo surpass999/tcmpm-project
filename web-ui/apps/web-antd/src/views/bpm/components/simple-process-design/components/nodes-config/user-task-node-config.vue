@@ -41,8 +41,6 @@ import {
 
 import { ProcessExpressionSelectModal } from '#/views/bpm/processExpression/components';
 
-import { getSimpleProcessDefinitionList } from '#/api/bpm/definition';
-
 import {
   APPROVE_METHODS,
   APPROVE_TYPE,
@@ -51,6 +49,7 @@ import {
   ASSIGN_EMPTY_HANDLER_TYPES,
   ASSIGN_START_USER_HANDLER_TYPES,
   AssignEmptyHandlerType,
+  BUSINESS_START_USER_LEVEL,
   CANDIDATE_STRATEGY,
   CandidateStrategy,
   DEFAULT_BUTTON_SETTING,
@@ -132,24 +131,6 @@ watchEffect(() => {
 
 // 激活的 Tab 标签页
 const activeTabName = ref('user');
-
-// 流程定义列表（用于整改按钮下拉选择）
-const processDefinitionOptions = ref<{ key: string; name: string }[]>([]);
-
-async function loadProcessDefinitionOptions() {
-  try {
-    const result = await getSimpleProcessDefinitionList();
-    if (result && Array.isArray(result)) {
-      // 过滤掉当前正在编辑的流程模型自身的 key，避免循环引用
-      const currentModelKey = currentNode.value?.key || '';
-      processDefinitionOptions.value = result
-        .filter((item) => item.key && item.key !== currentModelKey)
-        .map((item) => ({ key: item.key!, name: item.name || item.key! }));
-    }
-  } catch (e) {
-    console.warn('加载流程定义列表失败', e);
-  }
-}
 
 // 表单字段权限设置
 const {
@@ -519,8 +500,6 @@ function showUserTaskNodeConfig(node: SimpleFlowNode) {
   configForm.value.reasonRequire = node?.reasonRequire ?? false;
   // 8. 跳过表达式
   configForm.value.skipExpression = node?.skipExpression ?? '';
-  // 9. 加载流程定义列表（用于整改按钮下拉选择）
-  loadProcessDefinitionOptions();
   drawerApi.open();
 }
 
@@ -969,13 +948,17 @@ onMounted(() => {
               v-if="
                 configForm.candidateStrategy === CandidateStrategy.BUSINESS_START_USER
               "
-              label="部门层级"
+              label="部门层级（业务创建人视角）"
               name="businessStartUserLevel"
             >
-              <Select v-model:value="configForm.businessStartUserLevel" clearable placeholder="不选则获取本部门所有成员">
+              <Select
+                v-model:value="configForm.businessStartUserLevel"
+                clearable
+                placeholder="请选择部门层级"
+              >
                 <SelectOption
-                  v-for="(item, index) in MULTI_LEVEL_DEPT"
-                  :key="index"
+                  v-for="item in BUSINESS_START_USER_LEVEL"
+                  :key="item.value"
                   :label="item.label"
                   :value="item.value"
                 >
@@ -983,7 +966,7 @@ onMounted(() => {
                 </SelectOption>
               </Select>
               <div class="text-xs text-gray-500 mt-1">
-                不选择或选0则获取本部门所有成员，选择数字获取对应层级的上级部门负责人
+                不选择则获取业务创建人本部门负责人，选择数字则获取对应层级的上级部门负责人
               </div>
             </FormItem>
             <FormItem
@@ -1303,10 +1286,9 @@ onMounted(() => {
 
           <!-- 表头 -->
           <Row class="border border-gray-200 px-4 py-3">
-            <Col :span="6" class="font-bold">操作按钮</Col>
-            <Col :span="6" class="font-bold">显示名称</Col>
+            <Col :span="9" class="font-bold">操作按钮</Col>
+            <Col :span="9" class="font-bold">显示名称</Col>
             <Col :span="5" class="font-bold">业务状态(bizStatus)</Col>
-            <Col :span="6" class="font-bold">整改流程定义Key</Col>
             <Col :span="1" class="flex items-center justify-center font-bold">
               启用
             </Col>
@@ -1315,10 +1297,10 @@ onMounted(() => {
           <!-- 表格内容 -->
           <div v-for="(item, index) in buttonsSetting" :key="index">
             <Row class="border border-t-0 border-gray-200 px-4 py-2">
-              <Col :span="6" class="flex items-center truncate">
+              <Col :span="9" class="flex items-center truncate">
                 {{ OPERATION_BUTTON_NAME.get(item.id) }}
               </Col>
-              <Col :span="6" class="flex items-center">
+              <Col :span="9" class="flex items-center">
                 <Input
                   v-if="btnDisplayNameEdit[index]"
                   :ref="(el) => setInputRef(el, index)"
@@ -1342,18 +1324,6 @@ onMounted(() => {
                   class="max-w-24"
                   v-model:value="item.bizStatus"
                   placeholder="如: PASS, REJECT"
-                />
-              </Col>
-              <!-- 整改流程定义 Key 列（仅整改按钮显示） -->
-              <Col :span="6" class="flex items-center">
-                <Select
-                  v-if="item.id === OperationButtonType.RECTIFY"
-                  v-model:value="item.rectifyProcessDefinitionKey"
-                  placeholder="选择整改流程"
-                  allow-clear
-                  class="w-full"
-                  :options="processDefinitionOptions"
-                  :field-names="{ label: 'name', value: 'key' }"
                 />
               </Col>
               <Col :span="1" class="flex items-center justify-center">
