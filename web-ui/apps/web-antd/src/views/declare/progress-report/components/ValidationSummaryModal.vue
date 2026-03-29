@@ -26,6 +26,7 @@ import { ref } from 'vue';
 
 interface ErrorItem {
   indicatorId: number;
+  indicatorCode: string;
   message: string;
 }
 
@@ -38,12 +39,15 @@ function show(errorList: ErrorItem[]) {
 }
 
 function handleJump(error: ErrorItem) {
-  const el = document.querySelector(`[data-indicator-id="${error.indicatorId}"]`);
+  // 优先按 indicatorId 定位，找不到再按 indicatorCode
+  let el = document.querySelector(`[data-indicator-id="${error.indicatorId}"]`);
+  if (!el && error.indicatorCode) {
+    el = document.querySelector(`[data-indicator-code="${error.indicatorCode}"]`);
+  }
   if (el) {
     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    // 高亮闪烁效果
     el.classList.add('indicator-highlight');
-    setTimeout(() => el.classList.remove('indicator-highlight'), 1500);
+    setTimeout(() => el!.classList.remove('indicator-highlight'), 1500);
   }
   visible.value = false;
 }

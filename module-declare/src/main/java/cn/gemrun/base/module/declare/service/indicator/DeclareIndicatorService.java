@@ -51,6 +51,13 @@ public interface DeclareIndicatorService {
     List<DeclareIndicatorDO> getIndicatorsByBusinessType(String businessType);
 
     /**
+     * 根据业务类型获取指标列表（可选按项目类型过滤）
+     * @param projectType 项目类型，null 时不按项目类型过滤
+     * @param businessType 业务类型
+     */
+    List<DeclareIndicatorDO> getIndicatorsByBusinessType(Integer projectType, String businessType);
+
+    /**
      * 根据指标代号获取指标
      */
     DeclareIndicatorDO getIndicatorByCode(String indicatorCode);

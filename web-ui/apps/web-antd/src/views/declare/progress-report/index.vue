@@ -373,6 +373,7 @@ function getRowActions(row: DeclareProgressReport) {
       label: '上报国家局',
       type: 'link' as const,
       icon: 'lucide:upload',
+      auth: ['declare:national-report:batch-report'],
       onClick: () => handleSingleReport(row),
     });
   }
@@ -557,6 +558,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
             },
             {
               label: '数据对比',
+              auth: ['declare/progress-report/compare-data'],
               icon: 'lucide:git-compare',
               disabled: compareDisabled,
               tooltip: compareTooltip,
@@ -565,6 +567,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
             {
               label: '批量上报国家局',
               icon: 'lucide:upload',
+              auth: ['declare:national-report:batch-report'],
               onClick: handleBatchReport,
             },
           ]"

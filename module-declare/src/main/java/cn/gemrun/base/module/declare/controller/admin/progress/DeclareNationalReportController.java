@@ -5,6 +5,8 @@ import cn.gemrun.base.module.declare.service.progress.DeclareNationalReportServi
 import cn.gemrun.base.module.declare.vo.progress.*;
 import javax.annotation.Resource;
 import javax.validation.Valid;
+
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
@@ -24,6 +26,7 @@ public class DeclareNationalReportController {
      * 批量上报国家局
      */
     @PostMapping("/batch-report")
+    @PreAuthorize("@ss.hasPermission('declare:national-report:batch-report')")
     public CommonResult<Long> batchReport(@Valid @RequestBody BatchNationalReportReqVO reqVO) {
         return success(nationalReportService.batchReport(reqVO));
     }

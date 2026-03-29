@@ -12,21 +12,63 @@
           'category-title--level2': group.groupLevel === 2,
         }"
       >
-        {{ group.groupName }}
+        {{ group.groupPrefix ? group.groupPrefix + ' ' : '' }}{{ group.groupName }}
       </div>
       <div class="indicator-list">
         <div
           v-for="indicator in group.indicators"
           :key="indicator.id"
+          :data-indicator-id="indicator.id"
+          :data-indicator-code="indicator.indicatorCode"
           class="indicator-row"
         >
           <!-- 左侧：指标名称 + 输入组件 -->
           <div class="indicator-main">
             <!-- 指标标签行 -->
             <div class="indicator-label-row">
-              <span class="label-text" :title="indicator.indicatorName">
-                {{ indicator.indicatorName }}
-              </span>
+              <!-- 指标名称 + 口径提示图标 -->
+              <div class="flex items-center gap-1 flex-wrap">
+                <!-- 有口径时用 Popover 展示 -->
+                <a-popover
+                  v-if="hasIndicatorSpec(indicator)"
+                  placement="right"
+                  trigger="click"
+                  :overlay-style="{ maxWidth: '420px' }"
+                >
+                  <template #content>
+                    <div class="caliber-popover-content">
+                      <div v-if="indicator.definition" class="caliber-item">
+                        <div class="caliber-label">📌 指标定义</div>
+                        <div class="caliber-value">{{ indicator.definition }}</div>
+                      </div>
+                      <div v-if="indicator.statisticScope" class="caliber-item">
+                        <div class="caliber-label">📏 统计范围</div>
+                        <div class="caliber-value">{{ indicator.statisticScope }}</div>
+                      </div>
+                      <div v-if="indicator.dataSource" class="caliber-item">
+                        <div class="caliber-label">📁 数据来源</div>
+                        <div class="caliber-value">{{ indicator.dataSource }}</div>
+                      </div>
+                      <div v-if="indicator.fillRequire" class="caliber-item">
+                        <div class="caliber-label">📝 填报要求</div>
+                        <div class="caliber-value">{{ indicator.fillRequire }}</div>
+                      </div>
+                      <div v-if="indicator.calculationExample" class="caliber-item">
+                        <div class="caliber-label">🧮 计算示例</div>
+                        <div class="caliber-value">{{ indicator.calculationExample }}</div>
+                      </div>
+                    </div>
+                  </template>
+                  <span class="label-text has-caliber" :title="indicator.indicatorName">
+                    {{ indicator.indicatorCode }} - {{ indicator.indicatorName }}
+                    <IconifyIcon icon="lucide:help-circle" class="caliber-icon" />
+                  </span>
+                </a-popover>
+                <!-- 无口径时只显示名称 -->
+                <span v-else class="label-text" :title="indicator.indicatorName">
+                  {{ indicator.indicatorCode }} - {{ indicator.indicatorName }}
+                </span>
+              </div>
               <a-tag v-if="indicator.isRequired" color="red" class="required-tag">必填</a-tag>
               <a-tag v-if="isComputedIndicator(indicator)" color="orange" class="computed-tag">自动计算</a-tag>
             </div>
@@ -360,9 +402,12 @@
               <!-- 未知类型 -->
               <span v-else class="text-gray-400 text-sm">暂不支持该类型</span>
 
-              <!-- 错误提示 -->
-              <div v-if="indicator.id && indicatorErrors[indicator.id]" class="indicator-error">
-                {{ indicatorErrors[indicator.id] }}
+              <!-- 错误提示（优先显示联合规则错误，其次显示必填/范围错误） -->
+              <div
+                v-if="indicator.id && (jointRuleErrors[indicator.id] || jointRuleErrors[indicator.indicatorCode] || indicatorErrors[indicator.id] || indicatorErrors[indicator.indicatorCode])"
+                class="indicator-error"
+              >
+                {{ jointRuleErrors[indicator.id] || jointRuleErrors[indicator.indicatorCode] || indicatorErrors[indicator.id] || indicatorErrors[indicator.indicatorCode] }}
               </div>
             </div>
           </div>
@@ -391,7 +436,7 @@
 <script lang="ts" setup>
 import type { DeclareIndicatorApi } from '#/api/declare/indicator';
 
-import { reactive, ref, computed, onMounted } from 'vue';
+import { reactive, ref, computed, onMounted, watch, nextTick } from 'vue';
 import dayjs from 'dayjs';
 
 import { IconifyIcon } from '@vben/icons';
@@ -405,11 +450,17 @@ import {
   getProgressReportIndicatorValues,
 } from '#/api/declare/indicator';
 import { getIndicatorGroupList } from '#/api/declare/indicator-group';
+import {
+  getEnabledJointRules,
+  type DeclareIndicatorJointRuleApi,
+} from '#/api/declare/jointRule';
 import { uploadFile } from '#/api/infra/file';
+import { validate as validateJointRule, parseLogicRule } from '#/utils/indicatorValidator';
 
 interface IndicatorGroup {
   groupId: number;
   groupName: string;
+  groupPrefix: string;
   parentId: number;
   groupLevel: number;
   indicators: DeclareIndicatorApi.Indicator[];
@@ -420,12 +471,14 @@ interface IndicatorGroup {
 const props = withDefaults(
   defineProps<{
     hospitalId: number;
+    projectType?: number;
     reportId?: number;
     reportYear?: number;
     reportBatch?: number;
     readonly?: boolean;
   }>(),
   {
+    projectType: undefined,
     readonly: false,
   },
 );
@@ -437,8 +490,8 @@ const emit = defineEmits<{
   loadingChange: [loading: boolean];
 }>();
 
-/** 分组信息映射（key = groupId），包含 parentId 和 groupLevel */
-const groupInfoMap = ref<Record<number, { groupName: string; parentId: number; groupLevel: number }>>({});
+/** 分组信息映射（key = groupId），包含 parentId、groupLevel 和 groupPrefix */
+const groupInfoMap = ref<Record<number, { groupName: string; groupPrefix: string; parentId: number; groupLevel: number }>>({});
 
 /** 指标列表 */
 const indicators = ref<DeclareIndicatorApi.Indicator[]>([]);
@@ -446,8 +499,8 @@ const indicators = ref<DeclareIndicatorApi.Indicator[]>([]);
 /** 填报值 Map（key = indicatorCode） */
 const formValues = reactive<Record<string, any>>({});
 
-/** 指标验证错误 Map（key = indicatorId） */
-const indicatorErrors = reactive<Record<number, string>>({});
+/** 指标验证错误 Map（key = indicatorId 数字 或 indicatorCode 字符串） */
+const indicatorErrors = reactive<Record<string, string>>({});
 
 /** 文件列表 Map（key = indicatorCode） */
 const fileListMap = reactive<Record<string, UploadFile[]>>({});
@@ -482,71 +535,86 @@ const containerValuesRef = computed(() => containerValues);
 /** 上期值 Map（key = indicatorCode） */
 const lastPeriodValues = ref<Record<string, string>>({});
 
+/** 联合验证规则（按 projectType 加载） */
+const jointRules = ref<DeclareIndicatorJointRuleApi.JointRule[]>([]);
+
 /** 指标分组（树形结构：一级 → 二级 → 指标） */
 const indicatorGroups = computed<IndicatorGroup[]>(() => {
-  // 1. 初始化一级分组 Map（parentId = 0）
+  // 1. 先把所有分组注册到 map（一级、二级都要）
   const levelOneMap = new Map<number, IndicatorGroup>();
-  // 2. 初始化二级分组 Map（parentId != 0），key = groupId
   const levelTwoMap = new Map<number, IndicatorGroup>();
 
-  // 先按 parentId 分类填充分组信息
+  // 注册所有一级分组
+  for (const [gid, info] of Object.entries(groupInfoMap.value)) {
+    if (info.parentId === 0) {
+      levelOneMap.set(Number(gid), {
+        groupId: Number(gid),
+        groupName: info.groupName,
+        groupPrefix: info.groupPrefix,
+        parentId: 0,
+        groupLevel: 1,
+        indicators: [],
+        children: [],
+      });
+    }
+  }
+
+  // 注册所有二级分组并挂到父分组下
+  for (const [gid, info] of Object.entries(groupInfoMap.value)) {
+    if (info.parentId !== 0) {
+      const lvl2: IndicatorGroup = {
+        groupId: Number(gid),
+        groupName: info.groupName,
+        groupPrefix: info.groupPrefix,
+        parentId: info.parentId,
+        groupLevel: 2,
+        indicators: [],
+        children: [],
+      };
+      levelTwoMap.set(Number(gid), lvl2);
+      const parent = levelOneMap.get(info.parentId);
+      if (parent) {
+        parent.children.push(lvl2);
+      }
+    }
+  }
+
+  // 2. 将指标分配到对应分组
   for (const ind of indicators.value) {
     const gid = ind.groupId || 0;
-    // 确保分组信息已注册（从 groupInfoMap 中获取）
     const info = groupInfoMap.value[gid];
     if (!info) continue;
 
     if (info.parentId === 0) {
-      // 一级分组
-      if (!levelOneMap.has(gid)) {
-        levelOneMap.set(gid, {
-          groupId: gid,
-          groupName: info.groupName,
-          parentId: 0,
-          groupLevel: 1,
-          indicators: [],
-          children: [],
-        });
+      // 一级分组下的指标
+      const lvl1 = levelOneMap.get(gid);
+      if (lvl1) {
+        lvl1.indicators.push(ind);
       }
-      levelOneMap.get(gid)!.indicators.push(ind);
     } else {
-      // 二级分组
-      if (!levelTwoMap.has(gid)) {
-        levelTwoMap.set(gid, {
-          groupId: gid,
-          groupName: info.groupName,
-          parentId: info.parentId,
-          groupLevel: 2,
-          indicators: [],
-          children: [],
-        });
+      // 二级分组下的指标
+      const lvl2 = levelTwoMap.get(gid);
+      if (lvl2) {
+        lvl2.indicators.push(ind);
       }
-      levelTwoMap.get(gid)!.indicators.push(ind);
     }
   }
 
-  // 3. 将二级分组挂到对应一级分组下
-  for (const [, lvl2] of levelTwoMap) {
-    const parent = levelOneMap.get(lvl2.parentId);
-    if (parent) {
-      parent.children.push(lvl2);
-    }
-  }
-
-  // 4. 组装结果：一级分组在前，二级分组按 sort 排序后追加
-  const result: IndicatorGroup[] = [];
-  // 指标 sort 函数
+  // 3. 排序
   const sortInds = (g: IndicatorGroup) => {
     g.indicators.sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0));
     g.children.forEach(sortInds);
   };
-  // 将二级分组展开为独立条目插在一级分组之后
   for (const [, lvl1] of levelOneMap) {
     sortInds(lvl1);
+    lvl1.children.sort((a, b) => a.groupId - b.groupId);
+  }
+
+  // 4. 组装结果：一级分组在前，其二级子分组依次跟在后面
+  const result: IndicatorGroup[] = [];
+  for (const [, lvl1] of levelOneMap) {
     result.push(lvl1);
-    // 二级分组按 groupId 排序追加
-    const sortedLvl2 = Array.from(lvl1.children.values()).sort((a, b) => a.groupId - b.groupId);
-    result.push(...sortedLvl2);
+    result.push(...lvl1.children);
   }
 
   return result;
@@ -555,6 +623,17 @@ const indicatorGroups = computed<IndicatorGroup[]>(() => {
 /** 判断指标是否为计算指标 */
 function isComputedIndicator(indicator: DeclareIndicatorApi.Indicator): boolean {
   return !!(indicator.calculationRule && indicator.calculationRule.trim());
+}
+
+/** 判断指标是否有口径 */
+function hasIndicatorSpec(indicator: DeclareIndicatorApi.Indicator): boolean {
+  return !!(
+    indicator.definition ||
+    indicator.statisticScope ||
+    indicator.dataSource ||
+    indicator.fillRequire ||
+    indicator.calculationExample
+  );
 }
 
 /** 解析 valueOptions JSON */
@@ -713,19 +792,184 @@ function parseStoredFileList(value: string | undefined): UploadFile[] {
 
 /** 指标值变化处理 */
 function onIndicatorChange(indicator: DeclareIndicatorApi.Indicator) {
-  // 清除错误
+  // 清除当前字段的错误（同时清除 id 和 code 两种 key）
   if (indicator.id) {
     delete indicatorErrors[indicator.id];
+    delete jointRuleErrors[indicator.id];
   }
+  delete indicatorErrors[indicator.indicatorCode];
+  delete jointRuleErrors[indicator.indicatorCode];
 
   // 如果是动态容器，将子字段值同步到 formValues
   if (indicator.valueType === 12) {
     formValues[indicator.indicatorCode] = JSON.stringify(containerValues[indicator.indicatorCode] || {});
   }
 
-  // 如果是计算指标，重新计算
-  if (isComputedIndicator(indicator)) {
-    recalculateComputedIndicators();
+  // 任何指标值变化，都触发所有计算指标全量重算（支持依赖链）
+  recalculateComputedIndicators();
+
+  // 实时逻辑校验（指标自身的 logicRule）
+  runLogicRuleValidation();
+
+  // 实时联合规则校验
+  nextTick(() => runJointValidation());
+}
+
+/** 联合验证错误 Map（独立追踪，与必填等独立错误分开） */
+const jointRuleErrors = reactive<Record<string, string>>({});
+
+/** 构建 id → code 和 code → id 的双向查找表 */
+function buildIndicatorMaps() {
+  const allIndicators = indicators.value;
+  const idToCode = new Map<number, string>();
+  const codeToId = new Map<string, number>();
+  for (const ind of allIndicators) {
+    if (ind.id !== undefined) {
+      idToCode.set(ind.id, ind.indicatorCode);
+      codeToId.set(ind.indicatorCode, ind.id);
+    }
+  }
+  return { idToCode, codeToId };
+}
+
+/** 运行指标自身的逻辑校验（logicRule 字符串，如 201>=20101）并更新 indicatorErrors */
+function runLogicRuleValidation() {
+  const { idToCode, codeToId } = buildIndicatorMaps();
+
+  for (const indicator of indicators.value) {
+    if (!indicator.logicRule?.trim()) continue;
+
+    const rules = parseLogicRule(indicator.logicRule);
+    if (rules.length === 0) continue;
+
+    // 构建 code → value 映射
+    const codeValueMap: Record<string, any> = {};
+    for (const ind of indicators.value) {
+      codeValueMap[ind.indicatorCode] = formValues[ind.indicatorCode];
+    }
+
+    const results = validateJointRule(rules as any, codeValueMap, { triggerTiming: 'FILL', idToCode });
+
+    const errKey = indicator.indicatorCode;
+
+    if (results.length === 0) {
+      // 验证通过：清除旧错误
+      delete indicatorErrors[errKey];
+      if (indicator.id) delete indicatorErrors[indicator.id];
+      continue;
+    }
+
+    // 验证失败：取第一条错误信息
+    const first = results[0]!;
+    const errMsg = first.message || '校验失败';
+
+    indicatorErrors[errKey] = errMsg;
+    if (indicator.id) indicatorErrors[indicator.id] = errMsg;
+
+    // 同时清除相关指标的联合规则旧错误
+    const codes: string[] = [...(first.involvedIndicatorCodes || [])];
+    if (first.involvedIndicatorIds) {
+      for (const id of first.involvedIndicatorIds) {
+        const code = idToCode.get(id);
+        if (code && !codes.includes(code)) codes.push(code);
+      }
+    }
+    for (const code of codes) {
+      delete jointRuleErrors[code];
+      const id = codeToId.get(code);
+      if (id !== undefined) delete jointRuleErrors[id];
+    }
+  }
+}
+
+/** 运行联合验证并更新 jointRuleErrors（供 onIndicatorChange 实时调用） */
+function runJointValidation() {
+  if (jointRules.value.length === 0) return;
+
+  const { idToCode, codeToId } = buildIndicatorMaps();
+
+  // 构建 code → value 映射（引擎用 code 字符串查值）
+  const codeValueMap: Record<string, any> = {};
+  for (const ind of indicators.value) {
+    codeValueMap[ind.indicatorCode] = formValues[ind.indicatorCode];
+  }
+
+  const results = validateJointRule(jointRules.value as any, codeValueMap, { triggerTiming: 'FILL', idToCode });
+
+  // 先收集所有规则涉及的全部指标 code/id（用于清除旧错误）
+  const allInvolvedCodes = new Set<string>();
+  const allInvolvedIds = new Set<number>();
+  for (const rule of jointRules.value) {
+    try {
+      const config = JSON.parse(rule.ruleConfig);
+      for (const item of config.rules || []) {
+        const action = item.action || {};
+        if (action.indicatorCode) allInvolvedCodes.add(action.indicatorCode);
+        if (action.compareIndicatorCode) allInvolvedCodes.add(action.compareIndicatorCode);
+        if (action.indicatorId !== undefined) allInvolvedIds.add(action.indicatorId);
+        if (action.compareIndicatorId !== undefined) allInvolvedIds.add(action.compareIndicatorId);
+        if (action.formula) {
+          for (const f of action.formula) {
+            if (f.indicatorCode) allInvolvedCodes.add(f.indicatorCode);
+            if (f.indicatorId !== undefined) allInvolvedIds.add(f.indicatorId);
+          }
+        }
+        if (action.compareFormula) {
+          for (const f of action.compareFormula) {
+            if (f.indicatorCode) allInvolvedCodes.add(f.indicatorCode);
+            if (f.indicatorId !== undefined) allInvolvedIds.add(f.indicatorId);
+          }
+        }
+      }
+    } catch {}
+  }
+
+  if (results.length === 0) {
+    // 验证全部通过：清除涉及的指标爆红
+    for (const code of allInvolvedCodes) {
+      delete jointRuleErrors[code];
+    }
+    for (const id of allInvolvedIds) {
+      delete jointRuleErrors[id];
+    }
+    return;
+  }
+
+  for (const result of results) {
+    if (!result.valid) {
+      const codes: string[] = [...(result.involvedIndicatorCodes || [])];
+      // 把 involvedIndicatorIds 也转成 code
+      if (result.involvedIndicatorIds) {
+        for (const id of result.involvedIndicatorIds) {
+          const code = idToCode.get(id);
+          if (code && !codes.includes(code)) {
+            codes.push(code);
+          }
+        }
+      }
+      console.log('[runJointValidation] 验证失败，involvedCodes:', codes, 'message:', result.message);
+      if (codes.length === 0 && result.indicatorCode) {
+        codes.push(result.indicatorCode);
+      }
+      for (const code of codes) {
+        jointRuleErrors[code] = result.message;
+        const id = codeToId.get(code);
+        if (id !== undefined) {
+          jointRuleErrors[id] = result.message;
+        }
+      }
+      // 从清除集合中移除已报错的指标（保留其错误状态）
+      for (const code of codes) {
+        allInvolvedCodes.delete(code);
+      }
+    }
+  }
+  // 清除未报错的涉及指标的旧错误
+  for (const code of allInvolvedCodes) {
+    delete jointRuleErrors[code];
+  }
+  for (const id of allInvolvedIds) {
+    delete jointRuleErrors[id];
   }
 }
 
@@ -760,19 +1004,13 @@ function calculateIndicatorValue(indicator: DeclareIndicatorApi.Indicator): numb
       processedFormula = processedFormula.replace(match, String(value));
     }
 
-    if (!hasAllValues) {
-      return undefined;
-    }
+    if (!hasAllValues) return undefined;
 
     const safeFormula = processedFormula.replace(/[^0-9+\-*/.()%]/g, '');
-    if (!safeFormula || safeFormula.trim() === '') {
-      return undefined;
-    }
+    if (!safeFormula || safeFormula.trim() === '') return undefined;
 
     const result = new Function(`return ${safeFormula}`)();
-    if (isNaN(result) || !isFinite(result)) {
-      return undefined;
-    }
+    if (isNaN(result) || !isFinite(result)) return undefined;
 
     return result;
   } catch {
@@ -780,16 +1018,105 @@ function calculateIndicatorValue(indicator: DeclareIndicatorApi.Indicator): numb
   }
 }
 
-/** 重新计算所有计算指标 */
+/**
+ * 解析指标公式中的依赖指标代码列表
+ */
+function parseCalcDependencies(calcRule: string): string[] {
+  if (!calcRule) return [];
+  const matches = calcRule.match(/\[[^\]]+\]/g) || [];
+  return matches.map(m => m.replace(/[\[\]]/g, ''));
+}
+
+/**
+ * 拓扑排序：按依赖关系确定计算顺序，避免 A = B+C 而 B 还未算出
+ */
+function sortIndicatorsTopological(computedOnes: DeclareIndicatorApi.Indicator[]): DeclareIndicatorApi.Indicator[] {
+  const codeToInd = new Map<string, DeclareIndicatorApi.Indicator>();
+  computedOnes.forEach(ind => codeToInd.set(ind.indicatorCode, ind));
+
+  const inDegree = new Map<string, number>();
+  const deps = new Map<string, string[]>();
+
+  computedOnes.forEach(ind => {
+    const depsCodes = parseCalcDependencies(ind.calculationRule || '');
+    inDegree.set(ind.indicatorCode, 0);
+    deps.set(ind.indicatorCode, []);
+    depsCodes.forEach(depCode => {
+      if (codeToInd.has(depCode)) {
+        deps.get(ind.indicatorCode)!.push(depCode);
+        inDegree.set(ind.indicatorCode, (inDegree.get(ind.indicatorCode) || 0) + 1);
+      }
+    });
+  });
+
+  const queue: string[] = [];
+  inDegree.forEach((deg, code) => {
+    if (deg === 0) queue.push(code);
+  });
+
+  const sorted: DeclareIndicatorApi.Indicator[] = [];
+  while (queue.length > 0) {
+    const code = queue.shift()!;
+    const ind = codeToInd.get(code)!;
+    sorted.push(ind);
+    const myDeps = deps.get(code) || [];
+    myDeps.forEach(depCode => {
+      const newDeg = (inDegree.get(depCode) || 1) - 1;
+      inDegree.set(depCode, newDeg);
+      if (newDeg === 0) queue.push(depCode);
+    });
+  }
+
+  // 兜底：未排进来的（循环依赖或异常）按原始顺序追加
+  computedOnes.forEach(ind => {
+    if (!sorted.includes(ind)) sorted.push(ind);
+  });
+
+  return sorted;
+}
+
+/** 重新计算所有计算指标（拓扑排序版，支持依赖链） */
 function recalculateComputedIndicators() {
-  for (const ind of indicators.value) {
-    if (isComputedIndicator(ind)) {
+  const computedOnes = indicators.value.filter(ind => isComputedIndicator(ind));
+  if (computedOnes.length === 0) return;
+
+  // 最多迭代 MAX_PASSES 轮，防止循环引用死循环
+  const MAX_PASSES = computedOnes.length + 1;
+  let changed = true;
+  let pass = 0;
+
+  while (changed && pass < MAX_PASSES) {
+    changed = false;
+    pass++;
+
+    // 每次按拓扑序重算（已算出值的指标可作为下一轮的依赖）
+    const sorted = sortIndicatorsTopological(computedOnes);
+    for (const ind of sorted) {
+      const prev = formValues[ind.indicatorCode];
       const calculatedValue = calculateIndicatorValue(ind);
       if (calculatedValue !== undefined) {
         formValues[ind.indicatorCode] = calculatedValue;
+        if (formValues[ind.indicatorCode] !== prev) {
+          changed = true;
+        }
       }
     }
   }
+
+  // 计算完成后，直接操作 DOM 刷新 disabled input 的显示值
+  // （v-model 对 disabled 无效，Vue 不追踪响应式变化到原生 DOM）
+  nextTick(() => {
+    for (const ind of computedOnes) {
+      if (formValues[ind.indicatorCode] !== undefined) {
+        const el = document.querySelector(
+          `[data-indicator-code="${ind.indicatorCode}"] .ant-input-number input`
+        ) as HTMLInputElement | null;
+        if (el) {
+          el.value = String(formValues[ind.indicatorCode]);
+        }
+      }
+    }
+  });
 }
 
 /** 从后端返回的指标值中提取展示值 */
@@ -894,14 +1221,15 @@ onMounted(async () => {
       if (g.id) {
         groupInfoMap.value[g.id] = {
           groupName: g.groupName,
+          groupPrefix: g.groupPrefix || '',
           parentId: g.parentId ?? 0,
           groupLevel: g.groupLevel ?? 1,
         };
       }
     });
 
-    // 2. 加载指标列表
-    const indicatorData = await getIndicatorsByBusinessType('process');
+    // 2. 加载指标列表（按项目类型过滤）
+    const indicatorData = await getIndicatorsByBusinessType('process', props.projectType);
     indicators.value = indicatorData;
 
     // 3. 加载已有填报值（编辑时）
@@ -956,6 +1284,20 @@ onMounted(async () => {
   }
 });
 
+/** 监听 projectType，当其变为有效值时加载联合验证规则（处理异步加载场景） */
+watch(() => props.projectType, async (newProjectType) => {
+  if (newProjectType === undefined || jointRules.value.length > 0) return;
+  try {
+    const rules = await getEnabledJointRules({
+      projectType: newProjectType,
+      triggerTiming: 'FILL',
+    });
+    jointRules.value = rules || [];
+  } catch (error) {
+    console.error('[IndicatorInputTable] watch 加载联合规则失败:', error);
+  }
+}, { immediate: false });
+
 /** 获取所有动态容器值（供父组件保存时调用） */
 function getContainerValues(): Record<string, string> {
   const result: Record<string, string> = {};
@@ -965,6 +1307,118 @@ function getContainerValues(): Record<string, string> {
     }
   }
   return result;
+}
+
+/** 验证所有必填指标，返回错误列表 */
+function validateAll(indicatorsToValidate: DeclareIndicatorApi.Indicator[]): Array<{ indicatorId: number; message: string }> {
+  const errors: Array<{ indicatorId: number; indicatorCode: string; message: string }> = [];
+
+  // 构建 id → indicator 的快速查找
+  const idToIndicator = new Map<number, DeclareIndicatorApi.Indicator>();
+  // 构建 code → id 的反向查找（联合验证用 code 标记错误，需要 id 来构建错误对象）
+  const codeToId = new Map<string, number>();
+  for (const ind of indicatorsToValidate) {
+    if (ind.id !== undefined) {
+      idToIndicator.set(ind.id, ind);
+      codeToId.set(ind.indicatorCode, ind.id);
+    }
+  }
+
+  // 构建 id → value 映射（供联合验证引擎使用）
+  // 同时用 numeric id 和 string indicatorCode 两种 key，方便引擎按两种方式查值
+  const indicatorIdValueMap: Record<string | number, any> = {};
+  for (const ind of indicatorsToValidate) {
+    if (ind.id !== undefined) {
+      indicatorIdValueMap[ind.id] = formValues[ind.indicatorCode];
+    }
+    if (ind.indicatorCode !== undefined) {
+      indicatorIdValueMap[ind.indicatorCode] = formValues[ind.indicatorCode];
+    }
+  }
+
+  for (const indicator of indicatorsToValidate) {
+    const code = indicator.indicatorCode;
+    const vt = indicator.valueType;
+    const rawValue = formValues[code];
+
+    // 必填校验
+    if (indicator.isRequired) {
+      const isEmpty = rawValue === undefined || rawValue === null || rawValue === '';
+      if (isEmpty) {
+        if (indicator.id) {
+          indicatorErrors[indicator.id] = '此项为必填';
+          indicatorErrors[indicator.indicatorCode] = '此项为必填';
+          errors.push({ indicatorId: indicator.id, indicatorCode: indicator.indicatorCode, message: `${indicator.indicatorCode} - ${indicator.indicatorName} 为必填项` });
+        }
+        continue;
+      }
+    }
+
+    // 数字范围校验
+    if (vt === 1 && rawValue !== undefined && rawValue !== null && rawValue !== '') {
+      const numVal = Number(rawValue);
+      if (!isNaN(numVal)) {
+        if (indicator.minValue !== undefined && numVal < indicator.minValue) {
+          indicatorErrors[indicator.indicatorCode] = `不能小于 ${indicator.minValue}`;
+          errors.push({ indicatorId: indicator.id!, indicatorCode: indicator.indicatorCode, message: `${indicator.indicatorCode} - ${indicator.indicatorName} 不能小于 ${indicator.minValue}` });
+        }
+        if (indicator.maxValue !== undefined && numVal > indicator.maxValue) {
+          indicatorErrors[indicator.indicatorCode] = `不能大于 ${indicator.maxValue}`;
+          errors.push({ indicatorId: indicator.id!, indicatorCode: indicator.indicatorCode, message: `${indicator.indicatorCode} - ${indicator.indicatorName} 不能大于 ${indicator.maxValue}` });
+        }
+      }
+    }
+
+    // 动态容器内部字段校验
+    if (vt === 12 && containerValues[code]) {
+      const fields = parseDynamicFields(indicator.valueOptions);
+      for (const field of fields) {
+        if (field.required && !containerValues[code][field.fieldCode]) {
+          errors.push({ indicatorId: indicator.id!, indicatorCode: indicator.indicatorCode, message: `${indicator.indicatorCode} - ${indicator.indicatorName} 中的「${field.fieldLabel}」为必填` });
+        }
+      }
+    }
+  }
+
+  // 联合规则校验：把 involvedIndicatorCodes 里所有涉及字段都标记为错误
+  if (jointRules.value.length > 0) {
+    const jointResults = validateJointRule(
+      jointRules.value as any,
+      indicatorIdValueMap,
+      { triggerTiming: 'FILL' }
+    );
+    for (const result of jointResults) {
+      if (!result.valid) {
+        const codes = result.involvedIndicatorCodes || [];
+        // 如果引擎没返回 involvedCodes，用 result.indicatorCode兜底
+        if (codes.length === 0 && result.indicatorCode) {
+          codes.push(result.indicatorCode);
+        }
+
+        for (const code of codes) {
+          // 标记联合验证错误（写到 jointRuleErrors，与必填等独立错误分开）
+          if (jointRuleErrors[code] === undefined) {
+            jointRuleErrors[code] = result.message;
+            const id = codeToId.get(code);
+            if (id !== undefined) {
+              jointRuleErrors[id] = result.message;
+            }
+          }
+          // 避免重复 push 到 errors 数组
+          const existing = errors.find(e => e.indicatorCode === code);
+          if (!existing) {
+            errors.push({
+              indicatorId: codeToId.get(code) ?? 0,
+              indicatorCode: code,
+              message: result.message,
+            });
+          }
+        }
+      }
+    }
+  }
+
+  return errors;
 }
 
 /** 获取所有指标值（用于保存到后端），包含动态容器的完整 valueStr */
@@ -1047,7 +1501,15 @@ function syncContainerValuesToForm(formValues: Record<string, any>) {
   }
 }
 
-defineExpose({ getContainerValues, getAllIndicatorValues, syncContainerValuesToForm, containerValues });
+defineExpose({
+  getContainerValues,
+  getAllIndicatorValues,
+  getAllIndicators: () => indicators.value,
+  validateAll,
+  recalculateComputedIndicators,
+  syncContainerValuesToForm,
+  containerValues,
+});
 </script>
 
 <style scoped>
@@ -1118,6 +1580,50 @@ defineExpose({ getContainerValues, getAllIndicatorValues, syncContainerValuesToF
   font-size: 14px;
   font-weight: 500;
   color: #333;
+}
+
+.label-text.has-caliber {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #1890ff;
+  cursor: pointer;
+}
+
+.caliber-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+/* 口径 Popover 内容 */
+.caliber-popover-content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 400px;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.caliber-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.caliber-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #555;
+  line-height: 1.4;
+}
+
+.caliber-value {
+  font-size: 13px;
+  color: #333;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 
 .required-tag {

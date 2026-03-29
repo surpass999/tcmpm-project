@@ -256,13 +256,14 @@ async function handleSaveDraft() {
       Object.assign(containerValuesData.value, containerVals);
     }
 
-    // 验证所有必填指标
+    // 1. 先触发自动计算，确保所有计算指标的值是最新的
+    indicatorTableRef.value?.recalculateComputedIndicators?.();
+
+    // 2. 验证所有必填指标（必须放在计算之后，因为联合规则可能引用计算指标的值）
     if (indicatorTableRef.value) {
       const indicators = indicatorTableRef.value.getAllIndicators?.();
-      console.log('[handleSaveDraft] 获取到指标数量:', indicators?.length);
       if (indicators) {
         const errors = indicatorTableRef.value.validateAll(indicators);
-        console.log('[handleSaveDraft] 验证错误:', errors);
         if (errors.length > 0) {
           summaryModalRef.value?.show(errors);
           return;
@@ -270,10 +271,7 @@ async function handleSaveDraft() {
       }
     }
 
-    // 1. 触发自动计算，确保所有计算指标的值是最新的
-    indicatorTableRef.value?.recalculateComputedIndicators?.();
-
-    // 2. 获取所有指标值并转换为统一格式
+    // 3. 获取所有指标值并转换为统一格式
     const rawValues = indicatorTableRef.value?.getAllIndicatorValues?.() || [];
     const values = rawValues.map((item: any) => ({
       indicatorId: item.indicatorId,
@@ -316,7 +314,10 @@ async function handleSubmit() {
       Object.assign(containerValuesData.value, containerVals);
     }
 
-    // 指标验证
+    // 1. 先触发自动计算，确保所有计算指标的值是最新的
+    indicatorTableRef.value?.recalculateComputedIndicators?.();
+
+    // 2. 指标验证（必须放在计算之后，因为联合规则可能引用计算指标的值）
     if (indicatorTableRef.value) {
       const indicators = indicatorTableRef.value.getAllIndicators?.();
       if (indicators) {
@@ -328,10 +329,7 @@ async function handleSubmit() {
       }
     }
 
-    // 1. 触发自动计算
-    indicatorTableRef.value?.recalculateComputedIndicators?.();
-
-    // 2. 获取所有指标值并转换为统一格式
+    // 3. 获取所有指标值并转换为统一格式
     const rawValues = indicatorTableRef.value?.getAllIndicatorValues?.() || [];
     const values = rawValues.map((item: any) => ({
       indicatorId: item.indicatorId,

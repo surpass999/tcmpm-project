@@ -90,10 +90,13 @@ export async function getIndicatorsByProjectType(projectType: number, businessTy
   );
 }
 
-/** 根据业务类型获取指标列表 */
-export async function getIndicatorsByBusinessType(businessType: string) {
+/** 根据业务类型获取指标列表（可选按项目类型过滤） */
+export async function getIndicatorsByBusinessType(businessType: string, projectType?: number) {
+  const params: Record<string, any> = { businessType };
+  if (projectType !== undefined) params.projectType = projectType;
   return requestClient.get<DeclareIndicatorApi.Indicator[]>(
-    `/declare/indicator/list-by-business-type?businessType=${businessType}`
+    '/declare/indicator/list-by-business-type',
+    { params }
   );
 }
 

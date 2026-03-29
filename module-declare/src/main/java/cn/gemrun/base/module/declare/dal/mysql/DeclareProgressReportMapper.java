@@ -39,4 +39,17 @@ public interface DeclareProgressReportMapper extends BaseMapperX<DeclareProgress
                 .ne(DeclareProgressReportDO::getReportStatus, 0));
     }
 
+    /**
+     * 查询医院在某年某批次的填报记录（按 deptId 查询，前端传入的 hospitalId 实际为 deptId）
+     */
+    default DeclareProgressReportDO selectByDeptAndPeriod(
+            @Param("deptId") Long deptId,
+            @Param("reportYear") Integer reportYear,
+            @Param("reportBatch") Integer reportBatch) {
+        return selectOne(new LambdaQueryWrapperX<DeclareProgressReportDO>()
+                .eq(DeclareProgressReportDO::getDeptId, deptId)
+                .eq(DeclareProgressReportDO::getReportYear, reportYear)
+                .eq(DeclareProgressReportDO::getReportBatch, reportBatch));
+    }
+
 }

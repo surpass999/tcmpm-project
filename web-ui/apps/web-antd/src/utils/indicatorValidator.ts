@@ -13,17 +13,17 @@
 // 验证规则（从后端获取）
 export interface JointRule {
   id: number;
-  ruleName: string;
-  projectType: number;
-  triggerTiming: 'FILL' | 'PROCESS_SUBMIT';
+  ruleName?: string;
+  projectType?: number;
+  triggerTiming?: 'FILL' | 'PROCESS_SUBMIT';
   processNode?: string;
   ruleConfig: string;
-  status: number;
+  status?: number;
   createTime?: string;
 }
 
-// 指标值Map: key 为 indicatorId，value 为指标值
-export type IndicatorValuesMap = Record<number, any>;
+// 指标值Map: key 为 indicatorId（数字）或 indicatorCode（字符串）
+export type IndicatorValuesMap = Record<string | number, any>;
 
 // 验证结果
 export interface ValidationResult {
@@ -43,6 +43,8 @@ export interface ValidatorOptions {
   triggerTiming?: 'FILL' | 'PROCESS_SUBMIT';
   processNode?: string;
   changedIndicatorId?: number;
+  /** id → code 的映射，用于将 indicatorId 翻成 code 来查 values */
+  idToCode?: Map<number, string>;
 }
 
 // 规则配置中的公式项
@@ -63,9 +65,17 @@ export interface RuleAction {
   operator: string;
   compareType?: 'indicator' | 'fixed';
   compareValue?: number;
+  // 当前指标（后端配置用 indicatorCode 字符串）
+  indicatorCode?: string;
+  indicatorId?: number;
+  indicatorName?: string;
+  // 被比较指标（后端配置用 compareIndicatorCode 字符串）
+  compareIndicatorCode?: string;
   compareIndicatorId?: number;
   compareIndicatorName?: string;
   formula?: FormulaItem[];
+  /** 被比较侧的公式（用于 logicRule 字符串解析） */
+  compareFormula?: FormulaItem[];
 }
 
 // 单条规则配置
@@ -137,80 +147,94 @@ export function validate(
 function validateRule(
   rule: JointRule,
   values: IndicatorValuesMap,
-  options: ValidatorOptions
+  options?: ValidatorOptions
 ): ValidationResult {
   try {
+    const idToCode = options?.idToCode;
     const config: RuleConfig = JSON.parse(rule.ruleConfig);
     const ruleItems = config.rules || [];
 
     for (const ruleItem of ruleItems) {
       const action = ruleItem.action || {};
 
-      // 如果指定了变化的指标ID，且当前规则的公式不涉及该指标，则跳过（优化）
-      if (options.changedIndicatorId && action.formula) {
-        const involvesChangedIndicator = action.formula.some(
-          (f) => f.indicatorId === options.changedIndicatorId
-        );
-        // 如果是被比较的指标变化，也需要验证
-        const involvesCompareIndicator =
-          action.compareIndicatorId === options.changedIndicatorId;
-
-        if (!involvesChangedIndicator && !involvesCompareIndicator) {
-          continue;
-        }
+      // 获取当前指标的值（保持 undefined/NaN 不被吞掉，交给 compareValues 判断）
+      let currentValue: any;
+      if (action.formula && action.formula.length > 0) {
+        currentValue = calculateFormula(action.formula, values, idToCode);
+      } else if (action.indicatorCode !== undefined) {
+        const v = values[action.indicatorCode];
+        currentValue = v === undefined || v === null ? undefined : Number(v);
+      } else if (action.indicatorId !== undefined) {
+        const code = idToCode ? idToCode.get(action.indicatorId) : undefined;
+        const v = code !== undefined ? values[code] : values[action.indicatorId];
+        currentValue = v === undefined || v === null ? undefined : Number(v);
+      } else {
+        currentValue = undefined;
       }
 
-      // 获取当前指标的值（可能是公式计算结果）
-      const currentValue = calculateFormula(action.formula || [], values);
-
       // 获取被比较指标的值
-      let compareValue: number;
+      let compareValue: any;
       if (action.compareType === 'fixed') {
-        // 固定值比较
-        compareValue = Number(action.compareValue) || 0;
+        compareValue = Number(action.compareValue);
+      } else if (action.compareFormula && action.compareFormula.length > 0) {
+        compareValue = calculateFormula(action.compareFormula, values, idToCode);
+      } else if (action.compareIndicatorCode !== undefined) {
+        const v = values[action.compareIndicatorCode];
+        compareValue = v === undefined || v === null ? undefined : Number(v);
+      } else if (action.compareIndicatorId !== undefined) {
+        const code = idToCode ? idToCode.get(action.compareIndicatorId) : undefined;
+        const v = code !== undefined ? values[code] : values[action.compareIndicatorId];
+        compareValue = v === undefined || v === null ? undefined : Number(v);
       } else {
-        // 指标值比较
-        compareValue = Number(values[action.compareIndicatorId]) || 0;
+        compareValue = undefined;
       }
 
       // 执行比较
       const operator = action.operator;
       if (!compareValues(currentValue, operator, compareValue)) {
-        // 收集所有涉及的指标ID
-        const involvedIndicatorIds: number[] = [];
-        const involvedIndicatorCodes: string[] = [];
-        
-        // 添加公式中的所有指标
-        (action.formula || []).forEach((f) => {
-          if (f.indicatorId) {
-            involvedIndicatorIds.push(f.indicatorId);
-            if (f.indicatorCode) involvedIndicatorCodes.push(f.indicatorCode);
+        // 从 formula / compareFormula 提取所有涉及的指标代码和 ID
+        const formulaCodes: string[] = [];
+        const formulaIds: number[] = [];
+        if (action.formula) {
+          for (const item of action.formula) {
+            if (item.indicatorCode) formulaCodes.push(item.indicatorCode);
+            if (item.indicatorId !== undefined) formulaIds.push(item.indicatorId);
           }
-        });
-        // 添加被比较的指标
-        if (action.compareIndicatorId) {
-          involvedIndicatorIds.push(action.compareIndicatorId);
-          if (action.compareIndicatorName) involvedIndicatorCodes.push(action.compareIndicatorName);
         }
+        if (action.compareFormula) {
+          for (const item of action.compareFormula) {
+            if (item.indicatorCode) formulaCodes.push(item.indicatorCode);
+            if (item.indicatorId !== undefined) formulaIds.push(item.indicatorId);
+          }
+        }
+        const involvedIndicatorCodes = [
+          action.indicatorCode,
+          action.compareIndicatorCode,
+          ...formulaCodes,
+        ].filter(Boolean) as string[];
+        const involvedIndicatorIds = [
+          action.indicatorId,
+          action.compareIndicatorId,
+          ...formulaIds,
+        ].filter((v): v is number => v !== undefined);
 
         return {
           valid: false,
           ruleId: rule.id,
-          ruleName: rule.ruleName,
+          ruleName: rule.ruleName ?? '',
           message: action.message || '验证失败',
-          indicatorId: action.formula?.[0]?.indicatorId,
-          indicatorCode: action.formula?.[0]?.indicatorCode,
+          indicatorId: action.indicatorId ?? undefined,
+          indicatorCode: action.indicatorCode ?? action.compareIndicatorCode ?? undefined,
           involvedIndicatorIds,
           involvedIndicatorCodes,
         };
       }
     }
 
-    return { valid: true, ruleId: rule.id, ruleName: rule.ruleName, message: '' };
+    return { valid: true, ruleId: rule.id, ruleName: rule.ruleName ?? '', message: '' };
   } catch (e) {
     console.error('规则解析错误:', e);
-    // 解析错误时不阻断流程
-    return { valid: true, ruleId: rule.id, ruleName: rule.ruleName, message: '' };
+    return { valid: true, ruleId: rule.id, ruleName: rule.ruleName ?? '', message: '' };
   }
 }
 
@@ -218,11 +242,13 @@ function validateRule(
  * 计算公式（支持加、减、乘、除）
  * @param formula 公式项数组
  * @param values 指标值Map
+ * @param idToCode id → code 映射
  * @returns 计算结果
  */
 export function calculateFormula(
   formula: FormulaItem[],
-  values: IndicatorValuesMap
+  values: IndicatorValuesMap,
+  idToCode?: Map<number, string>
 ): number {
   if (!formula || formula.length === 0) {
     return 0;
@@ -231,14 +257,19 @@ export function calculateFormula(
   let result: number | undefined;
 
   for (let i = 0; i < formula.length; i++) {
-    const item = formula[i];
+    const item = formula[i]!;
 
-    // 获取当前项的值
-    let itemValue: number;
+    // 获取当前项的值（同时支持 indicatorId 数字和 indicatorCode 字符串两种 key）
+    let itemValue: any;
     if (item.valueType === 'fixed') {
-      itemValue = Number(item.value) || 0;
+      itemValue = Number(item.value);
     } else {
-      itemValue = Number(values[item.indicatorId!]) || 0;
+      // 优先用 code 字符串查，再用 id 数字翻成 code 查
+      const code = item.indicatorCode !== undefined
+        ? item.indicatorCode
+        : (item.indicatorId !== undefined && idToCode ? idToCode.get(item.indicatorId) : undefined);
+      const v = code !== undefined ? values[code] : undefined;
+      itemValue = v === undefined || v === null ? undefined : Number(v);
     }
 
     // 第一个数直接赋值，后续根据操作符计算
@@ -248,16 +279,16 @@ export function calculateFormula(
       const mathOp = item.mathOp || '+';
       switch (mathOp) {
         case '+':
-          result = (result || 0) + itemValue;
+          result = (result ?? 0) + (itemValue ?? 0);
           break;
         case '-':
-          result = (result || 0) - itemValue;
+          result = (result ?? 0) - (itemValue ?? 0);
           break;
         case '*':
-          result = (result || 0) * itemValue;
+          result = (result ?? 0) * (itemValue ?? 0);
           break;
         case '/':
-          result = itemValue !== 0 ? (result || 0) / itemValue : 0;
+          result = itemValue !== 0 ? (result ?? 0) / itemValue : 0;
           break;
       }
     }
@@ -268,14 +299,21 @@ export function calculateFormula(
 
 /**
  * 比较两个值
+ * - 两边都有值：正常比较
+ * - 两边都空：返回 true（不阻断，等待填）
+ * - 左有右空：>=  >  <  <= 返回 false（填了左就不许右为空）
+ * - 左空右有：返回 true（右没填不阻断左）
  */
 function compareValues(current: number, operator: string, target: number): boolean {
-  // 处理空值情况
-  if (current === undefined || current === null || isNaN(current)) {
-    return true; // 空值不阻断，等待用户填写
-  }
-  if (target === undefined || target === null || isNaN(target)) {
-    return true; // 被比较值为空，不阻断
+  // 左操作数有具体值、右操作数缺失：>= > < <= 必须同时有值才让过
+  if (
+    current !== undefined && current !== null && !isNaN(current) &&
+    (target === undefined || target === null || isNaN(target))
+  ) {
+    if (['>=', '>', '<', '<='].includes(operator)) {
+      return false; // 填了左就不许右为空
+    }
+    return true; // == != 左空右空 两种情况都不阻断
   }
 
   switch (operator) {
@@ -304,6 +342,73 @@ export function validateSingleRule(
   values: IndicatorValuesMap
 ): ValidationResult {
   return validateRule(rule, values, {});
+}
+
+/** 解析逻辑校验字符串，返回 engine 认识的 JointRule 格式 */
+export function parseLogicRule(logicRule: string): JointRule[] {
+  if (!logicRule || !logicRule.trim()) return [];
+
+  const results: JointRule[] = [];
+  const parts = logicRule.split(/\n|；|;/).filter(Boolean);
+
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i]!.trim();
+    const opMatch = part.match(/^(.+?)(>=|<=|>|<|==|!=)(.+)$/);
+    if (!opMatch) continue;
+
+    const left = opMatch[1]!.trim();
+    const operator = opMatch[2]!;
+    const right = opMatch[3]!.trim();
+
+    const leftFormula = parseFormulaSide(left);
+    const rightFormula = parseFormulaSide(right);
+
+    // 构造 engine action：当前指标=左公式，右值=右公式
+    const action: any = {
+      type: 'formula',
+      operator,
+      formula: leftFormula,
+      compareType: 'indicator',
+      compareFormula: rightFormula,
+    };
+
+    results.push({
+      id: i + 1,
+      ruleConfig: JSON.stringify({
+        rules: [{ id: i + 1, action, name: part }],
+      }),
+    });
+  }
+
+  return results;
+}
+
+/** 解析公式一侧（如 '201' 或 '80201+80202'），返回 FormulaItem[] */
+function parseFormulaSide(side: string): FormulaItem[] {
+  // 去掉首尾括号和空格
+  const cleaned = side.replace(/^\[|\]$/g, '').trim();
+  if (!cleaned) return [];
+
+  // 按 + 和 - 分割（保留分隔符以便区分正负）
+  // 简单处理：只支持 + 和 -，乘除在后续扩展
+  const tokens = cleaned.split(/(?=\+|-)(?![+-])/);
+  const items: FormulaItem[] = [];
+
+  for (const token of tokens) {
+    const trimmed = token.trim();
+    if (!trimmed) continue;
+    if (/^[+-]?\d+(\.\d+)?$/.test(trimmed)) {
+      items.push({ valueType: 'fixed', value: Number(trimmed.replace(/^\+/, '')), mathOp: trimmed.startsWith('-') ? '-' : '+' });
+    } else {
+      items.push({
+        valueType: 'indicator',
+        indicatorCode: trimmed.replace(/^\+|^-|^\[|\]$/g, ''),
+        mathOp: trimmed.startsWith('-') ? '-' : '+',
+      });
+    }
+  }
+
+  return items;
 }
 
 export default {

@@ -23,7 +23,7 @@
       </div>
     </div>
 
-    <a-spin :spinning="loading">
+    <Spin :spinning="loading">
       <!-- 基础信息对比区（只展示，无差异高亮） -->
       <div class="mb-6">
         <div class="text-sm font-medium text-gray-500 mb-3 flex items-center gap-2">
@@ -103,12 +103,14 @@
           </template>
         </a-table>
       </div>
-    </a-spin>
+    </Spin>
   </a-modal>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, reactive } from 'vue';
+import { message } from 'ant-design-vue';
+import { Spin } from 'ant-design-vue';
 import { getCompareData, type CompareDataResponse, type CompareIndicatorRow } from '#/api/declare/progress-report';
 import { IconifyIcon } from '@vben/icons';
 

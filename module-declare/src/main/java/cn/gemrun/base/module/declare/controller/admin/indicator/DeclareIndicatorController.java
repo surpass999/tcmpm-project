@@ -109,11 +109,13 @@ public class DeclareIndicatorController {
     }
 
     /**
-     * 根据业务类型获取指标列表
+     * 根据业务类型获取指标列表（可选按项目类型过滤）
      */
     @GetMapping("/list-by-business-type")
-    public CommonResult<List<DeclareIndicatorRespVO>> getIndicatorsByBusinessType(@RequestParam("businessType") String businessType) {
-        List<DeclareIndicatorDO> list = indicatorService.getIndicatorsByBusinessType(businessType);
+    public CommonResult<List<DeclareIndicatorRespVO>> getIndicatorsByBusinessType(
+            @RequestParam("businessType") String businessType,
+            @RequestParam(value = "projectType", required = false) Integer projectType) {
+        List<DeclareIndicatorDO> list = indicatorService.getIndicatorsByBusinessType(projectType, businessType);
         List<DeclareIndicatorRespVO> voList = BeanUtils.toBean(list, DeclareIndicatorRespVO.class);
         // 填充口径数据
         fillCaliberData(voList);
