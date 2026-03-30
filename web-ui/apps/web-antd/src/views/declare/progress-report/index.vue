@@ -96,7 +96,6 @@ async function handleRefresh() {
 
 /** 对比按钮禁用状态：必须恰好选中2条且项目类型一致 */
 const compareDisabled = computed(() => {
-  console.log('[compareDisabled]', selectedRows.value.length, selectedRows.value);
   if (selectedRows.value.length !== 2) return true;
   const types = new Set(selectedRows.value.map((r) => r.projectType));
   return types.size > 1;

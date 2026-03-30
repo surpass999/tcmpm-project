@@ -872,6 +872,27 @@ function isConditionalContainer(valueOptions: string): boolean {
   return fields.some(f => f.showCondition != null);
 }
 
+/** 将动态容器条目中的日期/日期区间字段转换为 dayjs 对象（供 ADatePicker / ARangePicker 使用） */
+function convertContainerEntryDates(
+  valueOptions: string,
+  item: Record<string, any>,
+): Record<string, any> {
+  const fields = parseDynamicFields(valueOptions);
+  const result: Record<string, any> = { ...item };
+  for (const field of fields) {
+    if (field.fieldType === 'date' && item[field.fieldCode]) {
+      const d = dayjs(item[field.fieldCode]);
+      if (d.isValid()) result[field.fieldCode] = d;
+    } else if (field.fieldType === 'dateRange') {
+      const [start, end] = Array.isArray(item[field.fieldCode]) ? item[field.fieldCode] : [null, null];
+      const ds = start ? dayjs(start) : null;
+      const de = end ? dayjs(end) : null;
+      result[field.fieldCode] = [ds, de];
+    }
+  }
+  return result;
+}
+
 /** 判断同条目中某字段是否可见 */
 function isFieldVisible(entry: any, field: DynamicField, allFields: DynamicField[]): boolean {
   if (!field.showCondition) return true;
@@ -1408,16 +1429,15 @@ function extractValue(record: any, valueType: number): any {
       if (record.valueStr === 'false') return false;
       return undefined;
     case 4:
-      return record.valueDate || undefined;
+      return record.valueDate ? dayjs(record.valueDate) : undefined;
     case 5:
       return record.valueText || undefined;
     case 7:
       return record.valueStr ? record.valueStr.split(',') : undefined;
     case 8: {
-      if (record.valueDateStart || record.valueDateEnd) {
-        return [record.valueDateStart || null, record.valueDateEnd || null];
-      }
-      return undefined;
+      const start = record.valueDateStart ? dayjs(record.valueDateStart) : null;
+      const end = record.valueDateEnd ? dayjs(record.valueDateEnd) : null;
+      return start || end ? [start, end] : undefined;
     }
     case 9:
       return record.valueStr || undefined;
@@ -1544,11 +1564,13 @@ onMounted(async () => {
           if (Array.isArray(raw)) {
             containerValues[record.indicatorCode] = raw.map((item: any) => ({
               rowKey: item.rowKey || generateRowKey(),
-              ...item,
+              ...convertContainerEntryDates(ind!.valueOptions, item),
             }));
           } else if (raw && typeof raw === 'object') {
             // 旧格式兼容：单个对象转为一行
-            containerValues[record.indicatorCode] = [{ ...raw, rowKey: generateRowKey() }];
+            containerValues[record.indicatorCode] = [
+              { rowKey: generateRowKey(), ...convertContainerEntryDates(ind!.valueOptions, raw) },
+            ];
           } else {
             containerValues[record.indicatorCode] = [{ rowKey: generateRowKey() }];
           }
@@ -1626,14 +1648,14 @@ watch(() => props.projectType, async (newProjectType) => {
     indicators.value = indicatorData;
 
     // 3. 加载已有填报值（编辑时）
-    formValues.value = {};
+    Object.keys(formValues).forEach(key => delete formValues[key]);
     if (props.reportId) {
       const savedValues = await getProgressReportIndicatorValues(props.reportId);
       for (const record of savedValues) {
         const ind = indicatorData.find((i) => i.id === record.indicatorId);
         const vt = record.valueType ?? ind?.valueType ?? 1;
         const value = extractValue(record, vt);
-        formValues.value[record.indicatorCode!] = value;
+        formValues[record.indicatorCode!] = value;
 
         if (vt === 9 && value && record.indicatorCode) {
           fileListMap[record.indicatorCode] = parseStoredFileList(value);
@@ -1643,10 +1665,12 @@ watch(() => props.projectType, async (newProjectType) => {
           if (Array.isArray(raw)) {
             containerValues[record.indicatorCode] = raw.map((item: any) => ({
               rowKey: item.rowKey || generateRowKey(),
-              ...item,
+              ...convertContainerEntryDates(ind!.valueOptions, item),
             }));
           } else if (raw && typeof raw === 'object') {
-            containerValues[record.indicatorCode] = [{ ...raw, rowKey: generateRowKey() }];
+            containerValues[record.indicatorCode] = [
+              { rowKey: generateRowKey(), ...convertContainerEntryDates(ind!.valueOptions, raw) },
+            ];
           } else {
             containerValues[record.indicatorCode] = [{ rowKey: generateRowKey() }];
           }
@@ -1662,7 +1686,6 @@ watch(() => props.projectType, async (newProjectType) => {
     }
 
     // 4. 加载上期参考值
-    lastPeriodValues.value = {};
     if (props.hospitalId && props.reportYear !== undefined && props.reportBatch !== undefined) {
       const lastValues = await getLastPeriodValues(props.hospitalId, props.reportYear, props.reportBatch);
       lastPeriodValues.value = lastValues || {};
