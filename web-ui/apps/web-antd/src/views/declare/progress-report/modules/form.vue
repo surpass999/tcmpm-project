@@ -60,7 +60,7 @@ const isEditMode = computed(() => !!formData.value.id);
 /** 是否只读（状态不允许编辑） */
 const isReadonly = computed(() => {
   const status = formData.value.reportStatus;
-  return status !== 'DRAFT' && status !== 'SAVED';
+  return status !== 'DRAFT' && status !== 'SAVED' && status?.endsWith('RETURNED');
 });
 
 /** 项目类型展示文案（始终有兜底，永不空字符串） */
