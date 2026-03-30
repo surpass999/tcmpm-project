@@ -321,7 +321,7 @@ const getConditionValuePlaceholder = (field: DynamicField): string => {
     case 'number':
       return '输入数字，如 100';
     case 'boolean':
-      return '输入 true 或 false';
+      return '输入 1（开启）或 0（关闭）';
     default:
       return '输入比较值';
   }
@@ -786,7 +786,7 @@ watch(
               <div class="flex items-center gap-2 flex-wrap">
                 <span class="text-gray-400 text-xs">当</span>
                 <a-select
-                  v-model="field.showCondition.watchField"
+                  v-model:value="field.showCondition.watchField"
                   placeholder="请选择被监听的字段"
                   class="w-40"
                   allow-clear
@@ -802,7 +802,7 @@ watch(
                 <span class="text-red-400 text-xs" v-if="isWatchFieldAfterCurrent(field)">
                   ⚠ 被监听字段应在当前字段之前
                 </span>
-                <a-select v-model="field.showCondition.operator" class="w-24" placeholder="选择条件">
+                <a-select v-model:value="field.showCondition.operator" class="w-24" placeholder="选择条件">
                   <a-select-option value="eq">等于</a-select-option>
                   <a-select-option value="neq">不等于</a-select-option>
                   <a-select-option value="notEmpty">有值</a-select-option>
@@ -815,7 +815,7 @@ watch(
                 </a-select>
                 <a-input
                   v-if="!['notEmpty','isEmpty'].includes(field.showCondition.operator)"
-                  v-model="field.showCondition.value"
+                  v-model:value="field.showCondition.value"
                   :placeholder="getConditionValuePlaceholder(field)"
                   class="flex-1"
                 />

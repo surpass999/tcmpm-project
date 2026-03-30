@@ -309,14 +309,27 @@ function isConditionalContainer(valueOptions: string): boolean {
   return fields.some(f => f.showCondition != null);
 }
 
-/** 判断同条目中某字段是否可见 */
-function isFieldVisible(entry: any, field: DynamicField): boolean {
+/** 判断同条目中某字段是否可见（与 IndicatorInputTable 一致） */
+function isFieldVisible(entry: any, field: DynamicField, allFields: DynamicField[]): boolean {
   if (!field.showCondition) return true;
-  const watchVal = entry?.[field.showCondition.watchField];
-  const { operator, value } = field.showCondition;
+  const cond = field.showCondition;
+  const watchVal = entry?.[cond.watchField];
+  const { operator, value } = cond;
+  const watchedField = allFields.find(f => f.fieldCode === cond.watchField);
+  const isBooleanWatch = watchedField?.fieldType === 'boolean';
   switch (operator) {
-    case 'eq':       return watchVal === value;
-    case 'neq':      return watchVal !== value;
+    case 'eq':
+      if (isBooleanWatch) {
+        const boolVal = value === 'true' || value === '1' || value === true;
+        return watchVal === boolVal;
+      }
+      return watchVal === value;
+    case 'neq':
+      if (isBooleanWatch) {
+        const boolVal = value === 'true' || value === '1' || value === true;
+        return watchVal !== boolVal;
+      }
+      return watchVal !== value;
     case 'gt':       return Number(watchVal) > Number(value);
     case 'gte':      return Number(watchVal) >= Number(value);
     case 'lt':       return Number(watchVal) < Number(value);
@@ -335,7 +348,7 @@ function renderContainerEntry(entry: any, fields: DynamicField[], showIndex: boo
     parts.push(`【条目${entryIndex + 1}】`);
   }
   for (const field of fields) {
-    if (!isFieldVisible(entry, field)) continue;
+    if (!isFieldVisible(entry, field, fields)) continue;
     const val = entry?.[field.fieldCode];
     let displayVal: string;
     if (val === undefined || val === null || val === '') {

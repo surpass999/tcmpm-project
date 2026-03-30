@@ -873,13 +873,26 @@ function isConditionalContainer(valueOptions: string): boolean {
 }
 
 /** 判断同条目中某字段是否可见 */
-function isFieldVisible(entry: any, field: DynamicField): boolean {
+function isFieldVisible(entry: any, field: DynamicField, allFields: DynamicField[]): boolean {
   if (!field.showCondition) return true;
-  const watchVal = entry?.[field.showCondition.watchField];
-  const { operator, value } = field.showCondition;
+  const cond = field.showCondition;
+  const watchVal = entry?.[cond.watchField];
+  const { operator, value } = cond;
+  const watchedField = allFields.find(f => f.fieldCode === cond.watchField);
+  const isBooleanWatch = watchedField?.fieldType === 'boolean';
   switch (operator) {
-    case 'eq':       return watchVal === value;
-    case 'neq':      return watchVal !== value;
+    case 'eq':
+      if (isBooleanWatch) {
+        const boolVal = value === 'true' || value === '1' || value === true;
+        return watchVal === boolVal;
+      }
+      return watchVal === value;
+    case 'neq':
+      if (isBooleanWatch) {
+        const boolVal = value === 'true' || value === '1' || value === true;
+        return watchVal !== boolVal;
+      }
+      return watchVal !== value;
     case 'gt':       return Number(watchVal) > Number(value);
     case 'gte':      return Number(watchVal) >= Number(value);
     case 'lt':       return Number(watchVal) < Number(value);
@@ -894,7 +907,7 @@ function isFieldVisible(entry: any, field: DynamicField): boolean {
 /** 获取某条目中可见的字段列表（用于条件容器和动态容器两分支） */
 function getVisibleFields(valueOptions: string, entry: any): DynamicField[] {
   const fields = parseDynamicFields(valueOptions);
-  return fields.filter(f => isFieldVisible(entry, f));
+  return fields.filter(f => isFieldVisible(entry, f, fields));
 }
 
 /** 获取数字精度 */
@@ -1759,7 +1772,7 @@ function validateAll(indicatorsToValidate: DeclareIndicatorApi.Indicator[]): Arr
       for (let i = 0; i < containerValues[code].length; i++) {
         const entry = containerValues[code][i];
         for (const field of fields) {
-          if (field.required && isFieldVisible(entry, field) && !entry[field.fieldCode]) {
+          if (field.required && isFieldVisible(entry, field, fields) && !entry[field.fieldCode]) {
             errors.push({
               indicatorId: indicator.id!,
               indicatorCode: indicator.indicatorCode,

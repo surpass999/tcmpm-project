@@ -492,14 +492,27 @@ function isConditionalContainer(valueOptions: string): boolean {
   return fields.some(f => f.showCondition != null);
 }
 
-/** 判断同条目中某字段是否可见 */
-function isFieldVisible(entry: any, field: DynamicField): boolean {
+/** 判断同条目中某字段是否可见（与 IndicatorInputTable 一致：按被监听字段类型做布尔与字符串比较） */
+function isFieldVisible(entry: any, field: DynamicField, allFields: DynamicField[]): boolean {
   if (!field.showCondition) return true;
-  const watchVal = entry?.[field.showCondition.watchField];
-  const { operator, value } = field.showCondition;
+  const cond = field.showCondition;
+  const watchVal = entry?.[cond.watchField];
+  const { operator, value } = cond;
+  const watchedField = allFields.find(f => f.fieldCode === cond.watchField);
+  const isBooleanWatch = watchedField?.fieldType === 'boolean';
   switch (operator) {
-    case 'eq':       return watchVal === value;
-    case 'neq':      return watchVal !== value;
+    case 'eq':
+      if (isBooleanWatch) {
+        const boolVal = value === 'true' || value === '1' || value === true;
+        return watchVal === boolVal;
+      }
+      return watchVal === value;
+    case 'neq':
+      if (isBooleanWatch) {
+        const boolVal = value === 'true' || value === '1' || value === true;
+        return watchVal !== boolVal;
+      }
+      return watchVal !== value;
     case 'gt':       return Number(watchVal) > Number(value);
     case 'gte':      return Number(watchVal) >= Number(value);
     case 'lt':       return Number(watchVal) < Number(value);
@@ -703,7 +716,7 @@ defineExpose({
                             </template>
                             <div class="entry-fields-display">
                               <template v-for="field in containerFieldDefsMap[getIndicatorId(indicator.id)] || []" :key="field.fieldCode">
-                                <div v-if="isFieldVisible(entry, field)" class="entry-field-display">
+                                <div v-if="isFieldVisible(entry, field, containerFieldDefsMap[getIndicatorId(indicator.id)] || [])" class="entry-field-display">
                                   <span class="field-label">{{ field.fieldLabel }}:</span>
                                   <span v-if="field.fieldType === 'text' || field.fieldType === 'textarea'" class="field-value">
                                     {{ entry[field.fieldCode] || '-' }}
@@ -804,7 +817,7 @@ defineExpose({
                             </template>
                             <div class="entry-fields-display">
                               <template v-for="field in containerFieldDefsMap[getIndicatorId(indicator.id)] || []" :key="field.fieldCode">
-                                <div v-if="isFieldVisible(entry, field)" class="entry-field-display">
+                                <div v-if="isFieldVisible(entry, field, containerFieldDefsMap[getIndicatorId(indicator.id)] || [])" class="entry-field-display">
                                   <span class="field-label">{{ field.fieldLabel }}:</span>
                                   <span v-if="field.fieldType === 'text' || field.fieldType === 'textarea'" class="field-value">
                                     {{ entry[field.fieldCode] || '-' }}

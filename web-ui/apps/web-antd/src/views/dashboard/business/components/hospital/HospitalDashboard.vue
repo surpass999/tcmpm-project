@@ -45,7 +45,10 @@ onMounted(async () => {
 
 /** 打开填报弹窗 */
 function openFormModal() {
-  formModalApi.setData({ hospitalId: hospitalId.value }).open();
+  formModalApi.setData({ 
+    hospitalId: hospitalId.value,
+    
+   }).open();
 }
 
 /** 填报弹窗提交成功后刷新状态 */
