@@ -52,6 +52,21 @@ public class DeclareCompareIndicatorRowVO {
     private Long groupId;
 
     /**
+     * 一级分组排序号
+     */
+    private Integer parentGroupSort;
+
+    /**
+     * 二级分组排序号
+     */
+    private Integer groupSort;
+
+    /**
+     * 指标排序号
+     */
+    private Integer indicatorSort;
+
+    /**
      * 二级分组名称
      */
     private String groupName;

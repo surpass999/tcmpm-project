@@ -59,8 +59,8 @@
         </div>
         <a-table
           :columns="indicatorColumns"
-          :data-source="groupedIndicators"
-          :pagination="{ pageSize: 20 }"
+          :data-source="paginatedIndicators"
+          :pagination="indicatorPagination"
           bordered
           size="small"
           :scroll="{ y: 500 }"
@@ -75,7 +75,7 @@
             <!-- 二级分组标题行 -->
             <template v-else-if="record._isGroup && record._isLevel2">
               <template v-if="column.key === 'indicatorName'">
-                <span class="text-sm font-medium text-gray-600 border-b border-dashed border-gray-300 pb-0.5 ml-4">{{ record._groupName }}</span>
+                <span class="text-sm font-medium text-blue-700 border-b border-blue-300 pb-0.5 ml-4">{{ record._groupName }}</span>
               </template>
             </template>
             <!-- 指标数据行 -->
@@ -111,6 +111,8 @@
 import { ref, computed, reactive } from 'vue';
 import { message } from 'ant-design-vue';
 import { Spin } from 'ant-design-vue';
+import { DICT_TYPE } from '@vben/constants';
+import { getDictOptions } from '@vben/hooks';
 import { getCompareData, type CompareDataResponse, type CompareIndicatorRow } from '#/api/declare/progress-report';
 import { IconifyIcon } from '@vben/icons';
 
@@ -118,9 +120,21 @@ const visible = ref(false);
 const loading = ref(false);
 const data = reactive<CompareDataResponse>({ reportA: null as any, reportB: null as any, indicators: [] });
 
+// 指标对比表格分页：按一级分组整组翻页，避免分组标题和内容被切断
+const indicatorPage = reactive({ current: 1, pageSize: 20 });
+
+/** 通过字典获取填报状态中文名称 */
+function getReportStatusName(status: string | number | null | undefined): string {
+  if (!status) return '-';
+  const options = getDictOptions(DICT_TYPE.DECLARE_PROJECT_STATUS);
+  const found = options.find((item) => String(item.value) === String(status));
+  return found?.label || String(status);
+}
+
 async function open(reportIdA: number, reportIdB: number) {
   visible.value = true;
   loading.value = true;
+  indicatorPage.current = 1;
   data.indicators = [];
   data.reportA = null as any;
   data.reportB = null as any;
@@ -159,7 +173,7 @@ const infoRows = computed(() => [
   { label: '项目类型', valueA: data.reportA?.projectTypeName, valueB: data.reportB?.projectTypeName },
   { label: '填报年度', valueA: `${data.reportA?.reportYear}年`, valueB: `${data.reportB?.reportYear}年` },
   { label: '填报批次', valueA: `第${data.reportA?.reportBatch}批`, valueB: `第${data.reportB?.reportBatch}批` },
-  { label: '填报状态', valueA: data.reportA?.reportStatusName, valueB: data.reportB?.reportStatusName },
+  { label: '填报状态', valueA: getReportStatusName(data.reportA?.reportStatus), valueB: getReportStatusName(data.reportB?.reportStatus) },
   { label: '省级审核状态', valueA: data.reportA?.provinceStatusName, valueB: data.reportB?.provinceStatusName },
   { label: '国家上报状态', valueA: data.reportA?.nationalReportStatusName, valueB: data.reportB?.nationalReportStatusName },
 ]);
@@ -182,43 +196,75 @@ const groupedIndicators = computed(() => {
   let currentLevel2 = '';
 
   for (const row of data.indicators) {
-    // 如果遇到新的一级分组，插入分类标题行
-    if (row.parentGroupName && row.parentGroupName !== currentLevel1) {
-      currentLevel1 = row.parentGroupName;
+    // groupName 是一级标题（parentGroupName 不存在时）或二级标题（parentGroupName 存在时）
+    if (row.groupName && row.groupName !== currentLevel1) {
+      // 一级分组变化：groupName 本身作为一级标题
+      currentLevel1 = row.groupName;
       currentLevel2 = '';
       result.push({
         _isGroup: true,
         _isLevel1: true,
         _isLevel2: false,
         _groupName: currentLevel1,
-        _subGroupName: row.groupName,
       });
-      // 如果一级分组变化，二级分组也需要重置并插入
-      if (row.groupName && row.groupName !== currentLevel2) {
-        currentLevel2 = row.groupName;
+      // parentGroupName 存在时，作为二级标题追加在同级内
+      if (row.parentGroupName && row.parentGroupName !== currentLevel2) {
+        currentLevel2 = row.parentGroupName;
         result.push({
           _isGroup: true,
           _isLevel1: false,
           _isLevel2: true,
           _groupName: currentLevel2,
-          _subGroupName: row.groupName,
         });
       }
-    } else if (row.groupName && row.groupName !== currentLevel2) {
-      // 新二级分组，插入子标题行
-      currentLevel2 = row.groupName;
+    } else if (row.parentGroupName && row.parentGroupName !== currentLevel2) {
+      // 同组内 parentGroupName 变化，插入二级标题
+      currentLevel2 = row.parentGroupName;
       result.push({
         _isGroup: true,
         _isLevel1: false,
         _isLevel2: true,
         _groupName: currentLevel2,
-        _subGroupName: row.groupName,
       });
     }
     result.push(row);
   }
   return result;
 });
+
+// 将分组后的数据按一级分组切分成多页（每页 = 一个一级分组及其下所有内容）
+const indicatorPageGroups = computed(() => {
+  const groups: any[][] = [];
+  let currentGroup: any[] = [];
+
+  for (const row of groupedIndicators.value) {
+    if (row._isLevel1) {
+      // 新一级分组：先保存旧分组，再开启新分组
+      if (currentGroup.length > 0) {
+        groups.push(currentGroup);
+      }
+      currentGroup = [row];
+    } else {
+      currentGroup.push(row);
+    }
+  }
+  if (currentGroup.length > 0) {
+    groups.push(currentGroup);
+  }
+  return groups;
+});
+
+// 当前页显示的分组内容
+const paginatedIndicators = computed(() => {
+  const start = (indicatorPage.current - 1) * indicatorPage.pageSize;
+  return indicatorPageGroups.value.slice(start, start + indicatorPage.pageSize).flat();
+});
+
+// 分页变化处理
+function onIndicatorPageChange(page: number, size: number) {
+  indicatorPage.current = page;
+  indicatorPage.pageSize = size;
+}
 
 // 值格式化
 function formatValue(val: any, row: any) {

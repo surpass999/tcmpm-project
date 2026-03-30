@@ -627,15 +627,18 @@ public class DeclareProgressReportServiceImpl implements DeclareProgressReportSe
                     .groupId(indicator.getGroupId())
                     .build();
 
-            // 通过 groupId 查找二级分组，再找一级分组名称
+            // 通过 groupId 查找二级分组，再找一级分组名称和排序号
             DeclareIndicatorGroupDO group2 = groupMap.get(indicator.getGroupId());
             if (group2 != null) {
                 row.setGroupName(group2.getGroupName());
+                row.setGroupSort(group2.getSort());
                 DeclareIndicatorGroupDO group1 = groupMap.get(group2.getParentId());
                 if (group1 != null) {
                     row.setParentGroupName(group1.getGroupName());
+                    row.setParentGroupSort(group1.getSort());
                 }
             }
+            row.setIndicatorSort(indicator.getSort());
 
             DeclareIndicatorValueDO valA = valueMapA.get(indicator.getIndicatorCode());
             DeclareIndicatorValueDO valB = valueMapB.get(indicator.getIndicatorCode());
@@ -647,14 +650,15 @@ public class DeclareProgressReportServiceImpl implements DeclareProgressReportSe
             rows.add(row);
         }
 
-        // 7. 按一级分组名称 + 二级分组名称 + 指标代号排序，确保顺序一致
+        // 7. 按一级分组排序号 + 二级分组排序号 + 指标排序号排序，确保顺序与配置一致
+        // 一级分组 parentGroupSort=null，使用 groupSort；二级分组 parentGroupSort=父分组 sort
         rows.sort(java.util.Comparator
-                .comparing(DeclareCompareIndicatorRowVO::getParentGroupName,
-                        java.util.Comparator.nullsLast(String::compareTo))
-                .thenComparing(DeclareCompareIndicatorRowVO::getGroupName,
-                        java.util.Comparator.nullsLast(String::compareTo))
-                .thenComparing(DeclareCompareIndicatorRowVO::getIndicatorCode,
-                        java.util.Comparator.nullsLast(String::compareTo)));
+                // 一级分组排在前（parentGroupSort 为 null 的行）
+                .comparingInt((DeclareCompareIndicatorRowVO r) -> r.getParentGroupSort() == null ? r.getGroupSort() : r.getParentGroupSort())
+                // 二级分组排在对应一级分组之后（同一个一级分组下的二级分组按 sort 排序）
+                .thenComparingInt(DeclareCompareIndicatorRowVO::getGroupSort)
+                // 同组内指标按 sort 排序
+                .thenComparingInt(DeclareCompareIndicatorRowVO::getIndicatorSort));
 
         // 8. 组装返回 VO
         DeclareProgressReportVO voA = convertToVO(reportA);
