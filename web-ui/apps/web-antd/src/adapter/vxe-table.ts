@@ -126,6 +126,23 @@ setupVbenVxeTable({
       },
     });
 
+    // 表格配置项可以用 cellRender: { name: 'CellTagMap', props: { map: [{ label, value, color }] } },
+    // 用于自定义映射渲染，如禁用/启用状态等
+    vxeUI.renderer.add('CellTagMap', {
+      renderTableDefault(renderOpts, params) {
+        const { props } = renderOpts;
+        const { column, row } = params;
+        const cellValue = row[column.field];
+
+        if (!props?.map || !Array.isArray(props.map)) {
+          return h(Tag, { color: props?.color }, () => cellValue);
+        }
+
+        const matched = props.map.find((item) => item.value === cellValue);
+        return h(Tag, { color: matched?.color || props.color }, () => matched?.label ?? cellValue);
+      },
+    });
+
     vxeUI.renderer.add('CellTags', {
       renderTableDefault(renderOpts, params) {
         const { props } = renderOpts;

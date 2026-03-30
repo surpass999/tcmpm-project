@@ -40,8 +40,8 @@ export function useGridFormSchema(): VbenFormSchema[] {
       componentProps: {
         placeholder: '请选择状态',
         options: [
-          { label: '禁用', value: 0 },
-          { label: '启用', value: 1 },
+          { label: '禁用', value: 1 },
+          { label: '启用', value: 0 },
         ],
         allowClear: true,
       },
@@ -87,8 +87,13 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       minWidth: 80,
       align: 'center',
       cellRender: {
-        name: 'CellDict',
-        props: { type: DICT_TYPE.COMMON_STATUS },
+        name: 'CellTagMap',
+        props: {
+          map: [
+            { label: '启用', value: 1, color: 'green' },
+            { label: '禁用', value: 0, color: 'red' },
+          ],
+        },
       },
     },
     {
@@ -171,8 +176,8 @@ export function useFormSchema(): VbenFormSchema[] {
       defaultValue: 1,
       componentProps: {
         options: [
-          { label: '禁用', value: 0 },
           { label: '启用', value: 1 },
+          { label: '禁用', value: 0 },
         ],
       },
     },
