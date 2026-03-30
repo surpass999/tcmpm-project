@@ -140,22 +140,53 @@ public class DeclareIndicatorValueServiceImpl implements DeclareIndicatorValueSe
     }
 
     private String getDisplayValue(DeclareIndicatorValueDO value) {
-        if (value.getValueNum() != null) {
-            return value.getValueNum().toPlainString();
+        if (value == null) {
+            return null;
         }
-        if (value.getValueStr() != null) {
-            return value.getValueStr();
+        switch (value.getValueType()) {
+            case 1: // 数字
+                return value.getValueNum() != null ? value.getValueNum().toPlainString() : null;
+            case 2: // 字符串
+            case 6: // 单选
+            case 9: // 文件上传
+            case 10: // 单选下拉
+                return value.getValueStr();
+            case 3: // 布尔
+                if (value.getValueBool() != null) {
+                    return value.getValueBool() ? "1" : "0";
+                }
+                return null;
+            case 4: // 日期
+                return value.getValueDate() != null
+                    ? value.getValueDate().toLocalDate().toString()
+                    : null;
+            case 5: // 长文本
+                if (value.getValueText() == null) {
+                    return null;
+                }
+                return value.getValueText().length() > 50
+                    ? value.getValueText().substring(0, 50) + "..."
+                    : value.getValueText();
+            case 7: // 多选
+            case 11: // 多选下拉
+                if (value.getValueStr() == null) {
+                    return null;
+                }
+                return value.getValueStr().replace(",", " / ");
+            case 8: // 日期区间
+                if (value.getValueDateStart() == null && value.getValueDateEnd() == null) {
+                    return null;
+                }
+                String start = value.getValueDateStart() != null
+                    ? value.getValueDateStart().toLocalDate().toString() : "";
+                String end = value.getValueDateEnd() != null
+                    ? value.getValueDateEnd().toLocalDate().toString() : "";
+                return start + " ~ " + end;
+            case 12: // 动态容器
+                return value.getValueStr() != null ? "[动态数据]" : null;
+            default:
+                return value.getValueStr();
         }
-        if (value.getValueBool() != null) {
-            return value.getValueBool() ? "1" : "0";
-        }
-        if (value.getValueDate() != null) {
-            return value.getValueDate().toString();
-        }
-        if (value.getValueText() != null) {
-            return value.getValueText();
-        }
-        return null;
     }
 
     @Override
@@ -246,6 +277,67 @@ public class DeclareIndicatorValueServiceImpl implements DeclareIndicatorValueSe
             default:
                 log.warn("未知值类型: {}", valueType);
         }
+    }
+
+    // ==================== 动态容器（type=12）查询统计实现 ====================
+
+    @Override
+    public List<DeclareIndicatorValueDO> selectByContainerField(
+            Integer businessType, Long businessId,
+            String indicatorCode, String fieldCode, String fieldValue) {
+        if (businessType == null || businessId == null) {
+            return new java.util.ArrayList<>();
+        }
+        String jsonFieldValue;
+        if (fieldValue == null) {
+            jsonFieldValue = "null";
+        } else if (fieldValue.matches("-?\\d+(\\.\\d+)?")) {
+            jsonFieldValue = fieldValue;
+        } else {
+            jsonFieldValue = "\"" + fieldValue.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
+        }
+        return indicatorValueMapper.selectByContainerField(
+                businessType, businessId, indicatorCode, fieldCode, jsonFieldValue);
+    }
+
+    @Override
+    public Integer countContainerEntries(Integer businessType, Long businessId, String indicatorCode) {
+        if (businessType == null || businessId == null) {
+            return 0;
+        }
+        return indicatorValueMapper.sumContainerLength(businessType, businessId, indicatorCode);
+    }
+
+    @Override
+    public Map<String, Long> countGroupByContainerField(
+            Integer businessType, Long businessId,
+            String indicatorCode, String fieldCode) {
+        Map<String, Long> result = new HashMap<>();
+        if (businessType == null || businessId == null) {
+            return result;
+        }
+        List<DeclareIndicatorValueDO> records =
+                indicatorValueMapper.selectByIndicatorCodeAndBusiness(businessType, businessId, indicatorCode);
+        com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>> typeRef =
+                new com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>() {};
+
+        for (DeclareIndicatorValueDO record : records) {
+            if (record.getValueStr() == null || record.getValueStr().isEmpty()) {
+                continue;
+            }
+            try {
+                List<Map<String, Object>> items = mapper.readValue(record.getValueStr(), typeRef);
+                for (Map<String, Object> item : items) {
+                    Object fv = item.get(fieldCode);
+                    String key = fv != null ? String.valueOf(fv) : "(空)";
+                    result.merge(key, 1L, Long::sum);
+                }
+            } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+                log.warn("[countGroupByContainerField] JSON解析失败: id={}", record.getId(), e);
+            }
+        }
+        return result;
     }
 
 }

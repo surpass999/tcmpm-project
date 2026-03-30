@@ -23,6 +23,7 @@ export interface DeclareProgressReport {
   nationalReporterName?: string;
   /** 项目类型：1=综合型，2=中医电子病历型，3=智慧中药房型，4=名老中医传承型，5=中医临床科研型，6=中医智慧医共体型 */
   projectType?: number;
+  /** 项目类型名称（来自 declare_project_type.title） */
   projectTypeName?: string;
   /** 统一社会信用代码（从医院表关联获取） */
   unifiedSocialCreditCode?: string;

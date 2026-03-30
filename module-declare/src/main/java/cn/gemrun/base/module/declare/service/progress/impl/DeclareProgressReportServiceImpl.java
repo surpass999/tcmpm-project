@@ -230,9 +230,14 @@ public class DeclareProgressReportServiceImpl implements DeclareProgressReportSe
                     } catch (Exception e) { /* ignore */ }
                 }
                 break;
-            case 12: // 动态容器
-            default:
+            case 12: // 动态容器 - JSON 字符串直接保存
                 valueDO.setValueStr(strValue);
+                break;
+            default:
+                // 未知类型也尝试保存为字符串
+                valueDO.setValueStr(strValue);
+                break;
+            case 0:
                 break;
         }
     }
@@ -522,13 +527,17 @@ public class DeclareProgressReportServiceImpl implements DeclareProgressReportSe
                 .build();
     }
 
+    /**
+     * 从字典获取填报状态的中文展示文本（已废弃，请使用前端枚举渲染）
+     * @deprecated 前端通过 ReportStatusEnum 自行渲染
+     */
+    @Deprecated
     private String getReportStatusName(String status) {
         if (status == null) return "";
         ReportStatusEnum enumValue = ReportStatusEnum.getByStatus(status);
         if (enumValue != null) {
             return enumValue.getName();
         }
-        // BPM返回的状态不在枚举中，直接返回状态值
         return status;
     }
 
@@ -571,23 +580,19 @@ public class DeclareProgressReportServiceImpl implements DeclareProgressReportSe
         // 2. 校验项目类型一致，不一致则抛业务异常
         Integer projectTypeA = null;
         Integer projectTypeB = null;
-        String projectTypeNameA = null;
-        String projectTypeNameB = null;
 
         DeclareHospitalDO hospitalA = hospitalMapper.selectById(reportA.getHospitalId());
         DeclareHospitalDO hospitalB = hospitalMapper.selectById(reportB.getHospitalId());
 
         if (hospitalA != null) {
             projectTypeA = hospitalA.getProjectType();
-            projectTypeNameA = projectTypeService.getProjectTypeTitle(projectTypeA);
         }
         if (hospitalB != null) {
             projectTypeB = hospitalB.getProjectType();
-            projectTypeNameB = projectTypeService.getProjectTypeTitle(projectTypeB);
         }
 
         if (!java.util.Objects.equals(projectTypeA, projectTypeB)) {
-            throw new RuntimeException("所选两条记录项目类型不一致，无法对比。【记录A：" + projectTypeNameA + "，记录B：" + projectTypeNameB + "】");
+            throw new RuntimeException("所选两条记录项目类型不一致，无法对比。【记录A：" + projectTypeA + "，记录B：" + projectTypeB + "】");
         }
 
         // 3. 获取该项目的指标定义列表（按一级分组 + 二级分组 + 指标代号排序）
@@ -666,36 +671,56 @@ public class DeclareProgressReportServiceImpl implements DeclareProgressReportSe
      * 从 IndicatorValueDO 中提取对应类型的值对象
      */
     private Object extractValue(DeclareIndicatorValueDO val, Integer valueType) {
-        if (val == null) return null;
-        if (val.getValueNum() != null && valueType == 1) {
-            return val.getValueNum();
+        if (val == null) {
+            return null;
         }
-        if (val.getValueStr() != null && !val.getValueStr().isEmpty()) {
-            if (valueType == 1) {
-                try {
-                    return new java.math.BigDecimal(val.getValueStr());
-                } catch (NumberFormatException e) {
-                    return val.getValueStr();
+        switch (valueType != null ? valueType : 0) {
+            case 1: // 数字
+                if (val.getValueNum() != null) {
+                    return val.getValueNum();
                 }
-            }
-            return val.getValueStr();
+                if (val.getValueStr() != null && !val.getValueStr().isEmpty()) {
+                    try {
+                        return new java.math.BigDecimal(val.getValueStr());
+                    } catch (NumberFormatException e) {
+                        return val.getValueStr();
+                    }
+                }
+                return null;
+            case 2: // 字符串
+            case 6: // 单选
+            case 9: // 文件上传
+            case 10: // 单选下拉
+                return val.getValueStr() != null && !val.getValueStr().isEmpty() ? val.getValueStr() : null;
+            case 3: // 布尔
+                if (val.getValueBool() != null) {
+                    return val.getValueBool();
+                }
+                if ("true".equals(val.getValueStr())) return true;
+                if ("false".equals(val.getValueStr())) return false;
+                return null;
+            case 4: // 日期
+                return val.getValueDate();
+            case 5: // 长文本
+                return val.getValueText();
+            case 7: // 多选
+            case 11: // 多选下拉
+                return val.getValueStr() != null && !val.getValueStr().isEmpty()
+                    ? val.getValueStr().split(",")
+                    : null;
+            case 8: // 日期区间
+                if (val.getValueDateStart() == null && val.getValueDateEnd() == null) {
+                    return null;
+                }
+                Map<String, Object> range = new HashMap<>();
+                range.put("start", val.getValueDateStart());
+                range.put("end", val.getValueDateEnd());
+                return range;
+            case 12: // 动态容器
+                return val.getValueStr();
+            default:
+                return val.getValueStr();
         }
-        if (val.getValueBool() != null && valueType == 3) {
-            return val.getValueBool();
-        }
-        if (val.getValueDate() != null && valueType == 4) {
-            return val.getValueDate();
-        }
-        if ((val.getValueDateStart() != null || val.getValueDateEnd() != null) && valueType == 8) {
-            Map<String, Object> range = new HashMap<>();
-            range.put("start", val.getValueDateStart());
-            range.put("end", val.getValueDateEnd());
-            return range;
-        }
-        if (val.getValueText() != null && valueType == 5) {
-            return val.getValueText();
-        }
-        return null;
     }
 
     /**
@@ -705,25 +730,31 @@ public class DeclareProgressReportServiceImpl implements DeclareProgressReportSe
         boolean hasA = valA != null && !"".equals(String.valueOf(valA));
         boolean hasB = valB != null && !"".equals(String.valueOf(valB));
         if (!hasA && !hasB) return "none";
-
         if (!hasA || !hasB) return "different";
 
-        // 数字类型: 比较大小
-        if (valueType == 1) {
-            try {
-                double a = Double.parseDouble(String.valueOf(valA));
-                double b = Double.parseDouble(String.valueOf(valB));
-                if (b > a) return "up";
-                if (b < a) return "down";
-                return "equal";
-            } catch (NumberFormatException e) {
-                boolean equal = String.valueOf(valA).equals(String.valueOf(valB));
-                return equal ? "equal" : "different";
+        switch (valueType != null ? valueType : 0) {
+            case 1: // 数字: 比较大小
+                try {
+                    double a = Double.parseDouble(String.valueOf(valA));
+                    double b = Double.parseDouble(String.valueOf(valB));
+                    if (b > a) return "up";
+                    if (b < a) return "down";
+                    return "equal";
+                } catch (NumberFormatException e) {
+                    return String.valueOf(valA).equals(String.valueOf(valB)) ? "equal" : "different";
+                }
+            case 8: { // 日期区间: 比较开始日期
+                Map<String, Object> rangeA = (Map<String, Object>) valA;
+                Map<String, Object> rangeB = (Map<String, Object>) valB;
+                Object startA = rangeA != null ? rangeA.get("start") : null;
+                Object startB = rangeB != null ? rangeB.get("start") : null;
+                if (startA == null && startB == null) return "equal";
+                if (startA == null || startB == null) return "different";
+                return startA.toString().compareTo(startB.toString()) == 0 ? "equal" : "different";
             }
+            case 12: // 动态容器: JSON 字符串整体比较
+            default: // 其他类型: 比较字符串相等
+                return String.valueOf(valA).equals(String.valueOf(valB)) ? "equal" : "different";
         }
-
-        // 其他类型: 比较字符串相等
-        boolean equal = String.valueOf(valA).equals(String.valueOf(valB));
-        return equal ? "equal" : "different";
     }
 }

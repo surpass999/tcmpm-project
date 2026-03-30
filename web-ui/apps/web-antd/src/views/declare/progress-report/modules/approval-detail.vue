@@ -87,6 +87,11 @@ const indicatorGroups = ref<IndicatorGroup[]>([]);
 // 指标值 (indicatorId -> value)
 const indicatorValuesMap = ref<Record<number, any>>({});
 
+// 容器条目解析 Map（indicatorId -> entries[]，type=12 专用）
+const containerParsedMap = ref<Record<number, any[]>>({});
+// 容器字段定义 Map（indicatorId -> DynamicField[]，type=12 专用）
+const containerFieldDefsMap = ref<Record<number, any[]>>({});
+
 // 流程信息（来自 getProcessByBusiness）
 const processInfo = ref<{
   processInstanceId: string;
@@ -270,8 +275,31 @@ async function loadAllData() {
     // 4. 加载指标值
     const values = await getProgressReportIndicatorValues(payload.value!.reportId, BUSINESS_TYPE_NUMBER);
     const valuesMap: Record<number, any> = {};
+    // 先收集所有指标定义（供 type=12 解析字段定义用）
+    const indicatorById = new Map<number, any>();
+    for (const ind of indicators) {
+      if (ind.id) indicatorById.set(ind.id, ind);
+    }
+    containerParsedMap.value = {};
+    containerFieldDefsMap.value = {};
     for (const v of values) {
-      valuesMap[v.indicatorId] = parseIndicatorValue(v);
+      if (v.valueType === 12) {
+        // 原始 JSON 字符串仍存入 map（保持兼容）
+        valuesMap[v.indicatorId] = v.valueStr;
+        // 额外解析条目数组和字段定义
+        try {
+          const parsed = JSON.parse(v.valueStr || '[]');
+          containerParsedMap.value[v.indicatorId] = parsed;
+          const ind = indicatorById.get(v.indicatorId);
+          if (ind) {
+            containerFieldDefsMap.value[v.indicatorId] = parseDynamicFields(ind.valueOptions);
+          }
+        } catch {
+          containerParsedMap.value[v.indicatorId] = [];
+        }
+      } else {
+        valuesMap[v.indicatorId] = parseIndicatorValue(v);
+      }
     }
     indicatorValuesMap.value = valuesMap;
 
@@ -423,6 +451,71 @@ function parseIndicatorValue(item: DeclareIndicatorValueApi.IndicatorValue | any
 function parseOptions(valueOptions: string) {
   if (!valueOptions) return [];
   try { return JSON.parse(valueOptions); } catch { return []; }
+}
+
+/** 动态容器子字段条件显示配置 */
+interface ShowCondition {
+  watchField: string;
+  operator: 'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte' | 'in' | 'notEmpty' | 'isEmpty';
+  value?: any;
+}
+
+/** 动态容器子字段定义类型 */
+interface DynamicField {
+  fieldCode: string;
+  fieldLabel: string;
+  fieldType: string;
+  required?: boolean;
+  options?: { value: string; label: string }[];
+  showCondition?: ShowCondition;
+}
+
+/** 解析动态容器子字段定义 JSON */
+function parseDynamicFields(valueOptions: string): DynamicField[] {
+  if (!valueOptions) return [];
+  try {
+    const parsed = JSON.parse(valueOptions);
+    if (!Array.isArray(parsed)) return [];
+    const firstItem = parsed[0];
+    if (firstItem && 'fieldCode' in firstItem) {
+      return parsed as DynamicField[];
+    }
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+/** 判断是否为条件容器 */
+function isConditionalContainer(valueOptions: string): boolean {
+  const fields = parseDynamicFields(valueOptions);
+  return fields.some(f => f.showCondition != null);
+}
+
+/** 判断同条目中某字段是否可见 */
+function isFieldVisible(entry: any, field: DynamicField): boolean {
+  if (!field.showCondition) return true;
+  const watchVal = entry?.[field.showCondition.watchField];
+  const { operator, value } = field.showCondition;
+  switch (operator) {
+    case 'eq':       return watchVal === value;
+    case 'neq':      return watchVal !== value;
+    case 'gt':       return Number(watchVal) > Number(value);
+    case 'gte':      return Number(watchVal) >= Number(value);
+    case 'lt':       return Number(watchVal) < Number(value);
+    case 'lte':      return Number(watchVal) <= Number(value);
+    case 'in':       return Array.isArray(value) && value.includes(watchVal);
+    case 'notEmpty': return watchVal !== undefined && watchVal !== null && watchVal !== '';
+    case 'isEmpty':  return watchVal === undefined || watchVal === null || watchVal === '';
+    default:         return true;
+  }
+}
+
+/** 获取选项 label */
+function getOptionLabel(val: any, options?: { value: string; label: string }[]): string {
+  if (!options || !val) return '';
+  const found = options.find(o => String(o.value) === String(val));
+  return found?.label || '';
 }
 
 function getIndicatorId(id?: number): number {
@@ -601,6 +694,38 @@ defineExpose({
                         {{ indicatorValuesMap[getIndicatorId(indicator.id)]?.start ? `${indicatorValuesMap[getIndicatorId(indicator.id)].start} ~ ${indicatorValuesMap[getIndicatorId(indicator.id)].end}` : '-' }}
                       </span>
                     </template>
+                    <template v-else-if="indicator.valueType === 12">
+                      <div class="container-entries-display">
+                        <template v-for="(entry, eIdx) in containerParsedMap[getIndicatorId(indicator.id)] || []" :key="eIdx">
+                          <div class="container-entry-item">
+                            <template v-if="!isConditionalContainer(indicator.valueOptions || '')">
+                              <div class="entry-index">条目 {{ eIdx + 1 }}</div>
+                            </template>
+                            <div class="entry-fields-display">
+                              <template v-for="field in containerFieldDefsMap[getIndicatorId(indicator.id)] || []" :key="field.fieldCode">
+                                <div v-if="isFieldVisible(entry, field)" class="entry-field-display">
+                                  <span class="field-label">{{ field.fieldLabel }}:</span>
+                                  <span v-if="field.fieldType === 'text' || field.fieldType === 'textarea'" class="field-value">
+                                    {{ entry[field.fieldCode] || '-' }}
+                                  </span>
+                                  <span v-else-if="field.fieldType === 'number'" class="field-value">
+                                    {{ entry[field.fieldCode] ?? '-' }}
+                                  </span>
+                                  <span v-else-if="field.fieldType === 'boolean'" class="status-tag" :class="entry[field.fieldCode] ? 'status-tag-success' : 'status-tag-pending'">
+                                    {{ entry[field.fieldCode] ? '是' : '否' }}
+                                  </span>
+                                  <span v-else-if="field.fieldType === 'select' || field.fieldType === 'radio'" class="field-value">
+                                    {{ getOptionLabel(entry[field.fieldCode], field.options) || '-' }}
+                                  </span>
+                                  <span v-else class="field-value">{{ entry[field.fieldCode] || '-' }}</span>
+                                </div>
+                              </template>
+                            </div>
+                          </div>
+                        </template>
+                        <span v-if="!containerParsedMap[getIndicatorId(indicator.id)]?.length" class="info-value">-</span>
+                      </div>
+                    </template>
                     <template v-else>
                       <span class="info-value">{{ indicatorValuesMap[getIndicatorId(indicator.id)] || '-' }}</span>
                     </template>
@@ -669,6 +794,38 @@ defineExpose({
                       <span class="info-value">
                         {{ indicatorValuesMap[getIndicatorId(indicator.id)]?.start ? `${indicatorValuesMap[getIndicatorId(indicator.id)].start} ~ ${indicatorValuesMap[getIndicatorId(indicator.id)].end}` : '-' }}
                       </span>
+                    </template>
+                    <template v-else-if="indicator.valueType === 12">
+                      <div class="container-entries-display">
+                        <template v-for="(entry, eIdx) in containerParsedMap[getIndicatorId(indicator.id)] || []" :key="eIdx">
+                          <div class="container-entry-item">
+                            <template v-if="!isConditionalContainer(indicator.valueOptions || '')">
+                              <div class="entry-index">条目 {{ eIdx + 1 }}</div>
+                            </template>
+                            <div class="entry-fields-display">
+                              <template v-for="field in containerFieldDefsMap[getIndicatorId(indicator.id)] || []" :key="field.fieldCode">
+                                <div v-if="isFieldVisible(entry, field)" class="entry-field-display">
+                                  <span class="field-label">{{ field.fieldLabel }}:</span>
+                                  <span v-if="field.fieldType === 'text' || field.fieldType === 'textarea'" class="field-value">
+                                    {{ entry[field.fieldCode] || '-' }}
+                                  </span>
+                                  <span v-else-if="field.fieldType === 'number'" class="field-value">
+                                    {{ entry[field.fieldCode] ?? '-' }}
+                                  </span>
+                                  <span v-else-if="field.fieldType === 'boolean'" class="status-tag" :class="entry[field.fieldCode] ? 'status-tag-success' : 'status-tag-pending'">
+                                    {{ entry[field.fieldCode] ? '是' : '否' }}
+                                  </span>
+                                  <span v-else-if="field.fieldType === 'select' || field.fieldType === 'radio'" class="field-value">
+                                    {{ getOptionLabel(entry[field.fieldCode], field.options) || '-' }}
+                                  </span>
+                                  <span v-else class="field-value">{{ entry[field.fieldCode] || '-' }}</span>
+                                </div>
+                              </template>
+                            </div>
+                          </div>
+                        </template>
+                        <span v-if="!containerParsedMap[getIndicatorId(indicator.id)]?.length" class="info-value">-</span>
+                      </div>
                     </template>
                     <template v-else>
                       <span class="info-value">{{ indicatorValuesMap[getIndicatorId(indicator.id)] || '-' }}</span>
@@ -1014,5 +1171,42 @@ defineExpose({
 
 :deep(.ant-steps) {
   padding: 0 8px;
+}
+
+/* 容器条目只读展示样式 */
+.container-entries-display {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.container-entry-item {
+  padding: 6px 0;
+  border-bottom: 1px dashed #e5e7eb;
+  &:last-child { border-bottom: none; }
+}
+.entry-index {
+  font-size: 12px;
+  color: #9ca3af;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+.entry-fields-display {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.entry-field-display {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-size: 13px;
+  .field-label {
+    color: #6b7280;
+    flex-shrink: 0;
+  }
+  .field-value {
+    color: #374151;
+    word-break: break-all;
+  }
 }
 </style>

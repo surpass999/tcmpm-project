@@ -273,190 +273,278 @@
                 </Upload>
               </div>
 
-              <!-- 动态容器类型 -->
-              <div v-else-if="indicator.valueType === 12" class="dynamic-container-form">
-                <!-- 条目列表 -->
-                <div
-                  v-for="(entry, entryIndex) in getContainerEntries(indicator.indicatorCode)"
-                  :key="entry.rowKey"
-                  class="dynamic-entry-row mb-4"
-                >
-                  <!-- 条目头：序号 + 删除按钮 -->
-                  <div class="entry-header flex items-center justify-between mb-2">
-                    <span class="entry-label text-gray-500 text-sm font-medium">
-                      条目 {{ entryIndex + 1 }}
-                    </span>
-                    <a-button
-                      type="text"
-                      danger
-                      size="small"
-                      @click="handleRemoveEntry(indicator.indicatorCode, entry.rowKey)"
-                    >
-                      <template #icon><IconifyIcon icon="lucide:trash-2" /></template>
-                      删除条目
-                    </a-button>
-                  </div>
-
-                  <!-- 子字段纵向排列 -->
-                  <div class="entry-fields space-y-3">
-                    <div
-                      v-for="field in parseDynamicFields(indicator.valueOptions)"
-                      :key="field.fieldCode"
-                      class="dynamic-field-item"
-                    >
-                      <span class="dynamic-field-label">
-                        {{ field.fieldLabel }}
-                        <span v-if="field.required" class="text-red-500">*</span>
-                      </span>
-                      <!-- 文本输入 -->
-                      <a-input
-                        v-if="field.fieldType === 'text'"
-                        v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
-                        :disabled="readonly"
-                        :placeholder="field.placeholder || `请输入${field.fieldLabel}`"
-                        :maxlength="field.maxLength"
-                        :show-count="!!field.maxLength"
-                        class="w-full"
-                        @change="onIndicatorChange(indicator)"
-                      />
-                      <!-- 数字输入 -->
-                      <a-input-number
-                        v-else-if="field.fieldType === 'number'"
-                        v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
-                        :disabled="readonly"
-                        :precision="field.precision"
-                        :min="0"
-                        class="w-full"
-                        @change="onIndicatorChange(indicator)"
+              <!-- 动态容器类型（条件容器 vs 动态容器） -->
+              <div v-else-if="indicator.valueType === 12">
+                <!-- 条件容器：无 header，无添加按钮 -->
+                <div v-show="isConditionalContainer(indicator.valueOptions)" class="conditional-container-form">
+                  <div
+                    v-for="(entry, entryIndex) in getContainerEntries(indicator.indicatorCode)"
+                    :key="entry.rowKey"
+                    class="dynamic-entry-row mb-4"
+                  >
+                    <div class="entry-fields space-y-3">
+                      <div
+                        v-for="field in getVisibleFields(indicator.valueOptions, entry)"
+                        :key="field.fieldCode"
+                        class="dynamic-field-item"
                       >
-                        <template #addonBefore v-if="field.prefix">{{ field.prefix }}</template>
-                        <template #addonAfter v-if="field.suffix">{{ field.suffix }}</template>
-                      </a-input-number>
-                      <!-- 多行文本 -->
-                      <a-textarea
-                        v-else-if="field.fieldType === 'textarea'"
-                        v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
-                        :disabled="readonly"
-                        :placeholder="field.placeholder || `请输入${field.fieldLabel}`"
-                        :rows="field.rows || 3"
-                        :maxlength="field.maxLength"
-                        :show-count="!!field.maxLength"
-                        class="w-full"
-                        @change="onIndicatorChange(indicator)"
-                      />
-                      <!-- 单选 -->
-                      <a-radio-group
-                        v-else-if="field.fieldType === 'radio'"
-                        v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
-                        :disabled="readonly"
-                        class="flex flex-wrap gap-x-4 gap-y-2"
-                        @change="onIndicatorChange(indicator)"
-                      >
-                        <a-radio
-                          v-for="opt in field.options"
-                          :key="opt.value"
-                          :value="opt.value"
+                        <span class="dynamic-field-label">
+                          {{ field.fieldLabel }}
+                          <span v-if="field.required" class="text-red-500">*</span>
+                        </span>
+                        <a-input
+                          v-if="field.fieldType === 'text'"
+                          v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
+                          :disabled="readonly"
+                          :placeholder="field.placeholder || `请输入${field.fieldLabel}`"
+                          :maxlength="field.maxLength"
+                          :show-count="!!field.maxLength"
+                          class="w-full"
+                          @change="onIndicatorChange(indicator)"
+                        />
+                        <a-input-number
+                          v-else-if="field.fieldType === 'number'"
+                          v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
+                          :disabled="readonly"
+                          :precision="field.precision"
+                          :min="0"
+                          class="w-full"
+                          @change="onIndicatorChange(indicator)"
                         >
-                          {{ opt.label }}
-                        </a-radio>
-                      </a-radio-group>
-                      <!-- 多选 -->
-                      <a-checkbox-group
-                        v-else-if="field.fieldType === 'checkbox'"
-                        v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
-                        :disabled="readonly"
-                        class="flex flex-wrap gap-x-4 gap-y-2"
-                        @change="onIndicatorChange(indicator)"
-                      >
-                        <a-checkbox
-                          v-for="opt in field.options"
-                          :key="opt.value"
-                          :value="opt.value"
+                          <template #addonBefore v-if="field.prefix">{{ field.prefix }}</template>
+                          <template #addonAfter v-if="field.suffix">{{ field.suffix }}</template>
+                        </a-input-number>
+                        <a-textarea
+                          v-else-if="field.fieldType === 'textarea'"
+                          v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
+                          :disabled="readonly"
+                          :placeholder="field.placeholder || `请输入${field.fieldLabel}`"
+                          :rows="field.rows || 3"
+                          :maxlength="field.maxLength"
+                          :show-count="!!field.maxLength"
+                          class="w-full"
+                          @change="onIndicatorChange(indicator)"
+                        />
+                        <a-radio-group
+                          v-else-if="field.fieldType === 'radio'"
+                          v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
+                          :disabled="readonly"
+                          class="flex flex-wrap gap-x-4 gap-y-2"
+                          @change="onIndicatorChange(indicator)"
                         >
-                          {{ opt.label }}
-                        </a-checkbox>
-                      </a-checkbox-group>
-                      <!-- 下拉单选 -->
-                      <a-select
-                        v-else-if="field.fieldType === 'select'"
-                        v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
-                        :disabled="readonly"
-                        :placeholder="`请选择${field.fieldLabel}`"
-                        :show-search="field.showSearch"
-                        allow-clear
-                        class="w-full"
-                        @change="onIndicatorChange(indicator)"
-                      >
-                        <a-select-option
-                          v-for="opt in field.options"
-                          :key="opt.value"
-                          :value="opt.value"
+                          <a-radio v-for="opt in field.options" :key="opt.value" :value="opt.value">{{ opt.label }}</a-radio>
+                        </a-radio-group>
+                        <a-checkbox-group
+                          v-else-if="field.fieldType === 'checkbox'"
+                          v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
+                          :disabled="readonly"
+                          class="flex flex-wrap gap-x-4 gap-y-2"
+                          @change="onIndicatorChange(indicator)"
                         >
-                          {{ opt.label }}
-                        </a-select-option>
-                      </a-select>
-                      <!-- 下拉多选 -->
-                      <a-select
-                        v-else-if="field.fieldType === 'multiSelect'"
-                        v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
-                        :disabled="readonly"
-                        :placeholder="`请选择${field.fieldLabel}`"
-                        mode="multiple"
-                        allow-clear
-                        class="w-full"
-                        @change="onIndicatorChange(indicator)"
-                      >
-                        <a-select-option
-                          v-for="opt in field.options"
-                          :key="opt.value"
-                          :value="opt.value"
+                          <a-checkbox v-for="opt in field.options" :key="opt.value" :value="opt.value">{{ opt.label }}</a-checkbox>
+                        </a-checkbox-group>
+                        <a-select
+                          v-else-if="field.fieldType === 'select'"
+                          v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
+                          :disabled="readonly"
+                          :placeholder="`请选择${field.fieldLabel}`"
+                          :show-search="field.showSearch"
+                          allow-clear
+                          class="w-full"
+                          @change="onIndicatorChange(indicator)"
                         >
-                          {{ opt.label }}
-                        </a-select-option>
-                      </a-select>
-                      <!-- 日期 -->
-                      <a-date-picker
-                        v-else-if="field.fieldType === 'date'"
-                        v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
-                        :disabled="readonly"
-                        :show-time="field.format?.includes('HH')"
-                        :format="field.format || 'YYYY-MM-DD'"
-                        class="w-full"
-                        @change="onIndicatorChange(indicator)"
-                      />
-                      <!-- 日期区间 -->
-                      <a-range-picker
-                        v-else-if="field.fieldType === 'dateRange'"
-                        v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
-                        :disabled="readonly"
-                        :show-time="field.format?.includes('HH')"
-                        :format="field.format || 'YYYY-MM-DD'"
-                        class="w-full"
-                        @change="onIndicatorChange(indicator)"
-                      />
-                      <!-- 未知子字段类型 -->
-                      <span v-else class="text-gray-400 text-sm">不支持的类型: {{ field.fieldType }}</span>
+                          <a-select-option v-for="opt in field.options" :key="opt.value" :value="opt.value">{{ opt.label }}</a-select-option>
+                        </a-select>
+                        <a-select
+                          v-else-if="field.fieldType === 'multiSelect'"
+                          v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
+                          :disabled="readonly"
+                          :placeholder="`请选择${field.fieldLabel}`"
+                          mode="multiple"
+                          allow-clear
+                          class="w-full"
+                          @change="onIndicatorChange(indicator)"
+                        >
+                          <a-select-option v-for="opt in field.options" :key="opt.value" :value="opt.value">{{ opt.label }}</a-select-option>
+                        </a-select>
+                        <a-date-picker
+                          v-else-if="field.fieldType === 'date'"
+                          v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
+                          :disabled="readonly"
+                          :show-time="field.format?.includes('HH')"
+                          :format="field.format || 'YYYY-MM-DD'"
+                          class="w-full"
+                          @change="onIndicatorChange(indicator)"
+                        />
+                        <a-range-picker
+                          v-else-if="field.fieldType === 'dateRange'"
+                          v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
+                          :disabled="readonly"
+                          :show-time="field.format?.includes('HH')"
+                          :format="field.format || 'YYYY-MM-DD'"
+                          class="w-full"
+                          @change="onIndicatorChange(indicator)"
+                        />
+                        <a-switch
+                          v-else-if="field.fieldType === 'boolean'"
+                          v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
+                          :disabled="readonly"
+                          @change="onIndicatorChange(indicator)"
+                        />
+                        <span v-else class="text-gray-400 text-sm">不支持的类型: {{ field.fieldType }}</span>
+                      </div>
                     </div>
                   </div>
                 </div>
-
-                <!-- 添加条目按钮 -->
-                <a-button
-                  type="dashed"
-                  class="w-full mt-2"
-                  :disabled="readonly"
-                  @click="handleAddEntry(indicator.indicatorCode)"
-                >
-                  <template #icon><PlusOutlined /></template>
-                  添加条目
-                </a-button>
-
-                <!-- 条目统计 -->
-                <div
-                  v-if="getContainerEntries(indicator.indicatorCode).length > 0"
-                  class="text-gray-400 text-xs mt-1 text-right"
-                >
-                  共 {{ getContainerEntries(indicator.indicatorCode).length }} 个条目
+                <!-- 动态容器：有 header，有添加按钮 -->
+                <div v-show="!isConditionalContainer(indicator.valueOptions)" class="dynamic-container-form">
+                  <div
+                    v-for="(entry, entryIndex) in getContainerEntries(indicator.indicatorCode)"
+                    :key="entry.rowKey"
+                    class="dynamic-entry-row mb-4"
+                  >
+                    <div class="entry-header flex items-center justify-between mb-2">
+                      <span class="entry-label text-gray-500 text-sm font-medium">
+                        条目 {{ entryIndex + 1 }}
+                      </span>
+                      <a-button
+                        type="text"
+                        danger
+                        size="small"
+                        @click="handleRemoveEntry(indicator.indicatorCode, entry.rowKey)"
+                      >
+                        <template #icon><IconifyIcon icon="lucide:trash-2" /></template>
+                        删除条目
+                      </a-button>
+                    </div>
+                    <div class="entry-fields space-y-3">
+                      <div
+                        v-for="field in getVisibleFields(indicator.valueOptions, entry)"
+                        :key="field.fieldCode"
+                        class="dynamic-field-item"
+                      >
+                        <span class="dynamic-field-label">
+                          {{ field.fieldLabel }}
+                          <span v-if="field.required" class="text-red-500">*</span>
+                        </span>
+                        <a-input
+                          v-if="field.fieldType === 'text'"
+                          v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
+                          :disabled="readonly"
+                          :placeholder="field.placeholder || `请输入${field.fieldLabel}`"
+                          :maxlength="field.maxLength"
+                          :show-count="!!field.maxLength"
+                          class="w-full"
+                          @change="onIndicatorChange(indicator)"
+                        />
+                        <a-input-number
+                          v-else-if="field.fieldType === 'number'"
+                          v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
+                          :disabled="readonly"
+                          :precision="field.precision"
+                          :min="0"
+                          class="w-full"
+                          @change="onIndicatorChange(indicator)"
+                        >
+                          <template #addonBefore v-if="field.prefix">{{ field.prefix }}</template>
+                          <template #addonAfter v-if="field.suffix">{{ field.suffix }}</template>
+                        </a-input-number>
+                        <a-textarea
+                          v-else-if="field.fieldType === 'textarea'"
+                          v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
+                          :disabled="readonly"
+                          :placeholder="field.placeholder || `请输入${field.fieldLabel}`"
+                          :rows="field.rows || 3"
+                          :maxlength="field.maxLength"
+                          :show-count="!!field.maxLength"
+                          class="w-full"
+                          @change="onIndicatorChange(indicator)"
+                        />
+                        <a-radio-group
+                          v-else-if="field.fieldType === 'radio'"
+                          v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
+                          :disabled="readonly"
+                          class="flex flex-wrap gap-x-4 gap-y-2"
+                          @change="onIndicatorChange(indicator)"
+                        >
+                          <a-radio v-for="opt in field.options" :key="opt.value" :value="opt.value">{{ opt.label }}</a-radio>
+                        </a-radio-group>
+                        <a-checkbox-group
+                          v-else-if="field.fieldType === 'checkbox'"
+                          v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
+                          :disabled="readonly"
+                          class="flex flex-wrap gap-x-4 gap-y-2"
+                          @change="onIndicatorChange(indicator)"
+                        >
+                          <a-checkbox v-for="opt in field.options" :key="opt.value" :value="opt.value">{{ opt.label }}</a-checkbox>
+                        </a-checkbox-group>
+                        <a-select
+                          v-else-if="field.fieldType === 'select'"
+                          v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
+                          :disabled="readonly"
+                          :placeholder="`请选择${field.fieldLabel}`"
+                          :show-search="field.showSearch"
+                          allow-clear
+                          class="w-full"
+                          @change="onIndicatorChange(indicator)"
+                        >
+                          <a-select-option v-for="opt in field.options" :key="opt.value" :value="opt.value">{{ opt.label }}</a-select-option>
+                        </a-select>
+                        <a-select
+                          v-else-if="field.fieldType === 'multiSelect'"
+                          v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
+                          :disabled="readonly"
+                          :placeholder="`请选择${field.fieldLabel}`"
+                          mode="multiple"
+                          allow-clear
+                          class="w-full"
+                          @change="onIndicatorChange(indicator)"
+                        >
+                          <a-select-option v-for="opt in field.options" :key="opt.value" :value="opt.value">{{ opt.label }}</a-select-option>
+                        </a-select>
+                        <a-date-picker
+                          v-else-if="field.fieldType === 'date'"
+                          v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
+                          :disabled="readonly"
+                          :show-time="field.format?.includes('HH')"
+                          :format="field.format || 'YYYY-MM-DD'"
+                          class="w-full"
+                          @change="onIndicatorChange(indicator)"
+                        />
+                        <a-range-picker
+                          v-else-if="field.fieldType === 'dateRange'"
+                          v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
+                          :disabled="readonly"
+                          :show-time="field.format?.includes('HH')"
+                          :format="field.format || 'YYYY-MM-DD'"
+                          class="w-full"
+                          @change="onIndicatorChange(indicator)"
+                        />
+                        <a-switch
+                          v-else-if="field.fieldType === 'boolean'"
+                          v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
+                          :disabled="readonly"
+                          @change="onIndicatorChange(indicator)"
+                        />
+                        <span v-else class="text-gray-400 text-sm">不支持的类型: {{ field.fieldType }}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <a-button
+                    type="dashed"
+                    class="w-full mt-2"
+                    :disabled="readonly"
+                    @click="handleAddEntry(indicator.indicatorCode)"
+                  >
+                    <template #icon><PlusOutlined /></template>
+                    添加条目
+                  </a-button>
+                  <div
+                    v-if="getContainerEntries(indicator.indicatorCode).length > 0"
+                    class="text-gray-400 text-xs mt-1 text-right"
+                  >
+                    共 {{ getContainerEntries(indicator.indicatorCode).length }} 个条目
+                  </div>
                 </div>
               </div>
 
@@ -563,6 +651,13 @@ const formValues = reactive<Record<string, any>>({});
 /** 文件列表 Map（key = indicatorCode） */
 const fileListMap = reactive<Record<string, UploadFile[]>>({});
 
+/** 动态容器子字段条件显示配置 */
+interface ShowCondition {
+  watchField: string;
+  operator: 'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte' | 'in' | 'notEmpty' | 'isEmpty';
+  value?: any;
+}
+
 /** 动态容器子字段定义类型 */
 interface DynamicField {
   fieldCode: string;
@@ -582,6 +677,8 @@ interface DynamicField {
   precision?: number;
   prefix?: string;
   suffix?: string;
+  showCondition?: ShowCondition;
+  defaultValue?: any;
 }
 
 /** 动态容器值 Map（key = indicatorCode, value = 条目数组，每项 = { rowKey: string, [fieldCode]: value }） */
@@ -767,6 +864,37 @@ function parseExtraConfig(extraConfig: string | undefined): Record<string, any> 
   } catch {
     return {};
   }
+}
+
+/** 判断是否为条件容器（至少有一条 showCondition → 条件容器；否则 → 动态容器） */
+function isConditionalContainer(valueOptions: string): boolean {
+  const fields = parseDynamicFields(valueOptions);
+  return fields.some(f => f.showCondition != null);
+}
+
+/** 判断同条目中某字段是否可见 */
+function isFieldVisible(entry: any, field: DynamicField): boolean {
+  if (!field.showCondition) return true;
+  const watchVal = entry?.[field.showCondition.watchField];
+  const { operator, value } = field.showCondition;
+  switch (operator) {
+    case 'eq':       return watchVal === value;
+    case 'neq':      return watchVal !== value;
+    case 'gt':       return Number(watchVal) > Number(value);
+    case 'gte':      return Number(watchVal) >= Number(value);
+    case 'lt':       return Number(watchVal) < Number(value);
+    case 'lte':      return Number(watchVal) <= Number(value);
+    case 'in':       return Array.isArray(value) && value.includes(watchVal);
+    case 'notEmpty': return watchVal !== undefined && watchVal !== null && watchVal !== '';
+    case 'isEmpty':  return watchVal === undefined || watchVal === null || watchVal === '';
+    default:         return true;
+  }
+}
+
+/** 获取某条目中可见的字段列表（用于条件容器和动态容器两分支） */
+function getVisibleFields(valueOptions: string, entry: any): DynamicField[] {
+  const fields = parseDynamicFields(valueOptions);
+  return fields.filter(f => isFieldVisible(entry, f));
 }
 
 /** 获取数字精度 */
@@ -1631,7 +1759,7 @@ function validateAll(indicatorsToValidate: DeclareIndicatorApi.Indicator[]): Arr
       for (let i = 0; i < containerValues[code].length; i++) {
         const entry = containerValues[code][i];
         for (const field of fields) {
-          if (field.required && !entry[field.fieldCode]) {
+          if (field.required && isFieldVisible(entry, field) && !entry[field.fieldCode]) {
             errors.push({
               indicatorId: indicator.id!,
               indicatorCode: indicator.indicatorCode,

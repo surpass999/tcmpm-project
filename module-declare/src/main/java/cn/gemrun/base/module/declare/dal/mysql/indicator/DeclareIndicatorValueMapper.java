@@ -59,4 +59,45 @@ public interface DeclareIndicatorValueMapper extends BaseMapperX<DeclareIndicato
                                                         @Param("businessId") Long businessId,
                                                         @Param("indicatorCodes") List<String> indicatorCodes);
 
+    /**
+     * 查询动态容器（type=12）中 JSON 字段包含指定值的记录
+     * 使用 MySQL JSON_CONTAINS 实现精确查询
+     * @param businessType 业务类型
+     * @param businessId 业务ID
+     * @param indicatorCode 指标代号（可选）
+     * @param fieldCode JSON 内字段名
+     * @param jsonFieldValue JSON 格式的字段值（如 "\"字符串\"" 或 "123"）
+     * @return 匹配的记录
+     */
+    List<DeclareIndicatorValueDO> selectByContainerField(
+            @Param("businessType") Integer businessType,
+            @Param("businessId") Long businessId,
+            @Param("indicatorCode") String indicatorCode,
+            @Param("fieldCode") String fieldCode,
+            @Param("jsonFieldValue") String jsonFieldValue);
+
+    /**
+     * 统计动态容器总条目数量（基于 JSON_LENGTH 求和）
+     * @param businessType 业务类型
+     * @param businessId 业务ID
+     * @param indicatorCode 指标代号（可选，为空则统计所有 type=12 的）
+     * @return 总条目数量
+     */
+    Integer sumContainerLength(
+            @Param("businessType") Integer businessType,
+            @Param("businessId") Long businessId,
+            @Param("indicatorCode") String indicatorCode);
+
+    /**
+     * 根据指标代号和业务信息查询指标值（用于 Java 层内存分组统计）
+     * @param businessType 业务类型
+     * @param businessId 业务ID
+     * @param indicatorCode 指标代号（可选，为空则查询所有 type=12 的）
+     * @return 指标值列表
+     */
+    List<DeclareIndicatorValueDO> selectByIndicatorCodeAndBusiness(
+            @Param("businessType") Integer businessType,
+            @Param("businessId") Long businessId,
+            @Param("indicatorCode") String indicatorCode);
+
 }

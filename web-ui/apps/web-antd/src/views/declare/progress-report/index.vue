@@ -5,6 +5,8 @@ import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import { computed, nextTick, onMounted, ref } from 'vue';
 
 import { confirm, Page, useVbenModal } from '@vben/common-ui';
+import { DICT_TYPE } from '@vben/constants';
+import { getDictOptions } from '@vben/hooks';
 
 import { message, Modal } from 'ant-design-vue';
 import { useUserStore } from '@vben/stores';
@@ -314,6 +316,11 @@ function getStatusColor(status: string | number): string {
     PROVINCE_APPROVED: 'success',
     PROVINCE_REJECTED: 'error',
     PROVINCE_RETURNED: 'warning',
+    // 省级审核数字状态
+    0: 'default',   // 未提交
+    1: 'warning',   // 审核中
+    2: 'success',   // 已通过
+    3: 'error',     // 已驳回
   };
   return colors[String(status)] || 'default';
 }
@@ -331,8 +338,36 @@ function getStatusIcon(status: string | number): string {
     PROVINCE_APPROVED: 'lucide:check-circle',
     PROVINCE_REJECTED: 'lucide:x-circle',
     PROVINCE_RETURNED: 'lucide:corner-up-left',
+    // 省级审核数字状态
+    0: 'lucide:minus',          // 未提交
+    1: 'lucide:clock',          // 审核中
+    2: 'lucide:check-circle',  // 已通过
+    3: 'lucide:x-circle',       // 已驳回
   };
   return icons[String(status)] || 'lucide:circle';
+}
+
+/** 获取填报状态名称 */
+function getReportStatusName(status: string | number): string {
+  const options = getDictOptions(DICT_TYPE.DECLARE_PROJECT_STATUS);
+  const found = options.find((item) => String(item.value) === String(status));
+  return found?.label || String(status);
+}
+
+/** 获取省级审核状态名称 */
+function getProvinceStatusName(status: number | null | undefined): string {
+  const names: Record<number, string> = {
+    0: '未提交',
+    1: '审核中',
+    2: '已通过',
+    3: '已驳回',
+  };
+  return names[Number(status)] || '未知';
+}
+
+/** 获取国家局上报状态名称 */
+function getNationalReportStatusName(status: number | null | undefined): string {
+  return Number(status) === 1 ? '已上报' : '未上报';
 }
 
 /** 根据行数据构建操作按钮列表 */
@@ -434,6 +469,8 @@ const [Grid, gridApi] = useVbenVxeGrid({
           placeholder: '请选择年度',
           allowClear: true,
           options: [
+            { label: '2028', value: 2028 },
+            { label: '2027', value: 2027 },
             { label: '2026', value: 2026 },
             { label: '2025', value: 2025 },
             { label: '2024', value: 2024 },
@@ -615,7 +652,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
           class="status-tag"
         >
           <IconifyIcon :icon="getStatusIcon(row.reportStatus)" class="tag-icon" />
-          {{ row.reportStatusName }}
+          {{ getReportStatusName(row.reportStatus) }}
         </a-tag>
       </template>
 
@@ -626,7 +663,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
           class="status-tag"
         >
           <IconifyIcon :icon="getStatusIcon(row.provinceStatus)" class="tag-icon" />
-          {{ row.provinceStatusName }}
+          {{ getProvinceStatusName(row.provinceStatus) }}
         </a-tag>
       </template>
 
@@ -637,7 +674,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
           class="status-tag"
         >
           <IconifyIcon :icon="row.nationalReportStatus === 1 ? 'lucide:check-circle' : 'lucide:minus'" class="tag-icon" />
-          {{ row.nationalReportStatusName }}
+          {{ getNationalReportStatusName(row.nationalReportStatus) }}
         </a-tag>
       </template>
 

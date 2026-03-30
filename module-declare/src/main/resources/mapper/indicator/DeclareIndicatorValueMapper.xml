@@ -25,4 +25,42 @@
         </foreach>
     </select>
 
+    <!-- 查询动态容器（type=12）中 JSON 字段包含指定值的记录 -->
+    <!-- 使用 JSON_CONTAINS 实现精确查询，适用于字符串/数字/布尔值 -->
+    <select id="selectByContainerField" resultType="cn.gemrun.base.module.declare.dal.dataobject.indicator.DeclareIndicatorValueDO">
+        SELECT div.*
+        FROM declare_indicator_value div
+        WHERE div.business_type = #{businessType}
+          AND div.business_id = #{businessId}
+          AND div.value_type = 12
+          <if test="indicatorCode != null and indicatorCode != ''">
+            AND div.indicator_code = #{indicatorCode}
+          </if>
+          AND JSON_CONTAINS(div.value_str, #{jsonFieldValue}, CONCAT('$.', #{fieldCode}))
+    </select>
+
+    <!-- 统计动态容器总条目数量（基于 JSON_LENGTH 求和） -->
+    <select id="sumContainerLength" resultType="java.lang.Integer">
+        SELECT COALESCE(SUM(JSON_LENGTH(div.value_str)), 0)
+        FROM declare_indicator_value div
+        WHERE div.business_type = #{businessType}
+          AND div.business_id = #{businessId}
+          AND div.value_type = 12
+          <if test="indicatorCode != null and indicatorCode != ''">
+            AND div.indicator_code = #{indicatorCode}
+          </if>
+    </select>
+
+    <!-- 根据指标代号和业务信息查询指标值（用于 Java 层内存分组统计） -->
+    <select id="selectByIndicatorCodeAndBusiness" resultType="cn.gemrun.base.module.declare.dal.dataobject.indicator.DeclareIndicatorValueDO">
+        SELECT div.*
+        FROM declare_indicator_value div
+        WHERE div.business_type = #{businessType}
+          AND div.business_id = #{businessId}
+          AND div.value_type = 12
+          <if test="indicatorCode != null and indicatorCode != ''">
+            AND div.indicator_code = #{indicatorCode}
+          </if>
+    </select>
+
 </mapper>

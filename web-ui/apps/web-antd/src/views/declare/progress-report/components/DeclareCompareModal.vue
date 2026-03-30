@@ -164,6 +164,17 @@ const infoRows = computed(() => [
   { label: '国家上报状态', valueA: data.reportA?.nationalReportStatusName, valueB: data.reportB?.nationalReportStatusName },
 ]);
 
+/** 省级审核状态名称 */
+function getProvinceStatusName(status: number | null | undefined): string {
+  const names: Record<number, string> = { 0: '未提交', 1: '审核中', 2: '已通过', 3: '已驳回' };
+  return names[Number(status)] || '未知';
+}
+
+/** 国家局上报状态名称 */
+function getNationalReportStatusName(status: number | null | undefined): string {
+  return Number(status) === 1 ? '已上报' : '未上报';
+}
+
 // 按指标分类（两级分组）分组的对比数据
 const groupedIndicators = computed(() => {
   const result: any[] = [];
@@ -242,6 +253,8 @@ function formatValue(val: any, row: any) {
         }
       }
       return val;
+    case 12:
+      return renderContainerValue(val, row.valueOptions);
     default:
       return String(val);
   }
@@ -255,6 +268,111 @@ function resolveOptionLabel(value: any, valueOptions?: string) {
     const found = options.find((o: any) => o.value == value);
     return found ? found.label : value;
   } catch { return value; }
+}
+
+/** 动态容器子字段条件显示配置 */
+interface ShowCondition {
+  watchField: string;
+  operator: 'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte' | 'in' | 'notEmpty' | 'isEmpty';
+  value?: any;
+}
+
+/** 动态容器子字段定义类型 */
+interface DynamicField {
+  fieldCode: string;
+  fieldLabel: string;
+  fieldType: string;
+  required?: boolean;
+  options?: { value: string; label: string }[];
+  showCondition?: ShowCondition;
+}
+
+/** 解析动态容器子字段定义 JSON */
+function parseDynamicFields(valueOptions: string): DynamicField[] {
+  if (!valueOptions) return [];
+  try {
+    const parsed = JSON.parse(valueOptions);
+    if (!Array.isArray(parsed)) return [];
+    const firstItem = parsed[0];
+    if (firstItem && 'fieldCode' in firstItem) {
+      return parsed as DynamicField[];
+    }
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+/** 判断是否为条件容器 */
+function isConditionalContainer(valueOptions: string): boolean {
+  const fields = parseDynamicFields(valueOptions);
+  return fields.some(f => f.showCondition != null);
+}
+
+/** 判断同条目中某字段是否可见 */
+function isFieldVisible(entry: any, field: DynamicField): boolean {
+  if (!field.showCondition) return true;
+  const watchVal = entry?.[field.showCondition.watchField];
+  const { operator, value } = field.showCondition;
+  switch (operator) {
+    case 'eq':       return watchVal === value;
+    case 'neq':      return watchVal !== value;
+    case 'gt':       return Number(watchVal) > Number(value);
+    case 'gte':      return Number(watchVal) >= Number(value);
+    case 'lt':       return Number(watchVal) < Number(value);
+    case 'lte':      return Number(watchVal) <= Number(value);
+    case 'in':       return Array.isArray(value) && value.includes(watchVal);
+    case 'notEmpty': return watchVal !== undefined && watchVal !== null && watchVal !== '';
+    case 'isEmpty':  return watchVal === undefined || watchVal === null || watchVal === '';
+    default:         return true;
+  }
+}
+
+/** 渲染单个容器条目的字段列表（用于对比视图） */
+function renderContainerEntry(entry: any, fields: DynamicField[], showIndex: boolean, entryIndex: number): string {
+  const parts: string[] = [];
+  if (showIndex) {
+    parts.push(`【条目${entryIndex + 1}】`);
+  }
+  for (const field of fields) {
+    if (!isFieldVisible(entry, field)) continue;
+    const val = entry?.[field.fieldCode];
+    let displayVal: string;
+    if (val === undefined || val === null || val === '') {
+      displayVal = '-';
+    } else if (field.fieldType === 'boolean') {
+      displayVal = val ? '是' : '否';
+    } else if (field.fieldType === 'select' || field.fieldType === 'radio') {
+      displayVal = (field.options?.find(o => String(o.value) === String(val))?.label) || String(val);
+    } else if (field.fieldType === 'multiSelect' || field.fieldType === 'checkbox') {
+      const selected = Array.isArray(val) ? val : String(val).split(',');
+      displayVal = (selected as string[])
+        .map(v => field.options?.find(o => String(o.value) === String(v))?.label || v)
+        .join('、') || '-';
+    } else {
+      displayVal = String(val);
+    }
+    parts.push(`${field.fieldLabel}: ${displayVal}`);
+  }
+  return parts.join(' | ');
+}
+
+/** 渲染完整容器值字符串（用于对比表格单元格） */
+function renderContainerValue(val: any, valueOptions: string | undefined): string {
+  let entries: any[];
+  if (typeof val === 'string') {
+    try { entries = JSON.parse(val || '[]'); } catch { return '-'; }
+  } else if (Array.isArray(val)) {
+    entries = val;
+  } else {
+    return '-';
+  }
+  if (!entries.length) return '-';
+  const fields = valueOptions ? parseDynamicFields(valueOptions) : [];
+  const showIndex = !isConditionalContainer(valueOptions || '');
+  return entries
+    .map((entry, idx) => renderContainerEntry(entry, fields, showIndex, idx))
+    .join('\n');
 }
 
 // 差异样式类
