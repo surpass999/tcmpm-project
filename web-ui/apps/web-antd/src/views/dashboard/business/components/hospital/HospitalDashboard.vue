@@ -20,6 +20,7 @@ defineEmits(['refresh']);
 const [FormModal, formModalApi] = useVbenModal({
   connectedComponent: Form,
   destroyOnClose: true,
+  closeOnClickModal: false,
 });
 
 const userStore = useUserStore();

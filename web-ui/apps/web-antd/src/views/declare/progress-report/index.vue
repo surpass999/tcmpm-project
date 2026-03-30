@@ -30,6 +30,7 @@ import DeclareCompareModal from './components/DeclareCompareModal.vue';
 const [FormModal, formModalApi] = useVbenModal({
   connectedComponent: Form,
   destroyOnClose: true,
+  closeOnClickModal: false,
 });
 
 /** 审批详情组件 ref */
