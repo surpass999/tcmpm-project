@@ -129,20 +129,34 @@ const currentHospitalId = computed(() => Number(userStore.userInfo?.deptId) || 0
 const canSubmitAudit = computed(
   () =>
     payload.value?.deptId === currentHospitalId.value
-    && payload.value?.reportStatus === 'SAVED',
+    && (payload.value?.reportStatus === 'SAVED' || payload.value?.reportStatus === 'DRAFT'),
 );
 
 /** 提交审核 */
 async function handleSubmitAudit() {
   if (!payload.value?.reportId) return;
-  try {
-    await submitProgressReport(payload.value.reportId);
-    message.success('提交成功');
-    emit('success');
-    await loadAllData();
-  } catch (error: any) {
-    message.error(error.message || '提交失败');
-  }
+
+  const hospitalName = payload.value?.hospitalName || '';
+  const year = payload.value?.reportYear || '';
+  const batch = payload.value?.reportBatch || '';
+
+  Modal.confirm({
+    title: '确认提交审核',
+    content: `确认提交「${hospitalName}」${year}年第${batch}期进度填报？\n提交后将进入审批流程，提交后不可再编辑。`,
+    okText: '确认提交',
+    cancelText: '取消',
+    okButtonProps: { danger: true },
+    async onOk() {
+      try {
+        await submitProgressReport(payload.value!.reportId);
+        message.success('提交成功');
+        emit('success');
+        await loadAllData();
+      } catch (error: any) {
+        message.error(error.message || '提交失败');
+      }
+    },
+  });
 }
 
 function getNodeStatus(node: any): number {
@@ -248,7 +262,7 @@ async function loadAllData() {
 
     // 2. 加载指标数据（businessType 为 'process'）
     const { getIndicatorsByBusinessType } = await import('#/api/declare/indicator');
-    const indicators = await getIndicatorsByBusinessType('process');
+    const indicators = await getIndicatorsByBusinessType('process', payload.value!.projectType!);
 
     // 3. 构建两级分组
     buildIndicatorGroups(indicators);

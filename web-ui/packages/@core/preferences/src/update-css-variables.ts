@@ -107,8 +107,23 @@ function updateMainColorVariables(preference: Preferences) {
     '--yellow-500': '--warning',
   };
 
+  // 深浅与光晕变体：与 colorPrimary 同色相，保证渐变/阴影不再夹绿
+  const primaryVariantMappings = {
+    '--primary-700': '--primary-dark',
+    '--primary-400': '--primary-light',
+    '--primary-200': '--primary-glow',
+  };
+
   // 统一处理颜色变量的更新
   Object.entries(colorMappings).forEach(([sourceVar, targetVar]) => {
+    const colorValue = colorVariables[sourceVar];
+    if (colorValue) {
+      document.documentElement.style.setProperty(targetVar, colorValue);
+    }
+  });
+
+  // 将生成的主色深浅/光晕变体同步写入对应变量，避免渐变/阴影混用绿色
+  Object.entries(primaryVariantMappings).forEach(([sourceVar, targetVar]) => {
     const colorValue = colorVariables[sourceVar];
     if (colorValue) {
       document.documentElement.style.setProperty(targetVar, colorValue);

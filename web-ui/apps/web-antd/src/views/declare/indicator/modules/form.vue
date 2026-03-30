@@ -639,6 +639,41 @@ watch(
           </div>
         </div>
       </a-form-item>
+      <!-- 选项定义（单选、多选、单选下拉、多选下拉时显示） -->
+      <a-form-item v-if="showValueOptions" label="选项定义">
+        <div class="w-full">
+          <div v-if="optionsList.length === 0" class="text-gray-400 text-sm mb-2">
+            请点击下方按钮添加选项
+          </div>
+          <div
+            v-for="opt in optionsList"
+            :key="opt.key"
+            class="flex items-center gap-2 mb-2"
+          >
+            <a-input
+              v-model:value="opt.value"
+              placeholder="选项值"
+              class="w-32"
+            />
+            <a-input
+              v-model:value="opt.label"
+              placeholder="选项标签"
+              class="flex-1"
+            />
+            <a-button
+              type="text"
+              danger
+              @click="handleRemoveOption(opt.key)"
+            >
+              删除选项
+            </a-button>
+          </div>
+          <a-button type="dashed" class="w-full" @click="handleAddOption">
+            <PlusOutlined />
+            添加选项
+          </a-button>
+        </div>
+      </a-form-item>
       <!-- 动态容器子字段定义 -->
       <a-form-item v-if="isDynamicContainer" label="子字段定义">
         <div class="dynamic-container w-full">
@@ -655,17 +690,17 @@ watch(
               <a-input
                 v-model:value="field.fieldCode"
                 placeholder="字段编码"
-                class="w-32"
+                class="w-24"
               />
               <a-input
                 v-model:value="field.fieldLabel"
                 placeholder="字段名称"
-                class="flex-1"
+                class="flex-1 min-w-48"
               />
               <a-select
                 v-model:value="field.fieldType"
                 placeholder="字段类型"
-                class="w-28"
+                class="w-24"
               >
                 <a-select-option
                   v-for="opt in fieldTypeOptions"

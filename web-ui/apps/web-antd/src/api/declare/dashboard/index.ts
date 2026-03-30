@@ -41,10 +41,18 @@ export interface HospitalStats {
   urgentTaskCount: number;
   /** 四维度进度 */
   dimensionProgress?: DimensionProgress;
+  /** 是否有未填报的开放填报窗口 */
+  hasUnfilledOpenWindow?: boolean;
+  /** 成果总数 */
+  achievementTotalCount?: number;
+  /** 已认定/已推广成果数 */
+  achievementApprovedCount?: number;
 }
 
 export interface ProvinceStats {
+  provinceCode: string;
   regionProjectCount: number;
+  reportedHospitalCount: number;
   pendingReviewCount: number;
   regionProgress: number;
   highRiskCount: number;
@@ -229,6 +237,20 @@ export interface ProjectTypeItem {
 }
 
 /**
+ * 填报窗口统计信息
+ */
+export interface ReportWindowStatsVO {
+  hasOpenWindow: boolean;
+  openWindowName: string;
+  currentBatch: number;
+  reportYear: number;
+  startDate: string;
+  endDate: string;
+  reportedHospitalCount: number;
+  totalHospitalCount: number;
+}
+
+/**
  * 获取驾驶舱统计数据
  */
 export async function getDashboardStats(): Promise<DashboardStats> {
@@ -275,4 +297,11 @@ export async function getNationalStats(): Promise<NationalStatsVO> {
  */
 export async function getUserRole(): Promise<string> {
   return requestClient.get('/declare/dashboard/user-role');
+}
+
+/**
+ * 获取填报窗口统计信息（国家局专用）
+ */
+export async function getReportWindowStats(): Promise<ReportWindowStatsVO> {
+  return requestClient.get('/declare/dashboard/report-window-stats');
 }

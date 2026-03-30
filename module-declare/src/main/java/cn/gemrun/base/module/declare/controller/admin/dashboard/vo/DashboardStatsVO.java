@@ -86,6 +86,12 @@ public class DashboardStatsVO {
         private Integer urgentTaskCount;
         /** 四维度进度 */
         private DimensionProgress dimensionProgress;
+        /** 是否有未填报的开放填报窗口 */
+        private Boolean hasUnfilledOpenWindow;
+        /** 成果总数 */
+        private Integer achievementTotalCount;
+        /** 已认定/已推广成果数 */
+        private Integer achievementApprovedCount;
     }
 
     /**
@@ -105,8 +111,12 @@ public class DashboardStatsVO {
 
     @Data
     public static class ProvinceStats {
+        /** 省份编码 */
+        private String provinceCode;
         /** 辖区项目总数 */
         private Integer regionProjectCount;
+        /** 已填报医院数 */
+        private Integer reportedHospitalCount;
         /** 待审核任务数量 */
         private Integer pendingReviewCount;
         /** 辖区平均进度(%) */
@@ -115,7 +125,7 @@ public class DashboardStatsVO {
         private Integer highRiskCount;
         /** 各地市项目分布 */
         private List<RegionItem> regionDistribution;
-        /** 各项目类型分布（基于 dept_id 过滤后的项目聚合） */
+        /** 各项目类型分布（基于 province_code 过滤） */
         private List<NationalStats.ProjectTypeItem> projectTypeDistribution;
     }
 

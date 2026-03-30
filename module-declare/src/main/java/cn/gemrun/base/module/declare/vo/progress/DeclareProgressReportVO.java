@@ -124,6 +124,11 @@ public class DeclareProgressReportVO {
     private String medicalLicenseNo;
 
     /**
+     * 填报人（用户ID）
+     */
+    private String creator;
+
+    /**
      * 创建时间
      */
     private LocalDateTime createTime;

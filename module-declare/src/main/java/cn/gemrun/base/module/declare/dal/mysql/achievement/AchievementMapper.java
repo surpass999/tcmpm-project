@@ -71,4 +71,26 @@ public interface AchievementMapper extends BaseMapperX<AchievementDO> {
         return selectOne(wrapper);
     }
 
+    /**
+     * 统计指定医院（deptId）的成果总数
+     */
+    default long selectCountByDeptId(Long deptId) {
+        LambdaQueryWrapperX<AchievementDO> wrapper = new LambdaQueryWrapperX<>();
+        wrapper.eq(AchievementDO::getDeptId, deptId);
+        return selectList(wrapper).size();
+    }
+
+    /**
+     * 统计指定医院（deptId）已通过/已认定推广的成果数
+     * 已认定推广：status=NATIONAL_APPROVED 或 recommendStatus=2
+     */
+    default long selectCountApprovedByDeptId(Long deptId) {
+        LambdaQueryWrapperX<AchievementDO> wrapper = new LambdaQueryWrapperX<>();
+        wrapper.eq(AchievementDO::getDeptId, deptId)
+                .and(w -> w.eq(AchievementDO::getStatus, "NATIONAL_APPROVED")
+                        .or()
+                        .eq(AchievementDO::getRecommendStatus, 2));
+        return selectList(wrapper).size();
+    }
+
 }

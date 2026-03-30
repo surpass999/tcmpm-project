@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.gemrun.base.module.declare.dal.mysql.DeclareHospitalMapper">
+
+    <!-- 统计所有医院数量（国家驾驶舱展示全量数据，不限启用状态） -->
+    <select id="selectCountActive" resultType="java.lang.Integer">
+        SELECT COUNT(*)
+        FROM declare_hospital
+    </select>
+
+    <!-- 按项目类型（1-6）分组统计医院数量及占比 -->
+    <select id="selectCountGroupByProjectType"
+            resultType="cn.gemrun.base.module.declare.controller.admin.dashboard.vo.DashboardStatsVO$NationalStats$ProjectTypeItem">
+        SELECT
+            project_type AS typeValue,
+            COUNT(*) AS projectCount,
+            ROUND(
+                COUNT(*) * 100.0 / NULLIF((
+                    SELECT COUNT(*) FROM declare_hospital
+                    WHERE project_type BETWEEN 1 AND 6
+                ), 0), 1
+            ) AS percentage
+        FROM declare_hospital
+        WHERE project_type BETWEEN 1 AND 6
+        GROUP BY project_type
+        ORDER BY project_type
+    </select>
+
+    <!-- 按省份分组统计医院数量 -->
+    <select id="selectCountGroupByProvince"
+            resultType="cn.gemrun.base.module.declare.controller.admin.dashboard.vo.NationalStatsVO$ProvinceItem">
+        SELECT
+            province_code AS provinceId,
+            MAX(province_name) AS provinceName,
+            COUNT(*) AS projectCount
+        FROM declare_hospital
+        GROUP BY province_code
+        ORDER BY projectCount DESC
+    </select>
+
+    <!-- 按省份统计医院数量 -->
+    <select id="selectCountActiveByProvince" resultType="java.lang.Integer">
+        SELECT COUNT(*)
+        FROM declare_hospital
+        WHERE province_code = #{provinceCode}
+    </select>
+
+    <!-- 按项目类型（1-6）分组统计某省份的医院数量 -->
+    <select id="selectCountGroupByProjectTypeOfProvince"
+            resultType="cn.gemrun.base.module.declare.controller.admin.dashboard.vo.DashboardStatsVO$NationalStats$ProjectTypeItem">
+        SELECT
+            project_type AS typeValue,
+            COUNT(*) AS projectCount,
+            ROUND(
+                COUNT(*) * 100.0 / NULLIF((
+                    SELECT COUNT(*) FROM declare_hospital
+                    WHERE project_type BETWEEN 1 AND 6 AND province_code = #{provinceCode}
+                ), 0), 1
+            ) AS percentage
+        FROM declare_hospital
+        WHERE project_type BETWEEN 1 AND 6 AND province_code = #{provinceCode}
+        GROUP BY project_type
+        ORDER BY project_type
+    </select>
+
+</mapper>

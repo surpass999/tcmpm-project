@@ -8,6 +8,8 @@ defineProps<{
   icon?: string;
   color?: string;
   suffix?: string;
+  /** 额外副标题（如填报窗口时间范围） */
+  extra?: string;
   loading?: boolean;
   clickable?: boolean;
 }>();
@@ -40,6 +42,7 @@ function handleClick() {
         <span v-if="suffix" class="suffix">{{ suffix }}</span>
       </div>
       <div class="card-title">{{ title }}</div>
+      <div v-if="extra" class="card-extra">{{ extra }}</div>
     </div>
   </div>
 </template>
@@ -110,6 +113,15 @@ function handleClick() {
   font-size: 14px;
   color: #909399;
   margin-top: 8px;
+}
+
+.card-extra {
+  font-size: 11px;
+  color: #c0c4cc;
+  margin-top: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .loading-spinner {

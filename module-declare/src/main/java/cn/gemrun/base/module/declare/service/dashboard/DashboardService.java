@@ -43,4 +43,9 @@ public interface DashboardService {
      * 获取当前用户角色
      */
     String getCurrentUserRole();
+
+    /**
+     * 获取填报窗口统计信息（国家局专用）
+     */
+    ReportWindowStatsVO getReportWindowStats();
 }

@@ -101,7 +101,7 @@ public class DeclareIndicatorController {
     public CommonResult<List<DeclareIndicatorRespVO>> getIndicatorsByProjectType(
             @RequestParam("projectType") Integer projectType,
             @RequestParam("businessType") String businessType) {
-        List<DeclareIndicatorDO> list = indicatorService.getIndicatorsByProjectType(projectType, businessType);
+        List<DeclareIndicatorDO> list = indicatorService.getIndicators(projectType, businessType);
         List<DeclareIndicatorRespVO> voList = BeanUtils.toBean(list, DeclareIndicatorRespVO.class);
         // 填充口径数据
         fillCaliberData(voList);
@@ -109,25 +109,13 @@ public class DeclareIndicatorController {
     }
 
     /**
-     * 根据业务类型获取指标列表（可选按项目类型过滤）
-     */
-    @GetMapping("/list-by-business-type")
-    public CommonResult<List<DeclareIndicatorRespVO>> getIndicatorsByBusinessType(
-            @RequestParam("businessType") String businessType,
-            @RequestParam(value = "projectType", required = false) Integer projectType) {
-        List<DeclareIndicatorDO> list = indicatorService.getIndicatorsByBusinessType(projectType, businessType);
-        List<DeclareIndicatorRespVO> voList = BeanUtils.toBean(list, DeclareIndicatorRespVO.class);
-        // 填充口径数据
-        fillCaliberData(voList);
-        return success(voList);
-    }
-
-    /**
-     * 获取需要在列表显示的指标（showInList=true）
+     * 根据项目类型和业务类型获取需要在列表显示的指标（showInList=true）
      */
     @GetMapping("/list-for-list-display")
-    public CommonResult<List<DeclareIndicatorRespVO>> getIndicatorsForListDisplay(@RequestParam("businessType") String businessType) {
-        List<DeclareIndicatorDO> list = indicatorService.getIndicatorsByBusinessType(businessType);
+    public CommonResult<List<DeclareIndicatorRespVO>> getIndicatorsForListDisplay(
+            @RequestParam("projectType") Integer projectType,
+            @RequestParam("businessType") String businessType) {
+        List<DeclareIndicatorDO> list = indicatorService.getIndicators(projectType, businessType);
         // 过滤 showInList=true 的指标
         List<DeclareIndicatorDO> listDisplayIndicators = new java.util.ArrayList<>();
         for (DeclareIndicatorDO indicator : list) {

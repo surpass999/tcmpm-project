@@ -4,8 +4,8 @@ import { computed, onMounted, ref, watch } from 'vue';
 import type { PropType } from 'vue';
 import { useRouter } from 'vue-router';
 
-import type { DashboardStats, DashboardTasks, RiskWarnings } from '#/api/declare/dashboard';
-import { getNationalStats } from '#/api/declare/dashboard';
+import type { DashboardStats, DashboardTasks, RiskWarnings, ReportWindowStatsVO } from '#/api/declare/dashboard';
+import { getNationalStats, getReportWindowStats } from '#/api/declare/dashboard';
 import StatisticCard from '../common/StatisticCard.vue';
 import { EchartsUI, useEcharts } from '@vben/plugins/echarts';
 import type { EchartsUIType } from '@vben/plugins/echarts';
@@ -23,16 +23,18 @@ const emit = defineEmits<{
   'go-to-project-list': [params?: Record<string, string>];
 }>();
 
-// 全国统计数据（独立调用接口获取全量数据）
+// 全国统计数据
 const localNationalStats = ref<any>(null);
 const nationalStatsLoading = ref(false);
+
+// 填报窗口统计数据
+const windowStats = ref<ReportWindowStatsVO | null>(null);
 
 async function loadNationalStats() {
   nationalStatsLoading.value = true;
   try {
     const data = await getNationalStats();
     localNationalStats.value = data;
-    console.log('[NationalDashboard] 全国统计数据:', data);
   } catch (error) {
     console.error('加载全国统计数据失败:', error);
   } finally {
@@ -40,106 +42,56 @@ async function loadNationalStats() {
   }
 }
 
+async function loadWindowStats() {
+  try {
+    const data = await getReportWindowStats();
+    console.log('[Dashboard] 填报窗口 stats 原始数据:', data);
+    windowStats.value = data;
+    console.log('[Dashboard] windowStats.value:', windowStats.value);
+    console.log('[Dashboard] hasOpenWindow:', windowStats.value?.hasOpenWindow);
+  } catch (error) {
+    console.error('加载填报窗口统计失败:', error);
+  }
+}
+
 onMounted(() => {
   loadNationalStats();
+  loadWindowStats();
 });
-
-
 
 const bpmTasksItems = computed(() => props.tasks?.bpmTasks?.items ?? []);
 const hasBpmTasks = computed(() => bpmTasksItems.value.length > 0);
 
+// 6种项目类型网格数据
 const typeItems = computed(() => {
   return localNationalStats.value?.projectTypeDistribution
     || (props.stats?.nationalStats as any)?.projectTypeDistribution
     || [];
 });
 
-// ECharts 完成率图表
-const chartRef = ref<EchartsUIType>();
-const { renderEcharts } = useEcharts(chartRef);
-
-const typeCompletionData = computed(() => {
-  return localNationalStats.value?.projectTypeDistribution
-    || (props.stats?.nationalStats as any)?.projectTypeDistribution
-    || [];
-});
-
-watch(typeCompletionData, (val) => {
-  if (!val || val.length === 0) return;
-
-  const xData = val.map((item: any) => item.typeName);
-  const rateData = val.map((item: any) => item.completionRate ?? 0);
-  const countData = val.map((item: any) => ({
-    value: item.completedCount ?? 0,
-    total: item.projectCount ?? 0
-  }));
-
-  renderEcharts({
-    tooltip: {
-      trigger: 'axis',
-      formatter: (params: any) => {
-        const item = params[0];
-        const data = countData[item.dataIndex];
-        return `${item.name}<br/>完成率: ${item.value}%<br/>已完成: ${data.value}/${data.total}`;
-      }
-    },
-    grid: { left: 60, right: 20, bottom: 40, top: 30 },
-    xAxis: {
-      type: 'category',
-      data: xData,
-      axisLabel: { rotate: 30, fontSize: 10 }
-    },
-    yAxis: {
-      type: 'value',
-      axisLabel: { formatter: '{value}%' },
-      max: 100
-    },
-    series: [{
-      type: 'bar',
-      data: rateData,
-      itemStyle: {
-        color: (params: any) => {
-          const rate = params.value;
-          if (rate >= 80) return '#67c23a';
-          if (rate >= 50) return '#e6a23c';
-          return '#f56c6c';
-        }
-      },
-      label: {
-        show: true,
-        formatter: '{c}%',
-        position: 'top',
-        fontSize: 10
-      }
-    }]
-  });
-}, { immediate: true });
-
-// ECharts 各省项目分布图表（新增）
-const provinceChartRef = ref<EchartsUIType>();
-const { renderEcharts: renderProvinceChart } = useEcharts(provinceChartRef);
-
+// 各省分布数据
 const provinceData = computed(() => {
   return localNationalStats.value?.provinceDistribution
     || (props.stats?.nationalStats as any)?.provinceDistribution
     || [];
 });
 
-// 动态计算图表高度（每个省份约 35px）
+// 动态计算省分布图高度
 const provinceChartHeight = computed(() => {
   const count = provinceData.value.length;
   return Math.max(200, Math.min(count * 35, 500)) + 'px';
 });
 
+// ========== 各省医院分布图表 ==========
+const provinceChartRef = ref<EchartsUIType>();
+const { renderEcharts: renderProvinceChart } = useEcharts(provinceChartRef);
+
 watch(provinceData, (val) => {
   if (!val || val.length === 0) return;
 
-  // 按项目数量降序排序
-  const sortedData = [...val].sort((a, b) => b.projectCount - a.projectCount);
+  const sortedData = [...val].sort((a: any, b: any) => b.projectCount - a.projectCount);
   const yData = sortedData.map((item: any) => item.provinceName);
   const countData = sortedData.map((item: any) => item.projectCount ?? 0);
-  const progressData = sortedData.map((item: any) => item.progress ?? 0);
 
   renderProvinceChart({
     tooltip: {
@@ -148,13 +100,13 @@ watch(provinceData, (val) => {
       formatter: (params: any) => {
         const idx = params[0].dataIndex;
         const item = sortedData[idx];
-        return `${item.provinceName}<br/>项目数: ${item.projectCount}<br/>平均进度: ${item.progress ?? 0}%`;
+        return `${item.provinceName}<br/>医院数: ${item.projectCount}`;
       }
     },
     grid: { left: 80, right: 80, bottom: 20, top: 10 },
     xAxis: {
       type: 'value',
-      name: '项目数'
+      name: '医院数'
     },
     yAxis: {
       type: 'category',
@@ -167,20 +119,12 @@ watch(provinceData, (val) => {
         data: countData,
         barWidth: 18,
         itemStyle: {
-          color: (params: any) => {
-            const progress = progressData[params.dataIndex];
-            if (progress >= 80) return '#67c23a';
-            if (progress >= 50) return '#e6a23c';
-            return '#f56c6c';
-          }
+          color: '#409eff'
         },
         label: {
           show: true,
           position: 'right',
-          formatter: (params: any) => {
-            const progress = progressData[params.dataIndex];
-            return `${params.value} | 进度${progress}%`;
-          },
+          formatter: (params: any) => `${params.value}家`,
           fontSize: 11
         }
       }
@@ -188,9 +132,106 @@ watch(provinceData, (val) => {
   });
 }, { immediate: true });
 
-function handleProvinceClick(provinceId: number) {
-  emit('go-to-project-list', { province: String(provinceId) });
-}
+// ========== 各项目类型医院数量分布图表 ==========
+const typeChartRef = ref<EchartsUIType>();
+const { renderEcharts: renderTypeChart } = useEcharts(typeChartRef);
+
+const typeChartData = computed(() => {
+  return localNationalStats.value?.projectTypeDistribution
+    || (props.stats?.nationalStats as any)?.projectTypeDistribution
+    || [];
+});
+
+watch(typeChartData, (val) => {
+  if (!val || val.length === 0) return;
+
+  const xData = val.map((item: any) => item.typeName);
+  const countData = val.map((item: any) => item.projectCount ?? 0);
+  const percentageData = val.map((item: any) => item.percentage ?? 0);
+
+  // 按数量降序确定颜色
+  const sortedCounts = [...countData].sort((a: number, b: number) => b - a);
+  const maxCount = sortedCounts[0] || 1;
+  const colors = countData.map((count: number) => {
+    if (count >= maxCount * 0.8) return '#67c23a';
+    if (count >= maxCount * 0.5) return '#e6a23c';
+    return '#f56c6c';
+  });
+
+  renderTypeChart({
+    tooltip: {
+      trigger: 'axis',
+      formatter: (params: any) => {
+        const idx = params[0].dataIndex;
+        const typeItem = val[idx];
+        return `${params[0].name}<br/>医院数: ${params[0].value}<br/>占比: ${typeItem.percentage ?? 0}%`;
+      }
+    },
+    grid: { left: 60, right: 20, bottom: 40, top: 30 },
+    xAxis: {
+      type: 'category',
+      data: xData,
+      axisLabel: { rotate: 30, fontSize: 10 }
+    },
+    yAxis: {
+      type: 'value',
+      axisLabel: { formatter: '{value}家' }
+    },
+    series: [{
+      type: 'bar',
+      data: countData,
+      itemStyle: {
+        color: (params: any) => colors[params.dataIndex]
+      },
+      label: {
+        show: true,
+        formatter: '{c}',
+        position: 'top',
+        fontSize: 10
+      }
+    }]
+  });
+}, { immediate: true });
+
+// ========== 计算属性 ==========
+
+// 全国医院总数
+const totalHospitalCount = computed(() => {
+  return localNationalStats.value?.totalProjectCount
+    || (props.stats?.nationalStats as any)?.totalProjectCount
+    || props.stats?.projectCount
+    || 0;
+});
+
+// 填报进度（已填报/全国医院）
+const reportProgress = computed(() => {
+  const reported = windowStats.value?.reportedHospitalCount ?? 0;
+  const total = windowStats.value?.totalHospitalCount ?? totalHospitalCount.value;
+  if (!total) return 0;
+  return Math.round(reported * 100 / total);
+});
+
+// 填报窗口状态描述
+const windowStatusText = computed(() => {
+  if (windowStats.value?.hasOpenWindow) {
+    const { startDate, endDate } = windowStats.value;
+    // 支持两种格式：ISO字符串 或 时间戳数字
+    const fmt = (d: string | number | undefined | null) => {
+      if (d == null) return '';
+      if (typeof d === 'string') return d.substring(0, 10);
+      if (typeof d === 'number') return new Date(d).toISOString().substring(0, 10);
+      return '';
+    };
+    return `${fmt(startDate)} ~ ${fmt(endDate)}`;
+  }
+  return '已关闭';
+});
+
+// 填报批次描述
+const batchText = computed(() => {
+  if (!windowStats.value?.hasOpenWindow) return '暂无开放窗口';
+  return `第${windowStats.value?.currentBatch}批 · ${windowStats.value?.reportYear}年`;
+});
 
 const taskColumns = [
   { title: '任务名称', dataIndex: 'taskName', key: 'taskName', width: 180, ellipsis: true },
@@ -206,44 +247,42 @@ const taskColumns = [
     <a-row :gutter="20" class="stat-row">
       <a-col :span="6">
         <StatisticCard
-          title="全国项目"
-          :value="localNationalStats?.totalProjectCount || stats?.nationalStats?.totalProjectCount || stats?.projectCount || 0"
+          title="全国医院数"
+          :value="totalHospitalCount"
           icon="ant-design:bank-outlined"
           color="#67c23a"
           clickable
-          @click="emit('go-to-project-list')"
+          @click="router.push('/declare/hospital')"
         />
       </a-col>
       <a-col :span="6">
         <StatisticCard
-          title="全国平均进度"
-          :value="localNationalStats?.averageProgress || stats?.nationalStats?.nationalProgress || stats?.projectProgress || 0"
+          title="填报进度"
+          :value="reportProgress"
           suffix="%"
           icon="ant-design:line-chart-outlined"
           color="#e6a23c"
           clickable
-          @click="emit('go-to-project-list')"
+          @click="router.push('/progress-report')"
         />
       </a-col>
       <a-col :span="6">
         <StatisticCard
-          title="资金执行率"
-          :value="localNationalStats?.totalFundRate || stats?.nationalStats?.totalFundRate || stats?.fundExecutionRate || 0"
-          suffix="%"
-          icon="ant-design:account-book-outlined"
-          color="#9c27b0"
-          clickable
-          @click="emit('go-to-project-list')"
+          :title="windowStats?.hasOpenWindow ? '填报窗口状态' : '填报窗口状态'"
+          :value="windowStats?.hasOpenWindow ? '开放中' : '已关闭'"
+          icon="ant-design:calendar-outlined"
+          :color="windowStats?.hasOpenWindow ? '#67c23a' : '#f56c6c'"
+          :extra="windowStats?.hasOpenWindow ? windowStatusText : ''"
+          @click="router.push('/declare/report-window')"
         />
       </a-col>
       <a-col :span="6">
         <StatisticCard
-          title="中央转移资金三年总额"
-          :value="((localNationalStats?.centralFundThreeYearTotal || (stats?.nationalStats as any)?.centralFundThreeYearTotal) || 0) / 10000"
-          icon="ant-design:credit-card-outlined"
-          suffix="亿"
-          :precision="2"
-          color="#1d39c4"
+          title="填报批次"
+          :value="batchText"
+          icon="ant-design:form-outlined"
+          color="#409eff"
+          @click="router.push('/declare/report-window')"
         />
       </a-col>
     </a-row>
@@ -252,35 +291,36 @@ const taskColumns = [
     <a-row :gutter="20" class="stat-row-2">
       <a-col :span="6">
         <StatisticCard
-          title="已中期评估"
-          :value="localNationalStats?.midtermProjectCount || (stats?.nationalStats as any)?.midtermProjectCount || 0"
-          icon="ant-design:audit-outlined"
-          color="#909399"
-        />
-      </a-col>
-      <a-col :span="6">
-        <StatisticCard
-          title="已验收项目"
-          :value="localNationalStats?.acceptedProjectCount || (stats?.nationalStats as any)?.acceptedProjectCount || 0"
+          title="已填报医院"
+          :value="`${windowStats?.reportedHospitalCount ?? 0} / ${windowStats?.totalHospitalCount ?? 0}`"
           icon="ant-design:check-circle-outlined"
           color="#67c23a"
+          clickable
+          @click="router.push('/progress-report')"
         />
       </a-col>
       <a-col :span="6">
         <StatisticCard
-          title="到账资金总额"
-          :value="((localNationalStats?.centralFundArriveTotal || (stats?.nationalStats as any)?.centralFundArriveTotal) || 0) / 10000"
-          suffix="亿"
-          :precision="2"
-          icon="ant-design:account-book-outlined"
-          color="#c8960c"
+          title="总填报记录"
+          :value="localNationalStats?.midtermProjectCount ?? 0"
+          icon="ant-design:file-text-outlined"
+          color="#409eff"
+          clickable
+          @click="router.push('/progress-report')"
+        />
+      </a-col>
+      <a-col :span="6">
+        <StatisticCard
+          title="省级待审核"
+          :value="localNationalStats?.acceptedProjectCount ?? 0"
+          icon="ant-design:audit-outlined"
+          color="#e6a23c"
         />
       </a-col>
       <a-col :span="6">
         <div class="type-grid-wrap">
-
           <div class="type-grid-header">
-            <IconifyIcon icon="ant-design:pie-chart-outlined" class="header-icon" />          
+            <IconifyIcon icon="ant-design:pie-chart-outlined" class="header-icon" />
           </div>
           <div class="type-grid">
             <div
@@ -289,7 +329,7 @@ const taskColumns = [
               class="type-item"
             >
               <span class="type-name">{{ item.typeName }}</span>
-              <span class="type-count">{{ item.projectCount ?? 0 }}</span>
+              <span class="type-count">{{ item.projectCount ?? 0 }}家</span>
             </div>
           </div>
         </div>
@@ -297,7 +337,7 @@ const taskColumns = [
     </a-row>
 
     <!-- 待审批任务列表 -->
-    <div class="task-panel">
+    <!-- <div class="task-panel">
       <div class="panel-header">
         <h3>待审批任务</h3>
         <a-button type="link" @click="emit('go-to-bpm-tasks')">查看全部</a-button>
@@ -318,34 +358,32 @@ const taskColumns = [
         </template>
       </a-table>
       <div v-if="!hasBpmTasks" class="table-empty"><span>暂无待审批任务</span></div>
-    </div>
+    </div> -->
 
-    <!-- 全国项目分布（图表展示） -->
-    <div class="national-stats" v-loading="nationalStatsLoading">
-      <div class="panel-header">
-        <h3>全国项目分布（按项目数量排序）</h3>
-        <a-button type="link" @click="emit('go-to-project-list')">查看全部</a-button>
-      </div>
-      <EchartsUI ref="provinceChartRef" :style="{ height: provinceChartHeight }" />
-      <div class="province-chart-legend">
-        <span class="legend-item"><span class="dot green"></span>进度 ≥80%</span>
-        <span class="legend-item"><span class="dot yellow"></span>进度 50-80%</span>
-        <span class="legend-item"><span class="dot red"></span>进度 &lt;50%</span>
-      </div>
-    </div>
 
-    <!-- 各项目类型完成率统计 -->
+    <!-- 各项目类型医院数量分布图表 -->
     <div class="type-completion-chart" v-loading="nationalStatsLoading">
       <div class="panel-header">
-        <h3>各项目类型完成率统计</h3>
+        <h3>各项目类型医院数量分布</h3>
       </div>
-      <EchartsUI ref="chartRef" :style="{ height: '320px' }" />
+      <EchartsUI ref="typeChartRef" :style="{ height: '320px' }" />
       <div class="chart-legend">
-        <span class="legend-item"><span class="dot green"></span>完成率 ≥80%</span>
-        <span class="legend-item"><span class="dot yellow"></span>完成率 50-80%</span>
-        <span class="legend-item"><span class="dot red"></span>完成率 &lt;50%</span>
+        <span class="legend-item"><span class="dot green"></span>数量较多</span>
+        <span class="legend-item"><span class="dot yellow"></span>数量中等</span>
+        <span class="legend-item"><span class="dot red"></span>数量较少</span>
       </div>
     </div>
+
+    <!-- 各省医院分布图表 -->
+    <div class="national-stats" v-loading="nationalStatsLoading">
+      <div class="panel-header">
+        <h3>各省医院分布（按医院数量排序）</h3>
+        <!-- <a-button type="link" @click="emit('go-to-project-list')">查看全部</a-button> -->
+      </div>
+      <EchartsUI ref="provinceChartRef" :style="{ height: provinceChartHeight }" />
+    </div>
+
+    
   </div>
 </template>
 
@@ -493,15 +531,6 @@ const taskColumns = [
 }
 
 .chart-legend {
-  display: flex;
-  justify-content: center;
-  gap: 20px;
-  margin-top: 10px;
-  font-size: 12px;
-  color: #606266;
-}
-
-.province-chart-legend {
   display: flex;
   justify-content: center;
   gap: 20px;

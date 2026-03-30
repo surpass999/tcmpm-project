@@ -383,7 +383,8 @@ public class BpmTaskStatusService {
 
         // 3. 批量查询主流程实例（包含运行中 + 已结束）
         // 注意：流程结束后实例从 runtime 表移到 history 表，必须同时查询两表
-        List<String> allProcessInstanceIds = new ArrayList<>();
+        // 使用 LinkedHashSet 去重：Flowable 在同一事务内可能同时在 runtime/history 两表存在同一实例
+        Set<String> allProcessInstanceIds = new java.util.LinkedHashSet<>();
         Map<String, Long> processInstanceIdToBusinessId = new HashMap<>();
         log.info("[getTaskByBusiness] 开始查询主流程实例: businessKeys={}", businessKeys);
         for (String businessKey : businessKeys) {
@@ -464,7 +465,7 @@ public class BpmTaskStatusService {
         }
 
         // 7. 批量查询任务状态
-        List<BpmTaskBatchStatusRespVO> batchStatusList = getTaskBatchStatus(userId, allProcessInstanceIds);
+        List<BpmTaskBatchStatusRespVO> batchStatusList = getTaskBatchStatus(userId, new ArrayList<>(allProcessInstanceIds));
 
         // 8. 按 businessId 封装结果
         Map<String, BpmTaskBatchStatusRespVO> processInstanceIdToStatus = batchStatusList.stream()

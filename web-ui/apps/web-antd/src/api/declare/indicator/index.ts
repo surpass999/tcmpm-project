@@ -84,19 +84,12 @@ export async function getIndicator(id: number) {
 }
 
 /** 根据项目类型和业务类型获取指标列表 */
-export async function getIndicatorsByProjectType(projectType: number, businessType: string) {
+export async function getIndicatorsByBusinessType(businessType: string, projectType?: number) {
+  if (projectType === undefined || projectType === null) {
+    throw new Error('projectType 为必填参数');
+  }
   return requestClient.get<DeclareIndicatorApi.Indicator[]>(
     `/declare/indicator/list-by-project-type?projectType=${projectType}&businessType=${businessType}`
-  );
-}
-
-/** 根据业务类型获取指标列表（可选按项目类型过滤） */
-export async function getIndicatorsByBusinessType(businessType: string, projectType?: number) {
-  const params: Record<string, any> = { businessType };
-  if (projectType !== undefined) params.projectType = projectType;
-  return requestClient.get<DeclareIndicatorApi.Indicator[]>(
-    '/declare/indicator/list-by-business-type',
-    { params }
   );
 }
 
@@ -116,9 +109,12 @@ export async function deleteIndicator(id: number) {
 }
 
 /** 获取需要在列表显示的指标（showInList=true） */
-export async function getIndicatorsForListDisplay(businessType: string) {
+export async function getIndicatorsForListDisplay(businessType: string, projectType?: number) {
+  if (projectType === undefined || projectType === null) {
+    throw new Error('projectType 为必填参数');
+  }
   return requestClient.get<DeclareIndicatorApi.Indicator[]>(
-    `/declare/indicator/list-for-list-display?businessType=${businessType}`
+    `/declare/indicator/list-for-list-display?projectType=${projectType}&businessType=${businessType}`
   );
 }
 

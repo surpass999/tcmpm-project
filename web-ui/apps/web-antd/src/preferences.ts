@@ -29,9 +29,35 @@ export const overridesPreferences = defineOverridesPreferences({
   copyright: {
     companyName: import.meta.env.VITE_APP_TITLE,
     companySiteLink: '#',
+    date: "2026"
+  },
+  header: {
+    menuAlign: 'center',
   },
   widget: {
-    timezone: false,
+    "timezone": false,
+    "fullscreen": false,
+    "globalSearch": false,
+    "languageToggle": false,
+    "lockScreen": false,
+    "notification": false,
+    "sidebarToggle": false,
+    "themeToggle": false
+  },
+  theme: {
+    "builtinType": "rose",
+    "colorPrimary": "hsl(0 75% 42%)",
+    "fontSize": 16,
+    "semiDarkHeader": false
+  },
+  shortcutKeys: {
+    "enable": false,
+    "globalLockScreen": false,
+    "globalLogout": false,
+    "globalSearch": false
+  },
+  breadcrumb: {
+    enable: false
   },
 });
 

@@ -80,7 +80,6 @@ export const RECOMMEND_STATUS_OPTIONS = [
 
 /** 表单校验规则 */
 export const FORM_RULES = {
-  projectId: [{ required: true, message: '请选择关联项目', trigger: 'change' }],
   achievementName: [{ required: true, message: '请输入成果名称', trigger: 'blur' }],
   achievementType: [{ required: true, message: '请选择成果类型', trigger: 'change' }],
   applicationField: [{ required: true, message: '请输入应用领域', trigger: 'blur' }],

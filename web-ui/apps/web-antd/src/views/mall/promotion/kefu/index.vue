@@ -12,7 +12,6 @@ import { message } from 'ant-design-vue';
 import { useMallKefuStore } from '#/store/mall/kefu';
 
 import ConversationList from './modules/conversation-list.vue';
-import MemberInfo from './modules/member/member-info.vue';
 import MessageList from './modules/message-list.vue';
 import { WebSocketMessageTypeConstants } from './modules/tools/constants';
 
@@ -21,7 +20,6 @@ const kefuStore = useMallKefuStore(); // 客服缓存
 
 /** 组件引用 */
 const messageListRef = ref<InstanceType<typeof MessageList>>();
-const memberInfoRef = ref<InstanceType<typeof MemberInfo>>();
 const conversationListRef = ref<InstanceType<typeof ConversationList>>();
 
 // ======================= WebSocket start =======================
@@ -82,7 +80,6 @@ watch(
 
 function handleChange(conversation: MallKefuConversationApi.Conversation) {
   messageListRef.value?.getNewMessageList(conversation);
-  memberInfoRef.value?.initHistory(conversation);
 }
 
 /** 初始化 */
@@ -113,9 +110,7 @@ onBeforeUnmount(() => {
           @change="handleChange"
         />
         <!-- 会话详情（选中会话的消息列表） -->
-        <MessageList class="w-4/6" ref="messageListRef" />
-        <!-- 会员信息（选中会话的会员信息） -->
-        <MemberInfo class="w-[280px]" ref="memberInfoRef" />
+        <MessageList class="w-5/6" ref="messageListRef" />
       </div>
     </div>
   </Page>

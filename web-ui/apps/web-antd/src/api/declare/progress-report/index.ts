@@ -28,6 +28,8 @@ export interface DeclareProgressReport {
   unifiedSocialCreditCode?: string;
   /** 医疗机构执业许可证登记号（从医院表关联获取） */
   medicalLicenseNo?: string;
+  /** 填报人（用户账号） */
+  creator?: string;
   createTime: string;
   updateTime: string;
 }

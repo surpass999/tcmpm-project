@@ -101,13 +101,6 @@ public interface AchievementService {
     void updateAchievementProcessInstance(Long id, String processInstanceId);
 
     /**
-     * 审核通过后，同步指标值到 declare_indicator_value 表
-     *
-     * @param achievementId 成果ID
-     */
-    void syncIndicatorsOnApproved(Long achievementId);
-
-    /**
      * 获取已纳入推广库的成果列表（公开接口）
      * 筛选条件：recommendStatus=2（已纳入推广库，遴选完成）
      *

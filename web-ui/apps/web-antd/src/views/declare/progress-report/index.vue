@@ -53,8 +53,14 @@ const userStore = useUserStore();
 
 const BUSINESS_TYPE_KEY = 'progress_report:submit';
 
+/** 当前用户ID */
+const currentUserId = computed(() => {
+  return Number(userStore.userInfo?.userId) || userStore.userInfo?.id;
+});
+
 /** 当前用户所属医院ID，从 deptId 获取 */
 const hospitalId = computed(() => Number(userStore.userInfo?.deptId) || 0);
+
 
 /** 是否有开放的填报窗口 */
 const canCreate = ref(false);
@@ -87,6 +93,7 @@ async function handleRefresh() {
 
 /** 对比按钮禁用状态：必须恰好选中2条且项目类型一致 */
 const compareDisabled = computed(() => {
+  console.log('[compareDisabled]', selectedRows.value.length, selectedRows.value);
   if (selectedRows.value.length !== 2) return true;
   const types = new Set(selectedRows.value.map((r) => r.projectType));
   return types.size > 1;
@@ -107,6 +114,11 @@ function handleOpenCompare() {
   if (a && b) {
     compareModalRef.value?.open(a.id, b.id);
   }
+}
+
+/** 监听复选框变化，更新已选行 */
+function handleRowCheckboxChange(params: { records: DeclareProgressReport[] }) {
+  selectedRows.value = [...params.records];
 }
 function handleCreate() {
   formModalApi.setData({ hospitalId: hospitalId.value }).open();
@@ -334,37 +346,25 @@ function getRowActions(row: DeclareProgressReport) {
     onClick: () => handleQuickBpmAction(row, action),
   }));
 
+  // 只有创建者才能看到编辑/详情按钮（其他人只能看到审批详情）
+  const isCreator = String(row.creator) === String(currentUserId.value);
   const alwaysButtons = [
     {
       label: '审批详情',
       type: 'link' as const,
       icon: 'lucide:history',
       onClick: () => handleViewApprovalDetail(row),
-    },
-    {
-      label: canEditStatus(row.reportStatus) ? '编辑' : '详情',
-      type: 'link' as const,
-      auth: 'declare:progress-report:update',
-      icon: canEditStatus(row.reportStatus) ? 'lucide:pencil' : 'lucide:eye',
-      onClick: () => handleEdit(row),
-    },
+    }
   ];
 
-  if (row.deptId === hospitalId.value && canSubmitStatus(row.reportStatus)) {
+  
+  if (isCreator && row.deptId === hospitalId.value && canSubmitStatus(row.reportStatus)) {
     alwaysButtons.push({
       label: '提交',
       type: 'link' as const,
       icon: 'lucide:send',
       onClick: () => handleSubmit(row),
     });
-    alwaysButtons.push({
-      label: '删除',
-      type: 'link' as const,
-      danger: true,
-      icon: 'lucide:trash-2',
-      auth: 'declare:progress-report:update',
-      onClick: () => handleDelete(row),
-    } as any);
   }
 
   // 省级通过且未上报：显示上报按钮
@@ -375,7 +375,25 @@ function getRowActions(row: DeclareProgressReport) {
       icon: 'lucide:upload',
       auth: ['declare:national-report:batch-report'],
       onClick: () => handleSingleReport(row),
-    });
+    } as any);
+  }
+  if (isCreator && canEditStatus(row.reportStatus)) {
+    alwaysButtons.push({
+      label: '编辑',
+      type: 'link' as const,
+      icon: 'lucide:pencil',
+      auth: ['declare:progress-report:update'],
+      onClick: () => handleEdit(row),
+    } as any);
+
+    alwaysButtons.push({
+      label: '删除',
+      type: 'link' as const,
+      danger: true,
+      icon: 'lucide:trash-2',
+      auth: ['declare:progress-report:update'],
+      onClick: () => handleDelete(row),
+    } as any);
   }
 
   return [...actionButtons, ...alwaysButtons];
@@ -427,7 +445,12 @@ const [Grid, gridApi] = useVbenVxeGrid({
   gridOptions: {
     columns: [
       { type: 'checkbox', width: 50 },
-      { type: 'seq', width: 50, title: '序号' },
+      {
+        field: 'seq',
+        title: '序号',
+        width: 70,
+        slots: { default: 'seq' },
+      },
       { field: 'hospitalName', title: '医院名称', minWidth: 200, showOverflow: true },
       { field: 'reportYear', title: '填报年度', width: 100 },
       {
@@ -489,16 +512,8 @@ const [Grid, gridApi] = useVbenVxeGrid({
       highlight: true,
       reserve: true,
       checkMethod: ({ row }: { row: DeclareProgressReport }) => {
-        // 只允许省级审核通过且未上报国家局的记录参与对比选择
-        return row.provinceStatus === 2 && row.nationalReportStatus !== 1;
-      },
-      listen: {
-        checked: ({ records }: { records: DeclareProgressReport[] }) => {
-          selectedRows.value = [...records];
-        },
-        all: ({ records }: { records: DeclareProgressReport[] }) => {
-          selectedRows.value = [...records];
-        },
+        // 用 == 宽松比较，兼容 provinceStatus 返回值为字符串或数字的场景
+        return true;   //Number(row.provinceStatus) === 2 && Number(row.nationalReportStatus) !== 1;
       },
     },
     toolbarConfig: {
@@ -509,8 +524,13 @@ const [Grid, gridApi] = useVbenVxeGrid({
       enabled: true,
       pageSize: 10,
     },
-  } as VxeTableGridOptions<DeclareProgressReport> as any,
-});
+  },
+  gridEvents: {
+    checkboxAll: handleRowCheckboxChange,
+    checkboxChange: handleRowCheckboxChange,
+  },
+} as VxeTableGridOptions<DeclareProgressReport> as any,
+);
 </script>
 
 <template>
@@ -552,6 +572,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
               label: canCreate ? '新建填报' : '暂无可用窗口',
               type: 'primary',
               icon: 'lucide:plus',
+              auth: ['declare:progress-report:create'],
               disabled: !canCreate,
               tooltip: canCreate ? '' : '当前没有开放的填报时间窗口',
               onClick: handleCreate,
@@ -572,6 +593,11 @@ const [Grid, gridApi] = useVbenVxeGrid({
             },
           ]"
         />
+      </template>
+
+      <!-- 序号列 -->
+      <template #seq="{ $rowIndex }">
+        <span class="seq-cell">{{ $rowIndex + 1 }}</span>
       </template>
 
       <!-- 填报批次列 -->
@@ -626,6 +652,12 @@ const [Grid, gridApi] = useVbenVxeGrid({
 </template>
 
 <style scoped>
+/* 序号 */
+.seq-cell {
+  color: hsl(var(--muted-foreground));
+  font-size: 13px;
+}
+
 /* 批次徽章 */
 .batch-badge {
   display: inline-flex;

@@ -16,11 +16,6 @@ import java.util.List;
 public interface DeclareIndicatorJointRuleMapper extends BaseMapperX<DeclareIndicatorJointRuleDO> {
 
     /**
-     * 项目类型 - 通用/全部类型
-     */
-    Integer COMPREHENSIVE_PROJECT_TYPE = 0;
-
-    /**
      * 根据项目类型获取启用的规则
      * @param projectType 项目类型，0表示全部项目
      * @param processNode 流程节点，可为空表示不限制
@@ -30,12 +25,9 @@ public interface DeclareIndicatorJointRuleMapper extends BaseMapperX<DeclareIndi
         LambdaQueryWrapperX<DeclareIndicatorJointRuleDO> wrapper = new LambdaQueryWrapperX<DeclareIndicatorJointRuleDO>()
                 .eq(DeclareIndicatorJointRuleDO::getStatus, 1); // 启用状态
 
-        // 项目类型过滤：查询指定类型或通用类型
+        // 项目类型过滤：严格匹配指定类型
         if (projectType != null) {
-            wrapper.and(w -> w
-                .eq(DeclareIndicatorJointRuleDO::getProjectType, projectType)
-                    .or()
-                    .eq(DeclareIndicatorJointRuleDO::getProjectType, COMPREHENSIVE_PROJECT_TYPE));
+            wrapper.eq(DeclareIndicatorJointRuleDO::getProjectType, projectType);
         }
 
         // 流程节点过滤

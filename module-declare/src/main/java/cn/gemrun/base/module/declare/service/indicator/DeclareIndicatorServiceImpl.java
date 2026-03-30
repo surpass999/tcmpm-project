@@ -166,21 +166,8 @@ public class DeclareIndicatorServiceImpl implements DeclareIndicatorService {
     }
 
     @Override
-    public List<DeclareIndicatorDO> getIndicatorsByProjectType(Integer projectType, String businessType) {
+    public List<DeclareIndicatorDO> getIndicators(Integer projectType, String businessType) {
         return indicatorMapper.selectByProjectTypeAndBusinessType(projectType, businessType);
-    }
-
-    @Override
-    public List<DeclareIndicatorDO> getIndicatorsByBusinessType(String businessType) {
-        return indicatorMapper.selectByBusinessType(businessType);
-    }
-
-    @Override
-    public List<DeclareIndicatorDO> getIndicatorsByBusinessType(Integer projectType, String businessType) {
-        if (projectType != null) {
-            return indicatorMapper.selectByProjectTypeAndBusinessType(projectType, businessType);
-        }
-        return indicatorMapper.selectByBusinessType(businessType);
     }
 
     @Override

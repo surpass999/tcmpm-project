@@ -64,6 +64,7 @@ const pageTitle = '智慧中医医院试点项目过程管理平台';
   background: linear-gradient(180deg, hsl(var(--primary)) 0%, hsl(var(--primary-dark)) 100%);
   box-shadow: 0 2px 12px hsl(var(--primary) / 0.25);
   position: relative;
+  
   flex-shrink: 0;
 }
 

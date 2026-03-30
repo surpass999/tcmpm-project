@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.gemrun.base.module.declare.dal.mysql.DeclareProgressReportMapper">
+
+    <!-- 统计已有填报记录的医院数量（去重） -->
+    <select id="selectReportedHospitalCount" resultType="java.lang.Integer">
+        SELECT COUNT(DISTINCT hospital_id)
+        FROM declare_progress_report
+    </select>
+
+    <!-- 统计总填报记录数 -->
+    <select id="selectTotalReportCount" resultType="java.lang.Integer">
+        SELECT COUNT(*)
+        FROM declare_progress_report
+    </select>
+
+    <!-- 统计填报状态为 SUBMITTED（待审批）的记录数 -->
+    <select id="selectPendingReportCount" resultType="java.lang.Integer">
+        SELECT COUNT(*)
+        FROM declare_progress_report
+        WHERE report_status = 'SUBMITTED'
+    </select>
+
+    <!-- 统计省级审核中（province_status = 1）的记录数 -->
+    <select id="selectProvincePendingCount" resultType="java.lang.Integer">
+        SELECT COUNT(*)
+        FROM declare_progress_report
+        WHERE province_status = 1
+    </select>
+
+    <!-- 按省份统计省级审核中（province_status = 1）的记录数 -->
+    <select id="selectProvincePendingCountByProvince" resultType="java.lang.Integer">
+        SELECT COUNT(*)
+        FROM declare_progress_report
+        WHERE province_status = 1 AND province_code = #{provinceCode}
+    </select>
+
+    <!-- 按省份统计已有填报记录的医院数量（去重） -->
+    <select id="selectReportedHospitalCountByProvince" resultType="java.lang.Integer">
+        SELECT COUNT(DISTINCT hospital_id)
+        FROM declare_progress_report
+        WHERE province_code = #{provinceCode}
+    </select>
+
+</mapper>

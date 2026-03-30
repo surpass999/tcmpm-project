@@ -6,7 +6,7 @@ import { BUSINESS_TYPE } from '#/constants/bpm/business-type';
 export namespace DeclareAchievementApi {
   /** 成果与流通信息 */
   export interface Achievement {
-    // 基础字段
+    // 基础字段（deptId/projectId 由后端自动设置，前端不填）
     id: number;
     processInstanceId?: string;
     deptId?: number;

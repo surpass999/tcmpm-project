@@ -84,11 +84,12 @@ public class DeclareProgressReportServiceImpl implements DeclareProgressReportSe
                 .reportStatus(ReportStatusEnum.DRAFT.getStatus())
                 .provinceStatus(ProvinceStatusEnum.NOT_SUBMITTED.getStatus())
                 .nationalReportStatus(NationalReportStatusEnum.NOT_REPORTED.getStatus())
+                .creator(userId != null ? userId.toString() : null)
                 .build();
         progressReportMapper.insert(report);
 
         // 初始化指标骨架记录（businessType=3：进度填报）
-        initIndicatorSkeletons(report.getId(), userId);
+        initIndicatorSkeletons(report.getId(), hospital.getProjectType(), userId);
 
         return report.getId();
     }
@@ -96,8 +97,8 @@ public class DeclareProgressReportServiceImpl implements DeclareProgressReportSe
     /**
      * 为新报告初始化所有指标的骨架记录
      */
-    private void initIndicatorSkeletons(Long reportId, Long userId) {
-        List<DeclareIndicatorDO> indicators = indicatorService.getIndicatorsByBusinessType("process");
+    private void initIndicatorSkeletons(Long reportId, Integer projectType, Long userId) {
+        List<DeclareIndicatorDO> indicators = indicatorService.getIndicators(projectType, "process");
         if (indicators == null || indicators.isEmpty()) {
             return;
         }
@@ -515,6 +516,7 @@ public class DeclareProgressReportServiceImpl implements DeclareProgressReportSe
                 .projectTypeName(projectTypeName)
                 .unifiedSocialCreditCode(unifiedSocialCreditCode)
                 .medicalLicenseNo(medicalLicenseNo)
+                .creator(report.getCreator())
                 .createTime(report.getCreateTime())
                 .updateTime(report.getUpdateTime())
                 .build();
@@ -590,7 +592,7 @@ public class DeclareProgressReportServiceImpl implements DeclareProgressReportSe
 
         // 3. 获取该项目的指标定义列表（按一级分组 + 二级分组 + 指标代号排序）
         List<DeclareIndicatorDO> indicatorList =
-                indicatorService.getIndicatorsByProjectType(projectTypeA, "process");
+                indicatorService.getIndicators(projectTypeA, "process");
 
         // 4. 获取两条记录的指标值映射 (businessType=3=进度填报, businessId=reportId)
         Map<String, DeclareIndicatorValueDO> valueMapA =

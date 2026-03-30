@@ -69,4 +69,10 @@ public class DashboardController {
     public CommonResult<String> getUserRole() {
         return CommonResult.success(dashboardService.getCurrentUserRole());
     }
+
+    @Operation(summary = "获取填报窗口统计信息（国家局专用）")
+    @GetMapping("/report-window-stats")
+    public CommonResult<ReportWindowStatsVO> getReportWindowStats() {
+        return CommonResult.success(dashboardService.getReportWindowStats());
+    }
 }
