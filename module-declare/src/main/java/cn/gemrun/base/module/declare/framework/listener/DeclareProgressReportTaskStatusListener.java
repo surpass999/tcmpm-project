@@ -111,8 +111,12 @@ public class DeclareProgressReportTaskStatusListener extends BpmTaskStatusEventL
 
         } else if ("PROVINCE_RETURNED".equals(bizStatus)) {
             // 省级退回（打回修正），提交员可重新编辑并提交
-            report.setReportStatus(bizStatus);
-            progressReportMapper.updateById(report);
+            // 幂等：避免退回流程中 BPM 层重复发布事件导致重复处理
+            if (!"PROVINCE_RETURNED".equals(report.getReportStatus())) {
+                report.setReportStatus(bizStatus);
+                report.setProvinceStatus(ProvinceStatusEnum.REJECTED.getStatus());
+                progressReportMapper.updateById(report);
+            }
 
         } else if ("DRAFT".equals(bizStatus)) {
             // 保存草稿（不推进流程，仅保存）

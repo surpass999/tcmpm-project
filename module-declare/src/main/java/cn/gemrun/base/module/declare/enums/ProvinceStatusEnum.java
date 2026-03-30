@@ -11,6 +11,7 @@ public enum ProvinceStatusEnum {
     AUDITING(1, "省级审核中"),
     APPROVED(2, "省级通过"),
     REJECTED(3, "省级驳回");
+    
 
     private final Integer status;
     private final String name;

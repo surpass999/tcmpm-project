@@ -6,14 +6,17 @@ import cn.gemrun.base.module.declare.dal.dataobject.hospital.DeclareHospitalDO;
 import cn.gemrun.base.module.declare.dal.mysql.DeclareHospitalMapper;
 import cn.gemrun.base.module.declare.dal.mysql.DeclareProgressReportMapper;
 import cn.gemrun.base.module.declare.dal.mysql.achievement.AchievementMapper;
+import cn.gemrun.base.framework.mybatis.core.query.LambdaQueryWrapperX;
 import cn.gemrun.base.module.declare.enums.ProjectTypeEnum;
 import cn.gemrun.base.module.declare.service.dashboard.DashboardService;
 import cn.gemrun.base.module.declare.service.progress.DeclareReportWindowService;
 import cn.gemrun.base.module.declare.vo.progress.ReportWindowVO;
 import cn.gemrun.base.module.system.api.user.AdminUserApi;
 import cn.gemrun.base.module.system.api.user.dto.AdminUserRespDTO;
+import cn.gemrun.base.module.system.dal.dataobject.dept.DeptDO;
 import cn.gemrun.base.module.system.dal.dataobject.permission.RoleDO;
 import cn.gemrun.base.module.system.enums.permission.DataScopeEnum;
+import cn.gemrun.base.module.system.service.dept.DeptService;
 import cn.gemrun.base.module.system.service.permission.PermissionService;
 import cn.gemrun.base.module.system.service.permission.RoleService;
 import cn.hutool.core.collection.CollUtil;
@@ -26,6 +29,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * 驾驶舱数据服务实现类
@@ -57,6 +61,8 @@ public class DashboardServiceImpl implements DashboardService {
     @Resource
     @Lazy
     private AdminUserApi adminUserApi;
+    @Resource
+    private DeptService deptService;
     @Resource
     private DeclareHospitalMapper hospitalMapper;
     @Resource
@@ -135,19 +141,27 @@ public class DashboardServiceImpl implements DashboardService {
         Long deptId = user != null ? user.getDeptId() : null;
 
         // 通过用户归属的医院确定省份
+        // 优先级：直接匹配 deptId（医院用户）> 在 deptId 子树中查找（省局/市局用户）
         String provinceCode = null;
         if (deptId != null) {
             DeclareHospitalDO hospital = hospitalMapper.selectByDeptId(deptId);
             if (hospital != null) {
                 provinceCode = hospital.getProvinceCode();
-            }
-        }
-
-        if (provinceCode == null) {
-            // 兜底：取该用户可见的第一家医院的省份
-            List<DeclareHospitalDO> hospitals = hospitalMapper.selectList(null);
-            if (CollUtil.isNotEmpty(hospitals)) {
-                provinceCode = hospitals.get(0).getProvinceCode();
+            } else {
+                // 省局/市局用户的 deptId 是医院 deptId 的祖先，
+                // 在其子树中查找任意一家医院，取其 provinceCode
+                List<DeptDO> childDepts = deptService.getChildDeptList(deptId);
+                List<Long> deptIds = childDepts.stream()
+                        .map(DeptDO::getId)
+                        .collect(Collectors.toList());
+                deptIds.add(deptId); // 包含自身
+                List<DeclareHospitalDO> hospitals = hospitalMapper.selectList(
+                        new LambdaQueryWrapperX<DeclareHospitalDO>()
+                                .in(DeclareHospitalDO::getDeptId, deptIds)
+                                .last("LIMIT 1"));
+                if (CollUtil.isNotEmpty(hospitals)) {
+                    provinceCode = hospitals.get(0).getProvinceCode();
+                }
             }
         }
 

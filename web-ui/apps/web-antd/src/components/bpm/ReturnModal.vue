@@ -99,7 +99,6 @@ async function handleConfirm() {
       reason: reason.value,
       buttonId: currentButtonId.value,
     });
-    message.success('退回成功');
     open.value = false;
     emit('success');
   } catch (error: any) {

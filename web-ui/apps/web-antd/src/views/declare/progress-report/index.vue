@@ -381,7 +381,7 @@ function getRowActions(row: DeclareProgressReport) {
     onClick: () => handleQuickBpmAction(row, action),
   }));
 
-  // 只有创建者才能看到编辑/详情按钮（其他人只能看到审批详情）
+  // 只有创建者才能看到编辑/删除按钮（其他人只能看到审批详情）
   const isCreator = String(row.creator) === String(currentUserId.value);
   const alwaysButtons = [
     {
@@ -393,7 +393,7 @@ function getRowActions(row: DeclareProgressReport) {
   ];
 
   
-  if (isCreator && row.deptId === hospitalId.value && canSubmitStatus(row.reportStatus)) {
+  if (isCreator && row.deptId === hospitalId.value && canSubmitStatus(row.reportStatus) && row.provinceStatus !== 3) {
     alwaysButtons.push({
       label: '提交',
       type: 'link' as const,
