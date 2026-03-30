@@ -387,7 +387,7 @@
                         />
                         <a-switch
                           v-else-if="field.fieldType === 'boolean'"
-                          v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
+                          v-model:checked="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
                           :disabled="readonly"
                           @change="onIndicatorChange(indicator)"
                         />
@@ -522,7 +522,7 @@
                         />
                         <a-switch
                           v-else-if="field.fieldType === 'boolean'"
-                          v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
+                          v-model:checked="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
                           :disabled="readonly"
                           @change="onIndicatorChange(indicator)"
                         />

@@ -118,7 +118,7 @@ public class DeclareIndicatorServiceImpl implements DeclareIndicatorService {
             java.util.Set<String> fieldCodes = new java.util.HashSet<>();
             java.util.List<String> validFieldTypes = java.util.Arrays.asList(
                 "text", "number", "textarea", "radio", "checkbox",
-                "select", "multiSelect", "date", "dateRange"
+                "select", "multiSelect", "date", "dateRange","boolean"
             );
 
             for (com.fasterxml.jackson.databind.JsonNode field : fields) {

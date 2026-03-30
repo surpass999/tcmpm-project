@@ -22,6 +22,13 @@ interface OptionItem {
   key: string;
 }
 
+// 动态容器子字段条件配置
+interface ShowCondition {
+  watchField?: string;
+  operator: string;
+  value?: any;
+}
+
 // 动态容器子字段定义
 interface DynamicField {
   key: string;
@@ -42,6 +49,8 @@ interface DynamicField {
   precision?: number;
   prefix?: string;
   suffix?: string;
+  showCondition?: ShowCondition;
+  defaultValue?: any;
 }
 
 // 子字段类型选项
@@ -55,6 +64,7 @@ const fieldTypeOptions = [
   { value: 'multiSelect', label: '下拉多选' },
   { value: 'date', label: '日期' },
   { value: 'dateRange', label: '日期区间' },
+  { value: 'boolean', label: '开关' },
 ];
 
 // 值类型配置项
@@ -282,6 +292,49 @@ const handleRemoveField = (key: string) => {
   }
 };
 
+// 返回同容器中除自身外的其他字段（用于选择监听目标）
+const otherFields = (field: DynamicField): DynamicField[] => {
+  return dynamicFields.filter((f) => f.key !== field.key);
+};
+
+// 添加条件配置
+const handleAddShowCondition = (field: DynamicField) => {
+  field.showCondition = { watchField: '', operator: 'eq', value: '' };
+};
+
+// 移除条件配置
+const handleRemoveShowCondition = (field: DynamicField) => {
+  delete field.showCondition;
+};
+
+// 根据被监听字段类型返回合适的占位提示
+const getConditionValuePlaceholder = (field: DynamicField): string => {
+  const watchedField = dynamicFields.find((f) => f.fieldCode === field.showCondition?.watchField);
+  if (!watchedField) return '输入比较值';
+  switch (watchedField.fieldType) {
+    case 'radio':
+    case 'select':
+      return watchedField.options?.[0]?.value ?? '输入选项值';
+    case 'multiSelect':
+    case 'checkbox':
+      return '输入选项值，多个用逗号分隔';
+    case 'number':
+      return '输入数字，如 100';
+    case 'boolean':
+      return '输入 true 或 false';
+    default:
+      return '输入比较值';
+  }
+};
+
+// 判断被监听字段是否排在当前字段之后（顺序错误会导致运行时拿不到值）
+const isWatchFieldAfterCurrent = (field: DynamicField): boolean => {
+  if (!field.showCondition?.watchField) return false;
+  const watchedIdx = dynamicFields.findIndex((f) => f.fieldCode === field.showCondition?.watchField);
+  const currentIdx = dynamicFields.findIndex((f) => f.key === field.key);
+  return watchedIdx > currentIdx;
+};
+
 // 添加子字段选项
 const handleAddFieldOption = (fieldKey: string) => {
   const field = dynamicFields.find((item) => item.key === fieldKey);
@@ -326,6 +379,10 @@ const convertOptionsToJson = () => {
         precision: field.precision,
         prefix: field.prefix,
         suffix: field.suffix,
+        showCondition: field.showCondition?.watchField
+          ? Object.fromEntries(Object.entries({ ...field.showCondition }).filter(([, v]) => v !== undefined))
+          : undefined,
+        defaultValue: field.defaultValue,
       }));
     formData.value!.valueOptions = JSON.stringify(validFields);
     return;
@@ -375,6 +432,8 @@ const parseJsonToOptions = (jsonStr: string) => {
           precision: item.precision,
           prefix: item.prefix,
           suffix: item.suffix,
+          showCondition: item.showCondition,
+          defaultValue: item.defaultValue,
         });
       });
     } else {
@@ -690,7 +749,7 @@ watch(
               <a-input
                 v-model:value="field.fieldCode"
                 placeholder="字段编码"
-                class="w-24"
+                class="w-34"
               />
               <a-input
                 v-model:value="field.fieldLabel"
@@ -700,7 +759,7 @@ watch(
               <a-select
                 v-model:value="field.fieldType"
                 placeholder="字段类型"
-                class="w-24"
+                class="w-14"
               >
                 <a-select-option
                   v-for="opt in fieldTypeOptions"
@@ -718,6 +777,61 @@ watch(
                 @click="handleRemoveField(field.key)"
               >
                 删除字段
+              </a-button>
+            </div>
+
+            <!-- 条件显示配置（点击"添加显示条件"后出现） -->
+            <div v-if="field.showCondition" class="mb-2">
+              <div class="text-gray-500 text-xs mb-1 font-medium">字段显示条件</div>
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="text-gray-400 text-xs">当</span>
+                <a-select
+                  v-model="field.showCondition.watchField"
+                  placeholder="请选择被监听的字段"
+                  class="w-40"
+                  allow-clear
+                >
+                  <a-select-option
+                    v-for="f in otherFields(field)"
+                    :key="f.fieldCode"
+                    :value="f.fieldCode"
+                  >
+                    {{ f.fieldLabel }}
+                  </a-select-option>
+                </a-select>
+                <span class="text-red-400 text-xs" v-if="isWatchFieldAfterCurrent(field)">
+                  ⚠ 被监听字段应在当前字段之前
+                </span>
+                <a-select v-model="field.showCondition.operator" class="w-24" placeholder="选择条件">
+                  <a-select-option value="eq">等于</a-select-option>
+                  <a-select-option value="neq">不等于</a-select-option>
+                  <a-select-option value="notEmpty">有值</a-select-option>
+                  <a-select-option value="isEmpty">无值</a-select-option>
+                  <a-select-option value="gt">大于</a-select-option>
+                  <a-select-option value="gte">大于等于</a-select-option>
+                  <a-select-option value="lt">小于</a-select-option>
+                  <a-select-option value="lte">小于等于</a-select-option>
+                  <a-select-option value="in">包含</a-select-option>
+                </a-select>
+                <a-input
+                  v-if="!['notEmpty','isEmpty'].includes(field.showCondition.operator)"
+                  v-model="field.showCondition.value"
+                  :placeholder="getConditionValuePlaceholder(field)"
+                  class="flex-1"
+                />
+                <a-button type="text" danger size="small" @click="handleRemoveShowCondition(field)">
+                  移除条件
+                </a-button>
+              </div>
+              <div class="text-gray-400 text-xs mt-1">
+                示例：监听字段="性别"，运算符="等于"，比较值="男" → 当用户填写"性别=男"时此字段才显示<br/>
+                无条件=始终可见；有条件=默认隐藏，满足条件才显示
+              </div>
+            </div>
+            <!-- "添加显示条件"按钮（无条件配置时显示） -->
+            <div v-else class="mb-2">
+              <a-button type="link" size="small" @click="handleAddShowCondition(field)">
+                + 添加显示条件
               </a-button>
             </div>
 
