@@ -139,8 +139,14 @@ const formData = ref({
   windowEnd: undefined as string | undefined,
 });
 
-/** 保存草稿状态 */
+/** 保存状态（用于禁用按钮防重复提交） */
 const saving = ref(false);
+
+/** 提交状态（用于禁用提交审核按钮） */
+const submitting = ref(false);
+
+/** 是否已保存（可提交审核的状态） */
+const isSaved = computed(() => formData.value.reportStatus === 'SAVED');
 
 /** 标记表单在本次打开后是否被修改（用于关闭时判断） */
 const isFormDirty = ref(false);
@@ -159,12 +165,6 @@ const [Modal, modalApi] = useVbenModal({
   class: '!w-[90%]',
   destroyOnClose: true,
   showCancelButton: true,
-  confirmText: '提交审核',
-  async onConfirm() {
-    // 提交审核
-    await handleSubmit();
-    return false;
-  },
   async onBeforeClose() {
     // 如果用户已填了内容（dirty），弹出确认框
     if (isFormDirty.value) {
@@ -172,11 +172,11 @@ const [Modal, modalApi] = useVbenModal({
         AConfirmModal.confirm({
           title: '确认关闭',
           content: '当前有未保存的填报内容，关闭后将丢失。是否保存为草稿？',
-          okText: '保存草稿',
+          okText: '保存为草稿',
           cancelText: '不保存',
           okButtonProps: { loading: saving.value },
           async onOk() {
-            // 用户点"保存草稿"，执行保存后关闭
+            // 用户点"保存为草稿"，执行保存后关闭
             await handleSaveDraft();
             resolve(true);
           },
@@ -297,34 +297,24 @@ const [Modal, modalApi] = useVbenModal({
   },
 });
 
-/** 保存草稿 */
+/** 保存草稿：状态保持 DRAFT，仅记录填写进度，不做必填验证 */
 async function handleSaveDraft() {
   modalApi.lock();
   saving.value = true;
   try {
-    // 同步动态容器值
+    // 1. 同步动态容器值
     if (indicatorTableRef.value) {
       const containerVals = indicatorTableRef.value.getContainerValues();
       Object.assign(containerValuesData.value, containerVals);
       isFormDirty.value = true;
     }
 
-    // 1. 先触发自动计算，确保所有计算指标的值是最新的
+    // 2. 触发自动计算（计算指标依赖真实值）
     indicatorTableRef.value?.recalculateComputedIndicators?.();
 
-    // 2. 验证所有必填指标（必须放在计算之后，因为联合规则可能引用计算指标的值）
-    if (indicatorTableRef.value) {
-      const indicators = indicatorTableRef.value.getAllIndicators?.();
-      if (indicators) {
-        const errors = indicatorTableRef.value.validateAll(indicators);
-        if (errors.length > 0) {
-          summaryModalRef.value?.show(errors);
-          return;
-        }
-      }
-    }
+    // 3. 【不做验证】草稿可随时保存，无需校验必填
 
-    // 3. 获取所有指标值并转换为统一格式
+    // 4. 获取所有指标值
     const rawValues = indicatorTableRef.value?.getAllIndicatorValues?.() || [];
     const values = rawValues.map((item: any) => ({
       indicatorId: item.indicatorId,
@@ -332,19 +322,18 @@ async function handleSaveDraft() {
       valueType: item.valueType,
       value: extractValue(item),
     }));
-    console.log('[handleSaveDraft] 保存指标值，数量:', values.length, 'reportId:', formData.value.id);
 
-    // 3. 调用一体化保存接口
+    // 5. 调用一体化保存接口，状态为 DRAFT
     const id = await saveProgressReport({
       id: formData.value.id,
       reportYear: formData.value.reportYear,
       reportBatch: formData.value.reportBatch,
-      reportStatus: 'SAVED',
+      reportStatus: 'DRAFT',
       values,
     });
     formData.value.id = id;
-    formData.value.reportStatus = 'SAVED';
-
+    formData.value.reportStatus = 'DRAFT';
+    isFormDirty.value = false;
     message.success('保存草稿成功');
     await modalApi.close();
     emit('success');
@@ -357,20 +346,22 @@ async function handleSaveDraft() {
   }
 }
 
-/** 提交审核 */
-async function handleSubmit() {
+/** 保存：状态设为 SAVED，需验证所有必填指标，确认无误后可在列表页提交审核 */
+async function handleSave() {
   modalApi.lock();
+  saving.value = true;
   try {
-    // 同步动态容器值
+    // 1. 同步动态容器值
     if (indicatorTableRef.value) {
       const containerVals = indicatorTableRef.value.getContainerValues();
       Object.assign(containerValuesData.value, containerVals);
+      isFormDirty.value = true;
     }
 
-    // 1. 先触发自动计算，确保所有计算指标的值是最新的
+    // 2. 触发自动计算
     indicatorTableRef.value?.recalculateComputedIndicators?.();
 
-    // 2. 指标验证（必须放在计算之后，因为联合规则可能引用计算指标的值）
+    // 3. 【验证必填指标】必须全部通过才能保存
     if (indicatorTableRef.value) {
       const indicators = indicatorTableRef.value.getAllIndicators?.();
       if (indicators) {
@@ -382,7 +373,7 @@ async function handleSubmit() {
       }
     }
 
-    // 3. 获取所有指标值并转换为统一格式
+    // 4. 获取所有指标值
     const rawValues = indicatorTableRef.value?.getAllIndicatorValues?.() || [];
     const values = rawValues.map((item: any) => ({
       indicatorId: item.indicatorId,
@@ -390,20 +381,52 @@ async function handleSubmit() {
       valueType: item.valueType,
       value: extractValue(item),
     }));
-    console.log('[handleSubmit] 保存指标值，数量:', values.length, 'reportId:', formData.value.id);
 
-    // 3. 调用一体化保存接口
+    // 5. 调用一体化保存接口，状态为 SAVED
     const id = await saveProgressReport({
       id: formData.value.id,
       reportYear: formData.value.reportYear,
       reportBatch: formData.value.reportBatch,
-      reportStatus: 'SUBMITTED',
+      reportStatus: 'SAVED',
       values,
     });
     formData.value.id = id;
+    formData.value.reportStatus = 'SAVED';
+    isFormDirty.value = false;
+    message.success('保存成功');
+    await modalApi.close();
+    emit('success');
+  } catch (error) {
+    console.error('保存失败:', error);
+    message.error('保存失败');
+  } finally {
+    modalApi.unlock();
+    saving.value = false;
+  }
+}
 
-    // 4. 提交流程
-    await submitProgressReport(id);
+/** 提交审核：仅在 SAVED 状态下可用，直接发起 BPM 流程，不重新保存 */
+async function handleSubmit() {
+  modalApi.lock();
+  submitting.value = true;
+  try {
+    // 1. 再次验证所有必填指标（表单页内提交也要校验）
+    indicatorTableRef.value?.recalculateComputedIndicators?.();
+    if (indicatorTableRef.value) {
+      const indicators = indicatorTableRef.value.getAllIndicators?.();
+      if (indicators) {
+        const errors = indicatorTableRef.value.validateAll(indicators);
+        if (errors.length > 0) {
+          summaryModalRef.value?.show(errors);
+          return;
+        }
+      }
+    }
+
+    // 2. 直接发起 BPM 流程（数据已在上一次保存时入库，状态为 SAVED）
+    await submitProgressReport(formData.value.id!);
+    formData.value.reportStatus = 'SUBMITTED';
+    isFormDirty.value = false;
     message.success('提交审核成功');
     await modalApi.close();
     emit('success');
@@ -412,6 +435,7 @@ async function handleSubmit() {
     message.error('提交失败');
   } finally {
     modalApi.unlock();
+    submitting.value = false;
   }
 }
 
@@ -528,10 +552,16 @@ defineExpose({ setData: modalApi.setData });
     <template #footer>
       <a-button @click="handleCancel">取消</a-button>
       <template v-if="!isReadonly">
-        <a-button @click="handleSaveDraft" :loading="saving">
-          保存草稿
-        </a-button>
-        <a-button type="primary" @click="handleSubmit"> 提交审核 </a-button>
+        <!-- SAVED 之前：显示保存草稿 + 保存 -->
+        <template v-if="!isSaved">
+          <a-button @click="handleSaveDraft" :loading="saving">保存草稿</a-button>
+          <a-button type="default" @click="handleSave" :loading="saving">保存</a-button>
+        </template>
+        <!-- SAVED 之后：显示保存 + 提交审核（不再需要保存草稿） -->
+        <template v-else>
+          <a-button @click="handleSave" :loading="saving">保存</a-button>
+          <a-button type="primary" @click="handleSubmit" :loading="submitting">提交审核</a-button>
+        </template>
       </template>
     </template>
   </Modal>

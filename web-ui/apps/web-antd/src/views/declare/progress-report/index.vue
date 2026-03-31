@@ -300,7 +300,7 @@ function canEditStatus(status: string): boolean {
 
 /** 判断填报状态是否可提交 */
 function canSubmitStatus(status: string): boolean {
-  return status === 'DRAFT' || status === 'SAVED';
+  return status === 'SAVED';
 }
 
 /** 获取状态颜色 */

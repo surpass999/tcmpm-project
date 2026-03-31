@@ -118,10 +118,6 @@ public class DeclareProgressReportTaskStatusListener extends BpmTaskStatusEventL
                 progressReportMapper.updateById(report);
             }
 
-        } else if ("DRAFT".equals(bizStatus)) {
-            // 保存草稿（不推进流程，仅保存）
-            report.setReportStatus(ReportStatusEnum.SAVED.getStatus());
-            progressReportMapper.updateById(report);
         } else if (StrUtil.isNotEmpty(bizStatus)) {
             report.setReportStatus(bizStatus);
             progressReportMapper.updateById(report);

@@ -73,7 +73,6 @@
                   {{ indicator.indicatorCode }} - {{ indicator.indicatorName }}
                 </span>
               </div>
-              <a-tag v-if="indicator.isRequired" color="red" class="required-tag">必填</a-tag>
               <a-tag v-if="isComputedIndicator(indicator)" color="orange" class="computed-tag">自动计算</a-tag>
             </div>
 
@@ -264,6 +263,7 @@
                   :before-upload="(file: any) => handleFileUpload(file, indicator)"
                   :show-upload-list="false"
                   :disabled="getFileList(indicator.indicatorCode).length >= getMaxFileCount(indicator)"
+                  :accept="getAcceptTypes(indicator) ? '.' + getAcceptTypes(indicator).replace(/,/g, ',.') : undefined"
                   multiple
                 >
                   <a-button type="dashed" :disabled="getFileList(indicator.indicatorCode).length >= getMaxFileCount(indicator)">
@@ -995,6 +995,12 @@ function getShowSearch(indicator: DeclareIndicatorApi.Indicator): boolean {
   return extraConfig.showSearch === true;
 }
 
+/** 获取指标允许的上传文件类型（来自 extraConfig.accept，如 "pdf,jpg,png"） */
+function getAcceptTypes(indicator: DeclareIndicatorApi.Indicator): string {
+  const extraConfig = parseExtraConfig(indicator.extraConfig);
+  return extraConfig.accept || '';
+}
+
 /** 获取文件上传最大数量 */
 function getMaxFileCount(indicator: DeclareIndicatorApi.Indicator): number {
   const extraConfig = parseExtraConfig(indicator.extraConfig);
@@ -1469,6 +1475,17 @@ function extractValue(record: any, valueType: number): any {
 async function handleFileUpload(file: File, indicator: DeclareIndicatorApi.Indicator) {
   const indicatorCode = indicator.indicatorCode;
   const maxCount = getMaxFileCount(indicator);
+
+  // 前端格式校验（指标配置中的 accept 字段）
+  const acceptTypes = getAcceptTypes(indicator);
+  if (acceptTypes) {
+    const fileExt = file.name.split('.').pop()?.toLowerCase() || '';
+    const allowedExts = acceptTypes.split(',').map((ext: string) => ext.trim().toLowerCase());
+    if (!allowedExts.includes(fileExt)) {
+      message.warning(`仅支持上传以下格式：${acceptTypes}（由管理员在指标配置中设置）`);
+      return false;
+    }
+  }
 
   try {
     const result = await uploadFile({

@@ -358,6 +358,10 @@ public class DeclareProgressReportServiceImpl implements DeclareProgressReportSe
         if (report == null) {
             throw new RuntimeException("填报记录不存在");
         }
+        // 前置校验：只有 SAVED 状态才允许提交
+        if (!ReportStatusEnum.SAVED.getStatus().equals(report.getReportStatus())) {
+            throw new RuntimeException("请先保存后再提交审核");
+        }
         if (StrUtil.isNotBlank(report.getHospitalProcessInstanceId())) {
             throw new RuntimeException("该填报记录已提交审核，请勿重复提交");
         }

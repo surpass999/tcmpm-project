@@ -134,7 +134,7 @@ const currentHospitalId = computed(() => Number(userStore.userInfo?.deptId) || 0
 const canSubmitAudit = computed(
   () =>
     payload.value?.deptId === currentHospitalId.value
-    && (payload.value?.reportStatus === 'SAVED' || payload.value?.reportStatus === 'DRAFT'),
+    && payload.value?.reportStatus === 'SAVED',
 );
 
 /** 提交审核 */
@@ -189,7 +189,7 @@ function getProjectTypeText(): string {
 
 function getProcessStatusText(): string {
   const status = processInfo.value?.status;
-  if (!status) return '未知';
+  if (!status) return '未提交';
   switch (status) {
     case 'RUNNING': return '审批中';
     case 'ENDED': return '已结束';
@@ -444,6 +444,12 @@ function parseIndicatorValue(item: DeclareIndicatorValueApi.IndicatorValue | any
     case 4: return item.valueDate;
     case 5: return item.valueText;
     case 8: return item.valueDateStart ? [item.valueDateStart, item.valueDateEnd] : undefined;
+    case 9: // 文件上传
+      try {
+        return item.valueStr ? JSON.parse(item.valueStr) : [];
+      } catch {
+        return [];
+      }
     default: return item.valueStr;
   }
 }
@@ -660,7 +666,7 @@ defineExpose({
                   v-for="indicator in group.indicators"
                   :key="getIndicatorId(indicator.id)"
                   class="info-item"
-                  :class="{ 'col-span-2': indicator.valueType === 5 }"
+                  :class="{ 'col-span-2': indicator.valueType === 5 || indicator.valueType === 12 }"
                 >
                   <label class="info-label">{{ indicator.indicatorCode }} {{ indicator.indicatorName }}：</label>
                   <div class="info-value-wrap">
@@ -706,6 +712,17 @@ defineExpose({
                       <span class="info-value">
                         {{ indicatorValuesMap[getIndicatorId(indicator.id)]?.start ? `${indicatorValuesMap[getIndicatorId(indicator.id)].start} ~ ${indicatorValuesMap[getIndicatorId(indicator.id)].end}` : '-' }}
                       </span>
+                    </template>
+                    <template v-else-if="indicator.valueType === 9">
+                      <div class="file-list-display">
+                        <template v-for="(file, fIdx) in (indicatorValuesMap[getIndicatorId(indicator.id)] || [])" :key="fIdx">
+                          <a :href="file.url" target="_blank" class="file-link">
+                            <IconifyIcon icon="lucide:file-text" class="file-icon" />
+                            {{ file.name }}
+                          </a>
+                        </template>
+                        <span v-if="!indicatorValuesMap[getIndicatorId(indicator.id)]?.length" class="info-value">-</span>
+                      </div>
                     </template>
                     <template v-else-if="indicator.valueType === 12">
                       <div class="container-entries-display">
@@ -761,7 +778,7 @@ defineExpose({
                   v-for="indicator in group.indicators"
                   :key="getIndicatorId(indicator.id)"
                   class="info-item"
-                  :class="{ 'col-span-2': indicator.valueType === 5 }"
+                  :class="{ 'col-span-2': indicator.valueType === 5 || indicator.valueType === 12 }"
                 >
                   <label class="info-label">{{ indicator.indicatorCode }} {{ indicator.indicatorName }}：</label>
                   <div class="info-value-wrap">
@@ -807,6 +824,17 @@ defineExpose({
                       <span class="info-value">
                         {{ indicatorValuesMap[getIndicatorId(indicator.id)]?.start ? `${indicatorValuesMap[getIndicatorId(indicator.id)].start} ~ ${indicatorValuesMap[getIndicatorId(indicator.id)].end}` : '-' }}
                       </span>
+                    </template>
+                    <template v-else-if="indicator.valueType === 9">
+                      <div class="file-list-display">
+                        <template v-for="(file, fIdx) in (indicatorValuesMap[getIndicatorId(indicator.id)] || [])" :key="fIdx">
+                          <a :href="file.url" target="_blank" class="file-link">
+                            <IconifyIcon icon="lucide:file-text" class="file-icon" />
+                            {{ file.name }}
+                          </a>
+                        </template>
+                        <span v-if="!indicatorValuesMap[getIndicatorId(indicator.id)]?.length" class="info-value">-</span>
+                      </div>
                     </template>
                     <template v-else-if="indicator.valueType === 12">
                       <div class="container-entries-display">
@@ -1221,5 +1249,25 @@ defineExpose({
     color: #374151;
     word-break: break-all;
   }
+}
+
+/* 文件列表展示样式 */
+.file-list-display {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.file-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #1677ff;
+  text-decoration: none;
+  font-size: 13px;
+  &:hover { text-decoration: underline; }
+}
+.file-link .file-icon {
+  flex-shrink: 0;
+  font-size: 14px;
 }
 </style>
