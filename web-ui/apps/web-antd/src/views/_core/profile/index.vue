@@ -56,9 +56,9 @@ onMounted(loadProfile);
           <Tabs.TabPane key="resetPwd" tab="密码设置">
             <ResetPwd />
           </Tabs.TabPane>
-          <Tabs.TabPane key="userSocial" tab="社交绑定" force-render>
+          <!-- <Tabs.TabPane key="userSocial" tab="社交绑定" force-render>
             <UserSocial @update:active-name="activeName = $event" />
-          </Tabs.TabPane>
+          </Tabs.TabPane> -->
           <!-- TODO @芋艿：在线设备 -->
         </Tabs>
       </Card>

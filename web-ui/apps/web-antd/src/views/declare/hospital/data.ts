@@ -162,16 +162,16 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       title: '联系电话',
       minWidth: 120,
     },
-    {
-      field: 'status',
-      title: '状态',
-      minWidth: 80,
-      align: 'center',
-      cellRender: {
-        name: 'CellDict',
-        props: { type: DICT_TYPE.COMMON_STATUS },
-      },
-    },
+    // {
+    //   field: 'status',
+    //   title: '状态',
+    //   minWidth: 80,
+    //   align: 'center',
+    //   cellRender: {
+    //     name: 'CellDict',
+    //     props: { type: DICT_TYPE.COMMON_STATUS },
+    //   },
+    // },
     {
       field: 'createTime',
       title: '创建时间',

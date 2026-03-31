@@ -5,14 +5,21 @@ import { computed, onMounted, ref } from 'vue';
 
 import { useVbenModal } from '@vben/common-ui';
 import { useUserStore } from '@vben/stores';
+import { useRouter } from 'vue-router';
 
 import { checkReportWindow } from '#/api/declare/progress-report';
 
 import Form from '../../../../declare/progress-report/modules/form.vue';
 
+
+const router = useRouter();
+
+
 const props = defineProps({
   stats: Object as PropType<DashboardStats>,
 });
+
+
 
 defineEmits(['refresh']);
 
@@ -89,6 +96,9 @@ async function handleFormSuccess() {
           <h3>当前无开放填报窗口</h3>
           <p>暂无可填报任务，请耐心等待国家局发布新的填报通知。</p>
         </div>
+        <a-button type="default" class="bg-background-lighter text-red-500" size="large" @click="router.push('/progress-report')">
+          查看填报记录
+        </a-button>
       </div>
     </div>
 

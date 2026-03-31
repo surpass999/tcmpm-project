@@ -12,7 +12,7 @@ const logoSrc = computed(() => {
   return src || preferences.logo.source;
 });
 
-const pageTitle = '智慧中医医院试点项目过程管理平台';
+const pageTitle = '智慧中医医院试点项目管理平台';
 </script>
 
 <template>
