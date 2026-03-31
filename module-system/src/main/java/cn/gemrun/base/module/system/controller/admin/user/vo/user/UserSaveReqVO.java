@@ -9,7 +9,6 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.mzt.logapi.starter.annotation.DiffLogField;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
-import org.hibernate.validator.constraints.Length;
 
 import javax.validation.constraints.*;
 import java.util.Set;
@@ -72,8 +71,7 @@ public class UserSaveReqVO {
 
     // ========== 仅【创建】时，需要传递的字段 ==========
 
-    @Schema(description = "密码", requiredMode = Schema.RequiredMode.REQUIRED, example = "123456")
-    @Length(min = 4, max = 16, message = "密码长度为 4-16 位")
+    @Schema(description = "密码", requiredMode = Schema.RequiredMode.REQUIRED, example = "NewPass123!")
     private String password;
 
     @AssertTrue(message = "密码不能为空")

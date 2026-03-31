@@ -76,6 +76,11 @@ public class DeclareHospitalRespVO {
     private String projectTypeName;
 
     /**
+     * 项目类型全称（来自 declare_project_type.title，如"综合型医院"）
+     */
+    private String projectTypeTitle;
+
+    /**
      * 医院等级
      */
     private String hospitalLevel;

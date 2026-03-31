@@ -12,6 +12,7 @@ import { getDeptList } from '#/api/system/dept';
 import { requestClient } from '#/api/request';
 import { getSimplePostList } from '#/api/system/post';
 import { getSimpleRoleList } from '#/api/system/role';
+import { PASSWORD_RULES } from '#/utils/password';
 import { getRangePickerDefaultProps } from '#/utils';
 
 /** 新增/修改的表单 */
@@ -209,8 +210,8 @@ export function useResetPasswordFormSchema(): VbenFormSchema[] {
         rules(values) {
           return z
             .string({ message: '请输入新密码' })
-            .min(5, '密码长度不能少于 5 个字符')
-            .max(20, '密码长度不能超过 20 个字符')
+            .min(PASSWORD_RULES.MIN_LENGTH, `密码长度不能少于 ${PASSWORD_RULES.MIN_LENGTH} 个字符`)
+            .max(PASSWORD_RULES.MAX_LENGTH, `密码长度不能超过 ${PASSWORD_RULES.MAX_LENGTH} 个字符`)
             .refine(
               (value) => value !== values.oldPassword,
               '新旧密码不能相同',
@@ -232,8 +233,8 @@ export function useResetPasswordFormSchema(): VbenFormSchema[] {
         rules(values) {
           return z
             .string({ message: '请输入确认密码' })
-            .min(5, '密码长度不能少于 5 个字符')
-            .max(20, '密码长度不能超过 20 个字符')
+            .min(PASSWORD_RULES.MIN_LENGTH, `密码长度不能少于 ${PASSWORD_RULES.MIN_LENGTH} 个字符`)
+            .max(PASSWORD_RULES.MAX_LENGTH, `密码长度不能超过 ${PASSWORD_RULES.MAX_LENGTH} 个字符`)
             .refine(
               (value) => value === values.newPassword,
               '新密码和确认密码不一致',

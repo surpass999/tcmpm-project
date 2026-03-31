@@ -7,6 +7,7 @@ import { message } from 'ant-design-vue';
 
 import { useVbenForm, z } from '#/adapter/form';
 import { updateUserPassword } from '#/api/system/user/profile';
+import { PASSWORD_RULES } from '#/utils/password';
 
 const emit = defineEmits<{ success: [] }>();
 
@@ -21,8 +22,8 @@ const [Form, formApi] = useVbenForm({
       label: '旧密码',
       rules: z
         .string({ message: '请输入旧密码' })
-        .min(5, '密码长度不能少于 5 个字符')
-        .max(20, '密码长度不能超过 20 个字符'),
+        .min(PASSWORD_RULES.MIN_LENGTH, `密码长度不能少于 ${PASSWORD_RULES.MIN_LENGTH} 个字符`)
+        .max(PASSWORD_RULES.MAX_LENGTH, `密码长度不能超过 ${PASSWORD_RULES.MAX_LENGTH} 个字符`),
     },
     {
       component: 'InputPassword',
@@ -32,8 +33,8 @@ const [Form, formApi] = useVbenForm({
         rules(values) {
           return z
             .string({ message: '请输入新密码' })
-            .min(5, '密码长度不能少于 5 个字符')
-            .max(20, '密码长度不能超过 20 个字符')
+            .min(PASSWORD_RULES.MIN_LENGTH, `密码长度不能少于 ${PASSWORD_RULES.MIN_LENGTH} 个字符`)
+            .max(PASSWORD_RULES.MAX_LENGTH, `密码长度不能超过 ${PASSWORD_RULES.MAX_LENGTH} 个字符`)
             .refine(
               (value) => value !== values.oldPassword,
               '新旧密码不能相同',
@@ -50,8 +51,8 @@ const [Form, formApi] = useVbenForm({
         rules(values) {
           return z
             .string({ message: '请输入确认密码' })
-            .min(5, '密码长度不能少于 5 个字符')
-            .max(20, '密码长度不能超过 20 个字符')
+            .min(PASSWORD_RULES.MIN_LENGTH, `密码长度不能少于 ${PASSWORD_RULES.MIN_LENGTH} 个字符`)
+            .max(PASSWORD_RULES.MAX_LENGTH, `密码长度不能超过 ${PASSWORD_RULES.MAX_LENGTH} 个字符`)
             .refine(
               (value) => value === values.newPassword,
               '新密码和确认密码不一致',
@@ -74,6 +75,20 @@ async function handleSubmit(values: Recordable<any>) {
       newPassword: values.newPassword,
     });
     message.success('密码修改成功');
+
+    // 刷新 token，获取最新的用户信息（包含 passwordMustChange=false）
+    try {
+      const { refreshTokenApi } = await import('#/api/core/auth');
+      const { useAccessStore } = await import('@vben/stores');
+      const accessStore = useAccessStore();
+      const resp = await refreshTokenApi(accessStore.refreshToken);
+      if (resp?.data?.accessToken) {
+        accessStore.setAccessToken(resp.data.accessToken);
+      }
+    } catch (e) {
+      console.error('Token refresh failed:', e);
+    }
+
     emit('success');
   } catch (error) {
     console.error(error);

@@ -26,6 +26,8 @@ export namespace DeclareHospitalApi {
     projectType?: number;
     /** 项目类型名称 */
     projectTypeName?: string;
+    /** 项目类型全称（如"综合型医院"） */
+    projectTypeTitle?: string;
     /** 医院等级 */
     hospitalLevel?: string;
     /** 医院类别 */

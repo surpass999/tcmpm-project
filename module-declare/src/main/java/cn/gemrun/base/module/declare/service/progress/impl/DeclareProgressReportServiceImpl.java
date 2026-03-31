@@ -497,8 +497,26 @@ public class DeclareProgressReportServiceImpl implements DeclareProgressReportSe
     private DeclareProgressReportVO convertToVOWithHospital(DeclareProgressReportDO report, DeclareHospitalDO hospital) {
         Integer projectType = hospital != null ? hospital.getProjectType() : null;
         String projectTypeName = projectTypeService.getProjectTypeTitle(projectType);
+        String projectTypeShortName = projectTypeService.getProjectTypeName(projectType);
         String unifiedSocialCreditCode = hospital != null ? hospital.getUnifiedSocialCreditCode() : null;
         String medicalLicenseNo = hospital != null ? hospital.getMedicalLicenseNo() : null;
+
+        // 查询填报窗口信息
+        LocalDateTime ws = null;
+        LocalDateTime we = null;
+        if (report.getReportYear() != null && report.getReportBatch() != null) {
+            List<ReportWindowVO> windows = reportWindowService.getWindowList(report.getReportYear());
+            if (windows != null) {
+                for (ReportWindowVO w : windows) {
+                    if (w.getReportBatch() != null && w.getReportBatch().equals(report.getReportBatch())) {
+                        ws = w.getWindowStart();
+                        we = w.getWindowEnd();
+                        break;
+                    }
+                }
+            }
+        }
+
         return DeclareProgressReportVO.builder()
                 .id(report.getId())
                 .hospitalProcessInstanceId(report.getHospitalProcessInstanceId())
@@ -519,6 +537,9 @@ public class DeclareProgressReportServiceImpl implements DeclareProgressReportSe
                 .nationalReporterName(report.getNationalReporterName())
                 .projectType(projectType)
                 .projectTypeName(projectTypeName)
+                .projectTypeShortName(projectTypeShortName)
+                .windowStart(ws)
+                .windowEnd(we)
                 .unifiedSocialCreditCode(unifiedSocialCreditCode)
                 .medicalLicenseNo(medicalLicenseNo)
                 .creator(report.getCreator())

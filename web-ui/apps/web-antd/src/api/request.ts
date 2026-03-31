@@ -17,6 +17,7 @@ import { createApiEncrypt } from '@vben/utils';
 
 import { message } from 'ant-design-vue';
 import { useRoute } from 'vue-router';
+import { h } from 'vue';
 
 import { useAuthStore } from '#/store';
 
@@ -183,18 +184,57 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
     }),
   );
 
+  // 标记是否正在处理强制改密，防止重复弹窗
+  let isShowingPasswordChangeModal = false;
+
   // 通用的错误处理,如果没有进入上面的错误处理逻辑，就会进入这里
   client.addResponseInterceptor(
-    errorMessageResponseInterceptor((msg: string, error) => {
+    errorMessageResponseInterceptor(async (msg: string, error) => {
       // 这里可以根据业务进行定制,你可以拿到 error 内的信息进行定制化处理，根据不同的 code 做不同的提示，而不是直接使用 message.error 提示 msg
       // 当前mock接口返回的错误字段是 error 或者 message
       const responseData = error?.response?.data ?? {};
       const errorMessage =
         responseData?.error ?? responseData?.message ?? responseData.msg ?? '';
-      // add by 芋艿：特殊：避免 401 “账号未登录”，重复提示。因为，此时会跳转到登录界面，只需提示一次！！！
+      // add by 芋艿：特殊：避免 401 "账号未登录"，重复提示。因为，此时会跳转到登录界面，只需提示一次！！！
       if (error?.data?.code === 401) {
         return;
       }
+
+      // 特殊处理：强制改密错误码 1002018
+      if (error?.data?.code === 1002018 && !isShowingPasswordChangeModal) {
+        isShowingPasswordChangeModal = true;
+        try {
+          const { Modal } = await import('ant-design-vue');
+          const ForceChangePassword = await import('#/views/_core/authentication/modules/force-change-password.vue');
+          const { useAccessStore } = await import('@vben/stores');
+          const { fetchUserInfo } = await import('#/store/auth');
+
+          const accessStore = useAccessStore();
+
+          Modal.confirm({
+            title: '修改密码',
+            closable: false,
+            maskClosable: false,
+            keyboard: false,
+            icon: null,
+            content: h(ForceChangePassword.default, {
+              onSuccess: async () => {
+                Modal.destroyAll();
+                isShowingPasswordChangeModal = false;
+                // 刷新用户信息
+                await fetchUserInfo();
+              },
+            }),
+            footer: null,
+            width: 420,
+          });
+        } catch (e) {
+          isShowingPasswordChangeModal = false;
+          throw e;
+        }
+        return;
+      }
+
       // 如果没有错误信息，则会根据状态码进行提示
       message.error(errorMessage || msg);
     }),

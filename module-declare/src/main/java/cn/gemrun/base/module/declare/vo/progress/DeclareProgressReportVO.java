@@ -114,6 +114,21 @@ public class DeclareProgressReportVO {
     private String projectTypeName;
 
     /**
+     * 项目类型简称（如"综合型"）
+     */
+    private String projectTypeShortName;
+
+    /**
+     * 填报窗口开始时间
+     */
+    private LocalDateTime windowStart;
+
+    /**
+     * 填报窗口结束时间
+     */
+    private LocalDateTime windowEnd;
+
+    /**
      * 统一社会信用代码
      */
     private String unifiedSocialCreditCode;

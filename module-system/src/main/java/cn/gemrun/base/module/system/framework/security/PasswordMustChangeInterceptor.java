@@ -9,6 +9,9 @@ import org.springframework.web.servlet.HandlerInterceptor;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.Set;
 
 @Component
@@ -18,7 +21,8 @@ public class PasswordMustChangeInterceptor implements HandlerInterceptor {
     private static final String CONFIG_KEY = "system.user.force-password-change-enabled";
 
     /** 不需要强制改密的路径白名单 */
-    private static final Set<String> WHITE_LIST = Set.of(
+    private static final Set<String> WHITE_LIST = Collections.unmodifiableSet(
+            new HashSet<>(Arrays.asList(
         "/system/user/profile/update-password",
         "/system/auth/logout",
         "/system/auth/get-permission-info",
@@ -26,7 +30,7 @@ public class PasswordMustChangeInterceptor implements HandlerInterceptor {
         "/system/oauth2/token",
         "/assets/",
         "/favicon"
-    );
+    )));
 
     private final ConfigApi configApi;
 

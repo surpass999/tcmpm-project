@@ -76,11 +76,15 @@ public class LoginUser {
         return MapUtil.get(context, key, type);
     }
 
-    public void setInfo(Map<String, String> info) {
+    /**
+     * 设置用户信息并返回自身，支持链式调用
+     */
+    public LoginUser setInfoAndReturn(Map<String, String> info) {
         this.info = info;
         if (info != null && info.containsKey("passwordMustChange")) {
             this.passwordMustChange = Boolean.parseBoolean(info.get("passwordMustChange"));
         }
+        return this;
     }
 
 }

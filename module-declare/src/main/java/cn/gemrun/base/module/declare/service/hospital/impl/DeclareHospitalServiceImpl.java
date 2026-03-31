@@ -454,8 +454,10 @@ public class DeclareHospitalServiceImpl implements DeclareHospitalService {
                 .status(hospital.getStatus())
                 .createTime(hospital.getCreateTime())
                 .build();
-        // 设置项目类型名称（从 declare_project_type 表的 title 字段读取，如"综合型医院"）
-        respVO.setProjectTypeName(projectTypeService.getProjectTypeTitle(hospital.getProjectType()));
+        // 设置项目类型简称（从 declare_project_type 表的 name 字段读取，如"综合型"）
+        respVO.setProjectTypeName(projectTypeService.getProjectTypeName(hospital.getProjectType()));
+        // 设置项目类型全称（从 declare_project_type 表的 title 字段读取，如"综合型医院"）
+        respVO.setProjectTypeTitle(projectTypeService.getProjectTypeTitle(hospital.getProjectType()));
         // 设置部门名称
         if (hospital.getDeptId() != null) {
             DeptRespDTO dept = deptMap.get(hospital.getDeptId());

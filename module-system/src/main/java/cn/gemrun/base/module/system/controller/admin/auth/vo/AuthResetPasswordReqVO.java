@@ -6,7 +6,6 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.hibernate.validator.constraints.Length;
 
 import javax.validation.constraints.NotEmpty;
 
@@ -17,9 +16,8 @@ import javax.validation.constraints.NotEmpty;
 @Builder
 public class AuthResetPasswordReqVO {
 
-    @Schema(description = "密码", requiredMode = Schema.RequiredMode.REQUIRED, example = "1234")
+    @Schema(description = "密码", requiredMode = Schema.RequiredMode.REQUIRED, example = "NewPass123!")
     @NotEmpty(message = "密码不能为空")
-    @Length(min = 4, max = 16, message = "密码长度为 4-16 位")
     private String password;
 
     @Schema(description = "手机号", requiredMode = Schema.RequiredMode.REQUIRED, example = "13312341234")

@@ -3,7 +3,6 @@ package cn.gemrun.base.module.system.controller.admin.auth.vo;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
-import org.hibernate.validator.constraints.Length;
 
 import javax.validation.constraints.*;
 
@@ -22,8 +21,7 @@ public class AuthRegisterReqVO extends CaptchaVerificationReqVO {
     @Size(max = 30, message = "用户昵称长度不能超过 30 个字符")
     private String nickname;
 
-    @Schema(description = "密码", requiredMode = Schema.RequiredMode.REQUIRED, example = "123456")
+    @Schema(description = "密码", requiredMode = Schema.RequiredMode.REQUIRED, example = "NewPass123!")
     @NotEmpty(message = "密码不能为空")
-    @Length(min = 4, max = 16, message = "密码长度为 4-16 位")
     private String password;
 }

@@ -648,6 +648,19 @@ const indicators = ref<DeclareIndicatorApi.Indicator[]>([]);
 /** 填报值 Map（key = indicatorCode） */
 const formValues = reactive<Record<string, any>>({});
 
+/** 是否已修改（任意指标有值即为 dirty，用于父组件关闭确认） */
+const isDirty = ref(false);
+
+/** 标记为已修改 */
+function markDirty() {
+  isDirty.value = true;
+}
+
+/** 重置 dirty（父组件在保存/重置后调用） */
+function resetDirty() {
+  isDirty.value = false;
+}
+
 /** 文件列表 Map（key = indicatorCode） */
 const fileListMap = reactive<Record<string, UploadFile[]>>({});
 
@@ -1718,6 +1731,20 @@ watch(() => props.projectType, async (newProjectType) => {
   }
 }, { immediate: false });
 
+/** 监听 formValues 变化，只要任意指标有值就标记 dirty */
+watch(
+  () => formValues,
+  () => {
+    const hasAnyValue = Object.values(formValues).some(
+      (v) => v !== undefined && v !== null && v !== '',
+    );
+    if (hasAnyValue) {
+      markDirty();
+    }
+  },
+  { deep: true },
+);
+
 /** 获取所有动态容器值（供父组件保存时调用） */
 function getContainerValues(): Record<string, string> {
   const result: Record<string, string> = {};
@@ -1936,6 +1963,8 @@ defineExpose({
   recalculateComputedIndicators,
   syncContainerValuesToForm,
   containerValues,
+  isDirty,
+  resetDirty,
 });
 </script>
 

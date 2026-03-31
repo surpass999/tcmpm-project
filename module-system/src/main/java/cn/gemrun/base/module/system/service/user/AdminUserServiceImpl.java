@@ -8,6 +8,7 @@ import cn.gemrun.base.framework.common.enums.CommonStatusEnum;
 import cn.gemrun.base.framework.common.enums.UserTypeEnum;
 import cn.gemrun.base.framework.common.exception.ServiceException;
 import cn.gemrun.base.framework.common.pojo.PageResult;
+import cn.gemrun.base.module.system.util.PasswordUtils;
 import cn.gemrun.base.framework.common.util.collection.CollectionUtils;
 import cn.gemrun.base.framework.common.util.object.BeanUtils;
 import cn.gemrun.base.framework.common.util.validation.ValidationUtils;
@@ -92,6 +93,8 @@ public class AdminUserServiceImpl implements AdminUserService {
         // 1. 校验正确性（单租户模式下不再进行租户账号数量限制）
         validateUserForCreateOrUpdate(null, createReqVO.getUsername(),
                 createReqVO.getMobile(), createReqVO.getEmail(), createReqVO.getDeptId(), createReqVO.getPostIds());
+        // 校验密码强度
+        PasswordUtils.validatePassword(createReqVO.getPassword(), createReqVO.getUsername());
         // 2.1 插入用户
         AdminUserDO user = BeanUtils.toBean(createReqVO, AdminUserDO.class);
         user.setStatus(CommonStatusEnum.ENABLE.getStatus()); // 默认开启
@@ -117,6 +120,8 @@ public class AdminUserServiceImpl implements AdminUserService {
         }
         // 1.2 校验正确性（单租户模式下不再进行租户账号数量限制）
         validateUserForCreateOrUpdate(null, registerReqVO.getUsername(), null, null, null, null);
+        // 校验密码强度
+        PasswordUtils.validatePassword(registerReqVO.getPassword(), registerReqVO.getUsername());
 
         // 2. 插入用户
         AdminUserDO user = BeanUtils.toBean(registerReqVO, AdminUserDO.class);
@@ -183,6 +188,8 @@ public class AdminUserServiceImpl implements AdminUserService {
     public void updateUserPassword(Long id, UserProfileUpdatePasswordReqVO reqVO) {
         // 校验旧密码密码
         validateOldPassword(id, reqVO.getOldPassword());
+        // 校验新密码强度
+        PasswordUtils.validatePassword(reqVO.getNewPassword());
         // 执行更新
         AdminUserDO updateObj = new AdminUserDO().setId(id);
         updateObj.setPassword(encodePassword(reqVO.getNewPassword())); // 加密密码
@@ -196,6 +203,8 @@ public class AdminUserServiceImpl implements AdminUserService {
     public void updateUserPassword(Long id, String password) {
         // 1. 校验用户存在
         AdminUserDO user = validateUserExists(id);
+        // 校验密码强度
+        PasswordUtils.validatePassword(password);
 
         // 2. 更新密码
         AdminUserDO updateObj = new AdminUserDO();

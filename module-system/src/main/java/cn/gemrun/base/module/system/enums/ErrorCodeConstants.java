@@ -47,6 +47,12 @@ public interface ErrorCodeConstants {
     ErrorCode USER_IMPORT_INIT_PASSWORD = new ErrorCode(1_002_003_009, "初始密码不能为空");
     ErrorCode USER_MOBILE_NOT_EXISTS = new ErrorCode(1_002_003_010, "该手机号尚未注册");
     ErrorCode USER_REGISTER_DISABLED = new ErrorCode(1_002_003_011, "注册功能已关闭");
+    ErrorCode PASSWORD_VALIDATION_FAILED = new ErrorCode(1_002_003_012, "密码不能为空");
+    ErrorCode PASSWORD_TOO_SHORT = new ErrorCode(1_002_003_013, "密码长度不能少于 8 位");
+    ErrorCode PASSWORD_TOO_LONG = new ErrorCode(1_002_003_014, "密码长度不能超过 32 位");
+    ErrorCode PASSWORD_COMPLEXITY_INSUFFICIENT = new ErrorCode(1_002_003_015, "密码必须包含大写字母、小写字母、数字、特殊字符中的至少 3 种");
+    ErrorCode PASSWORD_TOO_WEAK = new ErrorCode(1_002_003_016, "密码过于简单，请使用更复杂的密码");
+    ErrorCode PASSWORD_CONTAINS_USERNAME = new ErrorCode(1_002_003_017, "密码不能包含用户名");
 
     // ========== 部门模块 1-002-004-000 ==========
     ErrorCode DEPT_NAME_DUPLICATE = new ErrorCode(1_002_004_000, "已经存在该名字的部门");

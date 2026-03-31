@@ -25,6 +25,12 @@ export interface DeclareProgressReport {
   projectType?: number;
   /** 项目类型名称（来自 declare_project_type.title） */
   projectTypeName?: string;
+  /** 项目类型简称（如"综合型"） */
+  projectTypeShortName?: string;
+  /** 填报窗口开始时间 */
+  windowStart?: string;
+  /** 填报窗口结束时间 */
+  windowEnd?: string;
   /** 统一社会信用代码（从医院表关联获取） */
   unifiedSocialCreditCode?: string;
   /** 医疗机构执业许可证登记号（从医院表关联获取） */

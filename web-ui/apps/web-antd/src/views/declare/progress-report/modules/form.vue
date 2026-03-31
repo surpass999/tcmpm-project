@@ -2,13 +2,14 @@
 import type { DeclareProgressReport } from '#/api/declare/progress-report';
 import type { DeclareHospitalApi } from '#/api/declare/hospital';
 
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 import { useVbenModal } from '@vben/common-ui';
 import { DICT_TYPE } from '@vben/constants';
 import { getDictOptions } from '@vben/hooks';
 
-import { message, Spin } from 'ant-design-vue';
+import { message, Modal as AConfirmModal, Spin } from 'ant-design-vue';
+import dayjs from 'dayjs';
 
 import {
   getLatestOpenWindow,
@@ -52,6 +53,7 @@ const basicHospitalInfo = ref<{
   medicalLicenseNo?: string;
   projectType?: number;
   projectTypeName?: string;
+  projectTypeTitle?: string;
 } | null>(null);
 
 /** 是否是编辑已有记录 */
@@ -64,17 +66,17 @@ const isReadonly = computed(() => {
   return status !== 'DRAFT' && status !== 'SAVED' && !status?.endsWith('RETURNED');
 });
 
-/** 项目类型展示文案（始终有兜底，永不空字符串） */
+/** 项目类型展示文案（大标题用全称，始终有兜底，永不空字符串） */
 const projectTypeDisplayLabel = computed(() => {
-  // 优先使用接口返回的 projectTypeName（来自 declare_project_type.title，如"综合型医院"）
-  const name = hospitalInfo.value?.projectTypeName?.trim();
-  if (name) {
-    return name;
+  // 优先使用接口返回的 projectTypeTitle（来自 declare_project_type.title，如"综合型医院"）
+  const title = hospitalInfo.value?.projectTypeTitle?.trim();
+  if (title) {
+    return title;
   }
   // API 失败时用 basicHospitalInfo
-  const fallbackName = basicHospitalInfo.value?.projectTypeName?.trim();
-  if (fallbackName) {
-    return fallbackName;
+  const fallbackTitle = basicHospitalInfo.value?.projectTypeTitle?.trim();
+  if (fallbackTitle) {
+    return fallbackTitle;
   }
   // 字典备用（字典 label 应与 declare_project_type.title 一致）
   const projectType = hospitalInfo.value?.projectType;
@@ -102,15 +104,15 @@ const modalTitle = computed(() => {
   if (isEditMode.value) {
     return '编辑填报';
   }
-  // 优先接口返回的 title
-  const name = hospitalInfo.value?.projectTypeName?.trim();
-  if (name) {
-    return `${name} 填报`;
+  // 优先使用接口返回的 projectTypeTitle（来自 declare_project_type.title，如"综合型医院"）
+  const title = hospitalInfo.value?.projectTypeTitle?.trim();
+  if (title) {
+    return `${title} 填报`;
   }
   // basicHospitalInfo 备用
-  const fallbackName = basicHospitalInfo.value?.projectTypeName?.trim();
-  if (fallbackName) {
-    return `${fallbackName} 填报`;
+  const fallbackTitle = basicHospitalInfo.value?.projectTypeTitle?.trim();
+  if (fallbackTitle) {
+    return `${fallbackTitle} 填报`;
   }
   // 字典备用
   const projectType = hospitalInfo.value?.projectType;
@@ -132,10 +134,26 @@ const formData = ref({
   reportYear: undefined as number | undefined,
   reportBatch: undefined as number | undefined,
   reportStatus: undefined as string | undefined,
+  projectTypeShortName: undefined as string | undefined,
+  windowStart: undefined as string | undefined,
+  windowEnd: undefined as string | undefined,
 });
 
 /** 保存草稿状态 */
 const saving = ref(false);
+
+/** 标记表单在本次打开后是否被修改（用于关闭时判断） */
+const isFormDirty = ref(false);
+
+/** 监听指标表格内容变化，标记为已修改（用于关闭确认） */
+watch(
+  () => indicatorTableRef.value?.isDirty,
+  (isDirty) => {
+    if (isDirty && !saving.value) {
+      isFormDirty.value = true;
+    }
+  },
+);
 
 const [Modal, modalApi] = useVbenModal({
   class: '!w-[90%]',
@@ -146,6 +164,31 @@ const [Modal, modalApi] = useVbenModal({
     // 提交审核
     await handleSubmit();
     return false;
+  },
+  async onBeforeClose() {
+    // 如果用户已填了内容（dirty），弹出确认框
+    if (isFormDirty.value) {
+      return new Promise((resolve) => {
+        AConfirmModal.confirm({
+          title: '确认关闭',
+          content: '当前有未保存的填报内容，关闭后将丢失。是否保存为草稿？',
+          okText: '保存草稿',
+          cancelText: '不保存',
+          okButtonProps: { loading: saving.value },
+          async onOk() {
+            // 用户点"保存草稿"，执行保存后关闭
+            await handleSaveDraft();
+            resolve(true);
+          },
+          async onCancel() {
+            // 用户点"不保存"，强制重置 dirty 并关闭
+            isFormDirty.value = false;
+            resolve(true);
+          },
+        });
+      });
+    }
+    // 无未保存内容，正常关闭（返回 undefined，框架默认视为 true）
   },
   async onOpenChange(isOpen: boolean) {
     if (!isOpen) {
@@ -159,6 +202,9 @@ const [Modal, modalApi] = useVbenModal({
       };
       hospitalInfo.value = null;
       basicHospitalInfo.value = null;
+      isFormDirty.value = false;
+      // 重置子组件的 dirty 状态
+      indicatorTableRef.value?.resetDirty?.();
       return;
     }
 
@@ -179,6 +225,7 @@ const [Modal, modalApi] = useVbenModal({
           medicalLicenseNo: (data as any).medicalLicenseNo,
           projectType: data.projectType,
           projectTypeName: data.projectTypeName,
+          projectTypeTitle: data.projectTypeTitle,
         };
 
         // 加载医院详细信息（data.hospitalId 实际是 deptId）
@@ -195,6 +242,7 @@ const [Modal, modalApi] = useVbenModal({
             hospitalName: data.hospitalName || '',
             unifiedSocialCreditCode: '',
             medicalLicenseNo: '',
+            projectTypeTitle: basicHospitalInfo.value?.projectTypeTitle,
           } as DeclareHospitalApi.Hospital;
         }
       }
@@ -212,6 +260,7 @@ const [Modal, modalApi] = useVbenModal({
             medicalLicenseNo: (result as any).medicalLicenseNo,
             projectType: result.projectType,
             projectTypeName: result.projectTypeName,
+            projectTypeTitle: result.projectTypeTitle,
           };
           try {
             hospitalInfo.value = await getHospital(result.hospitalId);
@@ -236,6 +285,8 @@ const [Modal, modalApi] = useVbenModal({
         formData.value.reportYear = latestWindow.reportYear;
         formData.value.reportBatch = latestWindow.reportBatch;
         formData.value.reportStatus = 'DRAFT';
+        formData.value.windowStart = latestWindow.windowStart;
+        formData.value.windowEnd = latestWindow.windowEnd;
       }
     } catch (error) {
       console.error('加载数据失败:', error);
@@ -255,6 +306,7 @@ async function handleSaveDraft() {
     if (indicatorTableRef.value) {
       const containerVals = indicatorTableRef.value.getContainerValues();
       Object.assign(containerValuesData.value, containerVals);
+      isFormDirty.value = true;
     }
 
     // 1. 先触发自动计算，确保所有计算指标的值是最新的
@@ -393,7 +445,7 @@ defineExpose({ setData: modalApi.setData });
 <template>
   <Modal :title="modalTitle" class="progress-form-modal wide-modal">
     <Spin :spinning="isLoading || isLoadingIndicators">
-      <!-- 项目类型大标题（与下方「项目类型」同源展示） -->
+      <!-- 项目类型大标题（与下方「项目类型」不同源展示） -->
       <div class="project-type-title">
         {{ projectTypeDisplayLabel }}
       </div>
@@ -429,19 +481,27 @@ defineExpose({ setData: modalApi.setData });
         <div class="hospital-info-row">
           <div class="info-item">
             <span class="info-label">制定机关：</span>
-            <span class="info-value">国家中医药管理局监统中心</span>
+            <span class="info-value">国家中医药管理局监测统计中心</span>
           </div>
           <div class="info-item">
             <span class="info-label">项目类型：</span>
-            <span class="info-value">{{ projectTypeDisplayLabel }}</span>
+            <span class="info-value">{{ formData.projectTypeShortName || hospitalInfo?.projectTypeName || '-' }}</span>
           </div>
-          <div class="info-item">
-            <span class="info-label">填报年度：</span>
+          <!-- <div class="info-item">
+            <span class="info-label">填报窗口：</span>
             <span class="info-value">{{
               formData.reportYear
                 ? `${formData.reportYear}年第${formData.reportBatch}期`
                 : '-'
             }}</span>
+          </div> -->
+          <div class="info-item">
+            <span class="info-label">填报窗口：</span>
+            <span class="info-value">
+              {{ formData.windowStart ? dayjs(formData.windowStart).format('YYYY-MM-DD') : '-' }}
+              ~
+              {{ formData.windowEnd ? dayjs(formData.windowEnd).format('YYYY-MM-DD') : '-' }}
+            </span>
           </div>
         </div>
       </div>
