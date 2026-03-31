@@ -96,6 +96,7 @@ public class AdminUserServiceImpl implements AdminUserService {
         AdminUserDO user = BeanUtils.toBean(createReqVO, AdminUserDO.class);
         user.setStatus(CommonStatusEnum.ENABLE.getStatus()); // 默认开启
         user.setPassword(encodePassword(createReqVO.getPassword())); // 加密密码
+        user.setPasswordMustChange(true); // 新建用户默认需要强制改密
         userMapper.insert(user);
         // 2.2 插入关联岗位
         if (CollectionUtil.isNotEmpty(user.getPostIds())) {
@@ -185,6 +186,7 @@ public class AdminUserServiceImpl implements AdminUserService {
         // 执行更新
         AdminUserDO updateObj = new AdminUserDO().setId(id);
         updateObj.setPassword(encodePassword(reqVO.getNewPassword())); // 加密密码
+        updateObj.setPasswordMustChange(false); // 改密成功后清除强制改密标志
         userMapper.updateById(updateObj);
     }
 
@@ -199,6 +201,7 @@ public class AdminUserServiceImpl implements AdminUserService {
         AdminUserDO updateObj = new AdminUserDO();
         updateObj.setId(id);
         updateObj.setPassword(encodePassword(password)); // 加密密码
+        updateObj.setPasswordMustChange(true); // 管理员重置密码后强制改密
         userMapper.updateById(updateObj);
 
         // 3. 记录操作日志上下文
@@ -519,6 +522,12 @@ public class AdminUserServiceImpl implements AdminUserService {
     @Override
     public boolean isPasswordMatch(String rawPassword, String encodedPassword) {
         return passwordEncoder.matches(rawPassword, encodedPassword);
+    }
+
+    @Override
+    public void clearPasswordMustChange(Long userId) {
+        AdminUserDO user = new AdminUserDO().setId(userId).setPasswordMustChange(false);
+        userMapper.updateById(user);
     }
 
     /**

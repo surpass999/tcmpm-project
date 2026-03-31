@@ -47,6 +47,10 @@ public class LoginUser {
      * 过期时间
      */
     private LocalDateTime expiresTime;
+    /**
+     * 是否强制修改密码：false-否，true-是（首次登录/密码被重置后）
+     */
+    private Boolean passwordMustChange;
 
     // ========== 上下文 ==========
     /**
@@ -70,6 +74,13 @@ public class LoginUser {
 
     public <T> T getContext(String key, Class<T> type) {
         return MapUtil.get(context, key, type);
+    }
+
+    public void setInfo(Map<String, String> info) {
+        this.info = info;
+        if (info != null && info.containsKey("passwordMustChange")) {
+            this.passwordMustChange = Boolean.parseBoolean(info.get("passwordMustChange"));
+        }
     }
 
 }

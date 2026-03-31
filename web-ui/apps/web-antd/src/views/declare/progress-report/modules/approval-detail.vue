@@ -662,7 +662,7 @@ defineExpose({
                   class="info-item"
                   :class="{ 'col-span-2': indicator.valueType === 5 }"
                 >
-                  <label class="info-label">{{ indicator.indicatorName }}：</label>
+                  <label class="info-label">{{ indicator.indicatorCode }} {{ indicator.indicatorName }}：</label>
                   <div class="info-value-wrap">
                     <template v-if="indicator.valueType === 1">
                       <span class="info-value">{{ indicatorValuesMap[getIndicatorId(indicator.id)] || '-' }}</span>
@@ -763,7 +763,7 @@ defineExpose({
                   class="info-item"
                   :class="{ 'col-span-2': indicator.valueType === 5 }"
                 >
-                  <label class="info-label">{{ indicator.indicatorName }}：</label>
+                  <label class="info-label">{{ indicator.indicatorCode }} {{ indicator.indicatorName }}：</label>
                   <div class="info-value-wrap">
                     <template v-if="indicator.valueType === 1">
                       <span class="info-value">{{ indicatorValuesMap[getIndicatorId(indicator.id)] || '-' }}</span>

@@ -3,6 +3,8 @@ import type { DeclareHospitalApi } from '#/api/declare/hospital';
 
 import { computed, ref } from 'vue';
 
+import dayjs from 'dayjs';
+
 import { useVbenModal } from '@vben/common-ui';
 
 import { message } from 'ant-design-vue';
@@ -63,7 +65,12 @@ const [Modal, modalApi] = useVbenModal({
     modalApi.lock();
     try {
       formData.value = await getHospital(data.id);
-      await formApi.setValues(formData.value);
+      // 许可证有效期是字符串，需转为 dayjs 对象才能被 ADatePicker 正确渲染
+      const formValues = { ...formData.value };
+      if (formValues.medicalLicenseExpire) {
+        formValues.medicalLicenseExpire = dayjs(formValues.medicalLicenseExpire);
+      }
+      await formApi.setValues(formValues);
     } finally {
       modalApi.unlock();
     }

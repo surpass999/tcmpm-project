@@ -7,6 +7,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 @Schema(description = "管理后台 - 登录用户的权限信息 Response VO，额外包括用户信息和角色列表")
@@ -52,6 +53,9 @@ public class AuthPermissionInfoRespVO {
 
         @Schema(description = "用户邮箱", example = "base@iocoder.cn")
         private String email;
+
+        @Schema(description = "额外用户信息")
+        private Map<String, Object> extraInfo;
 
     }
 

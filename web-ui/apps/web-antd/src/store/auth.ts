@@ -3,6 +3,7 @@ import type { AuthPermissionInfo, Recordable, UserInfo } from '@vben/types';
 import type { AuthApi } from '#/api';
 
 import { ref } from 'vue';
+import { h } from 'vue';
 import { useRouter } from 'vue-router';
 
 import { LOGIN_PATH } from '@vben/constants';
@@ -80,8 +81,38 @@ export const useAuthStore = defineStore('auth', () => {
 
         userInfo = fetchUserInfoResult.user;
 
+        // 从 userInfo 的 extraInfo 中获取 passwordMustChange 标志
+        const passwordMustChange =
+          (fetchUserInfoResult.user as any)?.extraInfo?.passwordMustChange === true;
+
         if (accessStore.loginExpired) {
           accessStore.setLoginExpired(false);
+        } else if (passwordMustChange) {
+          // 开启强制改密弹窗，禁止跳转到其他页面
+          const { Modal } = await import('ant-design-vue');
+          const ForceChangePassword = await import(
+            '#/views/_core/authentication/modules/force-change-password.vue'
+          );
+          Modal.confirm({
+            title: '修改密码',
+            closable: false,
+            maskClosable: false,
+            keyboard: false,
+            icon: null,
+            content: h(ForceChangePassword.default, {
+              onSuccess: async () => {
+                Modal.destroyAll();
+                // 刷新用户信息（清除标志）
+                await fetchUserInfo();
+                // 跳转到首页
+                await router.push(
+                  userInfo.homePath || preferences.app.defaultHomePath,
+                );
+              },
+            }),
+            footer: null,
+            width: 420,
+          });
         } else {
           onSuccess
             ? await onSuccess?.()

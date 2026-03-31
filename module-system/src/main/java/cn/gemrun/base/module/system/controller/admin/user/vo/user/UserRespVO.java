@@ -85,4 +85,7 @@ public class UserRespVO{
     @Schema(description = "是否绑定专家，true=是", example = "false")
     private Boolean expertBind;
 
+    @Schema(description = "是否强制修改密码，true=是", example = "false")
+    private Boolean passwordMustChange;
+
 }

@@ -93,6 +93,10 @@ public class AdminUserDO extends BaseDO {
      */
     private Integer status;
     /**
+     * 是否强制修改密码：false-否，true-是（首次登录/密码被重置后）
+     */
+    private Boolean passwordMustChange;
+    /**
      * 最后登录IP
      */
     private String loginIp;

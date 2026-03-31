@@ -214,4 +214,10 @@ public interface AdminUserService {
      */
     boolean isPasswordMatch(String rawPassword, String encodedPassword);
 
+    /**
+     * 清除用户强制修改密码标志
+     * @param userId 用户ID
+     */
+    void clearPasswordMustChange(Long userId);
+
 }

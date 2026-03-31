@@ -32,6 +32,7 @@ import javax.annotation.security.PermitAll;
 import javax.servlet.http.HttpServletRequest;
 import javax.validation.Valid;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Set;
 
@@ -112,7 +113,12 @@ public class AuthController {
         menuList = menuService.filterDisableMenus(menuList);
 
         // 2. 拼接结果返回
-        return success(AuthConvert.INSTANCE.convert(user, roles, menuList));
+        AuthPermissionInfoRespVO respVO = AuthConvert.INSTANCE.convert(user, roles, menuList);
+        // 补充 extraInfo
+        HashMap<String, Object> extraInfo = new HashMap<>();
+        extraInfo.put("passwordMustChange", Boolean.TRUE.equals(user.getPasswordMustChange()));
+        respVO.getUser().setExtraInfo(extraInfo);
+        return success(respVO);
     }
 
     @PostMapping("/register")

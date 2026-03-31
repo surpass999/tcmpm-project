@@ -6,6 +6,15 @@ interface UserInfo extends BasicUserInfo {
    * 首页地址
    */
   homePath: string;
+  /**
+   * 额外用户信息
+   */
+  extraInfo?: {
+    /**
+     * 是否强制修改密码
+     */
+    passwordMustChange?: boolean;
+  };
 }
 
 /** 权限信息 */

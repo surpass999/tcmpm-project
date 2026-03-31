@@ -105,12 +105,12 @@ const modalTitle = computed(() => {
   // 优先接口返回的 title
   const name = hospitalInfo.value?.projectTypeName?.trim();
   if (name) {
-    return `新建${name}填报`;
+    return `${name} 填报`;
   }
   // basicHospitalInfo 备用
   const fallbackName = basicHospitalInfo.value?.projectTypeName?.trim();
   if (fallbackName) {
-    return `新建${fallbackName}填报`;
+    return `${fallbackName} 填报`;
   }
   // 字典备用
   const projectType = hospitalInfo.value?.projectType;
@@ -118,7 +118,7 @@ const modalTitle = computed(() => {
     const options = getDictOptions(DICT_TYPE.DECLARE_PROJECT_TYPE, 'number');
     const found = options.find((item) => Number(item.value) === projectType);
     if (found?.label) {
-      return `新建${found.label}填报`;
+      return `${found.label} 填报`;
     }
   }
   return '新建填报';
