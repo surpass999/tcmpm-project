@@ -70,9 +70,10 @@ export async function getIndicatorGroupList() {
 }
 
 /** 获取一级指标分组列表 */
-export async function getLevelOneIndicatorGroupList() {
+export async function getLevelOneIndicatorGroupList(projectType?: number) {
   return requestClient.get<DeclareIndicatorGroupApi.IndicatorGroup[]>(
-    '/declare/indicator-group/list-level-one'
+    '/declare/indicator-group/list-level-one',
+    projectType !== undefined ? { params: { projectType } } : {}
   );
 }
 

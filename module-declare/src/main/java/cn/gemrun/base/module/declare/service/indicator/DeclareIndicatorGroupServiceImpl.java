@@ -146,8 +146,15 @@ public class DeclareIndicatorGroupServiceImpl implements DeclareIndicatorGroupSe
     }
 
     @Override
-    public List<DeclareIndicatorGroupDO> getLevelOneList() {
-        return groupMapper.selectByGroupLevel(1);
+    public List<DeclareIndicatorGroupDO> getLevelOneList(Integer projectType) {
+        if (projectType == null) {
+            return groupMapper.selectByGroupLevel(1);
+        }
+        // 按项目类型过滤一级分组
+        return groupMapper.selectList(new LambdaQueryWrapperX<DeclareIndicatorGroupDO>()
+                .eq(DeclareIndicatorGroupDO::getGroupLevel, 1)
+                .eq(DeclareIndicatorGroupDO::getProjectType, projectType)
+                .orderByAsc(DeclareIndicatorGroupDO::getSort));
     }
 
     @Override

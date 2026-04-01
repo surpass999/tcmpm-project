@@ -102,10 +102,12 @@ public class DeclareIndicatorGroupController {
 
     /**
      * 获取一级分组列表
+     * @param projectType 项目类型，可选，用于过滤
      */
     @GetMapping("/list-level-one")
-    public CommonResult<List<DeclareIndicatorGroupRespVO>> getLevelOneList() {
-        List<DeclareIndicatorGroupDO> list = groupService.getLevelOneList();
+    public CommonResult<List<DeclareIndicatorGroupRespVO>> getLevelOneList(
+            @RequestParam(value = "projectType", required = false) Integer projectType) {
+        List<DeclareIndicatorGroupDO> list = groupService.getLevelOneList(projectType);
         List<DeclareIndicatorGroupRespVO> voList = BeanUtils.toBean(list, DeclareIndicatorGroupRespVO.class);
         // 填充项目类型名称
         for (DeclareIndicatorGroupRespVO vo : voList) {

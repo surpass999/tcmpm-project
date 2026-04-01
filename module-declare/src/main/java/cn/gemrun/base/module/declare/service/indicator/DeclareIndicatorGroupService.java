@@ -57,8 +57,9 @@ public interface DeclareIndicatorGroupService {
 
     /**
      * 获取一级分组列表
+     * @param projectType 项目类型，可选，null时返回全部
      */
-    List<DeclareIndicatorGroupDO> getLevelOneList();
+    List<DeclareIndicatorGroupDO> getLevelOneList(Integer projectType);
 
     /**
      * 获取二级分组列表

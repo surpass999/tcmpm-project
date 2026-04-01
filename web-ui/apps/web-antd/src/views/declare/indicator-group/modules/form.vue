@@ -61,6 +61,8 @@ const formLayout = {
 
 // 根据项目类型获取名称
 const getProjectTypeName = (value: number) => {
+  if (!value) return '';
+  if (!Array.isArray(projectTypeOptions) || projectTypeOptions.length === 0) return '';
   const option = projectTypeOptions.find((item) => item.value === value);
   return option ? option.label : '';
 };
@@ -72,16 +74,28 @@ const getGroupLevelName = (value: number) => {
 };
 
 // 获取父分组列表
-const loadParentGroups = async () => {
+const loadParentGroups = async (projectType?: number) => {
   try {
-    const list = await getLevelOneIndicatorGroupList();
-    parentGroupOptions.value = list.map((item) => ({
-      label: `${item.groupName}（${getProjectTypeName(item.projectType)}）`,
-      value: item.id as number,
-    }));
+    const list = await getLevelOneIndicatorGroupList(projectType);
+    parentGroupOptions.value = list.map((item) => {
+      const typeName = getProjectTypeName(item.projectType);
+      return {
+        label: typeName ? `${item.groupName}（${typeName}）` : item.groupName,
+        value: Number(item.id),
+      };
+    });
     // 添加"顶级"选项
     parentGroupOptions.value.unshift({ label: '顶级分组', value: 0 });
-  } catch {
+    // 如果当前是二级分组，检查 parentId 是否在新列表中存在
+    if (formData.value?.groupLevel === 2 && formData.value.parentId) {
+      const exists = list.some((item) => Number(item.id) === formData.value?.parentId);
+      if (!exists) {
+        // 父分组不存在于新列表中，清空选择
+        formData.value.parentId = undefined;
+      }
+    }
+  } catch (e) {
+    console.error('loadParentGroups - 错误:', e);
     parentGroupOptions.value = [{ label: '顶级分组', value: 0 }];
   }
 };
@@ -127,8 +141,6 @@ const [Modal, modalApi] = useVbenModal({
     }
     // 加载项目类型选项
     await loadProjectTypeOptions();
-    // 加载父分组列表
-    await loadParentGroups();
 
     const data = modalApi.getData<DeclareIndicatorGroupApi.IndicatorGroupSaveParams>();
     if (!data || !data.id) {
@@ -144,6 +156,8 @@ const [Modal, modalApi] = useVbenModal({
         status: 1,
         parentId: 0,
       };
+      // 加载父分组列表（新建时不过滤）
+      await loadParentGroups();
       return;
     }
 
@@ -163,15 +177,19 @@ const [Modal, modalApi] = useVbenModal({
         status: detail.status || 1,
         parentId: detail.parentId || 0,
       };
+      // 编辑时根据项目类型加载对应的父分组列表
+      await loadParentGroups(detail.projectType);
     } finally {
       modalApi.unlock();
     }
   },
 });
 
-const handleProjectTypeChange = (value: number) => {
+const handleProjectTypeChange = (value: number | undefined) => {
   if (formData.value) {
     formData.value.projectType = value;
+    // 项目类型变化时，重新加载对应的一级分组
+    loadParentGroups(value);
   }
 };
 
@@ -181,6 +199,9 @@ const handleGroupLevelChange = (value: number) => {
     // 切换到一级分组时，清空父分组
     if (value === 1) {
       formData.value.parentId = 0;
+    } else {
+      // 切换到二级分组时，根据当前项目类型重新加载父分组
+      loadParentGroups(formData.value.projectType);
     }
   }
 };
@@ -217,24 +238,10 @@ const handleGroupLevelChange = (value: number) => {
           <a-radio :value="2">二级分组</a-radio>
         </a-radio-group>
       </a-form-item>
-      <a-form-item v-if="formData.groupLevel === 2" label="父分组" name="parentId">
-        <a-select
-          v-model:value="formData.parentId"
-          placeholder="请选择父分组"
-        >
-          <a-select-option
-            v-for="option in parentGroupOptions"
-            :key="option.value"
-            :value="option.value"
-          >
-            {{ option.label }}
-          </a-select-option>
-        </a-select>
-      </a-form-item>
       <a-form-item label="关联项目类型" name="projectType">
         <a-select
           v-model:value="formData.projectType"
-          placeholder="一级分组必须选择项目类型"
+          placeholder="请选择关联项目类型"
           allowClear
           @change="handleProjectTypeChange"
         >
@@ -245,6 +252,24 @@ const handleGroupLevelChange = (value: number) => {
           >
             {{ option.label }}
           </a-select-option>
+        </a-select>
+      </a-form-item>
+      <a-form-item v-if="formData.groupLevel === 2 && formData.projectType" label="父分组" name="parentId">
+        <a-select
+          v-model:value="formData.parentId"
+          placeholder="请先选择关联项目类型"
+        >
+          <a-select-option
+            v-for="option in parentGroupOptions"
+            :key="option.value"
+            :value="option.value"
+          >
+            {{ option.label }}
+          </a-select-option>
+        </a-select>
+      </a-form-item>
+      <a-form-item v-if="formData.groupLevel === 2 && !formData.projectType" label="父分组" name="parentId">
+        <a-select placeholder="请先选择关联项目类型" disabled>
         </a-select>
       </a-form-item>
       <a-form-item label="分组前缀" name="groupPrefix">
