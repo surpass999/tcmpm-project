@@ -316,12 +316,21 @@ async function handleSaveDraft() {
 
     // 4. 获取所有指标值
     const rawValues = indicatorTableRef.value?.getAllIndicatorValues?.() || [];
-    const values = rawValues.map((item: any) => ({
-      indicatorId: item.indicatorId,
-      indicatorCode: item.indicatorCode,
-      valueType: item.valueType,
-      value: extractValue(item),
-    }));
+    const values = rawValues.map((item: any) => {
+      const base: any = {
+        indicatorId: item.indicatorId,
+        indicatorCode: item.indicatorCode,
+        valueType: item.valueType,
+        value: extractValue(item),
+      };
+      // type 8 日期区间：通过独立字段传递，不走 value
+      if (item.valueType === 8) {
+        base.value = undefined;
+        base.valueDateStart = item.valueDateStart;
+        base.valueDateEnd = item.valueDateEnd;
+      }
+      return base;
+    });
 
     // 5. 调用一体化保存接口，状态为 DRAFT
     const id = await saveProgressReport({
@@ -375,12 +384,21 @@ async function handleSave() {
 
     // 4. 获取所有指标值
     const rawValues = indicatorTableRef.value?.getAllIndicatorValues?.() || [];
-    const values = rawValues.map((item: any) => ({
-      indicatorId: item.indicatorId,
-      indicatorCode: item.indicatorCode,
-      valueType: item.valueType,
-      value: extractValue(item),
-    }));
+    const values = rawValues.map((item: any) => {
+      const base: any = {
+        indicatorId: item.indicatorId,
+        indicatorCode: item.indicatorCode,
+        valueType: item.valueType,
+        value: extractValue(item),
+      };
+      // type 8 日期区间：通过独立字段传递，不走 value
+      if (item.valueType === 8) {
+        base.value = undefined;
+        base.valueDateStart = item.valueDateStart;
+        base.valueDateEnd = item.valueDateEnd;
+      }
+      return base;
+    });
 
     // 5. 调用一体化保存接口，状态为 SAVED
     const id = await saveProgressReport({
@@ -447,9 +465,7 @@ function extractValue(item: any): any {
   if (item.valueText !== undefined) return item.valueText;
   if (item.valueBool !== undefined) return item.valueBool;
   if (item.valueDate !== undefined) return item.valueDate;
-  if (item.valueDateStart !== undefined) {
-    return [item.valueDateStart, item.valueDateEnd || ''];
-  }
+  // type 8 日期区间：valueDateStart/valueDateEnd 通过独立字段传递，不走 value
   return null;
 }
 

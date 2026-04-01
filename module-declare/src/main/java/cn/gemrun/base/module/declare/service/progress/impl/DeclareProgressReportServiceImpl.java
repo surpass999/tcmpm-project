@@ -149,13 +149,47 @@ public class DeclareProgressReportServiceImpl implements DeclareProgressReportSe
         if (reqVO.getValues() != null && !reqVO.getValues().isEmpty()) {
             List<DeclareIndicatorValueDO> valueDOs = new ArrayList<>();
             for (DeclareProgressReportSaveReqVO.IndicatorValueItem item : reqVO.getValues()) {
-                if (item.getValue() == null || item.getValue().toString().trim().isEmpty()) {
-                    continue; // 跳过空值
-                }
                 DeclareIndicatorValueDO valueDO = new DeclareIndicatorValueDO();
                 valueDO.setIndicatorId(item.getIndicatorId());
                 valueDO.setIndicatorCode(item.getIndicatorCode());
                 valueDO.setValueType(item.getValueType());
+
+                // type=8 日期区间：前端发的是 valueDateStart/valueDateEnd，需特殊处理
+                if (Integer.valueOf(8).equals(item.getValueType())) {
+                    boolean hasStart = item.getValueDateStart() != null && !item.getValueDateStart().trim().isEmpty();
+                    boolean hasEnd = item.getValueDateEnd() != null && !item.getValueDateEnd().trim().isEmpty();
+                    if (!hasStart && !hasEnd) {
+                        continue; // 日期区间两端都为空，跳过
+                    }
+                    if (hasStart) {
+                        try {
+                            valueDO.setValueDateStart(java.time.LocalDateTime.parse(item.getValueDateStart().trim()));
+                        } catch (Exception e) {
+                            try {
+                                valueDO.setValueDateStart(java.time.LocalDateTime.of(
+                                    java.time.LocalDate.parse(item.getValueDateStart().trim().substring(0, 10)),
+                                    java.time.LocalTime.of(0, 0, 0)));
+                            } catch (Exception ex) { /* ignore */ }
+                        }
+                    }
+                    if (hasEnd) {
+                        try {
+                            valueDO.setValueDateEnd(java.time.LocalDateTime.parse(item.getValueDateEnd().trim()));
+                        } catch (Exception e) {
+                            try {
+                                valueDO.setValueDateEnd(java.time.LocalDateTime.of(
+                                    java.time.LocalDate.parse(item.getValueDateEnd().trim().substring(0, 10)),
+                                    java.time.LocalTime.of(23, 59, 59)));
+                            } catch (Exception ex) { /* ignore */ }
+                        }
+                    }
+                    valueDOs.add(valueDO);
+                    continue;
+                }
+
+                if (item.getValue() == null || item.getValue().toString().trim().isEmpty()) {
+                    continue; // 跳过空值
+                }
                 setValueByType(valueDO, item.getValueType(), item.getValue());
                 valueDOs.add(valueDO);
             }

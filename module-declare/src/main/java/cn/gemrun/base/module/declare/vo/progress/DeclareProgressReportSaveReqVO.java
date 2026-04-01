@@ -63,5 +63,15 @@ public class DeclareProgressReportSaveReqVO {
          * 值
          */
         private Object value;
+
+        /**
+         * 日期区间开始（type=8 时使用）
+         */
+        private String valueDateStart;
+
+        /**
+         * 日期区间结束（type=8 时使用）
+         */
+        private String valueDateEnd;
     }
 }

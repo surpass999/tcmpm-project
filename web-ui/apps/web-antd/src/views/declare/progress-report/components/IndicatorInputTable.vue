@@ -406,12 +406,17 @@
                   >
                     <div class="entry-header flex items-center justify-between mb-2">
                       <span class="entry-label text-gray-500 text-sm font-medium">
-                        条目 {{ entryIndex + 1 }}
+                        条目 {{ entryIndex + 1 }} - 
+                        <span class="text-gray-500 text-xs font-italic">
+                          {{ indicator.isRequired ? '必须填写此项内容' : '如无特殊情况，请勿删除条目' }}
+                        </span>
                       </span>
                       <a-button
                         type="text"
                         danger
                         size="small"
+                        :disabled="entryIndex === 0 && indicator.isRequired"
+                        :title="entryIndex === 0 && indicator.isRequired ? '必填项，第一条不可删除' : ''"
                         @click="handleRemoveEntry(indicator.indicatorCode, entry.rowKey)"
                       >
                         <template #icon><IconifyIcon icon="lucide:trash-2" /></template>
