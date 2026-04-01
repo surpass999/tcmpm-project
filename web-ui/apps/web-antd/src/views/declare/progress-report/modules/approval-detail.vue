@@ -460,6 +460,23 @@ function parseOptions(valueOptions: string) {
   try { return JSON.parse(valueOptions); } catch { return []; }
 }
 
+/** 解析扩展配置 */
+function parseExtraConfig(extraConfig: string | undefined): Record<string, any> {
+  if (!extraConfig) return {};
+  try { return JSON.parse(extraConfig); } catch { return {}; }
+}
+
+/** 按精度格式化数字值：precision 有配置则保留 N 位小数，否则取整 */
+function formatNumericValue(value: any, precision: number | undefined): string {
+  if (value === null || value === undefined || value === '') return '-';
+  const num = Number(value);
+  if (isNaN(num)) return String(value);
+  if (precision !== undefined && precision !== null) {
+    return num.toFixed(Number(precision));
+  }
+  return Number.isInteger(num) ? String(num) : num.toFixed(2);
+}
+
 /** 动态容器子字段条件显示配置 */
 interface ShowCondition {
   watchField: string;
@@ -672,7 +689,7 @@ defineExpose({
                   <label class="info-label">{{ indicator.indicatorCode }} {{ indicator.indicatorName }}：</label>
                   <div class="info-value-wrap">
                     <template v-if="indicator.valueType === 1">
-                      <span class="info-value">{{ indicatorValuesMap[getIndicatorId(indicator.id)] || '-' }}</span>
+                      <span class="info-value">{{ formatNumericValue(indicatorValuesMap[getIndicatorId(indicator.id)], parseExtraConfig(indicator.extraConfig).precision) }}</span>
                       <span v-if="indicator.unit" class="unit">{{ indicator.unit }}</span>
                     </template>
                     <template v-else-if="indicator.valueType === 2">
@@ -740,7 +757,7 @@ defineExpose({
                                     {{ entry[field.fieldCode] || '-' }}
                                   </span>
                                   <span v-else-if="field.fieldType === 'number'" class="field-value">
-                                    {{ entry[field.fieldCode] ?? '-' }}
+                                    {{ formatNumericValue(entry[field.fieldCode], field.precision) }}
                                   </span>
                                   <span v-else-if="field.fieldType === 'boolean'" class="status-tag" :class="entry[field.fieldCode] ? 'status-tag-success' : 'status-tag-pending'">
                                     {{ entry[field.fieldCode] ? '是' : '否' }}
@@ -784,7 +801,7 @@ defineExpose({
                   <label class="info-label">{{ indicator.indicatorCode }} {{ indicator.indicatorName }}：</label>
                   <div class="info-value-wrap">
                     <template v-if="indicator.valueType === 1">
-                      <span class="info-value">{{ indicatorValuesMap[getIndicatorId(indicator.id)] || '-' }}</span>
+                      <span class="info-value">{{ formatNumericValue(indicatorValuesMap[getIndicatorId(indicator.id)], parseExtraConfig(indicator.extraConfig).precision) }}</span>
                       <span v-if="indicator.unit" class="unit">{{ indicator.unit }}</span>
                     </template>
                     <template v-else-if="indicator.valueType === 2">
@@ -852,7 +869,7 @@ defineExpose({
                                     {{ entry[field.fieldCode] || '-' }}
                                   </span>
                                   <span v-else-if="field.fieldType === 'number'" class="field-value">
-                                    {{ entry[field.fieldCode] ?? '-' }}
+                                    {{ formatNumericValue(entry[field.fieldCode], field.precision) }}
                                   </span>
                                   <span v-else-if="field.fieldType === 'boolean'" class="status-tag" :class="entry[field.fieldCode] ? 'status-tag-success' : 'status-tag-pending'">
                                     {{ entry[field.fieldCode] ? '是' : '否' }}
