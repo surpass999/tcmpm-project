@@ -1896,7 +1896,12 @@ function validateAll(indicatorsToValidate: DeclareIndicatorApi.Indicator[]): Arr
 
     // 必填校验
     if (indicator.isRequired) {
-      const isEmpty = rawValue === undefined || rawValue === null || rawValue === '';
+      const isEmpty =
+        rawValue === undefined ||
+        rawValue === null ||
+        rawValue === '' ||
+        // 文件上传类型：空文件列表存为 JSON 字符串 '[]'
+        (indicator.valueType === 9 && (rawValue === '[]' || rawValue === '[ ]'));
       if (isEmpty) {
         if (indicator.id) {
           jointRuleErrors[String(indicator.id)] = '此项为必填';

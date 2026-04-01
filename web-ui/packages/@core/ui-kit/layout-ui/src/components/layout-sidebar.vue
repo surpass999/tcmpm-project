@@ -173,7 +173,7 @@ const headerStyle = computed((): CSSProperties => {
 
   return {
     ...(isSidebarMixed ? { display: 'flex', justifyContent: 'center' } : {}),
-    height: `${headerHeight - 1}px`,
+    height: `${headerHeight + 5}px`,
     ...contentWidthStyle.value,
   };
 });

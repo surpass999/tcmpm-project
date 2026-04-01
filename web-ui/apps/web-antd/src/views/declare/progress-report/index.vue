@@ -395,7 +395,7 @@ function getRowActions(row: DeclareProgressReport) {
   
   if (isCreator && row.deptId === hospitalId.value && canSubmitStatus(row.reportStatus) && row.provinceStatus !== 3) {
     alwaysButtons.push({
-      label: '提交',
+      label: '提交审核',
       type: 'link' as const,
       icon: 'lucide:send',
       onClick: () => handleSubmit(row),

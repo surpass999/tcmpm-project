@@ -82,7 +82,7 @@ const logoSrc = computed(() => {
       />
       <template v-if="!collapsed">
         <slot name="text">
-          <span class="truncate text-nowrap font-semibold text-foreground">
+          <span class="break-words font-semibold text-foreground" style="word-break: break-word; white-space: normal">
             {{ text }}
           </span>
         </slot>
