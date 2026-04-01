@@ -60,6 +60,18 @@ public interface DeclareIndicatorMapper extends BaseMapperX<DeclareIndicatorDO> 
     }
 
     /**
+     * 根据指标代号和项目类型查询（用于校验唯一性）
+     * @param indicatorCode 指标代号
+     * @param projectType 项目类型（可为null）
+     * @return 指标
+     */
+    default DeclareIndicatorDO selectByIndicatorCodeAndProjectType(String indicatorCode, Integer projectType) {
+        return selectOne(new LambdaQueryWrapperX<DeclareIndicatorDO>()
+                .eq(DeclareIndicatorDO::getIndicatorCode, indicatorCode)
+                .eq(DeclareIndicatorDO::getProjectType, projectType));
+    }
+
+    /**
      * 根据分组ID查询指标列表
      * @param groupId 分组ID
      * @return 指标列表

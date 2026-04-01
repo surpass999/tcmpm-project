@@ -13,6 +13,7 @@ import org.springframework.util.StringUtils;
 
 import javax.annotation.Resource;
 import java.util.*;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -44,8 +45,9 @@ public class DeclareIndicatorServiceImpl implements DeclareIndicatorService {
         // 校验指标配置
         validateIndicator(createReqVO);
 
-        // 校验指标代号唯一
-        DeclareIndicatorDO existing = indicatorMapper.selectByIndicatorCode(createReqVO.getIndicatorCode());
+        // 校验指标代号唯一（按项目类型校验）
+        DeclareIndicatorDO existing = indicatorMapper.selectByIndicatorCodeAndProjectType(
+                createReqVO.getIndicatorCode(), createReqVO.getProjectType());
         if (existing != null) {
             throw ServiceExceptionUtil.exception(ErrorCodeConstants.INDICATOR_CODE_EXISTS, createReqVO.getIndicatorCode());
         }
@@ -67,10 +69,12 @@ public class DeclareIndicatorServiceImpl implements DeclareIndicatorService {
         // 校验指标配置
         validateIndicator(updateReqVO);
 
-        // 校验指标代号唯一
-        if (!existing.getIndicatorCode().equals(updateReqVO.getIndicatorCode())) {
-            DeclareIndicatorDO sameCode = indicatorMapper.selectByIndicatorCode(updateReqVO.getIndicatorCode());
-            if (sameCode != null) {
+        // 校验指标代号唯一（按项目类型校验，排除自己）
+        if (!existing.getIndicatorCode().equals(updateReqVO.getIndicatorCode())
+                || !Objects.equals(existing.getProjectType(), updateReqVO.getProjectType())) {
+            DeclareIndicatorDO sameCode = indicatorMapper.selectByIndicatorCodeAndProjectType(
+                    updateReqVO.getIndicatorCode(), updateReqVO.getProjectType());
+            if (sameCode != null && !sameCode.getId().equals(updateReqVO.getId())) {
                 throw ServiceExceptionUtil.exception(ErrorCodeConstants.INDICATOR_CODE_EXISTS, updateReqVO.getIndicatorCode());
             }
         }
