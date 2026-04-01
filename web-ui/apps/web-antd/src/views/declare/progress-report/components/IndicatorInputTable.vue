@@ -835,28 +835,25 @@ function parseOptions(valueOptions: string): Array<{ value: string; label: strin
  */
 function handleMultiSelectChange(indicator: any, selectedValues: string[]) {
   const options = parseOptions(indicator.valueOptions);
-  const exclusiveOption = options.find((o) => o.exclusive);
+  const exclusiveValues = new Set(
+    options.filter((o) => o.exclusive).map((o) => o.value),
+  );
 
-  if (!exclusiveOption) {
-    // 无排他选项，无需处理
+  if (exclusiveValues.size === 0) {
     onIndicatorChange(indicator);
     return;
   }
 
-  const hasExclusive = selectedValues.includes(exclusiveOption.value);
-  const hasOther = selectedValues.some(
-    (v) => v !== exclusiveOption.value && options.some((o) => o.value === v),
-  );
-
-  let newValues: string[];
-  if (hasExclusive && hasOther) {
-    // 同时存在排他项和其他项，只保留排他项
-    newValues = [exclusiveOption.value];
+  const selectedExclusives = selectedValues.filter((v) => exclusiveValues.has(v));
+  if (selectedExclusives.length > 0) {
+    const lastExclusive = selectedExclusives[selectedExclusives.length - 1];
+    formValues[indicator.indicatorCode] = [lastExclusive];
   } else {
-    newValues = selectedValues;
+    formValues[indicator.indicatorCode] = selectedValues.filter(
+      (v) => !exclusiveValues.has(v),
+    );
   }
 
-  formValues[indicator.indicatorCode] = newValues;
   onIndicatorChange(indicator);
 }
 

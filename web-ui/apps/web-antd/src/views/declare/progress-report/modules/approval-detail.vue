@@ -8,6 +8,7 @@ import type { BpmActionApi } from '#/api/bpm/action';
 import { nextTick, ref, computed } from 'vue';
 
 import { DICT_TYPE } from '@vben/constants';
+import { IconifyIcon } from '@vben/icons';
 import { getDictOptions } from '@vben/hooks';
 import { useUserStore } from '@vben/stores';
 
