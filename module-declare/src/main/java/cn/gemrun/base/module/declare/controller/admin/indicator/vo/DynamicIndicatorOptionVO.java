@@ -30,4 +30,10 @@ public class DynamicIndicatorOptionVO implements Serializable {
      */
     private String label;
 
+    /**
+     * 排他选项，选中后自动清除同指标下其他已选项（常用于"未建设"等否定选项）
+     */
+    @Builder.Default
+    private Boolean exclusive = false;
+
 }

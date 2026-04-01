@@ -20,6 +20,8 @@ interface OptionItem {
   value: string;
   label: string;
   key: string;
+  /** 排他选项，选中后自动清除同指标下其他已选项 */
+  exclusive?: boolean;
 }
 
 // 动态容器子字段条件配置
@@ -368,15 +370,15 @@ const convertOptionsToJson = () => {
         required: field.required ?? false,
         sort: field.sort ?? 0,
         options: field.options?.filter((opt) => opt.value && opt.label) ?? [],
-        maxLength: field.maxLength,
+        maxLength: field.maxLength != null ? Number(field.maxLength) : undefined,
         placeholder: field.placeholder,
         showSearch: field.showSearch,
-        minSelect: field.minSelect,
-        maxSelect: field.maxSelect,
+        minSelect: field.minSelect != null ? Number(field.minSelect) : undefined,
+        maxSelect: field.maxSelect != null ? Number(field.maxSelect) : undefined,
         format: field.format,
         layout: field.layout,
-        rows: field.rows,
-        precision: field.precision,
+        rows: field.rows != null ? Number(field.rows) : undefined,
+        precision: field.precision != null ? Number(field.precision) : undefined,
         prefix: field.prefix,
         suffix: field.suffix,
         showCondition: field.showCondition?.watchField
@@ -396,7 +398,9 @@ const convertOptionsToJson = () => {
   const validOptions = optionsList.filter(
     (opt) => opt.value && opt.label,
   );
-  formData.value!.valueOptions = JSON.stringify(validOptions);
+  formData.value!.valueOptions = JSON.stringify(
+    validOptions.map((opt) => ({ value: opt.value, label: opt.label, exclusive: opt.exclusive ?? false })),
+  );
 };
 
 // 将JSON字符串解析为选项列表
@@ -443,6 +447,7 @@ const parseJsonToOptions = (jsonStr: string) => {
           value: String(item.value),
           label: item.label,
           key: `option_${Date.now()}_${Math.random()}`,
+          exclusive: item.exclusive === true,
         });
       });
     }
@@ -719,6 +724,8 @@ watch(
               placeholder="选项标签"
               class="flex-1"
             />
+            <a-switch v-model:checked="opt.exclusive" size="small" />
+            <span class="text-gray-400 text-xs whitespace-nowrap w-12">排他</span>
             <a-button
               type="text"
               danger

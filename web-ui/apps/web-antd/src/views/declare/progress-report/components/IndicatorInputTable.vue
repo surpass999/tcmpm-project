@@ -176,7 +176,7 @@
                 v-model:value="formValues[indicator.indicatorCode]"
                 :disabled="readonly"
                 class="flex flex-wrap gap-x-4 gap-y-2"
-                @change="onIndicatorChange(indicator)"
+                @change="(vals: string[]) => handleMultiSelectChange(indicator, vals)"
               >
                 <a-checkbox
                   v-for="opt in parseOptions(indicator.valueOptions)"
@@ -217,7 +217,7 @@
                 class="w-full"
                 :show-search="getShowSearch(indicator)"
                 allow-clear
-                @change="onIndicatorChange(indicator)"
+                @change="(vals: string[]) => handleMultiSelectChange(indicator, vals)"
               >
                 <a-select-option
                   v-for="opt in parseOptions(indicator.valueOptions)"
@@ -298,8 +298,8 @@
                           v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
                           :disabled="readonly"
                           :placeholder="field.placeholder || `请输入${field.fieldLabel}`"
-                          :maxlength="field.maxLength"
-                          :show-count="!!field.maxLength"
+                          :maxlength="toNumber(field.maxLength)"
+                          :show-count="field.maxLength != null"
                           class="w-full"
                           @change="onIndicatorChange(indicator)"
                         />
@@ -321,8 +321,8 @@
                           :disabled="readonly"
                           :placeholder="field.placeholder || `请输入${field.fieldLabel}`"
                           :rows="field.rows || 3"
-                          :maxlength="field.maxLength"
-                          :show-count="!!field.maxLength"
+                          :maxlength="toNumber(field.maxLength)"
+                          :show-count="field.maxLength != null"
                           class="w-full"
                           @change="onIndicatorChange(indicator)"
                         />
@@ -433,8 +433,8 @@
                           v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
                           :disabled="readonly"
                           :placeholder="field.placeholder || `请输入${field.fieldLabel}`"
-                          :maxlength="field.maxLength"
-                          :show-count="!!field.maxLength"
+                          :maxlength="toNumber(field.maxLength)"
+                          :show-count="field.maxLength != null"
                           class="w-full"
                           @change="onIndicatorChange(indicator)"
                         />
@@ -456,8 +456,8 @@
                           :disabled="readonly"
                           :placeholder="field.placeholder || `请输入${field.fieldLabel}`"
                           :rows="field.rows || 3"
-                          :maxlength="field.maxLength"
-                          :show-count="!!field.maxLength"
+                          :maxlength="toNumber(field.maxLength)"
+                          :show-count="field.maxLength != null"
                           class="w-full"
                           @change="onIndicatorChange(indicator)"
                         />
@@ -813,7 +813,7 @@ function hasIndicatorSpec(indicator: DeclareIndicatorApi.Indicator): boolean {
 }
 
 /** 解析 valueOptions JSON */
-function parseOptions(valueOptions: string): Array<{ value: string; label: string }> {
+function parseOptions(valueOptions: string): Array<{ value: string; label: string; exclusive?: boolean }> {
   if (!valueOptions) return [];
   try {
     const parsed = JSON.parse(valueOptions);
@@ -821,11 +821,43 @@ function parseOptions(valueOptions: string): Array<{ value: string; label: strin
       ? parsed.map((item: any) => ({
           value: String(item.value),
           label: item.label ?? item.value,
+          exclusive: item.exclusive === true,
         }))
       : [];
   } catch {
     return [];
   }
+}
+
+/**
+ * 多选指标变化处理（支持排他选项）
+ * 选中排他项时清除其他已选项；取消选中其他项时清除排他项
+ */
+function handleMultiSelectChange(indicator: any, selectedValues: string[]) {
+  const options = parseOptions(indicator.valueOptions);
+  const exclusiveOption = options.find((o) => o.exclusive);
+
+  if (!exclusiveOption) {
+    // 无排他选项，无需处理
+    onIndicatorChange(indicator);
+    return;
+  }
+
+  const hasExclusive = selectedValues.includes(exclusiveOption.value);
+  const hasOther = selectedValues.some(
+    (v) => v !== exclusiveOption.value && options.some((o) => o.value === v),
+  );
+
+  let newValues: string[];
+  if (hasExclusive && hasOther) {
+    // 同时存在排他项和其他项，只保留排他项
+    newValues = [exclusiveOption.value];
+  } else {
+    newValues = selectedValues;
+  }
+
+  formValues[indicator.indicatorCode] = newValues;
+  onIndicatorChange(indicator);
 }
 
 /** 生成唯一 rowKey（时间戳 + 随机数） */
@@ -1029,6 +1061,13 @@ function getBooleanLabels(indicator: DeclareIndicatorApi.Indicator): { true: str
 function getMaxLength(indicator: DeclareIndicatorApi.Indicator): number | undefined {
   const extraConfig = parseExtraConfig(indicator.extraConfig);
   return extraConfig.maxLength !== undefined ? Number(extraConfig.maxLength) : undefined;
+}
+
+/** 防御性转数字，解决数据库已存字符串值的问题 */
+function toNumber(val: any): number | undefined {
+  if (val == null || val === '') return undefined;
+  const n = Number(val);
+  return isNaN(n) ? undefined : n;
 }
 
 /** 是否富文本 */

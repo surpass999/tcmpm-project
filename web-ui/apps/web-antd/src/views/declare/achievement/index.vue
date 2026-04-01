@@ -21,6 +21,9 @@ import ReturnModal from '#/components/bpm/ReturnModal.vue';
 import UserSelectModal from '#/components/bpm/UserSelectModal.vue';
 import { $t } from '#/locales';
 
+import { DICT_TYPE } from '@vben/constants';
+import { getDictOptions } from '@vben/hooks';
+
 import Form from './modules/form.vue';
 import DetailModal from './modules/DetailModal.vue';
 
@@ -71,8 +74,12 @@ const achievementTypeOptions = [
 ];
 
 function getStatusLabel(status: string) {
-  return statusOptions.find((item) => item.value === status)?.label || '未知';
+  // return statusOptions.find((item) => item.value === status)?.label || '未知';
+  const options = getDictOptions(DICT_TYPE.DECLARE_PROJECT_STATUS);
+  const found = options.find((item) => String(item.value) === String(status));
+  return found?.label || String(status);
 }
+
 
 function getRecommendStatusLabel(status: number) {
   return recommendStatusOptions.find((item) => item.value === status)?.label || '未知';
@@ -253,9 +260,9 @@ const columns = [
   { field: 'id', title: '编号', width: 80 },
   { type: 'checkbox', width: 60 },
   { field: 'achievementName', title: '成果名称', minWidth: 150 },
-  { field: 'achievementType', title: '成果类型', width: 100, slots: { default: 'achievementType' } },
-  { field: 'dataName', title: '数据名称', width: 120 },
-  { field: 'flowType', title: '流通类型', width: 100, slots: { default: 'flowType' } },
+  // { field: 'achievementType', title: '成果类型', width: 100, slots: { default: 'achievementType' } },
+  // { field: 'dataName', title: '数据名称', width: 120 },
+  // { field: 'flowType', title: '流通类型', width: 100, slots: { default: 'flowType' } },
   { field: 'status', title: '状态', width: 120, slots: { default: 'status' } },
   { field: 'recommendStatus', title: '推荐状态', width: 130, slots: { default: 'recommendStatus' } },
   { field: 'createTime', title: '创建时间', width: 160 },
@@ -280,9 +287,9 @@ const formSchema = [
 ];
 
 const [Grid, gridApi] = useVbenVxeGrid({
-  formOptions: {
-    schema: formSchema,
-  },
+  // formOptions: {
+  //   schema: formSchema,
+  // },
   gridOptions: {
     columns,
     height: 'auto',
@@ -358,6 +365,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
         <span v-else>-</span>
       </template>
       <!-- 状态插槽 -->
+
       <template #status="{ row }">
         <a-tag :color="row.status === 'NATIONAL_APPROVED' ? 'green' : row.status === 'REJECTED' ? 'red' : row.status === 'SUBMITTED' ? 'blue' : row.status === 'DRAFT' ? 'default' : 'orange'">
           {{ getStatusLabel(row.status) }}
