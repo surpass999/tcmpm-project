@@ -385,7 +385,7 @@ function getRowActions(row: DeclareProgressReport) {
   const isCreator = String(row.creator) === String(currentUserId.value);
   const alwaysButtons = [
     {
-      label: '审批详情',
+      label: '查看详情',
       type: 'link' as const,
       icon: 'lucide:history',
       onClick: () => handleViewApprovalDetail(row),

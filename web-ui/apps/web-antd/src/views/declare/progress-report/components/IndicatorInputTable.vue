@@ -94,6 +94,7 @@
                 :precision="getNumberPrecision(indicator)"
                 class="w-full"
                 @change="onIndicatorChange(indicator)"
+                @blur="(e: Event) => handleNumberBlur(indicator, e)"
               >
                 <template #addonBefore v-if="getNumberPrefix(indicator)">
                   {{ getNumberPrefix(indicator) }}
@@ -948,6 +949,53 @@ function getVisibleFields(valueOptions: string, entry: any): DynamicField[] {
 function getNumberPrecision(indicator: DeclareIndicatorApi.Indicator): number | undefined {
   const extraConfig = parseExtraConfig(indicator.extraConfig);
   return extraConfig.precision !== undefined ? Number(extraConfig.precision) : undefined;
+}
+
+/** 处理数字输入框失焦：范围校验（不再由 a-input-number 自动修值） */
+function handleNumberBlur(indicator: DeclareIndicatorApi.Indicator, event: Event) {
+  const target = event.target as HTMLInputElement;
+  const rawVal = target.value;
+  if (rawVal === '' || rawVal === undefined || rawVal === null) return;
+
+  const numVal = Number(rawVal);
+  if (isNaN(numVal)) return;
+
+  let hasError = false;
+
+  // 范围校验
+  if (indicator.maxValue != null && numVal > indicator.maxValue) {
+    formValues[indicator.indicatorCode] = indicator.maxValue;
+    const errMsg = `不能大于 ${indicator.maxValue}`;
+    if (indicator.id) jointRuleErrors[String(indicator.id)] = errMsg;
+    jointRuleErrors[indicator.indicatorCode] = errMsg;
+    hasError = true;
+  }
+  if (indicator.minValue != null && numVal < indicator.minValue) {
+    formValues[indicator.indicatorCode] = indicator.minValue;
+    const errMsg = `不能小于 ${indicator.minValue}`;
+    if (indicator.id) jointRuleErrors[String(indicator.id)] = errMsg;
+    jointRuleErrors[indicator.indicatorCode] = errMsg;
+    hasError = true;
+  }
+
+  // 精度校验
+  const precision = getNumberPrecision(indicator);
+  if (precision !== undefined) {
+    const rounded = Number(numVal.toFixed(precision));
+    if (numVal !== rounded) {
+      formValues[indicator.indicatorCode] = rounded;
+      if (!hasError) {
+        const errMsg = `小数位数不能超过 ${precision} 位`;
+        if (indicator.id) jointRuleErrors[String(indicator.id)] = errMsg;
+        jointRuleErrors[indicator.indicatorCode] = errMsg;
+      }
+    }
+  }
+
+  // 如果修正后触发 onIndicatorChange 以更新联合规则校验
+  if (hasError || precision !== undefined) {
+    onIndicatorChange(indicator);
+  }
 }
 
 /** 获取数字前缀 */
@@ -2025,7 +2073,7 @@ defineExpose({
 
 .indicator-row {
   display: grid;
-  grid-template-columns: 1fr 180px;
+  grid-template-columns: 1fr 20%;
   gap: 0;
   background: hsl(var(--card));
   border: 1px solid hsl(var(--border));
@@ -2088,7 +2136,7 @@ defineExpose({
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding-right: 16px;
+  padding-right: 30px;
   flex: 1;
   min-width: 0;
 }

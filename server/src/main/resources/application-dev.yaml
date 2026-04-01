@@ -67,6 +67,12 @@ spring:
     port: 6379 # 端口
     database: 1 # 数据库索引
 #    password: 123456 # 密码，建议生产环境开启
+    redisson:
+      threads: 2          # 核心业务线程，小服务器2个足够
+      netty-threads: 2    # Netty IO线程，强制限制2个，杜绝线程爆炸
+      single-server-config:
+        retry-attempts: 2  # 最多重试2次，禁止无限重试
+        retry-interval: 3000  # 重试间隔3秒，避免疯狂打日志
 
 --- #################### 定时任务相关配置 ####################
 

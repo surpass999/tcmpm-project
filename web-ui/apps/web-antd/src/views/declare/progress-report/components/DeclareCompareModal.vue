@@ -86,11 +86,13 @@
             </template>
             <!-- 申报A值 -->
             <template v-else-if="column.key === 'valueA'">
-              <span :class="getDiffClass(record, 'A')">{{ formatValue(record.valueA, record) }}</span>
+              <pre v-if="record.valueType === 12" :class="['whitespace-pre-wrap text-left', getDiffClass(record, 'A')]">{{ formatValue(record.valueA, record) }}</pre>
+              <span v-else :class="getDiffClass(record, 'A')">{{ formatValue(record.valueA, record) }}</span>
             </template>
             <!-- 申报B值 -->
             <template v-else-if="column.key === 'valueB'">
-              <span :class="getDiffClass(record, 'B')">{{ formatValue(record.valueB, record) }}</span>
+              <pre v-if="record.valueType === 12" :class="['whitespace-pre-wrap text-left', getDiffClass(record, 'B')]">{{ formatValue(record.valueB, record) }}</pre>
+              <span v-else :class="getDiffClass(record, 'B')">{{ formatValue(record.valueB, record) }}</span>
             </template>
             <!-- 对比结果 -->
             <template v-else-if="column.key === 'diff'">
@@ -299,6 +301,19 @@ function formatValue(val: any, row: any) {
         }
       }
       return val;
+    case 9: {
+      // 文件上传：显示文件名列表（换行分隔），每个文件名可点击下载
+      let files: any[];
+      if (typeof val === 'string') {
+        try { files = JSON.parse(val || '[]'); } catch { return '-'; }
+      } else if (Array.isArray(val)) {
+        files = val;
+      } else {
+        return '-';
+      }
+      if (!files.length) return '-';
+      return files.map(f => f.name || f.fileName || '未命名文件').join('\n');
+    }
     case 12:
       return renderContainerValue(val, row.valueOptions);
     default:
