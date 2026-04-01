@@ -347,7 +347,7 @@ CREATE TABLE `declare_indicator`  (
   `logic_rule` varchar(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '逻辑校验关系（如201>=20101、802>=80201+80202）',
   `is_required` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否必填（0=否，1=是）',
   `sort` int(11) NOT NULL DEFAULT 0 COMMENT '排序（展示顺序）',
-  `project_type` tinyint(4) DEFAULT NULL COMMENT '适用项目类型：0=全部，1=综合型，2=中医电子病历型，3=智慧中药房型，4=名老中医传承型，5=中医临床科研型，6=中医智慧医共体型',
+  `project_type` tinyint(4) DEFAULT NULL COMMENT '适用项目类型：1=综合型，2=中医电子病历型，3=智慧中药房型，4=名老中医传承型，5=中医临床科研型，6=中医智慧医共体型',
   `creator` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '创建者',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updater` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '更新者',

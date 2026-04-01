@@ -782,7 +782,7 @@ DROP TABLE IF EXISTS `declare_indicator_joint_rule`;
 CREATE TABLE `declare_indicator_joint_rule`  (
   `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '规则主键（自增）',
   `rule_name` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '规则名称',
-  `project_type` tinyint(4) DEFAULT 0 COMMENT '适用项目类型：0=全部，1=综合型，2=中医电子病历型，3=智慧中药房型，4=名老中医传承型，5=中医临床科研型，6=中医智慧医共体型',
+  `project_type` tinyint(4) DEFAULT 0 COMMENT '适用项目类型，1=综合型，2=中医电子病历型，3=智慧中药房型，4=名老中医传承型，5=中医临床科研型，6=中医智慧医共体型',
   `trigger_timing` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '触发时机：FILL=填报时，PROCESS_SUBMIT=流程提交时',
   `process_node` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '适用流程节点',
   `rule_config` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci COMMENT '规则配置（JSON格式）',

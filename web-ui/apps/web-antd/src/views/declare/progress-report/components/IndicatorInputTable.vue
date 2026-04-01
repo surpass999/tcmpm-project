@@ -964,14 +964,14 @@ function handleNumberBlur(indicator: DeclareIndicatorApi.Indicator, event: Event
 
   // 范围校验
   if (indicator.maxValue != null && numVal > indicator.maxValue) {
-    formValues[indicator.indicatorCode] = indicator.maxValue;
+    // formValues[indicator.indicatorCode] = indicator.maxValue;
     const errMsg = `不能大于 ${indicator.maxValue}`;
     if (indicator.id) jointRuleErrors[String(indicator.id)] = errMsg;
     jointRuleErrors[indicator.indicatorCode] = errMsg;
     hasError = true;
   }
   if (indicator.minValue != null && numVal < indicator.minValue) {
-    formValues[indicator.indicatorCode] = indicator.minValue;
+    // formValues[indicator.indicatorCode] = indicator.minValue;
     const errMsg = `不能小于 ${indicator.minValue}`;
     if (indicator.id) jointRuleErrors[String(indicator.id)] = errMsg;
     jointRuleErrors[indicator.indicatorCode] = errMsg;
@@ -983,7 +983,7 @@ function handleNumberBlur(indicator: DeclareIndicatorApi.Indicator, event: Event
   if (precision !== undefined) {
     const rounded = Number(numVal.toFixed(precision));
     if (numVal !== rounded) {
-      formValues[indicator.indicatorCode] = rounded;
+      // formValues[indicator.indicatorCode] = rounded;
       if (!hasError) {
         const errMsg = `小数位数不能超过 ${precision} 位`;
         if (indicator.id) jointRuleErrors[String(indicator.id)] = errMsg;
@@ -1731,7 +1731,12 @@ watch(() => props.projectType, async (newProjectType) => {
       const savedValues = await getProgressReportIndicatorValues(props.reportId);
       for (const record of savedValues) {
         const ind = indicatorData.find((i) => i.id === record.indicatorId);
-        const vt = record.valueType ?? ind?.valueType ?? 1;
+        if (!ind) {
+          // 指标已从系统删除，忽略该孤立值记录（后端保留审计数据，不级联删除）
+          console.warn(`[IndicatorInputTable] 指标 ${record.indicatorId} (code=${record.indicatorCode}) 已不存在，跳过加载`);
+          continue;
+        }
+        const vt = record.valueType ?? ind.valueType ?? 1;
         const value = extractValue(record, vt);
         formValues[record.indicatorCode!] = value;
 
@@ -1743,11 +1748,11 @@ watch(() => props.projectType, async (newProjectType) => {
           if (Array.isArray(raw)) {
             containerValues[record.indicatorCode] = raw.map((item: any) => ({
               rowKey: item.rowKey || generateRowKey(),
-              ...convertContainerEntryDates(ind!.valueOptions, item),
+              ...convertContainerEntryDates(ind.valueOptions, item),
             }));
           } else if (raw && typeof raw === 'object') {
             containerValues[record.indicatorCode] = [
-              { rowKey: generateRowKey(), ...convertContainerEntryDates(ind!.valueOptions, raw) },
+              { rowKey: generateRowKey(), ...convertContainerEntryDates(ind.valueOptions, raw) },
             ];
           } else {
             containerValues[record.indicatorCode] = [{ rowKey: generateRowKey() }];

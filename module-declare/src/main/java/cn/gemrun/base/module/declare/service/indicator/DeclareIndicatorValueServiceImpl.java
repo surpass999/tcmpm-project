@@ -115,14 +115,16 @@ public class DeclareIndicatorValueServiceImpl implements DeclareIndicatorValueSe
         if (businessType == null) {
             businessType = 3; // 进度填报默认 businessType
         }
-        // 计算上期：同一年度，上一批次
+        // 计算上期：同一年度，上一批次；第1期则回退到上年第4期
         int lastBatch = reportBatch - 1;
+        int lastYear = reportYear;
         if (lastBatch < 1) {
-            return new HashMap<>();
+            lastBatch = 4;
+            lastYear = reportYear - 1;
         }
 
-        // 查询上期填报记录
-        DeclareProgressReportDO lastReport = progressReportMapper.selectByHospitalAndPeriod(hospitalId, reportYear, lastBatch);
+        // 查询上期填报记录（跨年回退：reportYear -> lastYear）
+        DeclareProgressReportDO lastReport = progressReportMapper.selectByHospitalAndPeriod(hospitalId, lastYear, lastBatch);
         if (lastReport == null) {
             return new HashMap<>();
         }

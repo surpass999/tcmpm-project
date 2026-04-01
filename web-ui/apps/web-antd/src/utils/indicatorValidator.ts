@@ -167,7 +167,15 @@ function validateRule(
           const code = idToCode ? idToCode.get(action.indicatorId) : undefined;
           condValue = code !== undefined ? values[code] : values[action.indicatorId];
         }
-        const isEmpty = condValue === undefined || condValue === null || condValue === '' || isNaN(Number(condValue));
+        // 显式判断空数组、空对象为"空"（不能仅依赖 isNaN）
+        const isEmptyArray = Array.isArray(condValue) && condValue.length === 0;
+        const isEmptyObject = condValue !== null && typeof condValue === 'object' && !Array.isArray(condValue) && Object.keys(condValue).length === 0;
+        const isEmpty = condValue === undefined
+            || condValue === null
+            || condValue === ''
+            || isEmptyArray
+            || isEmptyObject
+            || (typeof condValue === 'string' && condValue.trim() === '');
         if (isEmpty) {
           return { valid: true, ruleId: rule.id, ruleName: rule.ruleName ?? '', message: '' };
         }

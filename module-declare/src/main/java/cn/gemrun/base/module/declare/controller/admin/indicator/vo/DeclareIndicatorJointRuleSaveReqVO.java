@@ -24,7 +24,7 @@ public class DeclareIndicatorJointRuleSaveReqVO {
     private String ruleName;
 
     /**
-     * 适用项目类型：0=全部，1=综合型，2=中医电子病历型，3=智慧中药房型，4=名老中医传承型，5=中医临床科研型，6=中医智慧医共体型
+     * 适用项目类型：1=综合型，2=中医电子病历型，3=智慧中药房型，4=名老中医传承型，5=中医临床科研型，6=中医智慧医共体型
      */
     private Integer projectType;
 
