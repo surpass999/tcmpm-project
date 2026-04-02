@@ -279,7 +279,7 @@ function getRowActions(row: DeclareProgressReport) {
       type: 'link' as const,
       danger: true,
       icon: 'lucide:trash-2',
-      auth: ['declare:progress-report:update'],
+      auth: ['declare:progress-report:delete'],
       onClick: () => handleDelete(row),
     });
   }

@@ -707,23 +707,17 @@ defineExpose({
                       <span class="info-value long-text">{{ indicatorValuesMap[getIndicatorId(indicator.id)] || '-' }}</span>
                     </template>
                     <template v-else-if="indicator.valueType === 6">
-                      <div class="option-list">
-                        <span
-                          v-for="opt in parseOptions(indicator.valueOptions)"
-                          :key="opt.value"
-                          class="option-tag"
-                          :class="{ 'option-selected': String(opt.value) === String(indicatorValuesMap[getIndicatorId(indicator.id)]) }"
-                        >{{ opt.label }}</span>
-                      </div>
+                      <span class="option-tag option-selected">
+                        {{ getOptionLabel(indicatorValuesMap[getIndicatorId(indicator.id)], parseOptions(indicator.valueOptions)) || '-' }}
+                      </span>
                     </template>
                     <template v-else-if="indicator.valueType === 7">
                       <div class="option-list">
                         <span
-                          v-for="opt in parseOptions(indicator.valueOptions)"
-                          :key="opt.value"
-                          class="option-tag"
-                          :class="{ 'option-selected': (indicatorValuesMap[getIndicatorId(indicator.id)] || []).includes(opt.value) }"
-                        >{{ opt.label }}</span>
+                          v-for="val in (indicatorValuesMap[getIndicatorId(indicator.id)] || [])"
+                          :key="val"
+                          class="option-tag option-selected"
+                        >{{ getOptionLabel(val, parseOptions(indicator.valueOptions)) }}</span>
                       </div>
                     </template>
                     <template v-else-if="indicator.valueType === 8">
@@ -819,23 +813,17 @@ defineExpose({
                       <span class="info-value long-text">{{ indicatorValuesMap[getIndicatorId(indicator.id)] || '-' }}</span>
                     </template>
                     <template v-else-if="indicator.valueType === 6">
-                      <div class="option-list">
-                        <span
-                          v-for="opt in parseOptions(indicator.valueOptions)"
-                          :key="opt.value"
-                          class="option-tag"
-                          :class="{ 'option-selected': String(opt.value) === String(indicatorValuesMap[getIndicatorId(indicator.id)]) }"
-                        >{{ opt.label }}</span>
-                      </div>
+                      <span class="option-tag option-selected">
+                        {{ getOptionLabel(indicatorValuesMap[getIndicatorId(indicator.id)], parseOptions(indicator.valueOptions)) || '-' }}
+                      </span>
                     </template>
                     <template v-else-if="indicator.valueType === 7">
                       <div class="option-list">
                         <span
-                          v-for="opt in parseOptions(indicator.valueOptions)"
-                          :key="opt.value"
-                          class="option-tag"
-                          :class="{ 'option-selected': (indicatorValuesMap[getIndicatorId(indicator.id)] || []).includes(opt.value) }"
-                        >{{ opt.label }}</span>
+                          v-for="val in (indicatorValuesMap[getIndicatorId(indicator.id)] || [])"
+                          :key="val"
+                          class="option-tag option-selected"
+                        >{{ getOptionLabel(val, parseOptions(indicator.valueOptions)) }}</span>
                       </div>
                     </template>
                     <template v-else-if="indicator.valueType === 8">
@@ -1126,10 +1114,9 @@ defineExpose({
   border: 1px solid hsl(var(--border));
 
   &.option-selected {
-    background: hsl(var(--primary) / 0.12);
-    color: hsl(var(--primary));
-    font-weight: 500;
-    border-color: hsl(var(--primary) / 0.35);
+    /* 去掉主色，改用默认字体色，保持 tag 边框样式 */
+    color: hsl(var(--foreground));
+    border-color: hsl(var(--border));
   }
 }
 

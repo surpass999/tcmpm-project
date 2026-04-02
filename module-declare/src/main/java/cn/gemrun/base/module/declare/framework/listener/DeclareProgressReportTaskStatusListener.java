@@ -77,8 +77,9 @@ public class DeclareProgressReportTaskStatusListener extends BpmTaskStatusEventL
         // 根据 bizStatus 更新业务状态
         String opinion = event.getReason();
         if ("HOSPITAL_SUBMITTED".equals(bizStatus)) {
-            // 提交员提交 或 重新提交
+            // 医院提交（或重新提交），直接进入省级审核（没有院内审批节点）
             report.setReportStatus(ReportStatusEnum.SUBMITTED.getStatus());
+            report.setProvinceStatus(ProvinceStatusEnum.AUDITING.getStatus());
             progressReportMapper.updateById(report);
 
         } else if ("HOSPITAL_APPROVED".equals(bizStatus)) {
