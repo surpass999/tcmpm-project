@@ -1703,7 +1703,22 @@ public class BpmTaskServiceImpl implements BpmTaskService {
                     return;
                 }
                 try {
-                ProcessInstance processInstance = processInstanceService.getProcessInstance(task.getProcessInstanceId());
+                    // 防御：如果当前是 StartUserNode，先检查任务是否已完成（避免重复回调导致访问已清理的 execution）
+                    if (START_USER_NODE_ID.equals(task.getTaskDefinitionKey())) {
+                        try {
+                            Integer currentStatus = (Integer) runtimeService.getVariableLocal(task.getExecutionId(),
+                                    BpmnVariableConstants.TASK_VARIABLE_STATUS);
+                            if (BpmTaskStatusEnum.isEndStatus(currentStatus)) {
+                                log.info("[processTaskAssigned][taskId({}) 发起人节点任务已处于终态，跳过]", task.getId());
+                                return;
+                            }
+                        } catch (Exception e) {
+                            // execution 已清理，说明任务已完成，直接返回
+                            log.info("[processTaskAssigned][taskId({}) 发起人节点 execution 已清理，任务已完成的标志，跳过]", task.getId());
+                            return;
+                        }
+                    }
+                    ProcessInstance processInstance = processInstanceService.getProcessInstance(task.getProcessInstanceId());
                 if (processInstance == null) {
                     log.error("[processTaskAssigned][taskId({}) 没有找到流程实例]", task.getId());
                     return;
@@ -1834,8 +1849,14 @@ public class BpmTaskServiceImpl implements BpmTaskService {
                     }
                 });
                 } catch (Exception e) {
-                    log.warn("[processTaskAssigned] afterCompletion 执行异常，taskId={}, error={}",
-                            task.getId(), e.getMessage());
+                    // StartUserNode 重复回调时的 task 不存在异常，不需要告警
+                    if (START_USER_NODE_ID.equals(task.getTaskDefinitionKey())
+                            && e.getMessage() != null && e.getMessage().contains("流程任务不存在")) {
+                        log.info("[processTaskAssigned][taskId({}) 发起人节点任务已不存在（重复回调导致），忽略]", task.getId());
+                    } else {
+                        log.warn("[processTaskAssigned] afterCompletion 执行异常，taskId={}, error={}",
+                                task.getId(), e.getMessage());
+                    }
                 }
             }
 

@@ -58,8 +58,15 @@ public class DeclareProgressReportTaskStatusListener extends BpmTaskStatusEventL
             }
         }
 
+        // 发起人节点自动完成时，bizStatus 为空是预期行为，后续会收到正确事件
         if (bizStatus == null) {
-            log.warn("[DeclareProgressReportTaskStatusListener] 无法确定业务状态，跳过处理: reportId={}", reportId);
+            if ("StartUserNode".equals(event.getTaskDefinitionKey())) {
+                // 发起人节点自动完成时，bizStatus 为空是预期行为，后续会收到正确事件
+                log.info("[DeclareProgressReportTaskStatusListener] 发起人节点自动完成事件，bizStatus为空属于预期，跳过: reportId={}", reportId);
+            } else {
+                // 非发起人节点但 bizStatus 为空，可能是配置问题
+                log.warn("[DeclareProgressReportTaskStatusListener] 无法确定业务状态，跳过处理: reportId={}", reportId);
+            }
             return;
         }
 

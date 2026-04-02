@@ -73,6 +73,18 @@ public class DeclareProgressReportServiceImpl implements DeclareProgressReportSe
             throw new RuntimeException("医院信息不存在，请确认当前用户已关联医院部门");
         }
 
+        // 防止重复创建：检查该医院本批次是否已有记录
+        DeclareProgressReportDO existing = progressReportMapper.selectByDeptAndPeriod(
+                deptId, reqVO.getReportYear(), reqVO.getReportBatch());
+        if (existing != null) {
+            throw new RuntimeException("该医院本批次已存在填报记录（id=" + existing.getId() + "），请直接编辑现有记录，勿重复创建");
+        }
+
+        // 防止超限
+        if (isOverLimit(deptId, reqVO.getReportYear())) {
+            throw new RuntimeException("该医院本年度填报次数已达上限（4次）");
+        }
+
         DeclareProgressReportDO report = DeclareProgressReportDO.builder()
                 .reportYear(reqVO.getReportYear())
                 .reportBatch(reqVO.getReportBatch())
@@ -127,11 +139,43 @@ public class DeclareProgressReportServiceImpl implements DeclareProgressReportSe
         Long reportId;
 
         if (reqVO.getId() == null) {
-            // 新建报告
-            DeclareProgressReportCreateReqVO createReq = new DeclareProgressReportCreateReqVO();
-            createReq.setReportYear(reqVO.getReportYear());
-            createReq.setReportBatch(reqVO.getReportBatch());
-            reportId = createReport(createReq);
+            // 新建报告 —— 直接内联创建，复用 createReport 的完整去重逻辑
+            AdminUserRespDTO currentUser = adminUserApi.getUser(userId);
+            Long deptId = currentUser != null ? currentUser.getDeptId() : null;
+
+            DeclareHospitalDO hospital = hospitalMapper.selectByDeptId(deptId);
+            if (hospital == null) {
+                throw new RuntimeException("医院信息不存在，请确认当前用户已关联医院部门");
+            }
+
+            // 防止重复创建：检查该医院本批次是否已有记录
+            DeclareProgressReportDO existing = progressReportMapper.selectByDeptAndPeriod(
+                    deptId, reqVO.getReportYear(), reqVO.getReportBatch());
+            if (existing != null) {
+                throw new RuntimeException("该医院本批次已存在填报记录（id=" + existing.getId() + "），请直接编辑现有记录，勿重复创建");
+            }
+
+            // 防止超限
+            if (isOverLimit(deptId, reqVO.getReportYear())) {
+                throw new RuntimeException("该医院本年度填报次数已达上限（4次）");
+            }
+
+            DeclareProgressReportDO report = DeclareProgressReportDO.builder()
+                    .reportYear(reqVO.getReportYear())
+                    .reportBatch(reqVO.getReportBatch())
+                    .hospitalId(hospital.getId())
+                    .deptId(deptId)
+                    .hospitalName(hospital.getHospitalName())
+                    .provinceCode(hospital.getProvinceCode())
+                    .provinceName(hospital.getProvinceName())
+                    .reportStatus(ReportStatusEnum.DRAFT.getStatus())
+                    .provinceStatus(ProvinceStatusEnum.NOT_SUBMITTED.getStatus())
+                    .nationalReportStatus(NationalReportStatusEnum.NOT_REPORTED.getStatus())
+                    .creator(userId != null ? userId.toString() : null)
+                    .build();
+            progressReportMapper.insert(report);
+            reportId = report.getId();
+            initIndicatorSkeletons(reportId, hospital.getProjectType(), userId);
         } else {
             // 更新报告状态
             reportId = reqVO.getId();

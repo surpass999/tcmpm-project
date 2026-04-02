@@ -6,6 +6,8 @@ import cn.gemrun.base.framework.mybatis.core.query.LambdaQueryWrapperX;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.util.List;
+
 /**
  * 进度填报Mapper
  *
@@ -41,15 +43,19 @@ public interface DeclareProgressReportMapper extends BaseMapperX<DeclareProgress
 
     /**
      * 查询医院在某年某批次的填报记录（按 deptId 查询，前端传入的 hospitalId 实际为 deptId）
+     * 使用 selectList + LIMIT 1 替代 selectOne，避免重复数据时抛 TooManyResultsException
      */
     default DeclareProgressReportDO selectByDeptAndPeriod(
             @Param("deptId") Long deptId,
             @Param("reportYear") Integer reportYear,
             @Param("reportBatch") Integer reportBatch) {
-        return selectOne(new LambdaQueryWrapperX<DeclareProgressReportDO>()
+        List<DeclareProgressReportDO> list = selectList(new LambdaQueryWrapperX<DeclareProgressReportDO>()
                 .eq(DeclareProgressReportDO::getDeptId, deptId)
                 .eq(DeclareProgressReportDO::getReportYear, reportYear)
-                .eq(DeclareProgressReportDO::getReportBatch, reportBatch));
+                .eq(DeclareProgressReportDO::getReportBatch, reportBatch)
+                .orderByDesc(DeclareProgressReportDO::getCreateTime)
+                .last("LIMIT 1"));
+        return list.isEmpty() ? null : list.get(0);
     }
 
     /**

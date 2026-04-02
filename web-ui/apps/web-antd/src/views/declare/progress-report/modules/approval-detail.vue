@@ -1064,7 +1064,7 @@ defineExpose({
 
 .info-label {
   flex-shrink: 0;
-  width: 300px;
+  width: 350px;
   color: hsl(var(--muted-foreground));
   font-size: 14px;
 }

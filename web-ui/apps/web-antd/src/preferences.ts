@@ -14,6 +14,8 @@ export const overridesPreferences = defineOverridesPreferences({
     defaultHomePath: '/dashboard/business',
     name: import.meta.env.VITE_APP_TITLE,
     enableRefreshToken: true,
+    enablePreferences: false, // 关闭偏好设置
+    enableStickyPreferencesNavigationBar: false, // 关闭偏好设置导航栏吸顶
   },
   logo: {
     enable: true,
@@ -34,6 +36,7 @@ export const overridesPreferences = defineOverridesPreferences({
   header: {
     menuAlign: 'center',
   },
+  
   widget: {
     "timezone": false,
     "fullscreen": false,
@@ -42,7 +45,8 @@ export const overridesPreferences = defineOverridesPreferences({
     "lockScreen": false,
     "notification": false,
     "sidebarToggle": false,
-    "themeToggle": false
+    "themeToggle": false,
+    "refresh": false,
   },
   theme: {
     "builtinType": "rose",
@@ -60,4 +64,5 @@ export const overridesPreferences = defineOverridesPreferences({
     enable: false
   },
 });
+
 
