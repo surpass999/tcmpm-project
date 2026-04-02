@@ -1,6 +1,7 @@
 package cn.gemrun.base.module.declare.dal.mysql;
 
 import cn.gemrun.base.module.declare.dal.dataobject.progress.DeclareProgressReportDO;
+import cn.gemrun.base.module.declare.vo.progress.DeclareNationalSearchReqVO;
 import cn.gemrun.base.framework.mybatis.core.mapper.BaseMapperX;
 import cn.gemrun.base.framework.mybatis.core.query.LambdaQueryWrapperX;
 import org.apache.ibatis.annotations.Mapper;
@@ -87,5 +88,10 @@ public interface DeclareProgressReportMapper extends BaseMapperX<DeclareProgress
      * 按省份统计已有填报记录的医院数量（去重）
      */
     int selectReportedHospitalCountByProvince(String provinceCode);
+
+    /**
+     * 国家局高级搜索（基本信息 + 指标值条件）
+     */
+    List<DeclareProgressReportDO> selectNationalSearch(@Param("req") DeclareNationalSearchReqVO reqVO);
 
 }

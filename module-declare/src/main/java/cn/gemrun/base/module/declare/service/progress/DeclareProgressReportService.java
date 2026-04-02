@@ -97,4 +97,9 @@ public interface DeclareProgressReportService {
      * @return 对比数据（含两条记录的基础信息和指标值对比）
      */
     DeclareCompareDataVO getCompareData(Long reportIdA, Long reportIdB);
+
+    /**
+     * 国家局高级搜索（基本信息 + 指标值条件）
+     */
+    List<DeclareProgressReportVO> nationalSearch(DeclareNationalSearchReqVO reqVO);
 }

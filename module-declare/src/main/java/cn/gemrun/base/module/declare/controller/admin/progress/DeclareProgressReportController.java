@@ -4,6 +4,7 @@ import cn.gemrun.base.framework.common.pojo.CommonResult;
 import cn.gemrun.base.module.declare.service.progress.DeclareProgressReportService;
 import cn.gemrun.base.module.declare.service.progress.DeclareReportWindowService;
 import cn.gemrun.base.module.declare.vo.progress.DeclareCompareDataVO;
+import cn.gemrun.base.module.declare.vo.progress.DeclareNationalSearchReqVO;
 import cn.gemrun.base.module.declare.vo.progress.DeclareProgressReportAuditReqVO;
 import cn.gemrun.base.module.declare.vo.progress.DeclareProgressReportCreateReqVO;
 import cn.gemrun.base.module.declare.vo.progress.DeclareProgressReportSaveReqVO;
@@ -178,5 +179,14 @@ public class DeclareProgressReportController {
             @RequestParam("reportIdA") Long reportIdA,
             @RequestParam("reportIdB") Long reportIdB) {
         return success(progressReportService.getCompareData(reportIdA, reportIdB));
+    }
+
+    /**
+     * 国家局高级搜索（基本信息 + 指标值条件组合）
+     */
+    @PostMapping("/national-search")
+    public CommonResult<List<DeclareProgressReportVO>> nationalSearch(
+            @RequestBody DeclareNationalSearchReqVO reqVO) {
+        return success(progressReportService.nationalSearch(reqVO));
     }
 }

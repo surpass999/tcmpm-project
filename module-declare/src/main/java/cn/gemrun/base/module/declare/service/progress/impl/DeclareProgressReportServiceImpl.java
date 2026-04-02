@@ -864,4 +864,13 @@ public class DeclareProgressReportServiceImpl implements DeclareProgressReportSe
                 return String.valueOf(valA).equals(String.valueOf(valB)) ? "equal" : "different";
         }
     }
+
+    @Override
+    public List<DeclareProgressReportVO> nationalSearch(DeclareNationalSearchReqVO reqVO) {
+        List<DeclareProgressReportDO> list = progressReportMapper.selectNationalSearch(reqVO);
+        if (list == null || list.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return list.stream().map(this::convertToVO).collect(Collectors.toList());
+    }
 }

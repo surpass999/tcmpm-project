@@ -42,4 +42,249 @@
         WHERE province_code = #{provinceCode}
     </select>
 
+    <!-- ========== 国家局高级搜索 ========== -->
+
+    <!-- 国家局高级搜索 -->
+    <select id="selectNationalSearch" resultType="cn.gemrun.base.module.declare.dal.dataobject.progress.DeclareProgressReportDO">
+        SELECT DISTINCT r.*
+        FROM declare_progress_report r
+        <if test="req.indicatorGroups != null and req.indicatorGroups.size() > 0">
+            <foreach collection="req.indicatorGroups" item="group" index="groupIdx" separator=" ">
+                INNER JOIN (
+                    SELECT DISTINCT v${groupIdx}.business_id
+                    FROM declare_indicator_value v${groupIdx}
+                    WHERE 1=1
+                    AND v${groupIdx}.business_type = 3
+                    <if test="group.innerLogic == 'AND'">
+                        AND
+                        <foreach collection="group.conditions" item="cond" separator=" AND ">
+                            <include refid="buildIndicatorConditionSql">
+                                <property name="alias" value="v${groupIdx}"/>
+                            </include>
+                        </foreach>
+                    </if>
+                    <if test="group.innerLogic != 'AND'">
+                        AND (
+                        <foreach collection="group.conditions" item="cond" separator=" OR ">
+                            <include refid="buildIndicatorConditionSql">
+                                <property name="alias" value="v${groupIdx}"/>
+                            </include>
+                        </foreach>
+                        )
+                    </if>
+                ) g${groupIdx} ON r.id = g${groupIdx}.business_id
+            </foreach>
+        </if>
+        WHERE 1=1
+        <if test="req.hospitalName != null and req.hospitalName != ''">
+            AND r.hospital_name LIKE CONCAT('%', #{req.hospitalName}, '%')
+        </if>
+        <if test="req.reportYear != null">
+            AND r.report_year = #{req.reportYear}
+        </if>
+        <if test="req.reportBatch != null">
+            AND r.report_batch = #{req.reportBatch}
+        </if>
+        <if test="req.reportStatus != null and req.reportStatus != ''">
+            AND r.report_status = #{req.reportStatus}
+        </if>
+        <if test="req.provinceStatus != null">
+            AND r.province_status = #{req.provinceStatus}
+        </if>
+        <if test="req.nationalReportStatus != null">
+            AND r.national_report_status = #{req.nationalReportStatus}
+        </if>
+        ORDER BY r.create_time DESC
+    </select>
+
+    <!-- 指标条件 SQL 片段（动态构建） -->
+    <!-- 操作符使用 snake_case: eq, neq, gt, gte, lt, lte, between, contains, starts_with, is_empty, is_not_empty, has_any, has_all, overlaps -->
+    <sql id="buildIndicatorConditionSql">
+        <choose>
+            <!-- 数字类型 (valueType=1) -->
+            <when test="cond.valueType == 1">
+                <choose>
+                    <when test="cond.operator == 'eq'">${alias}.indicator_code = #{cond.indicatorCode} AND ${alias}.value_num = CAST(#{cond.value} AS DECIMAL)</when>
+                    <when test="cond.operator == 'neq'">${alias}.indicator_code = #{cond.indicatorCode} AND ${alias}.value_num != CAST(#{cond.value} AS DECIMAL)</when>
+                    <when test="cond.operator == 'gt'">${alias}.indicator_code = #{cond.indicatorCode} AND ${alias}.value_num &gt; CAST(#{cond.value} AS DECIMAL)</when>
+                    <when test="cond.operator == 'gte'">${alias}.indicator_code = #{cond.indicatorCode} AND ${alias}.value_num &gt;= CAST(#{cond.value} AS DECIMAL)</when>
+                    <when test="cond.operator == 'lt'">${alias}.indicator_code = #{cond.indicatorCode} AND ${alias}.value_num &lt; CAST(#{cond.value} AS DECIMAL)</when>
+                    <when test="cond.operator == 'lte'">${alias}.indicator_code = #{cond.indicatorCode} AND ${alias}.value_num &lt;= CAST(#{cond.value} AS DECIMAL)</when>
+                    <when test="cond.operator == 'is_empty'">${alias}.indicator_code = #{cond.indicatorCode} AND ${alias}.value_num IS NULL</when>
+                    <when test="cond.operator == 'is_not_empty'">${alias}.indicator_code = #{cond.indicatorCode} AND ${alias}.value_num IS NOT NULL</when>
+                </choose>
+            </when>
+            <!-- 字符串类型 (valueType=2) -->
+            <when test="cond.valueType == 2">
+                <choose>
+                    <when test="cond.operator == 'eq'">${alias}.indicator_code = #{cond.indicatorCode} AND ${alias}.value_str = #{cond.value}</when>
+                    <when test="cond.operator == 'neq'">${alias}.indicator_code = #{cond.indicatorCode} AND ${alias}.value_str != #{cond.value}</when>
+                    <when test="cond.operator == 'contains'">${alias}.indicator_code = #{cond.indicatorCode} AND ${alias}.value_str LIKE CONCAT('%', #{cond.value}, '%')</when>
+                    <when test="cond.operator == 'starts_with'">${alias}.indicator_code = #{cond.indicatorCode} AND ${alias}.value_str LIKE CONCAT(#{cond.value}, '%')</when>
+                    <when test="cond.operator == 'is_empty'">${alias}.indicator_code = #{cond.indicatorCode} AND (${alias}.value_str IS NULL OR ${alias}.value_str = '')</when>
+                    <when test="cond.operator == 'is_not_empty'">${alias}.indicator_code = #{cond.indicatorCode} AND ${alias}.value_str IS NOT NULL AND ${alias}.value_str != ''</when>
+                </choose>
+            </when>
+            <!-- 布尔类型 (valueType=3) -->
+            <when test="cond.valueType == 3">
+                <choose>
+                    <when test="cond.operator == 'eq'">${alias}.indicator_code = #{cond.indicatorCode} AND ${alias}.value_bool = #{cond.value}</when>
+                    <when test="cond.operator == 'neq'">${alias}.indicator_code = #{cond.indicatorCode} AND (${alias}.value_bool IS NULL OR ${alias}.value_bool != #{cond.value})</when>
+                    <when test="cond.operator == 'is_empty'">${alias}.indicator_code = #{cond.indicatorCode} AND ${alias}.value_bool IS NULL</when>
+                    <when test="cond.operator == 'is_not_empty'">${alias}.indicator_code = #{cond.indicatorCode} AND ${alias}.value_bool IS NOT NULL</when>
+                </choose>
+            </when>
+            <!-- 日期类型 (valueType=4) -->
+            <when test="cond.valueType == 4">
+                <choose>
+                    <when test="cond.operator == 'eq'">${alias}.indicator_code = #{cond.indicatorCode} AND ${alias}.value_date = #{cond.value}</when>
+                    <when test="cond.operator == 'neq'">${alias}.indicator_code = #{cond.indicatorCode} AND ${alias}.value_date != #{cond.value}</when>
+                    <when test="cond.operator == 'gt'">${alias}.indicator_code = #{cond.indicatorCode} AND ${alias}.value_date &gt; #{cond.value}</when>
+                    <when test="cond.operator == 'lt'">${alias}.indicator_code = #{cond.indicatorCode} AND ${alias}.value_date &lt; #{cond.value}</when>
+                    <when test="cond.operator == 'between'">${alias}.indicator_code = #{cond.indicatorCode} AND ${alias}.value_date BETWEEN #{cond.value} AND #{cond.value2}</when>
+                    <when test="cond.operator == 'is_empty'">${alias}.indicator_code = #{cond.indicatorCode} AND ${alias}.value_date IS NULL</when>
+                    <when test="cond.operator == 'is_not_empty'">${alias}.indicator_code = #{cond.indicatorCode} AND ${alias}.value_date IS NOT NULL</when>
+                </choose>
+            </when>
+            <!-- 长文本类型 (valueType=5) -->
+            <when test="cond.valueType == 5">
+                <choose>
+                    <when test="cond.operator == 'contains'">${alias}.indicator_code = #{cond.indicatorCode} AND ${alias}.value_text LIKE CONCAT('%', #{cond.value}, '%')</when>
+                    <when test="cond.operator == 'is_empty'">${alias}.indicator_code = #{cond.indicatorCode} AND (${alias}.value_text IS NULL OR ${alias}.value_text = '')</when>
+                    <when test="cond.operator == 'is_not_empty'">${alias}.indicator_code = #{cond.indicatorCode} AND ${alias}.value_text IS NOT NULL AND ${alias}.value_text != ''</when>
+                </choose>
+            </when>
+            <!-- 单选类型 (valueType=6) -->
+            <when test="cond.valueType == 6">
+                <choose>
+                    <when test="cond.operator == 'eq'">${alias}.indicator_code = #{cond.indicatorCode} AND ${alias}.value_str = #{cond.value}</when>
+                    <when test="cond.operator == 'neq'">${alias}.indicator_code = #{cond.indicatorCode} AND ${alias}.value_str != #{cond.value}</when>
+                    <when test="cond.operator == 'is_empty'">${alias}.indicator_code = #{cond.indicatorCode} AND (${alias}.value_str IS NULL OR ${alias}.value_str = '')</when>
+                    <when test="cond.operator == 'is_not_empty'">${alias}.indicator_code = #{cond.indicatorCode} AND ${alias}.value_str IS NOT NULL AND ${alias}.value_str != ''</when>
+                </choose>
+            </when>
+            <!-- 多选类型 (valueType=7) -->
+            <when test="cond.valueType == 7">
+                <choose>
+                    <when test="cond.operator == 'has_any'">
+                        ${alias}.indicator_code = #{cond.indicatorCode}
+                        <foreach collection="@cn.gemrun.base.module.declare.util.IndicatorSearchHelper@splitValues(cond.value)" item="v" separator=" " open="AND (" close=")">
+                            OR FIND_IN_SET(#{v}, ${alias}.value_str) &gt; 0
+                        </foreach>
+                    </when>
+                    <when test="cond.operator == 'has_all'">
+                        ${alias}.indicator_code = #{cond.indicatorCode}
+                        <foreach collection="@cn.gemrun.base.module.declare.util.IndicatorSearchHelper@splitValues(cond.value)" item="v">
+                            AND FIND_IN_SET(#{v}, ${alias}.value_str) &gt; 0
+                        </foreach>
+                    </when>
+                    <when test="cond.operator == 'is_empty'">${alias}.indicator_code = #{cond.indicatorCode} AND (${alias}.value_str IS NULL OR ${alias}.value_str = '')</when>
+                    <when test="cond.operator == 'is_not_empty'">${alias}.indicator_code = #{cond.indicatorCode} AND ${alias}.value_str IS NOT NULL AND ${alias}.value_str != ''</when>
+                </choose>
+            </when>
+            <!-- 日期区间类型 (valueType=8) -->
+            <when test="cond.valueType == 8">
+                ${alias}.indicator_code = #{cond.indicatorCode} AND ${alias}.value_type = 8
+                <choose>
+                    <when test="cond.operator == 'overlaps'">
+                        AND #{cond.value} &lt;= IFNULL(${alias}.value_date_end, ${alias}.value_date_start)
+                        AND #{cond.value2} &gt;= IFNULL(${alias}.value_date_start, ${alias}.value_date_end)
+                    </when>
+                    <when test="cond.operator == 'contains'">
+                        AND #{cond.value} &lt;= IFNULL(${alias}.value_date_start, ${alias}.value_date_end)
+                        AND #{cond.value2} &gt;= IFNULL(${alias}.value_date_end, ${alias}.value_date_start)
+                    </when>
+                    <when test="cond.operator == 'is_empty'">AND (${alias}.value_date_start IS NULL OR ${alias}.value_date_end IS NULL)</when>
+                    <when test="cond.operator == 'is_not_empty'">AND ${alias}.value_date_start IS NOT NULL AND ${alias}.value_date_end IS NOT NULL</when>
+                </choose>
+            </when>
+            <!-- 单选下拉类型 (valueType=10)：同 type=6 -->
+            <when test="cond.valueType == 10">
+                <choose>
+                    <when test="cond.operator == 'eq'">${alias}.indicator_code = #{cond.indicatorCode} AND ${alias}.value_str = #{cond.value}</when>
+                    <when test="cond.operator == 'neq'">${alias}.indicator_code = #{cond.indicatorCode} AND ${alias}.value_str != #{cond.value}</when>
+                    <when test="cond.operator == 'is_empty'">${alias}.indicator_code = #{cond.indicatorCode} AND (${alias}.value_str IS NULL OR ${alias}.value_str = '')</when>
+                    <when test="cond.operator == 'is_not_empty'">${alias}.indicator_code = #{cond.indicatorCode} AND ${alias}.value_str IS NOT NULL AND ${alias}.value_str != ''</when>
+                </choose>
+            </when>
+            <!-- 多选下拉类型 (valueType=11)：同 type=7 -->
+            <when test="cond.valueType == 11">
+                <choose>
+                    <when test="cond.operator == 'has_any'">
+                        ${alias}.indicator_code = #{cond.indicatorCode}
+                        <foreach collection="@cn.gemrun.base.module.declare.util.IndicatorSearchHelper@splitValues(cond.value)" item="v" separator=" " open="AND (" close=")">
+                            OR FIND_IN_SET(#{v}, ${alias}.value_str) &gt; 0
+                        </foreach>
+                    </when>
+                    <when test="cond.operator == 'has_all'">
+                        ${alias}.indicator_code = #{cond.indicatorCode}
+                        <foreach collection="@cn.gemrun.base.module.declare.util.IndicatorSearchHelper@splitValues(cond.value)" item="v">
+                            AND FIND_IN_SET(#{v}, ${alias}.value_str) &gt; 0
+                        </foreach>
+                    </when>
+                    <when test="cond.operator == 'is_empty'">${alias}.indicator_code = #{cond.indicatorCode} AND (${alias}.value_str IS NULL OR ${alias}.value_str = '')</when>
+                    <when test="cond.operator == 'is_not_empty'">${alias}.indicator_code = #{cond.indicatorCode} AND ${alias}.value_str IS NOT NULL AND ${alias}.value_str != ''</when>
+                </choose>
+            </when>
+            <!-- 动态容器类型 (valueType=12)：value_str 为 JSON 数组 [{fieldCode: val, ...}, ...] -->
+            <when test="cond.valueType == 12">
+                ${alias}.indicator_code = #{cond.indicatorCode} AND ${alias}.value_type = 12
+                <choose>
+                    <when test="cond.fieldType == 'number'">
+                        <choose>
+                            <when test="cond.operator == 'eq'">
+                                AND JSON_SEARCH(${alias}.value_str, 'one', CAST(#{cond.value} AS CHAR)) IS NOT NULL
+                                AND CAST(JSON_UNQUOTE(JSON_EXTRACT(${alias}.value_str, '$.' + cond.fieldCode)) AS DECIMAL) = CAST(#{cond.value} AS DECIMAL)
+                            </when>
+                            <when test="cond.operator == 'gt'">
+                                AND CAST(JSON_UNQUOTE(JSON_EXTRACT(${alias}.value_str, '$.' + cond.fieldCode)) AS DECIMAL) &gt; CAST(#{cond.value} AS DECIMAL)
+                            </when>
+                            <when test="cond.operator == 'lt'">
+                                AND CAST(JSON_UNQUOTE(JSON_EXTRACT(${alias}.value_str, '$.' + cond.fieldCode)) AS DECIMAL) &lt; CAST(#{cond.value} AS DECIMAL)
+                            </when>
+                            <when test="cond.operator == 'is_empty'">
+                                AND (JSON_EXTRACT(${alias}.value_str, '$.' + cond.fieldCode) IS NULL OR JSON_EXTRACT(${alias}.value_str, '$.' + cond.fieldCode) = 'null')
+                            </when>
+                            <when test="cond.operator == 'is_not_empty'">
+                                AND JSON_EXTRACT(${alias}.value_str, '$.' + cond.fieldCode) IS NOT NULL AND JSON_EXTRACT(${alias}.value_str, '$.' + cond.fieldCode) != 'null'
+                            </when>
+                        </choose>
+                    </when>
+                    <when test="cond.fieldType == 'radio' or cond.fieldType == 'select'">
+                        <choose>
+                            <when test="cond.operator == 'eq'">AND JSON_SEARCH(${alias}.value_str, 'one', #{cond.value}) IS NOT NULL</when>
+                            <when test="cond.operator == 'neq'">AND JSON_SEARCH(${alias}.value_str, 'one', #{cond.value}) IS NULL</when>
+                            <when test="cond.operator == 'is_empty'">AND (JSON_EXTRACT(${alias}.value_str, '$.' + cond.fieldCode) IS NULL OR JSON_EXTRACT(${alias}.value_str, '$.' + cond.fieldCode) = 'null')</when>
+                            <when test="cond.operator == 'is_not_empty'">AND JSON_EXTRACT(${alias}.value_str, '$.' + cond.fieldCode) IS NOT NULL</when>
+                        </choose>
+                    </when>
+                    <when test="cond.fieldType == 'text' or cond.fieldType == 'textarea'">
+                        <choose>
+                            <when test="cond.operator == 'contains'">AND JSON_UNQUOTE(JSON_EXTRACT(${alias}.value_str, '$.' + cond.fieldCode)) LIKE CONCAT('%', #{cond.value}, '%')</when>
+                            <when test="cond.operator == 'eq'">AND JSON_UNQUOTE(JSON_EXTRACT(${alias}.value_str, '$.' + cond.fieldCode)) = #{cond.value}</when>
+                            <when test="cond.operator == 'is_empty'">AND (JSON_EXTRACT(${alias}.value_str, '$.' + cond.fieldCode) IS NULL OR JSON_EXTRACT(${alias}.value_str, '$.' + cond.fieldCode) = 'null' OR JSON_UNQUOTE(JSON_EXTRACT(${alias}.value_str, '$.' + cond.fieldCode)) = '')</when>
+                            <when test="cond.operator == 'is_not_empty'">AND JSON_UNQUOTE(JSON_EXTRACT(${alias}.value_str, '$.' + cond.fieldCode)) IS NOT NULL AND JSON_UNQUOTE(JSON_EXTRACT(${alias}.value_str, '$.' + cond.fieldCode)) != ''</when>
+                        </choose>
+                    </when>
+                    <when test="cond.fieldType == 'date'">
+                        <choose>
+                            <when test="cond.operator == 'eq'">AND JSON_UNQUOTE(JSON_EXTRACT(${alias}.value_str, '$.' + cond.fieldCode)) = #{cond.value}</when>
+                            <when test="cond.operator == 'gt'">AND JSON_UNQUOTE(JSON_EXTRACT(${alias}.value_str, '$.' + cond.fieldCode)) &gt; #{cond.value}</when>
+                            <when test="cond.operator == 'lt'">AND JSON_UNQUOTE(JSON_EXTRACT(${alias}.value_str, '$.' + cond.fieldCode)) &lt; #{cond.value}</when>
+                            <when test="cond.operator == 'between'">AND JSON_UNQUOTE(JSON_EXTRACT(${alias}.value_str, '$.' + cond.fieldCode)) BETWEEN #{cond.value} AND #{cond.value2}</when>
+                        </choose>
+                    </when>
+                    <when test="cond.fieldType == 'dateRange'">
+                        <choose>
+                            <when test="cond.operator == 'overlaps'">
+                                AND #{cond.value} &lt;= JSON_UNQUOTE(JSON_EXTRACT(JSON_EXTRACT(${alias}.value_str, '$.' + cond.fieldCode), '$[1]'))
+                                AND #{cond.value2} &gt;= JSON_UNQUOTE(JSON_EXTRACT(JSON_EXTRACT(${alias}.value_str, '$.' + cond.fieldCode), '$[0]'))
+                            </when>
+                        </choose>
+                    </when>
+                </choose>
+            </when>
+        </choose>
+    </sql>
+
 </mapper>

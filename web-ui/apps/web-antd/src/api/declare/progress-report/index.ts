@@ -295,3 +295,126 @@ export function getCompareData(reportIdA: number, reportIdB: number) {
     `/declare/progress-report/compare-data?reportIdA=${reportIdA}&reportIdB=${reportIdB}`,
   );
 }
+
+/**
+ * ========== 国家局高级搜索 ==========
+ */
+
+/** 单个指标条件 */
+export interface IndicatorCondition {
+  indicatorId: number;
+  indicatorCode: string;
+  valueType: number;
+  operator: string;
+  value: string;
+  value2?: string;
+  fieldCode?: string;
+  fieldType?: string;
+  indicatorOptions?: string;
+}
+
+/** 指标条件组 */
+export interface IndicatorConditionGroup {
+  innerLogic: 'AND' | 'OR';
+  conditions: IndicatorCondition[];
+}
+
+/** 国家局高级搜索请求参数 */
+export interface NationalSearchParams {
+  hospitalName?: string;
+  reportYear?: number;
+  reportBatch?: number;
+  reportStatus?: string;
+  provinceStatus?: number;
+  nationalReportStatus?: number;
+  projectType?: number;
+  indicatorGroups?: IndicatorConditionGroup[];
+}
+
+/** 国家局高级搜索 */
+export function nationalSearch(params: NationalSearchParams) {
+  return requestClient.post<DeclareProgressReport[]>(
+    '/declare/progress-report/national-search',
+    params,
+  );
+}
+
+/**
+ * 操作符配置（snake_case）
+ */
+export const OPERATORS: Record<number, { label: string; value: string }[]> = {
+  1: [
+    { label: '=', value: 'eq' },
+    { label: '≠', value: 'neq' },
+    { label: '>', value: 'gt' },
+    { label: '≥', value: 'gte' },
+    { label: '<', value: 'lt' },
+    { label: '≤', value: 'lte' },
+    { label: '为空', value: 'is_empty' },
+    { label: '不为空', value: 'is_not_empty' },
+  ],
+  2: [
+    { label: '等于', value: 'eq' },
+    { label: '不等于', value: 'neq' },
+    { label: '包含', value: 'contains' },
+    { label: '开头是', value: 'starts_with' },
+    { label: '为空', value: 'is_empty' },
+    { label: '不为空', value: 'is_not_empty' },
+  ],
+  3: [
+    { label: '是', value: 'eq' },
+    { label: '否', value: 'neq' },
+    { label: '为空', value: 'is_empty' },
+    { label: '不为空', value: 'is_not_empty' },
+  ],
+  4: [
+    { label: '等于', value: 'eq' },
+    { label: '不等于', value: 'neq' },
+    { label: '早于', value: 'lt' },
+    { label: '晚于', value: 'gt' },
+    { label: '区间', value: 'between' },
+    { label: '为空', value: 'is_empty' },
+    { label: '不为空', value: 'is_not_empty' },
+  ],
+  5: [
+    { label: '包含', value: 'contains' },
+    { label: '为空', value: 'is_empty' },
+    { label: '不为空', value: 'is_not_empty' },
+  ],
+  6: [
+    { label: '等于', value: 'eq' },
+    { label: '不等于', value: 'neq' },
+    { label: '为空', value: 'is_empty' },
+    { label: '不为空', value: 'is_not_empty' },
+  ],
+  7: [
+    { label: '包含任一', value: 'has_any' },
+    { label: '包含全部', value: 'has_all' },
+    { label: '为空', value: 'is_empty' },
+    { label: '不为空', value: 'is_not_empty' },
+  ],
+  8: [
+    { label: '相交', value: 'overlaps' },
+    { label: '包含', value: 'contains' },
+    { label: '为空', value: 'is_empty' },
+    { label: '不为空', value: 'is_not_empty' },
+  ],
+};
+// type=10 同 type=6, type=11 同 type=7
+OPERATORS[10] = OPERATORS[6];
+OPERATORS[11] = OPERATORS[7];
+
+/** 值类型映射到组件 */
+export const VALUE_TYPE_COMPONENTS: Record<number, string> = {
+  1: 'number',
+  2: 'text',
+  3: 'boolean',
+  4: 'date',
+  5: 'textarea',
+  6: 'select',
+  7: 'multiSelect',
+  8: 'dateRange',
+  10: 'select',
+  11: 'multiSelect',
+  12: 'dynamicContainer',
+};

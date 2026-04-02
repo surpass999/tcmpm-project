@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import type { DeclareProgressReport } from '#/api/declare/progress-report';
+import type { DeclareProgressReport, NationalSearchParams } from '#/api/declare/progress-report';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 
 import { computed, nextTick, ref } from 'vue';
@@ -11,7 +11,7 @@ import { getDictOptions } from '@vben/hooks';
 import { message, Tabs, TabPane } from 'ant-design-vue';
 import { useUserStore } from '@vben/stores';
 
-import { getHospitalReportList } from '#/api/declare/progress-report';
+import { getHospitalReportList, nationalSearch } from '#/api/declare/progress-report';
 import { getAvailableActionsBatch, submitBpmAction } from '#/api/bpm/action';
 import { IconifyIcon } from '@vben/icons';
 import { TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
@@ -19,6 +19,7 @@ import { TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 import ApprovalDetail from '../modules/approval-detail.vue';
 import ReturnModal from '#/components/bpm/ReturnModal.vue';
 import DeclareCompareModal from '../components/DeclareCompareModal.vue';
+import NationalAdvancedSearchModal from '../components/NationalAdvancedSearchModal.vue';
 
 const BUSINESS_TYPE_KEY = 'progress_report:submit';
 
@@ -39,6 +40,9 @@ const returnModalRef = ref<InstanceType<typeof ReturnModal> | null>(null);
 /** 对比弹窗组件 ref */
 const compareModalRef = ref<InstanceType<typeof DeclareCompareModal> | null>(null);
 
+/** 高级搜索弹窗组件 ref */
+const advancedSearchModalRef = ref<InstanceType<typeof NationalAdvancedSearchModal> | null>(null);
+
 /** 列表已选记录（用于数据对比） */
 const selectedRows = ref<DeclareProgressReport[]>([]);
 
@@ -52,6 +56,13 @@ const listBpmRow = ref<DeclareProgressReport | null>(null);
 const listBpmCurrentAction = ref<any>(null);
 const listBpmReason = ref('');
 
+/** 高级搜索状态 */
+const isAdvancedSearchMode = ref(false);
+const advancedSearchData = ref<DeclareProgressReport[]>([]);
+
+/** 缓存最后一次高级搜索参数（用于刷新时重放请求） */
+const lastSearchParams = ref<NationalSearchParams | null>(null);
+
 async function onTabChange(key: string) {
   activeKey.value = key as 'all' | 'reported' | 'unreported';
   await nextTick();
@@ -62,6 +73,32 @@ async function handleRefresh() {
   await nextTick();
   await nextTick();
   gridApi.query?.();
+}
+
+function handleOpenAdvancedSearch() {
+  advancedSearchModalRef.value?.open();
+}
+
+function handleAdvancedSearchResult(result: DeclareProgressReport[], params?: NationalSearchParams) {
+  isAdvancedSearchMode.value = true;
+  advancedSearchData.value = result;
+  lastSearchParams.value = params ?? null;
+  // 搜索完成后按当前 tab 过滤后加载到列表
+  let filtered = result;
+  if (activeKey.value === 'reported') {
+    filtered = result.filter((r) => r.nationalReportStatus === 1);
+  } else if (activeKey.value === 'unreported') {
+    filtered = result.filter((r) => r.nationalReportStatus !== 1);
+  }
+  // 通过 grid 实例方法加载数据（loadData 在 gridApi.grid 上）
+  gridApi.grid?.loadData(filtered);
+}
+
+async function handleClearAdvancedSearch() {
+  isAdvancedSearchMode.value = false;
+  lastSearchParams.value = null;
+  advancedSearchData.value = [];
+  await handleRefresh();
 }
 
 const compareDisabled = computed(() => {
@@ -344,6 +381,42 @@ const [Grid, gridApi] = useVbenVxeGrid({
     proxyConfig: {
       ajax: {
         query: async () => {
+          // 高级搜索模式：刷新时重放 nationalSearch 请求
+          if (isAdvancedSearchMode.value) {
+            if (lastSearchParams.value) {
+              try {
+                const result = await nationalSearch(lastSearchParams.value);
+                // 缓存完整结果，tab 切换时做前端过滤
+                const cachedResult = result;
+                advancedSearchData.value = cachedResult;
+                // 根据 tab 过滤
+                let filtered = cachedResult;
+                if (activeKey.value === 'reported') {
+                  filtered = cachedResult.filter((r) => r.nationalReportStatus === 1);
+                } else if (activeKey.value === 'unreported') {
+                  filtered = cachedResult.filter((r) => r.nationalReportStatus !== 1);
+                }
+                if (filtered.length) {
+                  await loadRowBpmActions(filtered);
+                }
+                return { list: filtered, total: filtered.length };
+              } catch {
+                return { list: [], total: 0 };
+              }
+            }
+            // 无缓存参数时，对已有结果做 tab 前端过滤
+            let filtered = advancedSearchData.value;
+            if (activeKey.value === 'reported') {
+              filtered = advancedSearchData.value.filter((r) => r.nationalReportStatus === 1);
+            } else if (activeKey.value === 'unreported') {
+              filtered = advancedSearchData.value.filter((r) => r.nationalReportStatus !== 1);
+            }
+            if (filtered.length) {
+              await loadRowBpmActions(filtered);
+            }
+            return { list: filtered, total: filtered.length };
+          }
+
           const allList = await getHospitalReportList(deptId.value);
           let list: DeclareProgressReport[] = [];
           if (activeKey.value === 'reported') {
@@ -391,6 +464,10 @@ const [Grid, gridApi] = useVbenVxeGrid({
     <ApprovalDetail ref="approvalDetailRef" @success="handleRefresh" />
     <ReturnModal ref="returnModalRef" @success="handleReturnSuccess" />
     <DeclareCompareModal ref="compareModalRef" />
+    <NationalAdvancedSearchModal
+      ref="advancedSearchModalRef"
+      @search="handleAdvancedSearchResult"
+    />
 
     <a-modal
       v-model:open="listBpmModalVisible"
@@ -423,6 +500,33 @@ const [Grid, gridApi] = useVbenVxeGrid({
     </Tabs>
 
     <Grid table-title="进度填报列表">
+      <!-- 与普通搜索同一行：在「搜索」后、「收起」前（Form 的 expand-before 插槽） -->
+      <template #form-expand-before>
+        <span class="advanced-search-form-actions">
+          <a-button
+            type="primary"
+            @click="handleOpenAdvancedSearch"
+            class="advanced-search-btn"
+          >
+            <template #icon>
+              <IconifyIcon icon="lucide:search" />
+            </template>
+            高级搜索
+          </a-button>
+          <a-button
+            v-if="isAdvancedSearchMode"
+            type="link"
+            @click="handleClearAdvancedSearch"
+            class="clear-search-btn"
+          >
+            <template #icon>
+              <IconifyIcon icon="lucide:x" />
+            </template>
+            清除高级搜索
+          </a-button>
+        </span>
+      </template>
+
       <template #toolbar-tools>
         <TableAction
           :actions="[
@@ -526,5 +630,24 @@ const [Grid, gridApi] = useVbenVxeGrid({
 :deep(.ant-tabs-tabpane) {
   height: 100%;
   overflow-y: auto;
+}
+
+.advanced-search-form-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.advanced-search-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.clear-search-btn {
+  color: #ff4d4f;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 </style>

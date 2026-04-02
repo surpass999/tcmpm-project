@@ -31,7 +31,7 @@ const currentUserId = computed(() => {
   return Number(userStore.userInfo?.userId) || userStore.userInfo?.id;
 });
 
-const activeKey = ref<'pending' | 'all'>('pending');
+const activeKey = ref<'pending' | 'all'>('all');
 
 /** 审批详情组件 ref */
 const approvalDetailRef = ref<InstanceType<typeof ApprovalDetail> | null>(null);
@@ -476,8 +476,8 @@ const [Grid, gridApi] = useVbenVxeGrid({
     </a-modal>
 
     <Tabs v-model:activeKey="activeKey" @change="onTabChange" class="mb-4">
-      <TabPane key="pending" tab="待我审核" />
       <TabPane key="all" tab="全部记录" />
+      <TabPane key="pending" tab="待审核" />
     </Tabs>
 
     <Grid table-title="进度填报列表">
