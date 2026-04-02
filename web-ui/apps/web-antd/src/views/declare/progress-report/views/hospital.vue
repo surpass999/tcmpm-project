@@ -182,8 +182,9 @@ function handleViewApprovalDetail(row: DeclareProgressReport) {
 
 function canEditStatus(status: string): boolean {
   if (status === 'DRAFT' || status === 'SAVED') return true;
-  return status.endsWith('RETURNED');
+  return status.endsWith('RETURNED') || status.endsWith('REJECTED');
 }
+
 
 function getStatusColor(status: string | number): string {
   const colors: Record<string, string> = {
@@ -349,21 +350,22 @@ function getRowActions(row: DeclareProgressReport) {
   });
 
   const isCreator = String(row.creator) === String(currentUserId.value);
-
-  if (bpmActions.length === 0 && isCreator) {
-    const isReturned =
+  const isReturned =
       row.reportStatus.endsWith('RETURNED') || row.reportStatus.endsWith('REJECTED');
-    const isSaved = row.reportStatus === 'SAVED';
 
-    if (isReturned) {
+  if (row.hospitalProcessInstanceId === null  && isCreator) {
+      // 保存状态：允许编辑 + 提交审核
+    if (canEditStatus(row.reportStatus)) {
       buttons.push({
-        label: '重新提交',
+        label: '编辑',
         type: 'link' as const,
-        icon: 'lucide:send',
-        auth: ['declare:progress-report:submit'],
-        onClick: () => handleSubmit(row),
+        icon: 'lucide:pencil',
+        auth: ['declare:progress-report:update'],
+        onClick: () => handleEdit(row),
       });
-    } else if (isSaved) {
+    }
+    const isSaved = row.reportStatus === 'SAVED';
+    if (isSaved) {
       buttons.push({
         label: '提交审核',
         type: 'link' as const,
@@ -372,6 +374,14 @@ function getRowActions(row: DeclareProgressReport) {
         onClick: () => handleSubmit(row),
       });
     }
+  } else if (isReturned || (isCreator && canEditStatus(row.reportStatus))) {
+    buttons.push({
+      label: '编辑',
+      type: 'link' as const,
+      icon: 'lucide:pencil',
+      auth: ['declare:progress-report:update'],
+      onClick: () => handleEdit(row),
+    });
   }
 
   if (row.provinceStatus === 2 && row.nationalReportStatus !== 1) {
@@ -384,15 +394,13 @@ function getRowActions(row: DeclareProgressReport) {
     });
   }
 
-  if (isCreator && canEditStatus(row.reportStatus)) {
-    buttons.push({
-      label: '编辑',
-      type: 'link' as const,
-      icon: 'lucide:pencil',
-      auth: ['declare:progress-report:update'],
-      onClick: () => handleEdit(row),
-    });
-
+  // 仅在非退回、非拒绝、非提交/审核中状态下允许删除
+  if (
+    isCreator
+    && canEditStatus(row.reportStatus)
+    && !row.reportStatus.endsWith('RETURNED')
+    && !row.reportStatus.endsWith('REJECTED')
+  ) {
     buttons.push({
       label: '删除',
       type: 'link' as const,
@@ -470,7 +478,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
       },
       {
         title: '操作',
-        width: 260,
+        width: 280,
         fixed: 'right',
         slots: { default: 'actions' },
       },

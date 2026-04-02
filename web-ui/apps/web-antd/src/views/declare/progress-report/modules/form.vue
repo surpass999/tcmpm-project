@@ -146,7 +146,10 @@ const saving = ref(false);
 const submitting = ref(false);
 
 /** 是否已保存（可提交审核的状态） */
-const isSaved = computed(() => formData.value.reportStatus === 'SAVED');
+const isSaved = computed(() => formData.value.reportStatus === 'SAVED' ||
+  formData.value.reportStatus?.endsWith('REJECTED') ||
+  formData.value.reportStatus?.endsWith('RETURNED')
+);
 
 /** 标记表单在本次打开后是否被修改（用于关闭时判断） */
 const isFormDirty = ref(false);
