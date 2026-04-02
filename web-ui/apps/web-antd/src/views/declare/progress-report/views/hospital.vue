@@ -18,11 +18,15 @@ import {
   getHospitalReportList,
   submitProgressReport,
 } from '#/api/declare/progress-report';
+import { getAvailableActionsBatch, submitBpmAction } from '#/api/bpm/action';
 import { IconifyIcon } from '@vben/icons';
 import { TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 
 import Form from '../modules/form.vue';
 import ApprovalDetail from '../modules/approval-detail.vue';
+import ReturnModal from '#/components/bpm/ReturnModal.vue';
+
+const BUSINESS_TYPE_KEY = 'progress_report:submit';
 
 const [FormModal, formModalApi] = useVbenModal({
   connectedComponent: Form,
@@ -31,6 +35,17 @@ const [FormModal, formModalApi] = useVbenModal({
 });
 
 const approvalDetailRef = ref<InstanceType<typeof ApprovalDetail> | null>(null);
+const returnModalRef = ref<InstanceType<typeof ReturnModal> | null>(null);
+
+/** 每行记录的 BPM 可用操作 */
+const rowBpmActions = ref<Record<number, any[]>>({});
+
+/** 列表行 BPM 操作：意见弹窗 */
+const listBpmModalVisible = ref(false);
+const listBpmLoading = ref(false);
+const listBpmRow = ref<DeclareProgressReport | null>(null);
+const listBpmCurrentAction = ref<any>(null);
+const listBpmReason = ref('');
 
 const userStore = useUserStore();
 
@@ -170,10 +185,6 @@ function canEditStatus(status: string): boolean {
   return status.endsWith('RETURNED');
 }
 
-function canSubmitStatus(status: string): boolean {
-  return status === 'SAVED';
-}
-
 function getStatusColor(status: string | number): string {
   const colors: Record<string, string> = {
     DRAFT: 'default',
@@ -234,25 +245,133 @@ function getNationalReportStatusName(status: number | null | undefined): string 
   return Number(status) === 1 ? '已上报' : '未上报';
 }
 
+async function loadRowBpmActions(rows: DeclareProgressReport[]) {
+  const ids = rows.map((r) => r.id).filter(Boolean);
+  if (!ids.length) return;
+  try {
+    const actions = await getAvailableActionsBatch(
+      BUSINESS_TYPE_KEY,
+      ids as number[],
+      'progress',
+    );
+    const grouped: Record<number, any[]> = {};
+    for (const action of actions) {
+      const bid = (action.businessId as number) || action.businessId?.toString?.();
+      if (bid && !Number.isNaN(Number(bid))) {
+        const key = Number(bid);
+        if (!grouped[key]) grouped[key] = [];
+        grouped[key].push(action);
+      }
+    }
+    ids.forEach((id) => {
+      rowBpmActions.value[id] = grouped[id] || [];
+    });
+  } catch {
+    ids.forEach((id) => { rowBpmActions.value[id] = []; });
+  }
+}
+
+function handleQuickBpmAction(row: DeclareProgressReport, action: any) {
+  const isBack =
+    action.bizStatus === 'PROVINCE_RETURNED'
+    || action.key === '6'
+    || (action.key as string)?.toLowerCase() === 'back';
+
+  if (isBack) {
+    returnModalRef.value?.open({ taskId: action.taskId, buttonId: action.key });
+    return;
+  }
+  listBpmRow.value = row;
+  listBpmCurrentAction.value = action;
+  listBpmReason.value = '';
+  listBpmModalVisible.value = true;
+}
+
+async function submitListBpmAction(reason: string) {
+  const row = listBpmRow.value;
+  const action = listBpmCurrentAction.value;
+  if (!row?.id || !action) return;
+
+  const vars = action.vars || {};
+  if (vars.reasonRequired && !reason?.trim()) {
+    message.warning('请输入审批意见');
+    return;
+  }
+
+  listBpmLoading.value = true;
+  try {
+    await submitBpmAction({
+      businessType: BUSINESS_TYPE_KEY,
+      businessId: row.id,
+      actionKey: String(action.key),
+      reason,
+      taskId: action.taskId,
+    });
+    message.success('操作成功');
+    listBpmModalVisible.value = false;
+    listBpmRow.value = null;
+    listBpmCurrentAction.value = null;
+    await handleRefresh();
+  } catch (e: any) {
+    message.error(e?.message || '操作失败');
+  } finally {
+    listBpmLoading.value = false;
+  }
+}
+
+function handleListBpmModalOk() {
+  void submitListBpmAction(listBpmReason.value);
+}
+
+function handleReturnSuccess() {
+  message.success('退回成功');
+  handleRefresh();
+}
+
 function getRowActions(row: DeclareProgressReport) {
-  const buttons: any[] = [
-    {
-      label: '查看详情',
+  const buttons: any[] = [];
+
+  const bpmActions = rowBpmActions.value[row.id] || [];
+  for (const action of bpmActions) {
+    buttons.push({
+      ...action,
       type: 'link' as const,
-      icon: 'lucide:history',
-      onClick: () => handleViewApprovalDetail(row),
-    },
-  ];
+      auth: [],
+      onClick: () => handleQuickBpmAction(row, action),
+    });
+  }
+
+  buttons.push({
+    label: '查看详情',
+    type: 'link' as const,
+    icon: 'lucide:history',
+    onClick: () => handleViewApprovalDetail(row),
+  });
 
   const isCreator = String(row.creator) === String(currentUserId.value);
 
-  if (isCreator && canSubmitStatus(row.reportStatus) && row.provinceStatus !== 3) {
-    buttons.push({
-      label: '提交审核',
-      type: 'link' as const,
-      icon: 'lucide:send',
-      onClick: () => handleSubmit(row),
-    });
+  if (bpmActions.length === 0 && isCreator) {
+    const isReturned =
+      row.reportStatus.endsWith('RETURNED') || row.reportStatus.endsWith('REJECTED');
+    const isSaved = row.reportStatus === 'SAVED';
+
+    if (isReturned) {
+      buttons.push({
+        label: '重新提交',
+        type: 'link' as const,
+        icon: 'lucide:send',
+        auth: ['declare:progress-report:submit'],
+        onClick: () => handleSubmit(row),
+      });
+    } else if (isSaved) {
+      buttons.push({
+        label: '提交审核',
+        type: 'link' as const,
+        icon: 'lucide:send',
+        auth: ['declare:progress-report:submit'],
+        onClick: () => handleSubmit(row),
+      });
+    }
   }
 
   if (row.provinceStatus === 2 && row.nationalReportStatus !== 1) {
@@ -362,6 +481,9 @@ const [Grid, gridApi] = useVbenVxeGrid({
       ajax: {
         query: async () => {
           const list = await getHospitalReportList(hospitalId.value);
+          if (list.length) {
+            await loadRowBpmActions(list);
+          }
           return { list: list || [], total: list?.length || 0 };
         },
       },
@@ -392,6 +514,31 @@ const [Grid, gridApi] = useVbenVxeGrid({
   <Page auto-content-height>
     <FormModal @success="handleRefresh" />
     <ApprovalDetail ref="approvalDetailRef" @success="handleRefresh" />
+    <ReturnModal ref="returnModalRef" @success="handleReturnSuccess" />
+
+    <a-modal
+      v-model:open="listBpmModalVisible"
+      :title="listBpmCurrentAction?.label || '审批操作'"
+      :confirm-loading="listBpmLoading"
+      @ok="handleListBpmModalOk"
+    >
+      <a-form layout="vertical">
+        <a-form-item
+          :label="listBpmCurrentAction?.vars?.reason || '审批意见'"
+          :required="listBpmCurrentAction?.vars?.reasonRequired"
+        >
+          <a-textarea
+            v-model:value="listBpmReason"
+            :placeholder="
+              listBpmCurrentAction?.vars?.reasonRequired
+                ? '请输入审批意见（必填）'
+                : '请输入审批意见（可选）'
+            "
+            :rows="4"
+          />
+        </a-form-item>
+      </a-form>
+    </a-modal>
 
     <Grid table-title="进度填报列表">
       <template #toolbar-tools>
