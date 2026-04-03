@@ -63,7 +63,7 @@ const isEditMode = computed(() => !!formData.value.id);
 const isReadonly = computed(() => {
   console.log('[是否编辑模式]', formData.value.reportStatus);
   const status = formData.value.reportStatus;
-  return status !== 'DRAFT' && status !== 'SAVED' && !status?.endsWith('RETURNED');
+  return status === 'SUBMITTED' || status?.endsWith('APPROVED');
 });
 
 /** 项目类型展示文案（大标题用全称，始终有兜底，永不空字符串） */
@@ -146,9 +146,10 @@ const saving = ref(false);
 const submitting = ref(false);
 
 /** 是否已保存（可提交审核的状态） */
-const isSaved = computed(() => formData.value.reportStatus === 'SAVED' ||
-  formData.value.reportStatus?.endsWith('REJECTED') ||
-  formData.value.reportStatus?.endsWith('RETURNED')
+const isSaved = computed(() => 
+  formData.value.reportStatus === 'SAVED' || 
+  formData.value.reportStatus?.endsWith('RETURNED') || 
+  formData.value.reportStatus?.endsWith('REJECTED')
 );
 
 /** 标记表单在本次打开后是否被修改（用于关闭时判断） */
@@ -169,8 +170,13 @@ const [Modal, modalApi] = useVbenModal({
   destroyOnClose: true,
   showCancelButton: true,
   async onBeforeClose() {
-    // 如果用户已填了内容（dirty），弹出确认框
-    if (isFormDirty.value) {
+    // 仅当新增记录(id不存在)或草稿状态(DRAFT)时，dirty 才需要弹出确认框
+    // SAVED/REJECTED/RETURNED 等已保存状态无需二次确认，直接关闭
+    const isNewOrDraft =
+      formData.value.id === undefined ||
+      formData.value.reportStatus === 'DRAFT';
+
+    if (isFormDirty.value && isNewOrDraft) {
       return new Promise((resolve) => {
         AConfirmModal.confirm({
           title: '确认关闭',
@@ -179,19 +185,16 @@ const [Modal, modalApi] = useVbenModal({
           cancelText: '不保存',
           okButtonProps: { loading: saving.value },
           async onOk() {
-            // 用户点"保存为草稿"，执行保存后关闭
             await handleSaveDraft();
             resolve(true);
           },
           async onCancel() {
-            // 用户点"不保存"，强制重置 dirty 并关闭
             isFormDirty.value = false;
             resolve(true);
           },
         });
       });
     }
-    // 无未保存内容，正常关闭（返回 undefined，框架默认视为 true）
   },
   async onOpenChange(isOpen: boolean) {
     if (!isOpen) {
@@ -579,7 +582,7 @@ defineExpose({ setData: modalApi.setData });
         <!-- SAVED 之后：显示保存 + 提交审核（不再需要保存草稿） -->
         <template v-else>
           <a-button @click="handleSave" :loading="saving">保存</a-button>
-          <a-button type="primary" @click="handleSubmit" :loading="submitting">提交审核</a-button>
+          <!-- <a-button type="primary" @click="handleSubmit" :loading="submitting">提交审核</a-button> -->
         </template>
       </template>
     </template>

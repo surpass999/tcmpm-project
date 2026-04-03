@@ -350,10 +350,12 @@ function getRowActions(row: DeclareProgressReport) {
   });
 
   const isCreator = String(row.creator) === String(currentUserId.value);
+
   const isReturned =
       row.reportStatus.endsWith('RETURNED') || row.reportStatus.endsWith('REJECTED');
 
-  if (row.hospitalProcessInstanceId === null  && isCreator) {
+  if ((row.hospitalProcessInstanceId == null || row.hospitalProcessInstanceId === "") && isCreator) {
+    console.log('保存状态：允许编辑 + 提交审核');
       // 保存状态：允许编辑 + 提交审核
     if (canEditStatus(row.reportStatus)) {
       buttons.push({
