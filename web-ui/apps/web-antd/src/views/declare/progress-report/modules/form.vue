@@ -570,9 +570,10 @@ defineExpose({ setData: modalApi.setData });
           <div class="info-item">
             <span class="info-label">填报窗口：</span>
             <span class="info-value">
-              {{ formData.windowStart ? dayjs(formData.windowStart).format('YYYY-MM-DD') : '-' }}
+              <!-- {{ formData.windowStart ? dayjs(formData.windowStart).format('YYYY-MM-DD') : '-' }}
               ~
-              {{ formData.windowEnd ? dayjs(formData.windowEnd).format('YYYY-MM-DD') : '-' }}
+              {{ formData.windowEnd ? dayjs(formData.windowEnd).format('YYYY-MM-DD') : '-' }} -->
+               {{ dayjs().format('YYYY-MM') }}
             </span>
           </div>
         </div>
