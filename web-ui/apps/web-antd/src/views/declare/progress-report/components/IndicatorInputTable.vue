@@ -167,7 +167,7 @@
               <!-- 多选类型 - 复选框 -->
               <a-checkbox-group
                 v-else-if="indicator.valueType === 7"
-                v-model:value="formValues[indicator.indicatorCode]"
+                :value="formValues[indicator.indicatorCode] || []"
                 :disabled="readonly"
                 class="flex flex-wrap gap-x-4 gap-y-2"
                 @change="(vals: string[]) => handleMultiSelectChange(indicator, vals)"
@@ -204,7 +204,7 @@
               <!-- 多选下拉类型 -->
               <a-select
                 v-else-if="indicator.valueType === 11"
-                v-model:value="formValues[indicator.indicatorCode]"
+                :value="formValues[indicator.indicatorCode] || []"
                 :disabled="readonly"
                 :placeholder="`请选择${indicator.indicatorName}`"
                 mode="multiple"
@@ -331,10 +331,10 @@
                         </a-radio-group>
                         <a-checkbox-group
                           v-else-if="field.fieldType === 'checkbox'"
-                          v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
+                          :value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode] || []"
                           :disabled="readonly"
                           class="flex flex-wrap gap-x-4 gap-y-2"
-                          @change="() => onContainerFieldChange(indicator, entryIndex, field)"
+                          @change="(vals: string[]) => { getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode] = vals; onContainerFieldChange(indicator, entryIndex, field); }"
                         >
                           <a-checkbox v-for="opt in field.options" :key="opt.value" :value="opt.value">{{ opt.label }}</a-checkbox>
                         </a-checkbox-group>
@@ -352,13 +352,13 @@
                         </a-select>
                         <a-select
                           v-else-if="field.fieldType === 'multiSelect'"
-                          v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
+                          :value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode] || []"
                           :disabled="readonly"
                           :placeholder="`请选择${field.fieldLabel}`"
                           mode="multiple"
                           allow-clear
                           class="w-full"
-                          @change="() => onContainerFieldChange(indicator, entryIndex, field)"
+                          @change="(vals: string[]) => { getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode] = vals; onContainerFieldChange(indicator, entryIndex, field); }"
                         >
                           <a-select-option v-for="opt in field.options" :key="opt.value" :value="opt.value">{{ opt.label }}</a-select-option>
                         </a-select>
@@ -465,10 +465,10 @@
                         </a-radio-group>
                         <a-checkbox-group
                           v-else-if="field.fieldType === 'checkbox'"
-                          v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
+                          :value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode] || []"
                           :disabled="readonly"
                           class="flex flex-wrap gap-x-4 gap-y-2"
-                          @change="() => onContainerFieldChange(indicator, entryIndex, field)"
+                          @change="(vals: string[]) => { getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode] = vals; onContainerFieldChange(indicator, entryIndex, field); }"
                         >
                           <a-checkbox v-for="opt in field.options" :key="opt.value" :value="opt.value">{{ opt.label }}</a-checkbox>
                         </a-checkbox-group>
@@ -486,13 +486,13 @@
                         </a-select>
                         <a-select
                           v-else-if="field.fieldType === 'multiSelect'"
-                          v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
+                          :value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode] || []"
                           :disabled="readonly"
                           :placeholder="`请选择${field.fieldLabel}`"
                           mode="multiple"
                           allow-clear
                           class="w-full"
-                          @change="() => onContainerFieldChange(indicator, entryIndex, field)"
+                          @change="(vals: string[]) => { getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode] = vals; onContainerFieldChange(indicator, entryIndex, field); }"
                         >
                           <a-select-option v-for="opt in field.options" :key="opt.value" :value="opt.value">{{ opt.label }}</a-select-option>
                         </a-select>
@@ -519,7 +519,7 @@
                         <!-- 字段错误提示 -->
                         <div
                           v-if="getContainerFieldError(indicator.indicatorCode, entryIndex, field.fieldCode) && containerFieldDirty[`${indicator.indicatorCode}:${entryIndex}:${field.fieldCode}`]"
-                          class="field-error"
+                          class="indicator-error"
                         >
                           {{ getContainerFieldError(indicator.indicatorCode, entryIndex, field.fieldCode) }}
                         </div>
@@ -613,10 +613,10 @@
                         </a-radio-group>
                         <a-checkbox-group
                           v-else-if="field.fieldType === 'checkbox'"
-                          v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
+                          :value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode] || []"
                           :disabled="readonly"
                           class="flex flex-wrap gap-x-4 gap-y-2"
-                          @change="() => onContainerFieldChange(indicator, entryIndex, field)"
+                          @change="(vals: string[]) => { getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode] = vals; onContainerFieldChange(indicator, entryIndex, field); }"
                         >
                           <a-checkbox v-for="opt in field.options" :key="opt.value" :value="opt.value">{{ opt.label }}</a-checkbox>
                         </a-checkbox-group>
@@ -634,13 +634,13 @@
                         </a-select>
                         <a-select
                           v-else-if="field.fieldType === 'multiSelect'"
-                          v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
+                          :value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode] || []"
                           :disabled="readonly"
                           :placeholder="`请选择${field.fieldLabel}`"
                           mode="multiple"
                           allow-clear
                           class="w-full"
-                          @change="() => onContainerFieldChange(indicator, entryIndex, field)"
+                          @change="(vals: string[]) => { getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode] = vals; onContainerFieldChange(indicator, entryIndex, field); }"
                         >
                           <a-select-option v-for="opt in field.options" :key="opt.value" :value="opt.value">{{ opt.label }}</a-select-option>
                         </a-select>
@@ -993,7 +993,7 @@ function parseOptions(valueOptions: string): Array<{ value: string; label: strin
       ? parsed.map((item: any) => ({
           value: String(item.value),
           label: item.label ?? item.value,
-          exclusive: item.exclusive === true,
+          exclusive: item.exclusive == true, // 用 == 兼容 "true"、1、true
         }))
       : [];
   } catch {
@@ -1003,29 +1003,45 @@ function parseOptions(valueOptions: string): Array<{ value: string; label: strin
 
 /**
  * 多选指标变化处理（支持排他选项）
- * 选中排他项时清除其他已选项；取消选中其他项时清除排他项
+ * 在 @change handler 入口处立即读取旧值（此时 Ant Design 尚未修改 formValues），
+ * 再 diff 出本次操作新增的选项，决定互斥行为
  */
 function handleMultiSelectChange(indicator: any, selectedValues: string[]) {
+  // 在 Ant Design 更新 formValues 之前立即捕获旧值
+  const prevValues = Array.isArray(formValues[indicator.indicatorCode])
+    ? [...formValues[indicator.indicatorCode]]
+    : [];
+
   const options = parseOptions(indicator.valueOptions);
   const exclusiveValues = new Set(
     options.filter((o) => o.exclusive).map((o) => o.value),
   );
 
   if (exclusiveValues.size === 0) {
+    formValues[indicator.indicatorCode] = selectedValues;
     onIndicatorChange(indicator);
     return;
   }
 
-  const selectedExclusives = selectedValues.filter((v) => exclusiveValues.has(v));
-  if (selectedExclusives.length > 0) {
-    const lastExclusive = selectedExclusives[selectedExclusives.length - 1];
-    formValues[indicator.indicatorCode] = [lastExclusive];
+  // 找出本次操作新增的选项（用于判断用户点击的是哪个）
+  const prevSet = new Set(prevValues);
+  const addedValues = selectedValues.filter((v) => !prevSet.has(v));
+
+  let result: string[];
+
+  if (addedValues.some((v) => exclusiveValues.has(v))) {
+    // 选中了互斥项 → 清除其他，只保留该互斥项
+    const exclusiveAdded = addedValues.find((v) => exclusiveValues.has(v));
+    result = exclusiveAdded !== undefined ? [exclusiveAdded] : [...selectedValues];
+  } else if (addedValues.length > 0) {
+    // 选中了普通项 → 清除所有互斥项
+    result = selectedValues.filter((v) => !exclusiveValues.has(v));
   } else {
-    formValues[indicator.indicatorCode] = selectedValues.filter(
-      (v) => !exclusiveValues.has(v),
-    );
+    // 取消勾选（addedValues 为空）→ 直接用 selectedValues
+    result = [...selectedValues];
   }
 
+  formValues[indicator.indicatorCode] = result;
   onIndicatorChange(indicator);
 }
 
@@ -2953,7 +2969,6 @@ defineExpose({
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  color: hsl(var(--primary));
   cursor: pointer;
   font-weight: 600;
   transition: color 0.15s;
