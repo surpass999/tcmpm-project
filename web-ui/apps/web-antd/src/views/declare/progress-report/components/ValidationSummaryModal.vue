@@ -9,12 +9,15 @@
     <div class="validation-summary">
       <div
         v-for="(error, index) in errors"
-        :key="`${error.indicatorId}-${index}`"
+        :key="error.containerFieldKey || `${error.indicatorId}-${index}`"
         class="error-item"
         @click="handleJump(error)"
       >
         <span class="error-icon">❌</span>
-        <span class="error-message">{{ error.message }}</span>
+        <div class="error-content">
+          <span class="error-code">{{ error.indicatorCode }}</span>
+          <span class="error-message">{{ error.message }}</span>
+        </div>
         <span class="jump-hint">点击定位</span>
       </div>
     </div>
@@ -25,9 +28,11 @@
 import { ref } from 'vue';
 
 interface ErrorItem {
-  indicatorId: number;
+  indicatorId?: number;  // 改为可选
   indicatorCode: string;
   message: string;
+  /** 容器字段错误 key，格式：containerCode:entryIndex:fieldCode */
+  containerFieldKey?: string;
 }
 
 const visible = ref(false);
@@ -39,8 +44,21 @@ function show(errorList: ErrorItem[]) {
 }
 
 function handleJump(error: ErrorItem) {
-  // 优先按 indicatorId 定位，找不到再按 indicatorCode
-  let el = document.querySelector(`[data-indicator-id="${error.indicatorId}"]`);
+  // 优先按 containerFieldKey 定位容器字段
+  if (error.containerFieldKey) {
+    const el = document.querySelector(`[data-container-field-key="${error.containerFieldKey}"]`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.classList.add('indicator-highlight');
+      setTimeout(() => el!.classList.remove('indicator-highlight'), 1500);
+      visible.value = false;
+      return;
+    }
+  }
+  // 其次按 indicatorId 定位
+  let el = error.indicatorId != null
+    ? document.querySelector(`[data-indicator-id="${error.indicatorId}"]`)
+    : null;
   if (!el && error.indicatorCode) {
     el = document.querySelector(`[data-indicator-code="${error.indicatorCode}"]`);
   }
@@ -95,8 +113,21 @@ defineExpose({ show });
   border-radius: 50%;
 }
 
-.error-message {
+.error-content {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.error-code {
+  font-size: 11px;
+  color: hsl(var(--muted-foreground));
+  font-weight: 600;
+  font-family: monospace;
+}
+
+.error-message {
   font-size: 13px;
   color: hsl(var(--destructive));
   font-weight: 500;

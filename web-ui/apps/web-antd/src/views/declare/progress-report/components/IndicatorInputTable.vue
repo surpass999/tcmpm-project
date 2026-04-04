@@ -83,24 +83,18 @@
                 'input-row--inline': indicator.valueType === 3 || indicator.valueType === 6 || indicator.valueType === 7,
               }"
             >
-              <!-- 数字类型 -->
+              <!-- 数字类型：使用 a-input-number 支持后缀显示 -->
               <a-input-number
                 v-if="indicator.valueType === 1"
                 v-model:value="formValues[indicator.indicatorCode]"
                 :disabled="readonly || isComputedIndicator(indicator)"
-                :placeholder="isComputedIndicator(indicator) ? '自动计算' : `请输入${indicator.indicatorName}`"
-                :min="indicator.minValue"
-                :max="indicator.maxValue"
-                :precision="getNumberPrecision(indicator)"
+                :placeholder="isComputedIndicator(indicator) ? '自动计算' : `请输入数字`"
+                :min="indicator.minValue ?? 0"
                 class="w-full"
-                @change="onIndicatorChange(indicator)"
                 @blur="(e: Event) => handleNumberBlur(indicator, e)"
               >
-                <template #addonBefore v-if="getNumberPrefix(indicator)">
-                  {{ getNumberPrefix(indicator) }}
-                </template>
-                <template #addonAfter v-if="getNumberSuffix(indicator)">
-                  {{ getNumberSuffix(indicator) }}
+                <template #addonAfter v-if="indicator.unit || parseExtraConfig(indicator.extraConfig).suffix">
+                  {{ indicator.unit || parseExtraConfig(indicator.extraConfig).suffix }}
                 </template>
               </a-input-number>
 
@@ -288,6 +282,7 @@
                         v-for="field in getVisibleFields(indicator.valueOptions, entry)"
                         :key="field.fieldCode"
                         class="dynamic-field-item"
+                        :data-container-field-key="`${indicator.indicatorCode}:${entryIndex}:${field.fieldCode}`"
                       >
                         <span class="dynamic-field-label">
                           {{ field.fieldLabel }}
@@ -301,16 +296,15 @@
                           :maxlength="toNumber(field.maxLength)"
                           :show-count="field.maxLength != null"
                           class="w-full"
-                          @change="onIndicatorChange(indicator)"
+                          @blur="() => onFieldBlur(indicator, entryIndex, field)"
                         />
                         <a-input-number
                           v-else-if="field.fieldType === 'number'"
                           v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
                           :disabled="readonly"
-                          :precision="field.precision"
-                          :min="0"
+                          :min="field.minValue ?? 0"
                           class="w-full"
-                          @change="onIndicatorChange(indicator)"
+                          @blur="() => onFieldBlur(indicator, entryIndex, field)"
                         >
                           <template #addonBefore v-if="field.prefix">{{ field.prefix }}</template>
                           <template #addonAfter v-if="field.suffix">{{ field.suffix }}</template>
@@ -324,14 +318,14 @@
                           :maxlength="toNumber(field.maxLength)"
                           :show-count="field.maxLength != null"
                           class="w-full"
-                          @change="onIndicatorChange(indicator)"
+                          @blur="() => onFieldBlur(indicator, entryIndex, field)"
                         />
                         <a-radio-group
                           v-else-if="field.fieldType === 'radio'"
                           v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
                           :disabled="readonly"
                           class="flex flex-wrap gap-x-4 gap-y-2"
-                          @change="onIndicatorChange(indicator)"
+                          @change="() => onContainerFieldChange(indicator, entryIndex, field)"
                         >
                           <a-radio v-for="opt in field.options" :key="opt.value" :value="opt.value">{{ opt.label }}</a-radio>
                         </a-radio-group>
@@ -340,7 +334,7 @@
                           v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
                           :disabled="readonly"
                           class="flex flex-wrap gap-x-4 gap-y-2"
-                          @change="onIndicatorChange(indicator)"
+                          @change="() => onContainerFieldChange(indicator, entryIndex, field)"
                         >
                           <a-checkbox v-for="opt in field.options" :key="opt.value" :value="opt.value">{{ opt.label }}</a-checkbox>
                         </a-checkbox-group>
@@ -352,7 +346,7 @@
                           :show-search="field.showSearch"
                           allow-clear
                           class="w-full"
-                          @change="onIndicatorChange(indicator)"
+                          @change="() => onContainerFieldChange(indicator, entryIndex, field)"
                         >
                           <a-select-option v-for="opt in field.options" :key="opt.value" :value="opt.value">{{ opt.label }}</a-select-option>
                         </a-select>
@@ -364,7 +358,7 @@
                           mode="multiple"
                           allow-clear
                           class="w-full"
-                          @change="onIndicatorChange(indicator)"
+                          @change="() => onContainerFieldChange(indicator, entryIndex, field)"
                         >
                           <a-select-option v-for="opt in field.options" :key="opt.value" :value="opt.value">{{ opt.label }}</a-select-option>
                         </a-select>
@@ -375,7 +369,7 @@
                           :show-time="field.format?.includes('HH')"
                           :format="field.format || 'YYYY-MM-DD'"
                           class="w-full"
-                          @change="onIndicatorChange(indicator)"
+                          @blur="() => onFieldBlur(indicator, entryIndex, field)"
                         />
                         <a-range-picker
                           v-else-if="field.fieldType === 'dateRange'"
@@ -384,15 +378,22 @@
                           :show-time="field.format?.includes('HH')"
                           :format="field.format || 'YYYY-MM-DD'"
                           class="w-full"
-                          @change="onIndicatorChange(indicator)"
+                          @blur="() => onFieldBlur(indicator, entryIndex, field)"
                         />
                         <a-switch
                           v-else-if="field.fieldType === 'boolean'"
                           v-model:checked="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
                           :disabled="readonly"
-                          @change="onIndicatorChange(indicator)"
+                          @change="() => onContainerFieldChange(indicator, entryIndex, field)"
                         />
                         <span v-else class="text-gray-400 text-sm">不支持的类型: {{ field.fieldType }}</span>
+                        <!-- 统一错误提示 -->
+                        <div
+                          v-if="getContainerFieldError(indicator.indicatorCode, entryIndex, field.fieldCode)"
+                          class="indicator-error"
+                        >
+                          {{ getContainerFieldError(indicator.indicatorCode, entryIndex, field.fieldCode) }}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -428,6 +429,7 @@
                         v-for="field in getVisibleFields(indicator.valueOptions, entry)"
                         :key="field.fieldCode"
                         class="dynamic-field-item"
+                        :data-container-field-key="`${indicator.indicatorCode}:${entryIndex}:${field.fieldCode}`"
                       >
                         <span class="dynamic-field-label">
                           {{ field.fieldLabel }}
@@ -441,16 +443,15 @@
                           :maxlength="toNumber(field.maxLength)"
                           :show-count="field.maxLength != null"
                           class="w-full"
-                          @change="onIndicatorChange(indicator)"
+                          @blur="() => onFieldBlur(indicator, entryIndex, field)"
                         />
                         <a-input-number
                           v-else-if="field.fieldType === 'number'"
                           v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
                           :disabled="readonly"
-                          :precision="field.precision"
-                          :min="0"
+                          :min="field.minValue ?? 0"
                           class="w-full"
-                          @change="onIndicatorChange(indicator)"
+                          @blur="() => onFieldBlur(indicator, entryIndex, field)"
                         >
                           <template #addonBefore v-if="field.prefix">{{ field.prefix }}</template>
                           <template #addonAfter v-if="field.suffix">{{ field.suffix }}</template>
@@ -464,14 +465,14 @@
                           :maxlength="toNumber(field.maxLength)"
                           :show-count="field.maxLength != null"
                           class="w-full"
-                          @change="onIndicatorChange(indicator)"
+                          @blur="() => onFieldBlur(indicator, entryIndex, field)"
                         />
                         <a-radio-group
                           v-else-if="field.fieldType === 'radio'"
                           v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
                           :disabled="readonly"
                           class="flex flex-wrap gap-x-4 gap-y-2"
-                          @change="onIndicatorChange(indicator)"
+                          @change="() => onContainerFieldChange(indicator, entryIndex, field)"
                         >
                           <a-radio v-for="opt in field.options" :key="opt.value" :value="opt.value">{{ opt.label }}</a-radio>
                         </a-radio-group>
@@ -480,7 +481,7 @@
                           v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
                           :disabled="readonly"
                           class="flex flex-wrap gap-x-4 gap-y-2"
-                          @change="onIndicatorChange(indicator)"
+                          @change="() => onContainerFieldChange(indicator, entryIndex, field)"
                         >
                           <a-checkbox v-for="opt in field.options" :key="opt.value" :value="opt.value">{{ opt.label }}</a-checkbox>
                         </a-checkbox-group>
@@ -492,7 +493,7 @@
                           :show-search="field.showSearch"
                           allow-clear
                           class="w-full"
-                          @change="onIndicatorChange(indicator)"
+                          @change="() => onContainerFieldChange(indicator, entryIndex, field)"
                         >
                           <a-select-option v-for="opt in field.options" :key="opt.value" :value="opt.value">{{ opt.label }}</a-select-option>
                         </a-select>
@@ -504,7 +505,7 @@
                           mode="multiple"
                           allow-clear
                           class="w-full"
-                          @change="onIndicatorChange(indicator)"
+                          @change="() => onContainerFieldChange(indicator, entryIndex, field)"
                         >
                           <a-select-option v-for="opt in field.options" :key="opt.value" :value="opt.value">{{ opt.label }}</a-select-option>
                         </a-select>
@@ -515,7 +516,7 @@
                           :show-time="field.format?.includes('HH')"
                           :format="field.format || 'YYYY-MM-DD'"
                           class="w-full"
-                          @change="onIndicatorChange(indicator)"
+                          @blur="() => onFieldBlur(indicator, entryIndex, field)"
                         />
                         <a-range-picker
                           v-else-if="field.fieldType === 'dateRange'"
@@ -524,15 +525,22 @@
                           :show-time="field.format?.includes('HH')"
                           :format="field.format || 'YYYY-MM-DD'"
                           class="w-full"
-                          @change="onIndicatorChange(indicator)"
+                          @blur="() => onFieldBlur(indicator, entryIndex, field)"
                         />
                         <a-switch
                           v-else-if="field.fieldType === 'boolean'"
                           v-model:checked="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
                           :disabled="readonly"
-                          @change="onIndicatorChange(indicator)"
+                          @change="() => onContainerFieldChange(indicator, entryIndex, field)"
                         />
                         <span v-else class="text-gray-400 text-sm">不支持的类型: {{ field.fieldType }}</span>
+                        <!-- 统一错误提示 -->
+                        <div
+                          v-if="getContainerFieldError(indicator.indicatorCode, entryIndex, field.fieldCode)"
+                          class="indicator-error"
+                        >
+                          {{ getContainerFieldError(indicator.indicatorCode, entryIndex, field.fieldCode) }}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -557,12 +565,12 @@
               <!-- 未知类型 -->
               <span v-else class="text-gray-400 text-sm">暂不支持该类型</span>
 
-              <!-- 错误提示 -->
+              <!-- 错误提示：必填/精度/格式/范围错误 -->
               <div
-              v-if="indicator.id && (jointRuleErrors[String(indicator.id)] || jointRuleErrors[indicator.indicatorCode])"
-              class="indicator-error"
-            >
-              {{ jointRuleErrors[String(indicator.id)] || jointRuleErrors[indicator.indicatorCode] }}
+                v-if="indicator.valueType !== 12 && (indicatorErrors[indicator.indicatorCode] || (indicator.id && indicatorErrors[String(indicator.id)])) && topLevelFieldDirty[indicator.indicatorCode]"
+                class="indicator-error"
+              >
+                {{ (indicator.id && indicatorErrors[String(indicator.id)]) || indicatorErrors[indicator.indicatorCode] }}
               </div>
             </div>
           </div>
@@ -702,6 +710,17 @@ interface DynamicField {
 
 /** 动态容器值 Map（key = indicatorCode, value = 条目数组，每项 = { rowKey: string, [fieldCode]: value }） */
 const containerValues = reactive<Record<string, any[]>>({});
+
+/** 容器字段脏标记 Map（key = `${code}:${entryIndex}:${fieldCode}`，用户交互后才显示错误） */
+const containerFieldDirty = reactive<Record<string, boolean>>({});
+
+/** 顶级指标脏标记 Map（key = indicatorCode，用户交互后才显示错误） */
+const topLevelFieldDirty = reactive<Record<string, boolean>>({});
+
+/** 标记顶级指标为脏 */
+function markTopLevelDirty(indicatorCode: string) {
+  topLevelFieldDirty[indicatorCode] = true;
+}
 
 /** 获取动态容器条目数组（返回空数组兜底，避免模板中 TS 报错） */
 function getContainerEntries(indicatorCode: string): any[] {
@@ -985,63 +1004,414 @@ function getNumberPrecision(indicator: DeclareIndicatorApi.Indicator): number | 
   return extraConfig.precision !== undefined ? Number(extraConfig.precision) : undefined;
 }
 
-/** 处理数字输入框失焦：范围校验（不再由 a-input-number 自动修值） */
-function handleNumberBlur(indicator: DeclareIndicatorApi.Indicator, event: Event) {
-  const target = event.target as HTMLInputElement;
-  const rawVal = target.value;
-  if (rawVal === '' || rawVal === undefined || rawVal === null) return;
+// ============================================================
+// 校验基础设施
+// ============================================================
 
-  const numVal = Number(rawVal);
-  if (isNaN(numVal)) return;
+/** 校验错误单元 */
+interface ValidationError {
+  indicatorId?: number;
+  indicatorCode: string;
+  message: string;
+  /** 容器字段错误 key，格式：containerCode:entryIndex:fieldCode */
+  containerFieldKey?: string;
+}
 
-  let hasError = false;
+/** 容器字段校验上下文 */
+interface ContainerFieldContext {
+  indicatorId: number;
+  containerCode: string;
+  entryIndex: number;
+  entry: Record<string, any>;
+  field: DynamicField;
+  fieldCode: string;
+  fieldValue: any;
+  fieldLabel: string;
+  indicatorName: string;
+  errors: ValidationError[];
+}
 
-  // 范围校验
-  if (indicator.maxValue != null && numVal > indicator.maxValue) {
-    // formValues[indicator.indicatorCode] = indicator.maxValue;
-    const errMsg = `不能大于 ${indicator.maxValue}`;
-    if (indicator.id) jointRuleErrors[String(indicator.id)] = errMsg;
-    jointRuleErrors[indicator.indicatorCode] = errMsg;
-    hasError = true;
+/** 空值判断（统一处理 null/undefined/''/'[]'/'[ ]'） */
+function isEmpty(value: any): boolean {
+  if (value === undefined || value === null || value === '') return true;
+  if (typeof value === 'string') {
+    const t = value.trim();
+    if (t === '' || t === '[]' || t === '[ ]') return true;
   }
-  if (indicator.minValue != null && numVal < indicator.minValue) {
-    // formValues[indicator.indicatorCode] = indicator.minValue;
-    const errMsg = `不能小于 ${indicator.minValue}`;
-    if (indicator.id) jointRuleErrors[String(indicator.id)] = errMsg;
-    jointRuleErrors[indicator.indicatorCode] = errMsg;
-    hasError = true;
-  }
+  return false;
+}
 
-  // 精度校验
-  const precision = getNumberPrecision(indicator);
-  if (precision !== undefined) {
-    const rounded = Number(numVal.toFixed(precision));
-    if (numVal !== rounded) {
-      // formValues[indicator.indicatorCode] = rounded;
-      if (!hasError) {
-        const errMsg = `小数位数不能超过 ${precision} 位`;
-        if (indicator.id) jointRuleErrors[String(indicator.id)] = errMsg;
-        jointRuleErrors[indicator.indicatorCode] = errMsg;
-      }
+/** 必填校验：返回错误消息或 null */
+function checkRequired(value: any, isRequired: boolean): string | null {
+  if (isRequired && isEmpty(value)) return '此项为必填';
+  return null;
+}
+
+/** 范围校验：仅对数字值生效，返回错误消息或 null */
+function checkRange(value: number, min: number | null, max: number | null): string | null {
+  if (min != null && value < min) return `不能小于 ${min}`;
+  if (max != null && value > max) return `不能大于 ${max}`;
+  return null;
+}
+
+/** 精度校验：仅对数字值生效，返回错误消息或 null */
+function checkPrecision(value: number, precision: number | undefined): string | null {
+  if (precision === undefined) return null;
+  if (value !== Number(value.toFixed(precision))) return `小数位数不能超过 ${precision} 位`;
+  return null;
+}
+
+/** 多选数量校验：仅对 checkbox 生效，返回错误消息或 null */
+function checkSelectCount(value: any, minSelect?: number, maxSelect?: number): string | null {
+  const arr = Array.isArray(value) ? value : [];
+  if (minSelect != null && arr.length < minSelect) return `至少选择 ${minSelect} 项`;
+  if (maxSelect != null && arr.length > maxSelect) return `最多选择 ${maxSelect} 项`;
+  return null;
+}
+
+/** 统一写入 errors 数组 */
+function pushError(errors: ValidationError[], code: string, message: string, id?: number, containerFieldKey?: string) {
+  errors.push({
+    indicatorId: id,
+    indicatorCode: code,
+    message,
+    ...(containerFieldKey ? { containerFieldKey } : {}),
+  });
+}
+
+/**
+ * 容器字段通用校验（必填 + 调用 extraRules）
+ * 所有容器内字段共用此入口
+ * 注意：容器字段错误由 containerFieldErrors computed 自动计算，此处仅生成 ValidationError[] 供 validateAll 使用
+ */
+function validateContainerField(
+  ctx: ContainerFieldContext,
+  extraRules?: Array<(ctx: ContainerFieldContext) => string | null>,
+) {
+  const { field, fieldValue, errors, indicatorId, containerCode, entryIndex, fieldCode, fieldLabel, indicatorName } = ctx;
+  const entryLabel = `第${entryIndex + 1}个条目`;
+  const containerFieldKey = `${containerCode}:${entryIndex}:${fieldCode}`;
+
+  // 1. 必填校验（所有字段类型，优先校验）
+  if (field.required) {
+    const err = checkRequired(fieldValue, true);
+    if (err) {
+      pushError(errors, containerCode, `${indicatorName} ${entryLabel}「${fieldLabel}」为必填`, indicatorId, containerFieldKey);
+      return; // 必填失败直接返回，不继续
     }
   }
 
-  // 如果修正后触发 onIndicatorChange 以更新联合规则校验
-  if (hasError || precision !== undefined) {
-    onIndicatorChange(indicator);
+  // 2. 非空时，执行类型相关额外规则（遇到第一个错误就返回）
+  if (!isEmpty(fieldValue) && extraRules) {
+    for (const rule of extraRules) {
+      const err = rule(ctx);
+      if (err) {
+        pushError(errors, containerFieldKey, `${indicatorName} ${entryLabel}「${fieldLabel}」：${err}`, indicatorId, containerFieldKey);
+        return; // 遇到第一个错误就返回
+      }
+    }
   }
 }
 
-/** 获取数字前缀 */
-function getNumberPrefix(indicator: DeclareIndicatorApi.Indicator): string {
-  const extraConfig = parseExtraConfig(indicator.extraConfig);
-  return extraConfig.prefix || '';
+// ============================================================
+// 按 valueType 拆分的校验方法
+// ============================================================
+
+/** valueType=1 数字：必填 → 非数字 → 范围 → 精度 */
+function validateType1_Number(indicator: DeclareIndicatorApi.Indicator): ValidationError[] {
+  const errors: ValidationError[] = [];
+  const { indicatorCode: code, id, isRequired, minValue, maxValue } = indicator;
+  const value = formValues[code];
+
+  // 必填校验（失败则返回）
+  const reqErr = checkRequired(value, !!isRequired);
+  if (reqErr) { pushError(errors, code, `${indicator.indicatorCode} - ${indicator.indicatorName}：${reqErr}`, id); return errors; }
+
+  // 非空时才校验格式/范围/精度（必填未填时在上面已返回）
+  if (!isEmpty(value)) {
+    const numVal = Number(value);
+    if (isNaN(numVal)) { pushError(errors, code, `${indicator.indicatorCode} - ${indicator.indicatorName}：请输入有效数字`, id); return errors; }
+    const rangeErr = checkRange(numVal, minValue ?? null, maxValue ?? null);
+    if (rangeErr) pushError(errors, code, `${indicator.indicatorCode} - ${indicator.indicatorName}：${rangeErr}`, id);
+    const cfg = parseExtraConfig(indicator.extraConfig);
+    const precErr = checkPrecision(numVal, cfg.precision);
+    if (precErr) pushError(errors, code, `${indicator.indicatorCode} - ${indicator.indicatorName}：${precErr}`, id);
+  }
+  return errors;
 }
 
-/** 获取数字后缀 */
-function getNumberSuffix(indicator: DeclareIndicatorApi.Indicator): string {
-  const extraConfig = parseExtraConfig(indicator.extraConfig);
-  return extraConfig.suffix || indicator.unit || '';
+/** valueType=2 文本：必填 */
+function validateType2_Text(indicator: DeclareIndicatorApi.Indicator): ValidationError[] {
+  const errors: ValidationError[] = [];
+  const reqErr = checkRequired(formValues[indicator.indicatorCode], !!indicator.isRequired);
+  if (reqErr) pushError(errors, indicator.indicatorCode, `${indicator.indicatorCode} - ${indicator.indicatorName}：${reqErr}`, indicator.id);
+  return errors;
+}
+
+/** valueType=3 布尔：无需校验 */
+function validateType3_Boolean(_: DeclareIndicatorApi.Indicator): ValidationError[] { return []; }
+
+/** valueType=4 日期：必填 */
+function validateType4_Date(indicator: DeclareIndicatorApi.Indicator): ValidationError[] {
+  const errors: ValidationError[] = [];
+  const reqErr = checkRequired(formValues[indicator.indicatorCode], !!indicator.isRequired);
+  if (reqErr) pushError(errors, indicator.indicatorCode, `${indicator.indicatorCode} - ${indicator.indicatorName}：${reqErr}`, indicator.id);
+  return errors;
+}
+
+/** valueType=5 富文本：同文本 */
+function validateType5_RichText(indicator: DeclareIndicatorApi.Indicator): ValidationError[] {
+  return validateType2_Text(indicator);
+}
+
+/** valueType=6 下拉选择：必填 */
+function validateType6_Select(indicator: DeclareIndicatorApi.Indicator): ValidationError[] {
+  const errors: ValidationError[] = [];
+  const reqErr = checkRequired(formValues[indicator.indicatorCode], !!indicator.isRequired);
+  if (reqErr) pushError(errors, indicator.indicatorCode, `${indicator.indicatorCode} - ${indicator.indicatorName}：${reqErr}`, indicator.id);
+  return errors;
+}
+
+/** valueType=7 多选：必填（数组长度判断） */
+function validateType7_MultiSelect(indicator: DeclareIndicatorApi.Indicator): ValidationError[] {
+  const errors: ValidationError[] = [];
+  const value = formValues[indicator.indicatorCode];
+  const arr = Array.isArray(value) ? value : [];
+  if (indicator.isRequired && arr.length === 0) {
+    pushError(errors, indicator.indicatorCode, `${indicator.indicatorCode} - ${indicator.indicatorName}：此项为必填`, indicator.id);
+  }
+  return errors;
+}
+
+/** valueType=8 日期区间：必填 */
+function validateType8_DateRange(indicator: DeclareIndicatorApi.Indicator): ValidationError[] {
+  const errors: ValidationError[] = [];
+  const reqErr = checkRequired(formValues[indicator.indicatorCode], !!indicator.isRequired);
+  if (reqErr) pushError(errors, indicator.indicatorCode, `${indicator.indicatorCode} - ${indicator.indicatorName}：${reqErr}`, indicator.id);
+  return errors;
+}
+
+/** valueType=9 文件上传：必填（'[]'/'[ ]' 视为空） */
+function validateType9_File(indicator: DeclareIndicatorApi.Indicator): ValidationError[] {
+  const errors: ValidationError[] = [];
+  const value = formValues[indicator.indicatorCode];
+  const isFileEmpty = isEmpty(value) || value === '[]' || value === '[ ]';
+  if (indicator.isRequired && isFileEmpty) {
+    pushError(errors, indicator.indicatorCode, `${indicator.indicatorCode} - ${indicator.indicatorName}：此项为必填`, indicator.id);
+  }
+  return errors;
+}
+
+/** valueType=10 部门选择：必填 */
+function validateType10_Dept(indicator: DeclareIndicatorApi.Indicator): ValidationError[] {
+  const errors: ValidationError[] = [];
+  const reqErr = checkRequired(formValues[indicator.indicatorCode], !!indicator.isRequired);
+  if (reqErr) pushError(errors, indicator.indicatorCode, `${indicator.indicatorCode} - ${indicator.indicatorName}：${reqErr}`, indicator.id);
+  return errors;
+}
+
+/** valueType=11 用户选择：必填 */
+function validateType11_User(indicator: DeclareIndicatorApi.Indicator): ValidationError[] {
+  const errors: ValidationError[] = [];
+  const reqErr = checkRequired(formValues[indicator.indicatorCode], !!indicator.isRequired);
+  if (reqErr) pushError(errors, indicator.indicatorCode, `${indicator.indicatorCode} - ${indicator.indicatorName}：${reqErr}`, indicator.id);
+  return errors;
+}
+
+/**
+ * valueType=12 动态容器
+ * 遍历每个条目 → 每个可见字段 → validateContainerField
+ * 容器内字段：required(所有) ✅ / precision(number) ✅ / selectCount(checkbox) ✅ / range(number) ⚠️ 待后端扩展
+ */
+function validateType12_Container(indicator: DeclareIndicatorApi.Indicator): ValidationError[] {
+  const errors: ValidationError[] = [];
+  const { indicatorCode: code, id, indicatorName } = indicator;
+  const entries = containerValues[code] || [];
+  const fields = parseDynamicFields(indicator.valueOptions);
+
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i];
+    for (const field of fields) {
+      if (!isFieldVisible(entry, field, fields)) continue;
+
+      const fieldValue = entry[field.fieldCode];
+      const ctx: ContainerFieldContext = {
+        indicatorId: id!,
+        containerCode: code,
+        entryIndex: i,
+        entry,
+        field,
+        fieldCode: field.fieldCode,
+        fieldValue,
+        fieldLabel: field.fieldLabel,
+        indicatorName,
+        errors,
+      };
+
+      let extraRules: Array<(ctx: ContainerFieldContext) => string | null> | undefined;
+
+      if (field.fieldType === 'number') {
+        extraRules = [(ctx) => {
+          const numVal = Number(ctx.fieldValue);
+          if (isNaN(numVal)) return '请输入有效数字';
+          const precErr = checkPrecision(numVal, ctx.field.precision);
+          return precErr;
+        }];
+      }
+
+      if (field.fieldType === 'checkbox') {
+        extraRules = [(ctx) => checkSelectCount(ctx.fieldValue, ctx.field.minSelect, ctx.field.maxSelect)];
+      }
+
+      validateContainerField(ctx, extraRules);
+    }
+  }
+
+  return errors;
+}
+
+// ============================================================
+// 主调度器 & 逻辑规则
+// ============================================================
+
+/** 主校验入口（返回 ValidationError[]，供 ValidationSummaryModal 消费） */
+function validateAll(indicatorsToValidate: DeclareIndicatorApi.Indicator[]): ValidationError[] {
+  const errors: ValidationError[] = [];
+
+  const validators: Record<number, (ind: DeclareIndicatorApi.Indicator) => ValidationError[]> = {
+    1: validateType1_Number, 2: validateType2_Text, 3: validateType3_Boolean,
+    4: validateType4_Date, 5: validateType5_RichText, 6: validateType6_Select,
+    7: validateType7_MultiSelect, 8: validateType8_DateRange, 9: validateType9_File,
+    10: validateType10_Dept, 11: validateType11_User, 12: validateType12_Container,
+  };
+
+  for (const indicator of indicatorsToValidate) {
+    const v = validators[indicator.valueType];
+    if (v) errors.push(...v(indicator));
+  }
+
+  errors.push(...validateLogicRules(indicatorsToValidate));
+
+  // 注意：行内错误由 computed 属性自动计算，无需手动写入 jointRuleErrors
+  // 此处仅返回 errors 数组供 ValidationSummaryModal 使用
+
+  return errors;
+}
+
+/** 逻辑规则校验（多指标时每个涉及指标各返回一个 ValidationError） */
+function validateLogicRules(allIndicators: DeclareIndicatorApi.Indicator[]): ValidationError[] {
+  const errors: ValidationError[] = [];
+
+  const codeToIndicator = new Map<string, DeclareIndicatorApi.Indicator>();
+  for (const ind of allIndicators) {
+    codeToIndicator.set(ind.indicatorCode, ind);
+  }
+
+  const codeValueMap: Record<string, any> = {};
+  for (const ind of allIndicators) {
+    codeValueMap[ind.indicatorCode] = formValues[ind.indicatorCode];
+  }
+
+  for (const indicator of allIndicators) {
+    if (!indicator.logicRule?.trim()) continue;
+
+    const rules = parseLogicRule(indicator.logicRule);
+    if (rules.length === 0) continue;
+
+    const involvedCodes = new Set<string>();
+    for (const m of indicator.logicRule.matchAll(/\[([^\]]+)\]/g)) {
+      involvedCodes.add(m[1]!.trim());
+    }
+
+    const results = validateJointRule(rules as any, codeValueMap, { triggerTiming: 'FILL' });
+    const errMsg = buildLogicRuleMsg(indicator.logicRule, allIndicators, codeValueMap);
+
+    if (results.length === 0) {
+      // 校验通过，清除涉及的逻辑规则错误
+      for (const code of involvedCodes) {
+        const ind = codeToIndicator.get(code);
+        if (ind?.id !== undefined) delete logicRuleErrors[String(ind.id)];
+        delete logicRuleErrors[code];
+      }
+      continue;
+    }
+
+    // 校验失败，设置逻辑规则错误
+    for (const code of involvedCodes) {
+      const ind = codeToIndicator.get(code);
+      errors.push({ indicatorId: ind?.id, indicatorCode: code, message: errMsg });
+      if (ind?.id !== undefined) logicRuleErrors[String(ind.id)] = errMsg;
+      logicRuleErrors[code] = errMsg;
+    }
+  }
+
+  return errors;
+}
+
+/**
+ * 实时逻辑规则（blur / change 时调用）
+ * 只校验涉及当前字段的那些 logicRule，而非全部
+ */
+function validateLogicRuleForBlur(changedIndicator: DeclareIndicatorApi.Indicator) {
+  const allIndicators = indicators.value;
+  const changedCode = changedIndicator.indicatorCode;
+
+  const codeValueMap: Record<string, any> = {};
+  for (const ind of allIndicators) {
+    codeValueMap[ind.indicatorCode] = formValues[ind.indicatorCode];
+  }
+
+  const codeToIndicator = new Map<string, DeclareIndicatorApi.Indicator>();
+  for (const ind of allIndicators) {
+    codeToIndicator.set(ind.indicatorCode, ind);
+  }
+
+  for (const indicator of allIndicators) {
+    if (!indicator.logicRule?.trim()) continue;
+
+    const involvedCodes = new Set<string>();
+    for (const m of indicator.logicRule.matchAll(/\[([^\]]+)\]/g)) {
+      involvedCodes.add(m[1]!.trim());
+    }
+    if (!involvedCodes.has(changedCode)) continue;
+
+    // 清除旧的逻辑规则错误
+    for (const code of involvedCodes) {
+      const ind = codeToIndicator.get(code);
+      if (ind?.id !== undefined) delete logicRuleErrors[String(ind.id)];
+      delete logicRuleErrors[code];
+    }
+
+    const rules = parseLogicRule(indicator.logicRule);
+    const results = validateJointRule(rules as any, codeValueMap, { triggerTiming: 'FILL' });
+    if (results.length === 0) continue;
+
+    const errMsg = buildLogicRuleMsg(indicator.logicRule, allIndicators, codeValueMap);
+    for (const code of involvedCodes) {
+      const ind = codeToIndicator.get(code);
+      if (ind?.id !== undefined) logicRuleErrors[String(ind.id)] = errMsg;
+      logicRuleErrors[code] = errMsg;
+    }
+  }
+}
+
+/** 获取容器字段行内错误（优先逻辑规则错误，其次 computed 计算的错误） */
+function getContainerFieldError(containerCode: string, entryIndex: number, fieldCode: string): string | undefined {
+  const key = `${containerCode}:${entryIndex}:${fieldCode}`;
+  // 优先返回逻辑规则错误
+  if (logicRuleErrors[key]) return logicRuleErrors[key];
+  // 只有脏标记为 true 时才返回 computed 计算的错误（避免页面加载时误显示）
+  if (!containerFieldDirty[key]) return undefined;
+  // 其次返回 computed 计算的错误
+  return containerFieldErrors.value[key];
+}
+
+/** 数字类型 blur 事件 */
+function handleNumberBlur(indicator: DeclareIndicatorApi.Indicator, _event: Event) {
+  markTopLevelDirty(indicator.indicatorCode);
+  nextTick(() => {
+    validateLogicRuleForBlur(indicator);
+  });
 }
 
 /** 获取日期格式 */
@@ -1152,11 +1522,7 @@ function parseStoredFileList(value: string | undefined): UploadFile[] {
 
 /** 指标值变化处理 */
 function onIndicatorChange(indicator: DeclareIndicatorApi.Indicator) {
-  // 只清除当前变化的指标的联合规则错误（不要清除所有指标！）
-  if (indicator.id) {
-    delete jointRuleErrors[String(indicator.id)];
-  }
-  delete jointRuleErrors[indicator.indicatorCode];
+  markTopLevelDirty(indicator.indicatorCode);
 
   // 如果是动态容器，将子字段值同步到 formValues
   if (indicator.valueType === 12) {
@@ -1167,84 +1533,172 @@ function onIndicatorChange(indicator: DeclareIndicatorApi.Indicator) {
   // 任何指标值变化，都触发所有计算指标全量重算（支持依赖链）
   recalculateComputedIndicators();
 
-  // 实时逻辑校验（双重 nextTick 确保 form 值已更新到 formValues）
+  // 触发逻辑规则校验
   nextTick(() => {
-    nextTick(() => {
-      runLogicRuleValidation();
-      console.log('[onIndicatorChange after runLogicRuleValidation] jointRuleErrors:', JSON.stringify(jointRuleErrors));
-    });
-  });
-
-  // 实时联合规则校验
-  nextTick(() => {
-    nextTick(() => {
-      runJointValidation();
-    });
+    validateLogicRuleForBlur(indicator);
   });
 }
 
-/** 联合验证错误 Map（独立追踪，与必填等独立错误分开） */
-const jointRuleErrors = reactive<Record<string, string>>({});
-
-/** 构建 id → code 和 code → id 的双向查找表 */
-function buildIndicatorMaps() {
-  const allIndicators = indicators.value;
-  const idToCode = new Map<number, string>();
-  const codeToId = new Map<string, number>();
-  for (const ind of allIndicators) {
-    if (ind.id !== undefined) {
-      idToCode.set(ind.id, ind.indicatorCode);
-      codeToId.set(ind.indicatorCode, ind.id);
-    }
-  }
-  return { idToCode, codeToId };
+/** 容器字段失焦验证 */
+function onFieldBlur(indicator: DeclareIndicatorApi.Indicator, entryIndex: number, field: DynamicField) {
+  const key = `${indicator.indicatorCode}:${entryIndex}:${field.fieldCode}`;
+  // 标记为脏
+  containerFieldDirty[key] = true;
+  // 触发逻辑规则校验
+  nextTick(() => {
+    validateLogicRuleForIndicator(indicator);
+  });
 }
-/** 运行逻辑规则校验并更新 jointRuleErrors */
-function runLogicRuleValidation() {
-  const { idToCode, codeToId } = buildIndicatorMaps();
 
-  // 构建 code → value 映射
+/** 容器字段值变化验证（单选/复选/下拉等选择类型） */
+function onContainerFieldChange(indicator: DeclareIndicatorApi.Indicator, entryIndex: number, field: DynamicField) {
+  const key = `${indicator.indicatorCode}:${entryIndex}:${field.fieldCode}`;
+  containerFieldDirty[key] = true;
+  nextTick(() => {
+    validateLogicRuleForIndicator(indicator);
+  });
+}
+
+/** 校验单个指标的逻辑规则（实时用） */
+function validateLogicRuleForIndicator(indicator: DeclareIndicatorApi.Indicator) {
+  if (!indicator.logicRule?.trim()) return;
+
   const codeValueMap: Record<string, any> = {};
   for (const ind of indicators.value) {
     codeValueMap[ind.indicatorCode] = formValues[ind.indicatorCode];
   }
 
-  for (const indicator of indicators.value) {
-    if (!indicator.logicRule?.trim()) continue;
+  const rules = parseLogicRule(indicator.logicRule);
+  if (rules.length === 0) return;
 
-    const rules = parseLogicRule(indicator.logicRule);
-    if (rules.length === 0) {
-      console.log('[调试] 指标', indicator.indicatorCode, 'logicRule:', indicator.logicRule, '解析结果为空');
-      continue;
+  const involvedCodes = new Set<string>();
+  for (const m of indicator.logicRule.matchAll(/\[([^\]]+)\]/g)) {
+    involvedCodes.add(m[1]!.trim());
+  }
+
+  const results = validateJointRule(rules as any, codeValueMap, { triggerTiming: 'FILL' });
+
+  if (results.length === 0) {
+    // 校验通过，清除涉及的逻辑规则错误
+    for (const code of involvedCodes) {
+      const ind = indicators.value.find(i => i.indicatorCode === code);
+      if (ind?.id !== undefined) delete logicRuleErrors[String(ind.id)];
+      delete logicRuleErrors[code];
     }
-
-    const results = validateJointRule(rules as any, codeValueMap, { triggerTiming: 'FILL', idToCode });
-    console.log('[调试] 指标', indicator.indicatorCode, 'logicRule:', indicator.logicRule, 'results.length:', results.length);
-
-    // 从 logicRule 字符串解析出所有涉及的指标 code（左侧和右侧的都包含）
-    const ruleCodes = new Set<string>();
-    const codeMatches = [...indicator.logicRule.matchAll(/\[([^\]]+)\]/g)];
-    for (const m of codeMatches) ruleCodes.add(m[1]!.trim());
-
-    if (results.length === 0) {
-      // 验证通过：只清除当前指标的 code/id key（不要清除其他指标的错误！）
-      const curId = indicator.id !== undefined ? String(indicator.id) : undefined;
-      if (curId !== undefined) delete jointRuleErrors[curId];
-      delete jointRuleErrors[indicator.indicatorCode];
-      continue;
+  } else {
+    // 校验失败，设置逻辑规则错误
+    const errMsg = buildLogicRuleMsg(indicator.logicRule, indicators.value, codeValueMap);
+    for (const code of involvedCodes) {
+      const ind = indicators.value.find(i => i.indicatorCode === code);
+      if (ind?.id !== undefined) logicRuleErrors[String(ind.id)] = errMsg;
+      logicRuleErrors[code] = errMsg;
     }
-
-    // 验证失败：只向当前指标的 code/id 写入错误（不在 ruleCodes 循环里跨指标写！）
-    const errMsg = buildLogicRuleMsg(indicator.logicRule, ruleCodes, indicators.value, codeValueMap);
-    const curId = indicator.id !== undefined ? String(indicator.id) : undefined;
-    if (curId !== undefined) jointRuleErrors[curId] = errMsg;
-    jointRuleErrors[indicator.indicatorCode] = errMsg;
-    console.log('[调试] 验证失败，indicator:', indicator.indicatorCode, 'errMsg:', errMsg, '| jointRuleErrors:', JSON.stringify(jointRuleErrors));
   }
 }
 
-/** 根据 logicRule 和涉及的指标代码生成含填报要求的提示语 */
-function buildLogicRuleMsg(logicRule: string, involvedCodes: Set<string>, allIndicators: typeof indicators.value, codeValueMap: Record<string, any>): string {
+/** 顶级指标错误（computed 直接计算，不存储） */
+const indicatorErrors = computed(() => {
+  const errors: Record<string, string> = {};
+  const allIndicators = indicators.value;
+
+  for (const ind of allIndicators) {
+    const code = ind.indicatorCode;
+    const value = formValues[code];
+    const isEmpty = value === undefined || value === null || value === '';
+
+    // 1. 必填校验（最优先）
+    if (ind.isRequired && isEmpty) {
+      errors[code] = '此项为必填';
+      continue;
+    }
+
+    // 2. 非空时才校验格式
+    if (!isEmpty) {
+      // 数字类型额外校验
+      if (ind.valueType === 1) {
+        const numVal = Number(value);
+        if (isNaN(numVal)) {
+          errors[code] = '请输入有效数字';
+          continue;
+        }
+        // 精度校验
+        const cfg = parseExtraConfig(ind.extraConfig);
+        const precErr = checkPrecision(numVal, cfg.precision);
+        if (precErr) {
+          errors[code] = precErr;
+          continue;
+        }
+        // 范围校验
+        const rangeErr = checkRange(numVal, ind.minValue ?? null, ind.maxValue ?? null);
+        if (rangeErr) {
+          errors[code] = rangeErr;
+        }
+      }
+    }
+  }
+
+  return errors;
+});
+
+/** 容器字段错误（computed 直接计算） */
+const containerFieldErrors = computed(() => {
+  const errors: Record<string, string> = {};
+
+  for (const indicator of indicators.value) {
+    if (indicator.valueType !== 12) continue; // 仅处理容器类型
+
+    const code = indicator.indicatorCode;
+    const entries = containerValues[code] || [];
+    const fields = parseDynamicFields(indicator.valueOptions);
+
+    for (let i = 0; i < entries.length; i++) {
+      const entry = entries[i];
+      for (const field of fields) {
+        if (!isFieldVisible(entry, field, fields)) continue;
+
+        const fieldValue = entry[field.fieldCode];
+        const key = `${code}:${i}:${field.fieldCode}`;
+        const isEmpty = fieldValue === undefined || fieldValue === null || fieldValue === '';
+
+        // 1. 必填校验
+        if (field.required && isEmpty) {
+          errors[key] = '此项为必填';
+          continue;
+        }
+
+        // 2. 非空时校验格式
+        if (!isEmpty) {
+          if (field.fieldType === 'number') {
+            const numVal = Number(fieldValue);
+            if (isNaN(numVal)) {
+              errors[key] = '请输入有效数字';
+              continue;
+            }
+            const precErr = checkPrecision(numVal, field.precision);
+            if (precErr) {
+              errors[key] = precErr;
+              continue;
+            }
+          }
+          if (field.fieldType === 'checkbox') {
+            const countErr = checkSelectCount(fieldValue, field.minSelect, field.maxSelect);
+            if (countErr) {
+              errors[key] = countErr;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return errors;
+});
+
+/** 逻辑规则错误 Map（仅用于多指标联合验证，需要跨指标共享错误） */
+const logicRuleErrors = reactive<Record<string, string>>({});
+
+/** 根据 logicRule 生成含填报要求的提示语 */
+function buildLogicRuleMsg(logicRule: string, allIndicators: typeof indicators.value, codeValueMap: Record<string, any>): string {
   if (!logicRule) return '校验失败';
 
   const match = logicRule.trim().match(/^(.+?)\s*(>=|<=|>|<|==|!=)\s*(.+)$/);
@@ -1253,9 +1707,6 @@ function buildLogicRuleMsg(logicRule: string, involvedCodes: Set<string>, allInd
   const leftRaw = match[1]!.trim();
   const operator = match[2]!;
   const rightRaw = match[3]!.trim();
-  const leftCodes = [...leftRaw.matchAll(/\[([^\]]+)\]/g)].map(m => m[1]!.trim());
-  const rightCodes = [...rightRaw.matchAll(/\[([^\]]+)\]/g)].map(m => m[1]!.trim());
-  const allRuleCodes = [...leftCodes, ...rightCodes];
 
   // 建立 code → 指标名 的映射（优先用 allIndicators，没有的用 code 本身）
   const codeMap = new Map<string, string>();
@@ -1279,97 +1730,6 @@ function buildLogicRuleMsg(logicRule: string, involvedCodes: Set<string>, allInd
   const msgRight = rightRaw.replace(/\[([^\]]+)\]/g, (_, c) => replaceCode(c.trim()));
 
   return `${msgLeft} ${opText[operator] || operator} ${msgRight}`;
-}
-
-/** 运行联合验证并更新 jointRuleErrors（供 onIndicatorChange 实时调用） */
-async function runJointValidation() {
-  if (jointRules.value.length === 0) return;
-
-  const { idToCode, codeToId } = buildIndicatorMaps();
-
-  // 构建 code → value 映射（引擎用 code 字符串查值）
-  const codeValueMap: Record<string, any> = {};
-  for (const ind of indicators.value) {
-    codeValueMap[ind.indicatorCode] = formValues[ind.indicatorCode];
-  }
-
-  const results = validateJointRule(jointRules.value as any, codeValueMap, { triggerTiming: 'FILL', idToCode });
-
-  // 先收集所有规则涉及的全部指标 code/id（用于清除旧错误）
-  const allInvolvedCodes = new Set<string>();
-  const allInvolvedIds = new Set<number>();
-  for (const rule of jointRules.value) {
-    try {
-      const config = JSON.parse(rule.ruleConfig);
-      for (const item of config.rules || []) {
-        const action = item.action || {};
-        if (action.indicatorCode) allInvolvedCodes.add(action.indicatorCode);
-        if (action.compareIndicatorCode) allInvolvedCodes.add(action.compareIndicatorCode);
-        if (action.indicatorId !== undefined) allInvolvedIds.add(action.indicatorId);
-        if (action.compareIndicatorId !== undefined) allInvolvedIds.add(action.compareIndicatorId);
-        if (action.formula) {
-          for (const f of action.formula) {
-            if (f.indicatorCode) allInvolvedCodes.add(f.indicatorCode);
-            if (f.indicatorId !== undefined) allInvolvedIds.add(f.indicatorId);
-          }
-        }
-        if (action.compareFormula) {
-          for (const f of action.compareFormula) {
-            if (f.indicatorCode) allInvolvedCodes.add(f.indicatorCode);
-            if (f.indicatorId !== undefined) allInvolvedIds.add(f.indicatorId);
-          }
-        }
-      }
-    } catch {}
-  }
-
-  if (results.length === 0) {
-    // 验证全部通过：清除涉及的指标爆红
-    for (const code of allInvolvedCodes) {
-      delete jointRuleErrors[code];
-    }
-    for (const id of allInvolvedIds) {
-      delete jointRuleErrors[String(id)];
-    }
-    return;
-  }
-
-  for (const result of results) {
-    if (!result.valid) {
-      const codes: string[] = [...(result.involvedIndicatorCodes || [])];
-      // 把 involvedIndicatorIds 也转成 code
-      if (result.involvedIndicatorIds) {
-        for (const id of result.involvedIndicatorIds) {
-          const code = idToCode.get(id);
-          if (code && !codes.includes(code)) {
-            codes.push(code);
-          }
-        }
-      }
-      console.log('[runJointValidation] 验证失败，involvedCodes:', codes, 'message:', result.message);
-      if (codes.length === 0 && result.indicatorCode) {
-        codes.push(result.indicatorCode);
-      }
-      for (const code of codes) {
-        jointRuleErrors[code] = result.message;
-        const id = codeToId.get(code);
-        if (id !== undefined) {
-          jointRuleErrors[String(id)] = result.message;
-        }
-      }
-      // 从清除集合中移除已报错的指标（保留其错误状态）
-      for (const code of codes) {
-        allInvolvedCodes.delete(code);
-      }
-    }
-  }
-  // 清除未报错的涉及指标的旧错误
-  for (const code of allInvolvedCodes) {
-    delete jointRuleErrors[code];
-  }
-  for (const id of allInvolvedIds) {
-    delete jointRuleErrors[String(id)];
-  }
 }
 
 /** 获取指标值 */
@@ -1491,13 +1851,19 @@ function recalculateComputedIndicators() {
     // 每次按拓扑序重算（已算出值的指标可作为下一轮的依赖）
     const sorted = sortIndicatorsTopological(computedOnes);
     for (const ind of sorted) {
-      const prev = formValues[ind.indicatorCode];
       const calculatedValue = calculateIndicatorValue(ind);
       if (calculatedValue !== undefined) {
-        formValues[ind.indicatorCode] = calculatedValue;
-        if (formValues[ind.indicatorCode] !== prev) {
-          changed = true;
+        let finalValue: number = calculatedValue;
+
+        // 精度截断（静默，不报错）
+        const precision = getNumberPrecision(ind);
+        if (precision !== undefined) {
+          finalValue = Number(calculatedValue.toFixed(precision));
         }
+
+        formValues[ind.indicatorCode] = finalValue;
+
+        // 范围校验由 indicatorErrors computed 自动处理，此处不需要手动设置错误
       }
     }
   }
@@ -1508,7 +1874,7 @@ function recalculateComputedIndicators() {
     for (const ind of computedOnes) {
       if (formValues[ind.indicatorCode] !== undefined) {
         const el = document.querySelector(
-          `[data-indicator-code="${ind.indicatorCode}"] .ant-input-number input`
+          `[data-indicator-code="${ind.indicatorCode}"] .ant-input input`
         ) as HTMLInputElement | null;
         if (el) {
           el.value = String(formValues[ind.indicatorCode]);
@@ -1721,9 +2087,8 @@ onMounted(async () => {
     // 5. 重新计算所有计算指标
     recalculateComputedIndicators();
 
-    // 6. 初始化逻辑校验和联合校验
-    runLogicRuleValidation();
-    runJointValidation();
+    // 6. 初始化逻辑校验
+    validateLogicRules(indicators.value);
   } catch (error) {
     console.error('[IndicatorInputTable] 加载指标数据失败:', error);
     message.error('加载指标数据失败');
@@ -1831,9 +2196,8 @@ watch(() => props.projectType, async (newProjectType) => {
     // 6. 重新计算所有计算指标
     recalculateComputedIndicators();
 
-    // 7. 初始化逻辑校验和联合校验
-    runLogicRuleValidation();
-    runJointValidation();
+    // 7. 初始化逻辑校验
+    validateLogicRules(indicators.value);
   } catch (error) {
     console.error('[IndicatorInputTable] watch 加载指标数据失败:', error);
     message.error('加载指标数据失败');
@@ -1865,130 +2229,6 @@ function getContainerValues(): Record<string, string> {
     }
   }
   return result;
-}
-
-/** 验证所有必填指标，返回错误列表 */
-function validateAll(indicatorsToValidate: DeclareIndicatorApi.Indicator[]): Array<{ indicatorId: number; message: string }> {
-  const errors: Array<{ indicatorId: number; indicatorCode: string; message: string }> = [];
-
-  // 构建 id → indicator 的快速查找
-  const idToIndicator = new Map<number, DeclareIndicatorApi.Indicator>();
-  // 构建 code → id 的反向查找（联合验证用 code 标记错误，需要 id 来构建错误对象）
-  const codeToId = new Map<string, number>();
-  for (const ind of indicatorsToValidate) {
-    if (ind.id !== undefined) {
-      idToIndicator.set(ind.id, ind);
-      codeToId.set(ind.indicatorCode, ind.id);
-    }
-  }
-
-  // 构建 id → value 映射（供联合验证引擎使用）
-  // 同时用 numeric id 和 string indicatorCode 两种 key，方便引擎按两种方式查值
-  const indicatorIdValueMap: Record<string | number, any> = {};
-  for (const ind of indicatorsToValidate) {
-    if (ind.id !== undefined) {
-      indicatorIdValueMap[ind.id] = formValues[ind.indicatorCode];
-    }
-    if (ind.indicatorCode !== undefined) {
-      indicatorIdValueMap[ind.indicatorCode] = formValues[ind.indicatorCode];
-    }
-  }
-
-  for (const indicator of indicatorsToValidate) {
-    const code = indicator.indicatorCode;
-    const vt = indicator.valueType;
-    const rawValue = formValues[code];
-
-    // 必填校验
-    if (indicator.isRequired) {
-      const isEmpty =
-        rawValue === undefined ||
-        rawValue === null ||
-        rawValue === '' ||
-        // 文件上传类型：空文件列表存为 JSON 字符串 '[]'
-        (indicator.valueType === 9 && (rawValue === '[]' || rawValue === '[ ]'));
-      if (isEmpty) {
-        if (indicator.id) {
-          jointRuleErrors[String(indicator.id)] = '此项为必填';
-          jointRuleErrors[indicator.indicatorCode] = '此项为必填';
-          errors.push({ indicatorId: indicator.id, indicatorCode: indicator.indicatorCode, message: `${indicator.indicatorCode} - ${indicator.indicatorName} 为必填项` });
-        }
-        continue;
-      }
-    }
-
-    // 数字范围校验
-    if (vt === 1 && rawValue !== undefined && rawValue !== null && rawValue !== '') {
-      const numVal = Number(rawValue);
-      if (!isNaN(numVal)) {
-        if ((indicator.minValue != null) && numVal < indicator.minValue) {
-          jointRuleErrors[indicator.indicatorCode] = `不能小于 ${indicator.minValue}`;
-          errors.push({ indicatorId: indicator.id!, indicatorCode: indicator.indicatorCode, message: `${indicator.indicatorCode} - ${indicator.indicatorName} 不能小于 ${indicator.minValue}` });
-        }
-        if ((indicator.maxValue != null) && numVal > indicator.maxValue) {
-          jointRuleErrors[indicator.indicatorCode] = `不能大于 ${indicator.maxValue}`;
-          errors.push({ indicatorId: indicator.id!, indicatorCode: indicator.indicatorCode, message: `${indicator.indicatorCode} - ${indicator.indicatorName} 不能大于 ${indicator.maxValue}` });
-        }
-      }
-    }
-
-    // 动态容器内部字段校验：遍历条目数组，验证每行的必填字段
-    if (vt === 12 && Array.isArray(containerValues[code])) {
-      const fields = parseDynamicFields(indicator.valueOptions);
-      for (let i = 0; i < containerValues[code].length; i++) {
-        const entry = containerValues[code][i];
-        for (const field of fields) {
-          if (field.required && isFieldVisible(entry, field, fields) && !entry[field.fieldCode]) {
-            errors.push({
-              indicatorId: indicator.id!,
-              indicatorCode: indicator.indicatorCode,
-              message: `${indicator.indicatorName} 第${i + 1}个条目的「${field.fieldLabel}」为必填`,
-            });
-          }
-        }
-      }
-    }
-  }
-
-  // 联合规则校验：把 involvedIndicatorCodes 里所有涉及字段都标记为错误
-  if (jointRules.value.length > 0) {
-    const jointResults = validateJointRule(
-      jointRules.value as any,
-      indicatorIdValueMap,
-      { triggerTiming: 'FILL' }
-    );
-    for (const result of jointResults) {
-      if (!result.valid) {
-        const codes = result.involvedIndicatorCodes || [];
-        // 如果引擎没返回 involvedCodes，用 result.indicatorCode兜底
-        if (codes.length === 0 && result.indicatorCode) {
-          codes.push(result.indicatorCode);
-        }
-
-        for (const code of codes) {
-          // 标记联合验证错误（写到 jointRuleErrors，与必填等独立错误分开）
-          if (jointRuleErrors[code] === undefined) {
-            jointRuleErrors[code] = result.message;
-            const id = codeToId.get(code);
-            if (id !== undefined) {
-              jointRuleErrors[String(id)] = result.message;
-            }
-          }
-          // 避免重复 push 到 errors 数组
-          const existing = errors.find(e => e.indicatorCode === code);
-          if (!existing) {
-            errors.push({
-              indicatorId: codeToId.get(code) ?? 0,
-              indicatorCode: code,
-              message: result.message,
-            });
-          }
-        }
-      }
-    }
-  }
-
-  return errors;
 }
 
 /** 获取所有指标值（用于保存到后端），包含动态容器的完整 valueStr */
