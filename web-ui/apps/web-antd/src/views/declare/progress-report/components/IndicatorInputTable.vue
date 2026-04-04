@@ -400,7 +400,7 @@
                 </div>
 
                 <!-- 自动条目容器：有 header，有来源说明，无添加/删除按钮 -->
-                <div v-show="getContainerType(indicator.valueOptions) === 'autoEntry'" class="auto-entry-container-form">
+                <div v-show="getContainerType(indicator.valueOptions) === 'autoEntry' && isAutoEntryVisible(indicator)" class="auto-entry-container-form">
                   <div
                     v-for="(entry, entryIndex) in getContainerEntries(indicator.indicatorCode)"
                     :key="entry.rowKey"
@@ -1186,6 +1186,14 @@ function getLinkedIndicatorName(indicator: any): string {
   if (!link) return '';
   const linkedIndicator = indicators.value.find(i => i.indicatorCode === link);
   return linkedIndicator?.indicatorName || link;
+}
+
+/** 判断自动条目容器是否应该显示（关联指标有正数值时才显示） */
+function isAutoEntryVisible(indicator: any): boolean {
+  const link = getAutoEntryLink(indicator.valueOptions);
+  if (!link) return false;
+  const linkedValue = formValues[link];
+  return Math.max(0, Math.floor(Number(linkedValue))) > 0;
 }
 
 /** 解析扩展配置 */
