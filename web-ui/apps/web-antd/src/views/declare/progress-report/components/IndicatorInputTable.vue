@@ -1158,11 +1158,24 @@ function validateType1_Number(indicator: DeclareIndicatorApi.Indicator): Validat
   return errors;
 }
 
-/** valueType=2 文本：必填 */
+/** valueType=2 文本：必填 + 纯数字校验 */
 function validateType2_Text(indicator: DeclareIndicatorApi.Indicator): ValidationError[] {
   const errors: ValidationError[] = [];
-  const reqErr = checkRequired(formValues[indicator.indicatorCode], !!indicator.isRequired);
-  if (reqErr) pushError(errors, indicator.indicatorCode, `${indicator.indicatorCode} - ${indicator.indicatorName}：${reqErr}`, indicator.id);
+  const value = formValues[indicator.indicatorCode];
+  const isEmpty = value === undefined || value === null || value === '';
+
+  // 必填校验
+  const reqErr = checkRequired(value, !!indicator.isRequired);
+  if (reqErr) { pushError(errors, indicator.indicatorCode, `${indicator.indicatorCode} - ${indicator.indicatorName}：${reqErr}`, indicator.id); return errors; }
+
+  // 非空时：纯数字校验
+  if (!isEmpty) {
+    const trimmed = String(value).trim();
+    if (/^-?\d+(\.\d+)?$/.test(trimmed)) {
+      pushError(errors, indicator.indicatorCode, `${indicator.indicatorCode} - ${indicator.indicatorName}：不能输入纯数字`, indicator.id);
+    }
+  }
+
   return errors;
 }
 
@@ -1279,6 +1292,14 @@ function validateType12_Container(indicator: DeclareIndicatorApi.Indicator): Val
 
       if (field.fieldType === 'checkbox') {
         extraRules = [(ctx) => checkSelectCount(ctx.fieldValue, ctx.field.minSelect, ctx.field.maxSelect)];
+      }
+
+      if (field.fieldType === 'text') {
+        extraRules = [(ctx) => {
+          const trimmed = String(ctx.fieldValue).trim();
+          if (/^-?\d+(\.\d+)?$/.test(trimmed)) return '不能输入纯数字';
+          return null;
+        }];
       }
 
       validateContainerField(ctx, extraRules);
@@ -1763,6 +1784,14 @@ const indicatorErrors = computed(() => {
 
     // 2. 非空时才校验格式
     if (!isEmpty) {
+      // 文本类型：不能输入纯数字
+      if (ind.valueType === 2) {
+        const trimmed = String(value).trim();
+        if (/^-?\d+(\.\d+)?$/.test(trimmed)) {
+          errors[code] = '不能输入纯数字';
+          continue;
+        }
+      }
       // 数字类型额外校验
       if (ind.valueType === 1) {
         const numVal = Number(value);
@@ -1817,6 +1846,14 @@ const containerFieldErrors = computed(() => {
 
         // 2. 非空时校验格式
         if (!isEmpty) {
+          // 文本类型：不能输入纯数字
+          if (field.fieldType === 'text') {
+            const trimmed = String(fieldValue).trim();
+            if (/^-?\d+(\.\d+)?$/.test(trimmed)) {
+              errors[key] = '不能输入纯数字';
+              continue;
+            }
+          }
           if (field.fieldType === 'number') {
             const numVal = Number(fieldValue);
             if (isNaN(numVal)) {
