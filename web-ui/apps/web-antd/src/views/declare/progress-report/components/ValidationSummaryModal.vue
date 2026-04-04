@@ -46,15 +46,36 @@ function show(errorList: ErrorItem[]) {
 function handleJump(error: ErrorItem) {
   // 优先按 containerFieldKey 定位容器字段
   if (error.containerFieldKey) {
-    const el = document.querySelector(`[data-container-field-key="${error.containerFieldKey}"]`);
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      el.classList.add('indicator-highlight');
-      setTimeout(() => el!.classList.remove('indicator-highlight'), 1500);
-      visible.value = false;
-      return;
+    // 容器字段的 key 格式是 "containerCode:entryIndex:fieldCode"
+    // 先提取 containerCode
+    const containerCode = error.containerFieldKey.split(':')[0];
+
+    // 1. 先滚动到容器所在的 indicator-row（解决嵌套层级深的问题）
+    if (containerCode) {
+      const containerEl = document.querySelector(`[data-indicator-code="${containerCode}"]`);
+      if (containerEl) {
+        containerEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // 添加高亮
+        containerEl.classList.add('indicator-highlight');
+        setTimeout(() => containerEl!.classList.remove('indicator-highlight'), 1500);
+      }
     }
+
+    // 2. 再滚动到具体字段（让浏览器自动处理嵌套滚动）
+    const fieldEl = document.querySelector(`[data-container-field-key="${error.containerFieldKey}"]`);
+    if (fieldEl) {
+      // 延迟执行，确保容器先滚动到位
+      setTimeout(() => {
+        fieldEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        fieldEl.classList.add('indicator-highlight');
+        setTimeout(() => fieldEl!.classList.remove('indicator-highlight'), 1500);
+      }, 100);
+    }
+
+    visible.value = false;
+    return;
   }
+
   // 其次按 indicatorId 定位
   let el = error.indicatorId != null
     ? document.querySelector(`[data-indicator-id="${error.indicatorId}"]`)

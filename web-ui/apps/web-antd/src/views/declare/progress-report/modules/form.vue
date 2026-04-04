@@ -373,10 +373,7 @@ async function handleSave() {
       isFormDirty.value = true;
     }
 
-    // 2. 触发自动计算
-    indicatorTableRef.value?.recalculateComputedIndicators?.();
-
-    // 3. 【验证必填指标】必须全部通过才能保存
+    // 2. 【验证必填指标】必须全部通过才能保存
     if (indicatorTableRef.value) {
       const indicators = indicatorTableRef.value.getAllIndicators?.();
       if (indicators) {
@@ -388,7 +385,22 @@ async function handleSave() {
       }
     }
 
-    // 4. 获取所有指标值
+    // 3. 触发自动计算（在校验之后，避免校验触发 onIndicatorChange 覆盖计算结果）
+    indicatorTableRef.value?.recalculateComputedIndicators?.();
+
+    // 4. 再次校验（确保计算后的值也通过验证）
+    if (indicatorTableRef.value) {
+      const indicators = indicatorTableRef.value.getAllIndicators?.();
+      if (indicators) {
+        const errors = indicatorTableRef.value.validateAll(indicators);
+        if (errors.length > 0) {
+          summaryModalRef.value?.show(errors);
+          return;
+        }
+      }
+    }
+
+    // 5. 获取所有指标值
     const rawValues = indicatorTableRef.value?.getAllIndicatorValues?.() || [];
     const values = rawValues.map((item: any) => {
       const base: any = {
@@ -406,7 +418,7 @@ async function handleSave() {
       return base;
     });
 
-    // 5. 调用一体化保存接口，状态为 SAVED
+    // 6. 调用一体化保存接口，状态为 SAVED
     const id = await saveProgressReport({
       id: formData.value.id,
       reportYear: formData.value.reportYear,
@@ -434,8 +446,7 @@ async function handleSubmit() {
   modalApi.lock();
   submitting.value = true;
   try {
-    // 1. 再次验证所有必填指标（表单页内提交也要校验）
-    indicatorTableRef.value?.recalculateComputedIndicators?.();
+    // 1. 【验证必填指标】必须全部通过才能提交
     if (indicatorTableRef.value) {
       const indicators = indicatorTableRef.value.getAllIndicators?.();
       if (indicators) {
@@ -447,7 +458,22 @@ async function handleSubmit() {
       }
     }
 
-    // 2. 直接发起 BPM 流程（数据已在上一次保存时入库，状态为 SAVED）
+    // 2. 触发自动计算（在校验之后）
+    indicatorTableRef.value?.recalculateComputedIndicators?.();
+
+    // 3. 再次校验（确保计算后的值也通过验证）
+    if (indicatorTableRef.value) {
+      const indicators = indicatorTableRef.value.getAllIndicators?.();
+      if (indicators) {
+        const errors = indicatorTableRef.value.validateAll(indicators);
+        if (errors.length > 0) {
+          summaryModalRef.value?.show(errors);
+          return;
+        }
+      }
+    }
+
+    // 4. 直接发起 BPM 流程（数据已在上一次保存时入库，状态为 SAVED）
     await submitProgressReport(formData.value.id!);
     formData.value.reportStatus = 'SUBMITTED';
     isFormDirty.value = false;

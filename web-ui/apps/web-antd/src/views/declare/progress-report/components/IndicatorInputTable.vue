@@ -567,10 +567,10 @@
 
               <!-- 错误提示：必填/精度/格式/范围错误 -->
               <div
-                v-if="indicator.valueType !== 12 && (indicatorErrors[indicator.indicatorCode] || (indicator.id && indicatorErrors[String(indicator.id)])) && topLevelFieldDirty[indicator.indicatorCode]"
+                v-if="indicator.valueType !== 12 && getTopLevelError(indicator) && topLevelFieldDirty[indicator.indicatorCode]"
                 class="indicator-error"
               >
-                {{ (indicator.id && indicatorErrors[String(indicator.id)]) || indicatorErrors[indicator.indicatorCode] }}
+                {{ getTopLevelError(indicator) }}
               </div>
             </div>
           </div>
@@ -704,8 +704,11 @@ interface DynamicField {
   precision?: number;
   prefix?: string;
   suffix?: string;
+  minValue?: number;
+  maxValue?: number;
   showCondition?: ShowCondition;
   defaultValue?: any;
+  logicRule?: string; // 容器字段的逻辑规则
 }
 
 /** 动态容器值 Map（key = indicatorCode, value = 条目数组，每项 = { rowKey: string, [fieldCode]: value }） */
@@ -900,6 +903,20 @@ function handleRemoveEntry(indicatorCode: string, rowKey: string) {
   const entries = containerValues[indicatorCode] || [];
   const index = entries.findIndex((e: any) => e.rowKey === rowKey);
   if (index !== -1) {
+    // 删除前清理该条目相关的脏标记和错误（避免残留的 entryIndex 导致错误引用）
+    // ⚠️ 必须在 splice 之前清理，因为 splice 后 entryIndex 会偏移到错误的位置
+    const indicator = indicators.value.find(i => i.indicatorCode === indicatorCode);
+    if (indicator) {
+      const fields = parseDynamicFields(indicator.valueOptions);
+      for (const field of fields) {
+        const key = `${indicatorCode}:${index}:${field.fieldCode}`;
+        delete containerFieldDirty[key];
+        delete jointRuleErrors[key];
+        delete logicRuleErrors[key];
+      }
+      // 清理容器指标本身的 logicRule 错误（key = containerCode，无 entryIndex）
+      delete logicRuleErrors[indicatorCode];
+    }
     containerValues[indicatorCode]!.splice(index, 1);
   }
   // 触发同步和校验
@@ -1123,8 +1140,9 @@ function validateType1_Number(indicator: DeclareIndicatorApi.Indicator): Validat
   const { indicatorCode: code, id, isRequired, minValue, maxValue } = indicator;
   const value = formValues[code];
 
-  // 必填校验（失败则返回）
-  const reqErr = checkRequired(value, !!isRequired);
+  // 必填校验（失败则返回；自动计算指标跳过，由公式决定值）
+  const isComputed = isComputedIndicator(indicator);
+  const reqErr = checkRequired(value, !!isRequired && !isComputed);
   if (reqErr) { pushError(errors, code, `${indicator.indicatorCode} - ${indicator.indicatorName}：${reqErr}`, id); return errors; }
 
   // 非空时才校验格式/范围/精度（必填未填时在上面已返回）
@@ -1264,6 +1282,14 @@ function validateType12_Container(indicator: DeclareIndicatorApi.Indicator): Val
       }
 
       validateContainerField(ctx, extraRules);
+
+      // 容器字段 logicRule 校验
+      if (field.logicRule?.trim()) {
+        const containerLogicRuleErrors = validateContainerFieldLogicRule(
+          indicator, field, i, entry
+        );
+        errors.push(...containerLogicRuleErrors);
+      }
     }
   }
 
@@ -1274,9 +1300,96 @@ function validateType12_Container(indicator: DeclareIndicatorApi.Indicator): Val
 // 主调度器 & 逻辑规则
 // ============================================================
 
-/** 主校验入口（返回 ValidationError[]，供 ValidationSummaryModal 消费） */
+/** 校验容器内字段的 logicRule */
+function validateContainerFieldLogicRule(
+  containerIndicator: DeclareIndicatorApi.Indicator,
+  field: DynamicField,
+  entryIndex: number,
+  entry: any
+): ValidationError[] {
+  const errors: ValidationError[] = [];
+  const containerCode = containerIndicator.indicatorCode;
+  const fieldCode = field.fieldCode;
+  const key = `${containerCode}:${entryIndex}:${fieldCode}`;
+  const fieldValue = entry[fieldCode];
+
+  // 解析 logicRule 中涉及的所有字段代码
+  const involvedFieldCodes = new Set<string>();
+  for (const m of field.logicRule!.matchAll(/\[([^\]]+)\]/g)) {
+    involvedFieldCodes.add(m[1]!.trim());
+  }
+
+  // 构建当前条目的字段值映射（仅限当前条目内）
+  const fieldValueMap: Record<string, any> = {};
+  for (const fc of involvedFieldCodes) {
+    fieldValueMap[fc] = entry[fc];
+  }
+  fieldValueMap[fieldCode] = fieldValue;
+
+  // 将 logicRule 中的 [fieldCode] 替换为实际值
+  let processedRule = field.logicRule!;
+  for (const fc of involvedFieldCodes) {
+    const val = entry[fc];
+    if (val !== undefined && val !== null && val !== '') {
+      processedRule = processedRule.replace(
+        new RegExp(`\\[${fc.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\]`, 'g'),
+        String(val)
+      );
+    }
+  }
+
+  // 安全过滤：只保留数字和运算符
+  const safeExpr = processedRule.replace(/[^0-9+\-*/.()%<>=!&|]/g, '');
+  if (!safeExpr || safeExpr.trim() === '') return errors;
+
+  try {
+    const result = new Function(`return ${safeExpr}`)();
+    if (typeof result === 'boolean' && !result) {
+      // 校验失败，生成错误
+      const msg = buildContainerFieldLogicRuleMsg(field.logicRule ?? '', containerIndicator);
+      errors.push({
+        indicatorId: containerIndicator.id,
+        indicatorCode: containerCode,
+        message: `${field.fieldLabel}：${msg}`,
+        containerFieldKey: key,
+      });
+    }
+  } catch {
+    // 解析错误，静默跳过
+  }
+
+  return errors;
+}
+
+/** 生成容器字段 logicRule 的错误提示 */
+function buildContainerFieldLogicRuleMsg(
+  logicRule: string,
+  _containerIndicator: DeclareIndicatorApi.Indicator
+): string {
+  if (!logicRule) return '校验失败';
+
+  const match = logicRule.trim().match(/^(.+?)\s*(>=|<=|>|<|==|!=)\s*(.+)$/);
+  if (!match) return '校验失败';
+
+  const leftRaw = match[1]!.trim();
+  const operator = match[2]!;
+  const rightRaw = match[3]!.trim();
+
+  const opText: Record<string, string> = { '>=': '应大于等于', '<=': '应小于等于', '>': '应大于', '<': '应小于', '==': '应等于', '!=': '不应等于' };
+
+  return `${leftRaw.replace(/\[([^\]]+)\]/g, '[$1]')} ${opText[operator] || operator} ${rightRaw.replace(/\[([^\]]+)\]/g, '[$1]')}`;
+}
+
+/** 主校验入口（返回 ValidationError[]，供 ValidationSummaryModal 消费）
+ * 同时将错误同步到 jointRuleErrors 和 containerFieldDirty，使行内错误能够显示
+ */
 function validateAll(indicatorsToValidate: DeclareIndicatorApi.Indicator[]): ValidationError[] {
   const errors: ValidationError[] = [];
+
+  // 清空旧的 jointRuleErrors（顶级指标），保留容器字段错误（由下方的循环重新设置）
+  Object.keys(jointRuleErrors).forEach(key => {
+    if (!key.includes(':')) delete jointRuleErrors[key];
+  });
 
   const validators: Record<number, (ind: DeclareIndicatorApi.Indicator) => ValidationError[]> = {
     1: validateType1_Number, 2: validateType2_Text, 3: validateType3_Boolean,
@@ -1292,8 +1405,14 @@ function validateAll(indicatorsToValidate: DeclareIndicatorApi.Indicator[]): Val
 
   errors.push(...validateLogicRules(indicatorsToValidate));
 
-  // 注意：行内错误由 computed 属性自动计算，无需手动写入 jointRuleErrors
-  // 此处仅返回 errors 数组供 ValidationSummaryModal 使用
+  // 标记所有容器字段为脏，使行内错误提示能够显示（即使用户没有与该字段交互）
+  for (const error of errors) {
+    if (error.containerFieldKey) {
+      containerFieldDirty[error.containerFieldKey] = true;
+    } else {
+      topLevelFieldDirty[error.indicatorCode] = true;
+    }
+  }
 
   return errors;
 }
@@ -1395,21 +1514,51 @@ function validateLogicRuleForBlur(changedIndicator: DeclareIndicatorApi.Indicato
   }
 }
 
-/** 获取容器字段行内错误（优先逻辑规则错误，其次 computed 计算的错误） */
+/** 获取容器字段行内错误
+ * 优先级：0. 容器级 logicRule > 1. 字段级 logicRuleErrors > 2. jointRuleErrors > 3. containerFieldErrors
+ * 说明：
+ * - 容器级 logicRule：容器指标本身的 logicRule（如 `sales >= 100`），引用容器内字段，错误存储为 logicRuleErrors[containerCode]
+ * - 字段级 logicRuleErrors：容器指标的 logicRule 引用了其他顶级指标的字段，错误存储为 logicRuleErrors[code]
+ * - jointRuleErrors：validateAll 同步的字段校验错误
+ * - containerFieldErrors：computed 自动计算的必填/格式错误
+ */
 function getContainerFieldError(containerCode: string, entryIndex: number, fieldCode: string): string | undefined {
   const key = `${containerCode}:${entryIndex}:${fieldCode}`;
-  // 优先返回逻辑规则错误
+
+  // 1. 容器指标本身的 logicRule 失败时，所有字段行都显示该错误
+  if (logicRuleErrors[containerCode]) return logicRuleErrors[containerCode];
+
+  // 2. 字段级 logicRule 错误
   if (logicRuleErrors[key]) return logicRuleErrors[key];
-  // 只有脏标记为 true 时才返回 computed 计算的错误（避免页面加载时误显示）
+
+  // 3. 只有脏标记为 true 时才返回 computed 计算的错误（避免页面加载时误显示）
   if (!containerFieldDirty[key]) return undefined;
-  // 其次返回 computed 计算的错误
+
+  // 4. 返回实时 computed 错误（必填/格式/精度）
   return containerFieldErrors.value[key];
+}
+
+/** 获取顶级指标行内错误（优先级：logicRuleErrors > jointRuleErrors > indicatorErrors） */
+function getTopLevelError(indicator: DeclareIndicatorApi.Indicator): string | undefined {
+  const code = indicator.indicatorCode;
+  // 1. 优先：逻辑规则错误（validateLogicRuleForBlur / validateLogicRules 实时设置的）
+  if (logicRuleErrors[code]) return logicRuleErrors[code];
+  if (indicator.id && logicRuleErrors[String(indicator.id)]) return logicRuleErrors[String(indicator.id)];
+  // 2. 其次：validateAll 同步到 jointRuleErrors（保存时统一反馈）
+  if (jointRuleErrors[code]) return jointRuleErrors[code];
+  if (indicator.id && jointRuleErrors[String(indicator.id)]) return jointRuleErrors[String(indicator.id)];
+  // 3. 兜底：实时 computed 错误（必填/精度/范围，用户交互后即时反馈）
+  const errs = indicatorErrors.value;
+  if (errs[code]) return errs[code];
+  if (indicator.id && errs[String(indicator.id)]) return errs[String(indicator.id)];
+  return undefined;
 }
 
 /** 数字类型 blur 事件 */
 function handleNumberBlur(indicator: DeclareIndicatorApi.Indicator, _event: Event) {
   markTopLevelDirty(indicator.indicatorCode);
   nextTick(() => {
+    recalculateComputedIndicators();
     validateLogicRuleForBlur(indicator);
   });
 }
@@ -1530,9 +1679,6 @@ function onIndicatorChange(indicator: DeclareIndicatorApi.Indicator) {
     formValues[indicator.indicatorCode] = JSON.stringify(entries);
   }
 
-  // 任何指标值变化，都触发所有计算指标全量重算（支持依赖链）
-  recalculateComputedIndicators();
-
   // 触发逻辑规则校验
   nextTick(() => {
     validateLogicRuleForBlur(indicator);
@@ -1546,6 +1692,7 @@ function onFieldBlur(indicator: DeclareIndicatorApi.Indicator, entryIndex: numbe
   containerFieldDirty[key] = true;
   // 触发逻辑规则校验
   nextTick(() => {
+    recalculateComputedIndicators();
     validateLogicRuleForIndicator(indicator);
   });
 }
@@ -1555,6 +1702,7 @@ function onContainerFieldChange(indicator: DeclareIndicatorApi.Indicator, entryI
   const key = `${indicator.indicatorCode}:${entryIndex}:${field.fieldCode}`;
   containerFieldDirty[key] = true;
   nextTick(() => {
+    recalculateComputedIndicators();
     validateLogicRuleForIndicator(indicator);
   });
 }
@@ -1605,9 +1753,10 @@ const indicatorErrors = computed(() => {
     const code = ind.indicatorCode;
     const value = formValues[code];
     const isEmpty = value === undefined || value === null || value === '';
+    const isComputed = isComputedIndicator(ind);
 
-    // 1. 必填校验（最优先）
-    if (ind.isRequired && isEmpty) {
+    // 1. 必填校验（自动计算指标跳过，由公式决定值）
+    if (ind.isRequired && isEmpty && !isComputed) {
       errors[code] = '此项为必填';
       continue;
     }
@@ -1693,6 +1842,13 @@ const containerFieldErrors = computed(() => {
 
   return errors;
 });
+
+/** 联合校验错误 Map（validateAll 将 ValidationError 同步至此，供 getContainerFieldError 读取）
+ * key 格式：
+ * - 顶级指标：`indicatorCode` 或 `indicatorId`
+ * - 容器字段：`containerCode:entryIndex:fieldCode`
+ */
+const jointRuleErrors = reactive<Record<string, string>>({});
 
 /** 逻辑规则错误 Map（仅用于多指标联合验证，需要跨指标共享错误） */
 const logicRuleErrors = reactive<Record<string, string>>({});
@@ -1880,6 +2036,10 @@ function recalculateComputedIndicators() {
           el.value = String(formValues[ind.indicatorCode]);
         }
       }
+    }
+    // 标记所有计算指标为脏，使范围错误能正确显示
+    for (const ind of computedOnes) {
+      markTopLevelDirty(ind.indicatorCode);
     }
   });
 }
