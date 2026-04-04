@@ -43,9 +43,19 @@ public interface ErrorCodeConstants {
 
     ErrorCode DYNAMIC_INDICATOR_FIELD_FORMAT_ERROR = new ErrorCode(1_010_002_008, "动态容器指标子字段定义格式错误，请检查 JSON 格式");
 
-    ErrorCode CALIBER_NOT_EXISTS = new ErrorCode(1_010_002_010, "指标口径不存在");
+    ErrorCode DYNAMIC_INDICATOR_AUTO_ENTRY_LINK_REQUIRED = new ErrorCode(1_010_002_009, "自动条目容器必须配置关联指标");
 
-    ErrorCode JOINT_RULE_NOT_EXISTS = new ErrorCode(1_010_002_011, "指标联合规则不存在");
+    ErrorCode DYNAMIC_INDICATOR_AUTO_ENTRY_LINK_NOT_EXISTS = new ErrorCode(1_010_002_014, "自动条目容器关联的指标不存在: {0}");
+
+    ErrorCode DYNAMIC_INDICATOR_AUTO_ENTRY_LINK_CANNOT_BE_CONTAINER = new ErrorCode(1_010_002_015, "自动条目容器不能关联容器指标");
+
+    ErrorCode DYNAMIC_INDICATOR_AUTO_ENTRY_LINK_PROJECT_TYPE_MISMATCH = new ErrorCode(1_010_002_016, "自动条目容器关联的指标必须与当前指标属于同一项目类型");
+
+    ErrorCode DYNAMIC_INDICATOR_CONDITIONAL_FIELD_NOT_IN_CONTAINER = new ErrorCode(1_010_002_011, "条件容器中 showCondition.watchField 必须指向容器内的字段: {0}");
+
+    ErrorCode CALIBER_NOT_EXISTS = new ErrorCode(1_010_002_012, "指标口径不存在");
+
+    ErrorCode JOINT_RULE_NOT_EXISTS = new ErrorCode(1_010_002_013, "指标联合规则不存在");
 
     // ========== 指标分组模块 1-010-002-020 ==========
 

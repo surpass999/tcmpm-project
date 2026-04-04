@@ -49,7 +49,6 @@ export function useGridFormSchema(): VbenFormSchema[] {
         placeholder: '请选择项目类型',
         allowClear: true,
         options: [
-          { label: '通用类型', value: 0 },
           ...getDictOptions(DICT_TYPE.DECLARE_PROJECT_TYPE, 'number'),
         ],
       },
@@ -95,9 +94,7 @@ function transformGroupTree(
 export function useGridColumns(): VxeTableGridOptions['columns'] {
   // 项目类型格式化函数（0显示为"通用类型"）
   const projectTypeFormatter = ({ cellValue }: { cellValue: any }) => {
-    if (cellValue === 0 || cellValue === '0') {
-      return '通用类型';
-    }
+
     const dict = getDictObj(DICT_TYPE.DECLARE_PROJECT_TYPE, String(cellValue));
     return dict?.label || cellValue;
   };

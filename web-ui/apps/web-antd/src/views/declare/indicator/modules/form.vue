@@ -10,6 +10,7 @@ import {
   createIndicator,
   getIndicator,
   updateIndicator,
+  getIndicatorList,
 } from '#/api/declare/indicator';
 import { getIndicatorGroupTreeByProjectType } from '#/api/declare/indicator-group';
 import { getProjectTypeSimpleList } from '#/api/declare/project-type';
@@ -109,6 +110,11 @@ const showUnit = computed(() => {
 // 处理值类型变化
 const handleValueTypeChange = (value: number) => {
   currentValueType.value = value;
+  // 切换到非容器类型时重置
+  if (value !== 12) {
+    containerMode.value = 'normal';
+    autoEntryLink.value = '';
+  }
 };
 
 // 选项列表
@@ -116,6 +122,15 @@ const optionsList = reactive<OptionItem[]>([]);
 
 // 动态容器子字段列表
 const dynamicFields = reactive<DynamicField[]>([]);
+
+// 容器类型（mode）：normal / conditional / autoEntry
+const containerMode = ref<'normal' | 'conditional' | 'autoEntry'>('normal');
+
+// 自动条目容器：关联的指标代码
+const autoEntryLink = ref<string>('');
+
+// 所有指标列表（用于关联指标下拉，排除自身）
+const allIndicatorsForLink = ref<any[]>([]);
 
 // 扩展配置对象
 const extraConfigData = reactive<Record<string, any>>({});
@@ -304,6 +319,25 @@ const handleAddShowCondition = (field: DynamicField) => {
   field.showCondition = { watchField: '', operator: 'eq', value: '' };
 };
 
+// 获取可选的关联指标（用于自动条目容器，仅数字类型指标）
+const availableLinkIndicators = computed(() => {
+  const projectType = formData.value?.projectType;
+  return allIndicatorsForLink.value
+    .filter((i: any) => {
+      // 仅数字类型
+      if (i.valueType !== 1) return false;
+      // 排除自身
+      if (i.indicatorCode === formData.value?.indicatorCode) return false;
+      // 如果已选项目类型，则按项目类型过滤（0表示全部）
+      if (projectType != null && projectType !== 0 && i.projectType !== projectType) return false;
+      return true;
+    })
+    .map((i: any) => ({
+      label: `${i.indicatorName} (${i.indicatorCode})`,
+      value: i.indicatorCode,
+    }));
+});
+
 // 移除条件配置
 const handleRemoveShowCondition = (field: DynamicField) => {
   delete field.showCondition;
@@ -355,7 +389,7 @@ const handleRemoveFieldOption = (fieldKey: string, optionIndex: number) => {
 
 // 将选项列表转换为JSON字符串
 const convertOptionsToJson = () => {
-  // 动态容器类型：序列化子字段定义
+  // 动态容器类型：序列化为统一对象格式
   if (currentValueType.value === 12) {
     if (dynamicFields.length === 0) {
       formData.value!.valueOptions = '';
@@ -386,7 +420,17 @@ const convertOptionsToJson = () => {
           : undefined,
         defaultValue: field.defaultValue,
       }));
-    formData.value!.valueOptions = JSON.stringify(validFields);
+
+    // 统一对象格式：包含 mode 和 fields
+    const config: Record<string, any> = {
+      mode: containerMode.value,
+      fields: validFields,
+    };
+    // 自动条目容器：增加 link 字段
+    if (containerMode.value === 'autoEntry' && autoEntryLink.value) {
+      config.link = autoEntryLink.value;
+    }
+    formData.value!.valueOptions = JSON.stringify(config);
     return;
   }
 
@@ -407,12 +451,46 @@ const convertOptionsToJson = () => {
 const parseJsonToOptions = (jsonStr: string) => {
   optionsList.length = 0;
   dynamicFields.length = 0;
+  containerMode.value = 'normal';
+  autoEntryLink.value = '';
   if (!jsonStr) return;
   try {
     const parsed = JSON.parse(jsonStr);
-    if (!Array.isArray(parsed)) return;
 
-    // 判断是动态容器子字段还是普通选项（通过是否有 fieldCode 判断）
+    // 对象格式（新数据）
+    if (!Array.isArray(parsed)) {
+      containerMode.value = parsed.mode || 'normal';
+      autoEntryLink.value = parsed.link || '';
+
+      const fields = parsed.fields || [];
+      fields.forEach((item: any) => {
+        dynamicFields.push({
+          key: `field_${Date.now()}_${Math.random()}`,
+          fieldCode: item.fieldCode ?? '',
+          fieldLabel: item.fieldLabel ?? '',
+          fieldType: item.fieldType ?? 'text',
+          required: item.required ?? false,
+          sort: item.sort ?? 0,
+          options: item.options ?? [],
+          maxLength: item.maxLength,
+          placeholder: item.placeholder,
+          showSearch: item.showSearch,
+          minSelect: item.minSelect,
+          maxSelect: item.maxSelect,
+          format: item.format,
+          layout: item.layout,
+          rows: item.rows,
+          precision: item.precision,
+          prefix: item.prefix,
+          suffix: item.suffix,
+          showCondition: item.showCondition,
+          defaultValue: item.defaultValue,
+        });
+      });
+      return;
+    }
+
+    // 数组格式（旧数据）→ 默认普通容器
     const firstItem = parsed[0];
     if (firstItem && 'fieldCode' in firstItem) {
       // 动态容器子字段定义
@@ -484,6 +562,20 @@ const loadGroupTreeData = async (projectType?: number) => {
   }
 };
 
+// 加载所有指标列表（用于自动条目容器的关联指标下拉）
+const loadAllIndicatorsForLink = async (projectType?: number) => {
+  try {
+    const params: { pageNo: number; pageSize: number; projectType?: number } = { pageNo: 1, pageSize: 200 };
+    if (projectType !== 0) {
+      params.projectType = projectType;
+    }
+    const list = await getIndicatorList(params);
+    allIndicatorsForLink.value = list || [];
+  } catch {
+    allIndicatorsForLink.value = [];
+  }
+};
+
 // 表单字段配置
 const formRules = {
   indicatorCode: [{ required: true, message: '请输入指标代号' }],
@@ -505,6 +597,28 @@ const [Modal, modalApi] = useVbenModal({
       message.error('请完善表单信息');
       return;
     }
+
+    // 自动条目容器：关联指标校验
+    if (currentValueType.value === 12 && containerMode.value === 'autoEntry') {
+      if (!autoEntryLink.value) {
+        message.error('自动条目容器必须选择关联指标');
+        return;
+      }
+      const target = allIndicatorsForLink.value.find((i: any) => i.indicatorCode === autoEntryLink.value);
+      if (!target) {
+        message.error('关联指标不存在');
+        return;
+      }
+      if (target.valueType === 12) {
+        message.error('关联指标不能是容器指标');
+        return;
+      }
+      if (target.projectType !== formData.value?.projectType) {
+        message.error('关联指标必须与当前指标属于同一项目类型');
+        return;
+      }
+    }
+
     modalApi.lock();
     // 转换选项为JSON
     convertOptionsToJson();
@@ -551,9 +665,12 @@ const [Modal, modalApi] = useVbenModal({
       currentValueType.value = 1;
       optionsList.length = 0;
       dynamicFields.length = 0;
+      containerMode.value = 'normal';
+      autoEntryLink.value = '';
       formData.value.extraConfig = '';
-      // 新建模式下先加载全部分组树
+      // 新建模式下先加载全部分组树和指标列表
       await loadGroupTreeData();
+      await loadAllIndicatorsForLink();
       return;
     }
     modalApi.lock();
@@ -566,7 +683,9 @@ const [Modal, modalApi] = useVbenModal({
       parseJsonToExtraConfig(formData.value?.extraConfig || '');
       // 2. 按指标的 projectType 加载分组树
       await loadGroupTreeData(res?.projectType);
-      // 3. 树加载完成后等待 DOM 更新，再递增 key 强制 tree-select 重渲染
+      // 3. 加载所有指标列表（用于关联指标下拉）
+      await loadAllIndicatorsForLink(res?.projectType);
+      // 4. 树加载完成后等待 DOM 更新，再递增 key 强制 tree-select 重渲染
       if (res?.groupId) {
         await nextTick();
         treeSelectKey.value++;
@@ -588,6 +707,8 @@ watch(
     // 清空动态容器子字段（当值类型不是动态容器时）
     if (newVal !== 12) {
       dynamicFields.length = 0;
+      containerMode.value = 'normal';
+      autoEntryLink.value = '';
     }
   },
 );
@@ -595,7 +716,7 @@ watch(
 // 监听适用项目类型变化，重新加载分组
 watch(
   () => formData.value?.projectType,
-  (newProjectType, oldProjectType) => {
+  async (newProjectType, oldProjectType) => {
     // 只在 projectType 从一个有值变为另一个有值时才清空 groupId（用户切换项目类型）
     // 初始加载编辑数据时 oldProjectType 是 undefined，此时不应清空 groupId
     if (
@@ -605,8 +726,10 @@ watch(
       formData.value
     ) {
       formData.value.groupId = undefined;
+      autoEntryLink.value = '';
     }
     loadGroupTreeData(newProjectType);
+    await loadAllIndicatorsForLink(newProjectType);
   },
 );
 </script>
@@ -632,6 +755,20 @@ watch(
           v-model:value="formData.indicatorName"
           placeholder="请输入指标名称"
         />
+      </a-form-item>
+      <a-form-item label="适用项目类型" name="projectType">
+        <a-select
+          v-model:value="formData.projectType"
+          placeholder="请选择适用项目类型"
+        >
+          <a-select-option
+            v-for="option in projectTypeOptions"
+            :key="option.value"
+            :value="option.value"
+          >
+            {{ option.label }}
+          </a-select-option>
+        </a-select>
       </a-form-item>
       <a-form-item label="计量单位" name="unit">
         <a-input
@@ -741,6 +878,28 @@ watch(
         </div>
       </a-form-item>
       <!-- 动态容器子字段定义 -->
+      <a-form-item v-if="isDynamicContainer" label="容器类型">
+        <a-radio-group v-model:value="containerMode">
+          <a-radio :value="'normal'">普通动态容器</a-radio>
+          <a-radio :value="'conditional'">条件容器</a-radio>
+          <a-radio :value="'autoEntry'">自动条目容器</a-radio>
+        </a-radio-group>
+      </a-form-item>
+
+      <!-- 关联指标下拉（仅自动条目容器显示） -->
+      <a-form-item v-if="isDynamicContainer && containerMode === 'autoEntry'" label="关联指标">
+        <a-select
+          v-model:value="autoEntryLink"
+          placeholder="请选择控制条目数量的指标"
+          :options="availableLinkIndicators"
+          allow-clear
+          class="w-full"
+        ></a-select>
+        <div class="text-gray-400 text-xs mt-1">
+          提示：仅显示同项目类型的普通指标（不含容器指标）
+        </div>
+      </a-form-item>
+
       <a-form-item v-if="isDynamicContainer" label="子字段定义">
         <div class="dynamic-container w-full">
           <div v-if="dynamicFields.length === 0" class="text-gray-400 text-sm mb-2">
@@ -1006,20 +1165,6 @@ watch(
           placeholder="请输入最大值"
           class="w-full"
         />
-      </a-form-item>
-      <a-form-item label="适用项目类型" name="projectType">
-        <a-select
-          v-model:value="formData.projectType"
-          placeholder="请选择适用项目类型"
-        >
-          <a-select-option
-            v-for="option in projectTypeOptions"
-            :key="option.value"
-            :value="option.value"
-          >
-            {{ option.label }}
-          </a-select-option>
-        </a-select>
       </a-form-item>
       <a-form-item label="指标分组" name="groupId">
         <a-tree-select

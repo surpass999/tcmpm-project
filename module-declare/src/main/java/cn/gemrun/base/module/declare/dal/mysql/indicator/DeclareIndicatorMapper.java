@@ -34,6 +34,8 @@ public interface DeclareIndicatorMapper extends BaseMapperX<DeclareIndicatorDO> 
         wrapper.eqIfPresent(DeclareIndicatorDO::getProjectType, reqVO.getProjectType())
                 .eqIfPresent(DeclareIndicatorDO::getBusinessType, reqVO.getBusinessType())
                 .eqIfPresent(DeclareIndicatorDO::getGroupId, reqVO.getGroupId())
+                .orderByAsc(DeclareIndicatorDO::getSort)
+                .orderByAsc(DeclareIndicatorDO::getProjectType)
                 .orderByDesc(DeclareIndicatorDO::getId);
         
         return selectPage(reqVO, wrapper);
@@ -68,7 +70,7 @@ public interface DeclareIndicatorMapper extends BaseMapperX<DeclareIndicatorDO> 
     default DeclareIndicatorDO selectByIndicatorCodeAndProjectType(String indicatorCode, Integer projectType) {
         return selectOne(new LambdaQueryWrapperX<DeclareIndicatorDO>()
                 .eq(DeclareIndicatorDO::getIndicatorCode, indicatorCode)
-                .eq(DeclareIndicatorDO::getProjectType, projectType));
+                .eqIfPresent(DeclareIndicatorDO::getProjectType, projectType));
     }
 
     /**

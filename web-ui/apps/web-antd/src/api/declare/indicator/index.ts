@@ -76,6 +76,20 @@ export async function getIndicatorPage(params: PageParam & {
   );
 }
 
+/** 获取所有指标列表（用于配置页面的关联指标下拉） */
+export async function getIndicatorList(params?: {
+  pageNo?: number;
+  pageSize?: number;
+  projectType?: number;
+}) {
+  const pageParams = { pageNo: 1, pageSize: 9999, ...params };
+  const result = await requestClient.get<PageResult<DeclareIndicatorApi.Indicator>>(
+    '/declare/indicator/page',
+    { params: pageParams }
+  );
+  return result?.list || [];
+}
+
 /** 获取指标详情 */
 export async function getIndicator(id: number) {
   return requestClient.get<DeclareIndicatorApi.Indicator>(
