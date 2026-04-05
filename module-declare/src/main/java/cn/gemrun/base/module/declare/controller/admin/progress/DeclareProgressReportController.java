@@ -191,4 +191,12 @@ public class DeclareProgressReportController {
             @RequestBody DeclareNationalSearchReqVO reqVO) {
         return success(progressReportService.nationalSearch(reqVO));
     }
+
+    /**
+     * 获取填报列表（国家局端）- 只显示医院已提交审核的填报
+     */
+    @GetMapping("/national-list")
+    public CommonResult<List<DeclareProgressReportVO>> getNationalReportList() {
+        return success(progressReportService.getReportListByNational());
+    }
 }

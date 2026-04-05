@@ -138,4 +138,10 @@ public class LambdaQueryWrapperX<T> extends LambdaQueryWrapper<T> {
         return this;
     }
 
+    @Override
+    public LambdaQueryWrapperX<T> isNotNull(SFunction<T, ?> column) {
+        super.isNotNull(column);
+        return this;
+    }
+
 }

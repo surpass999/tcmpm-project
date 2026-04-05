@@ -119,6 +119,15 @@ export function getProvinceApprovedList(provinceCode: string) {
 }
 
 /**
+ * 获取填报列表（国家局端）- 只显示医院已提交审核的填报
+ */
+export function getNationalReportList() {
+  return requestClient.get<DeclareProgressReport[]>(
+    '/declare/progress-report/national-list',
+  );
+}
+
+/**
  * 提交审核
  */
 export function submitProgressReport(id: number, auditUserName?: string) {

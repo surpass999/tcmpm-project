@@ -11,7 +11,7 @@ import { getDictOptions } from '@vben/hooks';
 import { message, Tabs, TabPane } from 'ant-design-vue';
 import { useUserStore } from '@vben/stores';
 
-import { getHospitalReportList, nationalSearch } from '#/api/declare/progress-report';
+import { getHospitalReportList, getNationalReportList, nationalSearch } from '#/api/declare/progress-report';
 import { getAvailableActionsBatch, submitBpmAction } from '#/api/bpm/action';
 import { IconifyIcon } from '@vben/icons';
 import { TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
@@ -420,7 +420,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
             return { list: filtered, total: filtered.length };
           }
 
-          const allList = await getHospitalReportList(deptId.value);
+          const allList = await getNationalReportList();
           let list: DeclareProgressReport[] = [];
           if (activeKey.value === 'reported') {
             list = (allList || []).filter((r) => r.nationalReportStatus === 2);

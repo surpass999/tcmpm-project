@@ -102,4 +102,9 @@ public interface DeclareProgressReportService {
      * 国家局高级搜索（基本信息 + 指标值条件）
      */
     List<DeclareProgressReportVO> nationalSearch(DeclareNationalSearchReqVO reqVO);
+
+    /**
+     * 获取填报列表（国家局端）- 只显示医院已提交审核的填报
+     */
+    List<DeclareProgressReportVO> getReportListByNational();
 }

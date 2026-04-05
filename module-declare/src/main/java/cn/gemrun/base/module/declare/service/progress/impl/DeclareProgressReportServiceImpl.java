@@ -888,4 +888,30 @@ public class DeclareProgressReportServiceImpl implements DeclareProgressReportSe
         }
         return list.stream().map(this::convertToVO).collect(Collectors.toList());
     }
+
+    @Override
+    public List<DeclareProgressReportVO> getReportListByNational() {
+        LambdaQueryWrapperX<DeclareProgressReportDO> wrapper = new LambdaQueryWrapperX<DeclareProgressReportDO>()
+                .isNotNull(DeclareProgressReportDO::getHospitalProcessInstanceId)
+                .ne(DeclareProgressReportDO::getReportStatus, ReportStatusEnum.DRAFT.getStatus())
+                .ne(DeclareProgressReportDO::getReportStatus, ReportStatusEnum.SAVED.getStatus())
+                .orderByDesc(DeclareProgressReportDO::getCreateTime);
+        List<DeclareProgressReportDO> reports = progressReportMapper.selectList(wrapper);
+        if (reports.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        Set<Long> hospitalIds = reports.stream()
+                .map(DeclareProgressReportDO::getHospitalId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<Long, DeclareHospitalDO> hospitalMap = hospitalIds.isEmpty()
+                ? Collections.emptyMap()
+                : hospitalMapper.selectBatchIds(hospitalIds).stream()
+                        .collect(Collectors.toMap(DeclareHospitalDO::getId, h -> h));
+
+        return reports.stream()
+                .map(report -> convertToVOWithHospital(report, hospitalMap.get(report.getHospitalId())))
+                .collect(Collectors.toList());
+    }
 }
