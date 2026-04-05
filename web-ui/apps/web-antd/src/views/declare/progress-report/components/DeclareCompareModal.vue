@@ -295,12 +295,12 @@ function formatValue(val: any, row: any) {
         try {
           const selected = String(val).split(',');
           const options = JSON.parse(row.valueOptions);
-          return selected.map((v: string) => options.find((o: any) => o.value == v)?.label || v).join('、');
+          return selected.map((v: string) => options.find((o: any) => String(o.value) === String(v))?.label || v).join('、');
         } catch {
-          return val;
+          return String(val);
         }
       }
-      return val;
+      return String(val);
     case 9: {
       // 文件上传：显示文件名列表（换行分隔），每个文件名可点击下载
       let files: any[];
@@ -323,55 +323,97 @@ function formatValue(val: any, row: any) {
 
 // 将选项代号映射为选项文本
 function resolveOptionLabel(value: any, valueOptions?: string) {
-  if (!value || !valueOptions) return value;
+  if (!value) return '-';
+  if (!valueOptions) return String(value);
   try {
     const options = JSON.parse(valueOptions);
-    const found = options.find((o: any) => o.value == value);
-    return found ? found.label : value;
-  } catch { return value; }
+    const found = options.find((o: any) => String(o.value) === String(value));
+    return found ? found.label : String(value);
+  } catch { return String(value); }
 }
 
-/** 动态容器子字段条件显示配置 */
+/** 容器子字段条件显示配置 */
 interface ShowCondition {
   watchField: string;
   operator: 'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte' | 'in' | 'notEmpty' | 'isEmpty';
   value?: any;
 }
 
-/** 动态容器子字段定义类型 */
-interface DynamicField {
+/** 容器字段定义 */
+interface ContainerField {
   fieldCode: string;
   fieldLabel: string;
   fieldType: string;
   required?: boolean;
   options?: { value: string; label: string }[];
   showCondition?: ShowCondition;
+  precision?: number;
+  prefix?: string;
+  suffix?: string;
+  format?: string;
+  maxLength?: number;
+  rows?: number;
+  defaultValue?: any;
 }
 
-/** 解析动态容器子字段定义 JSON */
-function parseDynamicFields(valueOptions: string): DynamicField[] {
-  if (!valueOptions) return [];
+/** 容器配置（统一解析格式） */
+interface ContainerConfig {
+  mode: 'normal' | 'conditional' | 'autoEntry';
+  link?: string;
+  fields: ContainerField[];
+}
+
+/** 统一解析容器配置（兼容三种容器类型） */
+function parseContainerConfig(valueOptions: string): ContainerConfig {
+  if (!valueOptions) return { mode: 'normal', fields: [] };
   try {
     const parsed = JSON.parse(valueOptions);
-    if (!Array.isArray(parsed)) return [];
-    const firstItem = parsed[0];
-    if (firstItem && 'fieldCode' in firstItem) {
-      return parsed as DynamicField[];
+    if (Array.isArray(parsed)) {
+      return { mode: 'normal', fields: parsed as ContainerField[] };
     }
-    return [];
+    return {
+      mode: (parsed.mode as ContainerConfig['mode']) || 'normal',
+      link: parsed.link,
+      fields: parsed.fields || [],
+    };
   } catch {
-    return [];
+    return { mode: 'normal', fields: [] };
   }
 }
 
-/** 判断是否为条件容器 */
-function isConditionalContainer(valueOptions: string): boolean {
-  const fields = parseDynamicFields(valueOptions);
-  return fields.some(f => f.showCondition != null);
+/** 获取容器的所有字段定义（统一入口） */
+function getContainerFields(valueOptions: string): ContainerField[] {
+  return parseContainerConfig(valueOptions).fields;
 }
 
-/** 判断同条目中某字段是否可见（与 IndicatorInputTable 一致） */
-function isFieldVisible(entry: any, field: DynamicField, allFields: DynamicField[]): boolean {
+/** 获取容器类型 */
+function getContainerType(valueOptions: string): ContainerConfig['mode'] {
+  return parseContainerConfig(valueOptions).mode;
+}
+
+/** 获取自动条目容器的关联指标名称 */
+function getContainerLink(valueOptions: string): string | undefined {
+  return parseContainerConfig(valueOptions).link;
+}
+
+/** 按精度格式化数字值（与 approval-detail.vue 一致） */
+function formatContainerNumber(val: any, precision?: number): string {
+  if (val === null || val === undefined || val === '') return '-';
+  const num = Number(val);
+  if (isNaN(num)) return String(val);
+  if (precision !== undefined && precision !== null) return num.toFixed(Number(precision));
+  return Number.isInteger(num) ? String(num) : num.toFixed(2);
+}
+
+/** 格式化日期值 */
+function formatContainerDate(val: any): string {
+  if (!val) return '-';
+  const s = String(val).substring(0, 10);
+  return s || '-';
+}
+
+/** 判断同条目中某字段是否可见（与 approval-detail.vue 一致） */
+function isFieldVisible(entry: any, field: ContainerField, allFields: ContainerField[]): boolean {
   if (!field.showCondition) return true;
   const cond = field.showCondition;
   const watchVal = entry?.[cond.watchField];
@@ -403,7 +445,7 @@ function isFieldVisible(entry: any, field: DynamicField, allFields: DynamicField
 }
 
 /** 渲染单个容器条目的字段列表（用于对比视图） */
-function renderContainerEntry(entry: any, fields: DynamicField[], showIndex: boolean, entryIndex: number): string {
+function renderContainerEntry(entry: any, fields: ContainerField[], showIndex: boolean, entryIndex: number): string {
   const parts: string[] = [];
   if (showIndex) {
     parts.push(`【条目${entryIndex + 1}】`);
@@ -423,12 +465,22 @@ function renderContainerEntry(entry: any, fields: DynamicField[], showIndex: boo
       displayVal = (selected as string[])
         .map(v => field.options?.find(o => String(o.value) === String(v))?.label || v)
         .join('、') || '-';
+    } else if (field.fieldType === 'number') {
+      displayVal = formatContainerNumber(val, field.precision);
+    } else if (field.fieldType === 'date') {
+      displayVal = formatContainerDate(val);
+    } else if (field.fieldType === 'dateRange') {
+      if (Array.isArray(val)) {
+        displayVal = `${formatContainerDate(val[0])} ~ ${formatContainerDate(val[1])}`;
+      } else {
+        displayVal = '-';
+      }
     } else {
       displayVal = String(val);
     }
     parts.push(`${field.fieldLabel}: ${displayVal}`);
   }
-  return parts.join(' | ');
+  return parts.join('\n');
 }
 
 /** 渲染完整容器值字符串（用于对比表格单元格） */
@@ -442,11 +494,17 @@ function renderContainerValue(val: any, valueOptions: string | undefined): strin
     return '-';
   }
   if (!entries.length) return '-';
-  const fields = valueOptions ? parseDynamicFields(valueOptions) : [];
-  const showIndex = !isConditionalContainer(valueOptions || '');
-  return entries
+  const fields = valueOptions ? getContainerFields(valueOptions) : [];
+  const containerType = getContainerType(valueOptions || '');
+  const showIndex = containerType !== 'conditional';
+  let result = entries
     .map((entry, idx) => renderContainerEntry(entry, fields, showIndex, idx))
     .join('\n');
+  if (containerType === 'autoEntry') {
+    const link = getContainerLink(valueOptions || '');
+    if (link) result = `[由「${link}」指标自动生成]\n${result}`;
+  }
+  return result;
 }
 
 // 差异样式类
@@ -464,3 +522,14 @@ function getDiffClass(record: any, side: 'A' | 'B') {
 
 defineExpose({ open });
 </script>
+
+<style scoped>
+/* 容器值在对比表格中的展示 — 不设 max-height，条目数量不同也能完整显示 */
+.container-compare-cell {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 13px;
+  line-height: 1.6;
+  color: hsl(var(--foreground));
+}
+</style>

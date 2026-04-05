@@ -90,8 +90,32 @@ const indicatorValuesMap = ref<Record<number, any>>({});
 
 // 容器条目解析 Map（indicatorId -> entries[]，type=12 专用）
 const containerParsedMap = ref<Record<number, any[]>>({});
-// 容器字段定义 Map（indicatorId -> DynamicField[]，type=12 专用）
-const containerFieldDefsMap = ref<Record<number, any[]>>({});
+// 容器字段定义 Map（indicatorId -> ContainerField[]，type=12 专用）
+const containerFieldDefsMap = ref<Record<number, ContainerField[]>>({});
+
+// 容器配置（统一解析格式）
+interface ContainerConfig {
+  mode: 'normal' | 'conditional' | 'autoEntry';
+  link?: string;
+  fields: ContainerField[];
+}
+
+// 容器字段定义
+interface ContainerField {
+  fieldCode: string;
+  fieldLabel: string;
+  fieldType: string;
+  required?: boolean;
+  options?: { value: string; label: string }[];
+  showCondition?: ShowCondition;
+  precision?: number;
+  prefix?: string;
+  suffix?: string;
+  format?: string;
+  maxLength?: number;
+  rows?: number;
+  defaultValue?: any;
+}
 
 // 流程信息（来自 getProcessByBusiness）
 const processInfo = ref<{
@@ -221,6 +245,8 @@ function resetState() {
   availableActions.value = [];
   taskInfo.value = null;
   groupInfoMap.value = {};
+  containerParsedMap.value = {};
+  containerFieldDefsMap.value = {};
 }
 
 function close() {
@@ -293,7 +319,7 @@ async function loadAllData() {
           containerParsedMap.value[v.indicatorId] = parsed;
           const ind = indicatorById.get(v.indicatorId);
           if (ind) {
-            containerFieldDefsMap.value[v.indicatorId] = parseDynamicFields(ind.valueOptions);
+            containerFieldDefsMap.value[v.indicatorId] = getContainerFields(ind.valueOptions || '');
           }
         } catch {
           containerParsedMap.value[v.indicatorId] = [];
@@ -477,47 +503,48 @@ function formatNumericValue(value: any, precision: number | undefined): string {
   return Number.isInteger(num) ? String(num) : num.toFixed(2);
 }
 
-/** 动态容器子字段条件显示配置 */
+/** 容器子字段条件显示配置 */
 interface ShowCondition {
   watchField: string;
   operator: 'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte' | 'in' | 'notEmpty' | 'isEmpty';
   value?: any;
 }
 
-/** 动态容器子字段定义类型 */
-interface DynamicField {
-  fieldCode: string;
-  fieldLabel: string;
-  fieldType: string;
-  required?: boolean;
-  options?: { value: string; label: string }[];
-  showCondition?: ShowCondition;
-}
-
-/** 解析动态容器子字段定义 JSON */
-function parseDynamicFields(valueOptions: string): DynamicField[] {
-  if (!valueOptions) return [];
+/** 统一解析容器配置（兼容三种容器类型） */
+function parseContainerConfig(valueOptions: string): ContainerConfig {
+  if (!valueOptions) return { mode: 'normal', fields: [] };
   try {
     const parsed = JSON.parse(valueOptions);
-    if (!Array.isArray(parsed)) return [];
-    const firstItem = parsed[0];
-    if (firstItem && 'fieldCode' in firstItem) {
-      return parsed as DynamicField[];
+    if (Array.isArray(parsed)) {
+      return { mode: 'normal', fields: parsed as ContainerField[] };
     }
-    return [];
+    return {
+      mode: (parsed.mode as ContainerConfig['mode']) || 'normal',
+      link: parsed.link,
+      fields: parsed.fields || [],
+    };
   } catch {
-    return [];
+    return { mode: 'normal', fields: [] };
   }
 }
 
-/** 判断是否为条件容器 */
-function isConditionalContainer(valueOptions: string): boolean {
-  const fields = parseDynamicFields(valueOptions);
-  return fields.some(f => f.showCondition != null);
+/** 获取容器的所有字段定义（统一入口） */
+function getContainerFields(valueOptions: string): ContainerField[] {
+  return parseContainerConfig(valueOptions).fields;
+}
+
+/** 获取容器类型 */
+function getContainerType(valueOptions: string): ContainerConfig['mode'] {
+  return parseContainerConfig(valueOptions).mode;
+}
+
+/** 获取自动条目容器的关联指标代码 */
+function getContainerLink(valueOptions: string): string | undefined {
+  return parseContainerConfig(valueOptions).link;
 }
 
 /** 判断同条目中某字段是否可见（与 IndicatorInputTable 一致：按被监听字段类型做布尔与字符串比较） */
-function isFieldVisible(entry: any, field: DynamicField, allFields: DynamicField[]): boolean {
+function isFieldVisible(entry: any, field: ContainerField, allFields: ContainerField[]): boolean {
   if (!field.showCondition) return true;
   const cond = field.showCondition;
   const watchVal = entry?.[cond.watchField];
@@ -684,7 +711,7 @@ defineExpose({
                   v-for="indicator in group.indicators"
                   :key="getIndicatorId(indicator.id)"
                   class="info-item"
-                  :class="{ 'col-span-2': indicator.valueType === 5 || indicator.valueType === 12 }"
+                  :class="{ 'col-span-2':  indicator.valueType === 12 }"
                 >
                   <label class="info-label">{{ indicator.indicatorCode }} {{ indicator.indicatorName }}：</label>
                   <div class="info-value-wrap">
@@ -738,34 +765,66 @@ defineExpose({
                     </template>
                     <template v-else-if="indicator.valueType === 12">
                       <div class="container-entries-display">
-                        <template v-for="(entry, eIdx) in containerParsedMap[getIndicatorId(indicator.id)] || []" :key="eIdx">
-                          <div class="container-entry-item">
-                            <template v-if="!isConditionalContainer(indicator.valueOptions || '')">
-                              <div class="entry-index">条目 {{ eIdx + 1 }}</div>
-                            </template>
-                            <div class="entry-fields-display">
-                              <template v-for="field in containerFieldDefsMap[getIndicatorId(indicator.id)] || []" :key="field.fieldCode">
-                                <div v-if="isFieldVisible(entry, field, containerFieldDefsMap[getIndicatorId(indicator.id)] || [])" class="entry-field-display">
-                                  <span class="field-label">{{ field.fieldLabel }}:</span>
-                                  <span v-if="field.fieldType === 'text' || field.fieldType === 'textarea'" class="field-value">
-                                    {{ entry[field.fieldCode] || '-' }}
+                        <template v-if="(containerParsedMap[getIndicatorId(indicator.id)] || []).length > 0">
+                          <template v-for="(entry, eIdx) in containerParsedMap[getIndicatorId(indicator.id)]" :key="eIdx">
+                            <div class="container-entry-item">
+                              <template v-if="getContainerType(indicator.valueOptions || '') !== 'conditional'">
+                                <div class="entry-index">
+                                  条目 {{ eIdx + 1 }}
+                                  <span v-if="getContainerType(indicator.valueOptions || '') === 'autoEntry'" class="auto-entry-source">
+                                    （由「{{ getContainerLink(indicator.valueOptions || '') }}」指标自动生成）
                                   </span>
-                                  <span v-else-if="field.fieldType === 'number'" class="field-value">
-                                    {{ formatNumericValue(entry[field.fieldCode], field.precision) }}
-                                  </span>
-                                  <span v-else-if="field.fieldType === 'boolean'" class="status-tag" :class="entry[field.fieldCode] ? 'status-tag-success' : 'status-tag-pending'">
-                                    {{ entry[field.fieldCode] ? '是' : '否' }}
-                                  </span>
-                                  <span v-else-if="field.fieldType === 'select' || field.fieldType === 'radio'" class="field-value">
-                                    {{ getOptionLabel(entry[field.fieldCode], field.options) || '-' }}
-                                  </span>
-                                  <span v-else class="field-value">{{ entry[field.fieldCode] || '-' }}</span>
                                 </div>
                               </template>
+                              <div class="entry-fields-display">
+                                <template v-for="field in containerFieldDefsMap[getIndicatorId(indicator.id)] || []" :key="field.fieldCode">
+                                  <div v-if="isFieldVisible(entry, field, containerFieldDefsMap[getIndicatorId(indicator.id)] || [])" class="entry-field-display">
+                                    <span class="field-label">{{ field.fieldLabel }}:</span>
+                                    <span v-if="field.fieldType === 'text'" class="field-value">
+                                      {{ entry[field.fieldCode] ?? '-' }}
+                                    </span>
+                                    <div
+                                      v-else-if="field.fieldType === 'textarea'"
+                                      class="field-value field-textarea"
+                                    >
+                                      {{ entry[field.fieldCode] ?? '-' }}
+                                    </div>
+                                    <span v-else-if="field.fieldType === 'number'" class="field-value">
+                                      {{ formatNumericValue(entry[field.fieldCode], field.precision) }}
+                                    </span>
+                                    <span v-else-if="field.fieldType === 'boolean'" class="field-value">
+                                      <span class="status-tag" :class="entry[field.fieldCode] ? 'status-tag-success' : 'status-tag-pending'">
+                                        {{ entry[field.fieldCode] ? '是' : '否' }}
+                                      </span>
+                                    </span>
+                                    <span v-else-if="field.fieldType === 'radio' || field.fieldType === 'select'" class="field-value">
+                                      {{ getOptionLabel(entry[field.fieldCode], field.options) || '-' }}
+                                    </span>
+                                    <div v-else-if="field.fieldType === 'checkbox' || field.fieldType === 'multiSelect'" class="field-value option-list">
+                                      <template v-if="entry[field.fieldCode] && Array.isArray(entry[field.fieldCode]) && entry[field.fieldCode].length > 0">
+                                        <span v-for="val in entry[field.fieldCode]" :key="val" class="option-tag option-selected">
+                                          {{ getOptionLabel(val, field.options) }}
+                                        </span>
+                                      </template>
+                                      <span v-else class="field-value text-gray-400">-</span>
+                                    </div>
+                                    <span v-else-if="field.fieldType === 'date'" class="field-value">
+                                      {{ formatDate(entry[field.fieldCode]) || '-' }}
+                                    </span>
+                                    <span v-else-if="field.fieldType === 'dateRange'" class="field-value">
+                                      <template v-if="entry[field.fieldCode] && Array.isArray(entry[field.fieldCode])">
+                                        {{ formatDate(entry[field.fieldCode][0]) }} ~ {{ formatDate(entry[field.fieldCode][1]) }}
+                                      </template>
+                                      <template v-else>-</template>
+                                    </span>
+                                    <span v-else class="field-value">{{ entry[field.fieldCode] ?? '-' }}</span>
+                                  </div>
+                                </template>
+                              </div>
                             </div>
-                          </div>
+                          </template>
                         </template>
-                        <span v-if="!containerParsedMap[getIndicatorId(indicator.id)]?.length" class="info-value">-</span>
+                        <span v-else class="info-value text-gray-400">暂无条目</span>
                       </div>
                     </template>
                     <template v-else>
@@ -844,34 +903,66 @@ defineExpose({
                     </template>
                     <template v-else-if="indicator.valueType === 12">
                       <div class="container-entries-display">
-                        <template v-for="(entry, eIdx) in containerParsedMap[getIndicatorId(indicator.id)] || []" :key="eIdx">
-                          <div class="container-entry-item">
-                            <template v-if="!isConditionalContainer(indicator.valueOptions || '')">
-                              <div class="entry-index">条目 {{ eIdx + 1 }}</div>
-                            </template>
-                            <div class="entry-fields-display">
-                              <template v-for="field in containerFieldDefsMap[getIndicatorId(indicator.id)] || []" :key="field.fieldCode">
-                                <div v-if="isFieldVisible(entry, field, containerFieldDefsMap[getIndicatorId(indicator.id)] || [])" class="entry-field-display">
-                                  <span class="field-label">{{ field.fieldLabel }}:</span>
-                                  <span v-if="field.fieldType === 'text' || field.fieldType === 'textarea'" class="field-value">
-                                    {{ entry[field.fieldCode] || '-' }}
+                        <template v-if="(containerParsedMap[getIndicatorId(indicator.id)] || []).length > 0">
+                          <template v-for="(entry, eIdx) in containerParsedMap[getIndicatorId(indicator.id)]" :key="eIdx">
+                            <div class="container-entry-item">
+                              <template v-if="getContainerType(indicator.valueOptions || '') !== 'conditional'">
+                                <div class="entry-index">
+                                  条目 {{ eIdx + 1 }}
+                                  <span v-if="getContainerType(indicator.valueOptions || '') === 'autoEntry'" class="auto-entry-source">
+                                    （由「{{ getContainerLink(indicator.valueOptions || '') }}」指标自动生成）
                                   </span>
-                                  <span v-else-if="field.fieldType === 'number'" class="field-value">
-                                    {{ formatNumericValue(entry[field.fieldCode], field.precision) }}
-                                  </span>
-                                  <span v-else-if="field.fieldType === 'boolean'" class="status-tag" :class="entry[field.fieldCode] ? 'status-tag-success' : 'status-tag-pending'">
-                                    {{ entry[field.fieldCode] ? '是' : '否' }}
-                                  </span>
-                                  <span v-else-if="field.fieldType === 'select' || field.fieldType === 'radio'" class="field-value">
-                                    {{ getOptionLabel(entry[field.fieldCode], field.options) || '-' }}
-                                  </span>
-                                  <span v-else class="field-value">{{ entry[field.fieldCode] || '-' }}</span>
                                 </div>
                               </template>
+                              <div class="entry-fields-display">
+                                <template v-for="field in containerFieldDefsMap[getIndicatorId(indicator.id)] || []" :key="field.fieldCode">
+                                  <div v-if="isFieldVisible(entry, field, containerFieldDefsMap[getIndicatorId(indicator.id)] || [])" class="entry-field-display">
+                                    <span class="field-label">{{ field.fieldLabel }}:</span>
+                                    <span v-if="field.fieldType === 'text'" class="field-value">
+                                      {{ entry[field.fieldCode] ?? '-' }}
+                                    </span>
+                                    <div
+                                      v-else-if="field.fieldType === 'textarea'"
+                                      class="field-value field-textarea"
+                                    >
+                                      {{ entry[field.fieldCode] ?? '-' }}
+                                    </div>
+                                    <span v-else-if="field.fieldType === 'number'" class="field-value">
+                                      {{ formatNumericValue(entry[field.fieldCode], field.precision) }}
+                                    </span>
+                                    <span v-else-if="field.fieldType === 'boolean'" class="field-value">
+                                      <span class="status-tag" :class="entry[field.fieldCode] ? 'status-tag-success' : 'status-tag-pending'">
+                                        {{ entry[field.fieldCode] ? '是' : '否' }}
+                                      </span>
+                                    </span>
+                                    <span v-else-if="field.fieldType === 'radio' || field.fieldType === 'select'" class="field-value">
+                                      {{ getOptionLabel(entry[field.fieldCode], field.options) || '-' }}
+                                    </span>
+                                    <div v-else-if="field.fieldType === 'checkbox' || field.fieldType === 'multiSelect'" class="field-value option-list">
+                                      <template v-if="entry[field.fieldCode] && Array.isArray(entry[field.fieldCode]) && entry[field.fieldCode].length > 0">
+                                        <span v-for="val in entry[field.fieldCode]" :key="val" class="option-tag option-selected">
+                                          {{ getOptionLabel(val, field.options) }}
+                                        </span>
+                                      </template>
+                                      <span v-else class="field-value text-gray-400">-</span>
+                                    </div>
+                                    <span v-else-if="field.fieldType === 'date'" class="field-value">
+                                      {{ formatDate(entry[field.fieldCode]) || '-' }}
+                                    </span>
+                                    <span v-else-if="field.fieldType === 'dateRange'" class="field-value">
+                                      <template v-if="entry[field.fieldCode] && Array.isArray(entry[field.fieldCode])">
+                                        {{ formatDate(entry[field.fieldCode][0]) }} ~ {{ formatDate(entry[field.fieldCode][1]) }}
+                                      </template>
+                                      <template v-else>-</template>
+                                    </span>
+                                    <span v-else class="field-value">{{ entry[field.fieldCode] ?? '-' }}</span>
+                                  </div>
+                                </template>
+                              </div>
                             </div>
-                          </div>
+                          </template>
                         </template>
-                        <span v-if="!containerParsedMap[getIndicatorId(indicator.id)]?.length" class="info-value">-</span>
+                        <span v-else class="info-value text-gray-400">暂无条目</span>
                       </div>
                     </template>
                     <template v-else>
@@ -951,6 +1042,8 @@ defineExpose({
   max-height: 70vh;
   overflow-y: auto;
   padding: 0 4px;
+  /* 避免 Modal / 全局样式把 text-align:center 继承到指标与容器只读区，导致多行文本看似「居中」 */
+  text-align: start;
 }
 
 .filing-status-section {
@@ -1058,11 +1151,10 @@ defineExpose({
 }
 
 .info-value {
-  flex: 1;
   color: hsl(var(--foreground));
   font-size: 14px;
   word-break: break-all;
-
+  margin-left: 8px;
   &.font-medium { font-weight: 500; }
 }
 
@@ -1071,6 +1163,8 @@ defineExpose({
   align-items: center;
   flex-wrap: wrap;
   gap: 4px;
+  flex: 1;
+  min-width: 0;
 }
 
 .status-tag {
@@ -1224,6 +1318,8 @@ defineExpose({
   display: flex;
   flex-direction: column;
   gap: 8px;
+  width: 100%;
+  min-width: 0;
 }
 .container-entry-item {
   padding: 6px 0;
@@ -1240,20 +1336,67 @@ defineExpose({
   display: flex;
   flex-direction: column;
   gap: 4px;
+  width: 100%;
+  min-width: 0;
 }
 .entry-field-display {
   display: flex;
-  align-items: baseline;
-  gap: 4px;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
   font-size: 13px;
+  line-height: 1.6;
   .field-label {
-    color: #6b7280;
-    flex-shrink: 0;
+    flex: 0 0 240px;
+    width: 240px;
+    max-width: 240px;
+    color: hsl(var(--muted-foreground));
+    text-align: right;
+    word-break: break-word;
+    text-align: left;
   }
   .field-value {
-    color: #374151;
-    word-break: break-all;
+    color: hsl(var(--foreground));
+    word-break: break-word;
+    flex: 1;
+    min-width: 0;
+    text-align: left;
   }
+}
+
+.field-textarea {
+  display: block;
+  box-sizing: border-box;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: hsl(var(--background));
+  border: 1px solid hsl(var(--border));
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: inherit;
+  line-height: 1.5;
+  height: 80px;
+  max-width: 300px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  margin: 0;
+  color: hsl(var(--foreground));
+  direction: ltr;
+  unicode-bidi: isolate;
+  text-align: start;
+}
+
+.auto-entry-source {
+  font-size: 11px;
+  color: hsl(var(--muted-foreground));
+  font-weight: normal;
+  margin-left: 4px;
+}
+
+.text-gray-400 {
+  color: #9ca3af;
 }
 
 /* 文件列表展示样式 */
