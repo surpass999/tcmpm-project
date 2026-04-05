@@ -36,6 +36,12 @@ const BATCH_OPTIONS = [
   { label: '第2期', value: 2 },
   { label: '第3期', value: 3 },
   { label: '第4期', value: 4 },
+  { label: '第5期', value: 5 },
+  { label: '第6期', value: 6 },
+  { label: '第7期', value: 7 },
+  { label: '第8期', value: 8 },
+  { label: '第9期', value: 9 },
+  { label: '第10期', value: 10 },
 ];
 
 /** 填报状态选项 */
@@ -43,10 +49,14 @@ const REPORT_STATUS_OPTIONS = [
   { label: '草稿', value: 'DRAFT' },
   { label: '已保存', value: 'SAVED' },
   { label: '待审批', value: 'SUBMITTED' },
-  { label: '省级审核中', value: 'HOSPITAL_AUDITING' },
-  { label: '省级通过', value: 'PROVINCE_APPROVED' },
-  { label: '省级驳回', value: 'PROVINCE_REJECTED' },
-  { label: '省级退回', value: 'PROVINCE_RETURNED' },
+  // { label: '省级审核中', value: 'HOSPITAL_AUDITING' },
+  // { label: '省级通过', value: 'PROVINCE_APPROVED' },
+  // { label: '省级驳回', value: 'PROVINCE_REJECTED' },
+  // { label: '省级退回', value: 'PROVINCE_RETURNED' },
+  // { label: '国家局审批中', value: 'NATION_AUDITING' },
+  { label: '国家局通过', value: 'NATION_APPROVED' },
+  { label: '国家局驳回', value: 'NATION_REJECTED' },
+  // { label: '国家局退回', value: 'NATION_RETURNED' },
 ];
 
 /** 省级审核状态选项 */
@@ -60,7 +70,8 @@ const PROVINCE_STATUS_OPTIONS = [
 /** 国家局上报状态选项 */
 const NATIONAL_REPORT_STATUS_OPTIONS = [
   { label: '未上报', value: 0 },
-  { label: '已上报', value: 1 },
+  { label: '国家局审批中', value: 1 },
+  { label: '已上报', value: 2 },
 ];
 
 /** 年度选项 */

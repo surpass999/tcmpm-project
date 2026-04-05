@@ -31,8 +31,6 @@ const currentUserId = computed(() => {
   return Number(userStore.userInfo?.userId) || userStore.userInfo?.id;
 });
 
-const activeKey = ref<'pending' | 'all'>('all');
-
 /** 审批详情组件 ref */
 const approvalDetailRef = ref<InstanceType<typeof ApprovalDetail> | null>(null);
 
@@ -45,6 +43,7 @@ const compareModalRef = ref<InstanceType<typeof DeclareCompareModal> | null>(nul
 /** 列表已选记录（用于数据对比） */
 const selectedRows = ref<DeclareProgressReport[]>([]);
 
+
 /** 每行记录的 BPM 可用操作 */
 const rowBpmActions = ref<Record<number, any[]>>({});
 
@@ -54,12 +53,6 @@ const listBpmLoading = ref(false);
 const listBpmRow = ref<DeclareProgressReport | null>(null);
 const listBpmCurrentAction = ref<any>(null);
 const listBpmReason = ref('');
-
-async function onTabChange(key: string) {
-  activeKey.value = key as 'pending' | 'all';
-  await nextTick();
-  gridApi.query?.();
-}
 
 async function handleRefresh() {
   await nextTick();
@@ -416,15 +409,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
           // 后端已过滤 hospitalProcessInstanceId 有值且状态不是 DRAFT/SAVED 的记录
           // 前端只需按 pending/all 标签页过滤
           const list = allList || [];
-          if (activeKey.value === 'pending') {
-            // 待审核：已提交审批但未完成的记录
-            return list.filter((r) =>
-              r.hospitalProcessInstanceId &&
-              !r.reportStatus?.endsWith('APPROVED') // 不是已通过状态
-            );
-          }
-          // 全部记录
-          return list;
+          return { list, total: list.length };
         },
       },
     },
@@ -484,10 +469,10 @@ const [Grid, gridApi] = useVbenVxeGrid({
       </a-form>
     </a-modal>
 
-    <Tabs v-model:activeKey="activeKey" @change="onTabChange" class="mb-4">
+    <!-- <Tabs v-model:activeKey="activeKey" @change="onTabChange" class="mb-4">
       <TabPane key="all" tab="全部记录" />
-      <!-- <TabPane key="pending" tab="待审核" /> -->
-    </Tabs>
+      <TabPane key="pending" tab="待审核" />
+    </Tabs> -->
 
     <Grid table-title="进度填报列表">
       <template #toolbar-tools>
