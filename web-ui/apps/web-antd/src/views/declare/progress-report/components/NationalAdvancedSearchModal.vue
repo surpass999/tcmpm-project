@@ -189,6 +189,35 @@ function parseValueOptions(optionsStr: string): Array<{ label: string; value: st
   return [];
 }
 
+/**
+ * 解析容器指标的子字段列表（适配新结构 { mode, link, fields }）
+ */
+function parseContainerFields(optionsStr: string): Array<{ label: string; value: string; fieldType: string; options?: any }> {
+  if (!optionsStr) return [];
+  try {
+    const parsed = JSON.parse(optionsStr);
+    // 新对象格式：{ mode, link?, fields: [...] }
+    if (parsed && typeof parsed === 'object' && Array.isArray(parsed.fields)) {
+      return parsed.fields.map((f: any) => ({
+        label: `${f.fieldLabel || f.fieldCode} (${f.fieldType})`,
+        value: f.fieldCode,
+      }));
+    }
+    // 旧数组格式（兼容）
+    if (Array.isArray(parsed)) {
+      return parsed.map((f: any) => ({
+        label: `${f.fieldLabel || f.fieldCode} (${f.fieldType})`,
+        value: f.fieldCode,
+      }));
+    }
+  } catch { /* ignore */ }
+  return [];
+}
+
+function getContainerFieldOptions(optionsStr: string) {
+  return parseContainerFields(optionsStr);
+}
+
 function addConditionGroup() {
   indicatorGroups.value.push({
     innerLogic: 'OR',
@@ -239,10 +268,14 @@ function onIndicatorChange(groupIndex: number, condIndex: number, indicatorCode:
     cond.value = '';
     cond.value2 = '';
 
-    // 设置默认值操作符
-    const ops = getOperatorsForType(indicator.valueType);
-    if (ops.length > 0) {
-      cond.operator = ops[0].value;
+    // 动态容器：自动设置默认操作符
+    if (indicator.valueType === 12) {
+      cond.operator = 'contains';
+    } else {
+      const ops = getOperatorsForType(indicator.valueType);
+      if (ops.length > 0) {
+        cond.operator = ops[0].value;
+      }
     }
   }
 }
@@ -262,6 +295,27 @@ function onFieldTypeChange(groupIndex: number, condIndex: number, fieldType: str
   const ops = getOperatorsByFieldType(fieldType);
   if (ops.length > 0) {
     cond.operator = ops[0].value;
+  }
+}
+
+function onContainerFieldChange(groupIndex: number, condIndex: number, fieldCode: string) {
+  const group = indicatorGroups.value[groupIndex];
+  if (!group) return;
+  const cond = group.conditions[condIndex];
+  if (!cond) return;
+
+  // 根据 fieldCode 查找对应字段定义
+  const fields = parseContainerFields(cond.indicatorOptions || '');
+  const field = fields.find((f) => f.value === fieldCode);
+  if (field) {
+    cond.fieldType = field.fieldType;
+    // 根据字段类型设置操作符
+    const ops = getOperatorsByFieldType(field.fieldType);
+    if (ops.length > 0) {
+      cond.operator = ops[0].value;
+    }
+    cond.value = '';
+    cond.value2 = '';
   }
 }
 
@@ -551,12 +605,13 @@ defineExpose({ open });
                     v-model:value="cond.fieldCode"
                     placeholder="选择子字段"
                     class="field-select"
+                    :options="getContainerFieldOptions(cond.indicatorOptions || '')"
                     allow-clear
-                  >
-                    <!-- 子字段需要从指标配置中解析，此处暂用简单处理 -->
-                  </a-select>
+                    @change="(val: string) => onContainerFieldChange(gIdx, cIdx, val)"
+                  />
 
                   <a-select
+                    v-if="cond.fieldCode"
                     v-model:value="cond.fieldType"
                     placeholder="子字段类型"
                     :options="FIELD_TYPES"

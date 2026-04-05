@@ -5,14 +5,15 @@ import type { DeclareHospitalApi } from '#/api/declare/hospital';
 import type { BpmTaskApi } from '#/api/bpm/task';
 import type { BpmActionApi } from '#/api/bpm/action';
 
-import { nextTick, ref, computed } from 'vue';
+import { nextTick, ref, computed, h } from 'vue';
 
 import { DICT_TYPE } from '@vben/constants';
 import { IconifyIcon } from '@vben/icons';
 import { getDictOptions } from '@vben/hooks';
 import { useUserStore } from '@vben/stores';
+import { prompt } from '@vben/common-ui';
 
-import { Spin, Steps, Step, Modal } from 'ant-design-vue';
+import { Spin, Steps, Step, Modal, Input } from 'ant-design-vue';
 import { message } from 'ant-design-vue';
 
 import { getProgressReportIndicatorValues } from '#/api/declare/indicator';
@@ -173,20 +174,32 @@ async function handleSubmitAudit() {
   const year = payload.value?.reportYear || '';
   const batch = payload.value?.reportBatch || '';
 
-  Modal.confirm({
-    title: '确认提交审核',
-    content: `确认提交「${hospitalName}」${year}年第${batch}期进度填报？\n提交后将进入审批流程，提交后不可再编辑。`,
-    okText: '确认提交',
-    cancelText: '取消',
-    okButtonProps: { danger: true },
-    async onOk() {
+  prompt({
+    title: '提交审核',
+    content: `确认提交「${hospitalName}」${year}年第${batch}期进度填报？`,
+    modelPropName: 'value',
+    component: () =>
+      h(Input, {
+        placeholder: '请输入审核人姓名',
+        allowClear: true,
+      }),
+    async beforeClose(scope) {
+      if (!scope.isConfirm) return;
+      const auditUserName = scope.value as string;
+      if (!auditUserName?.trim()) {
+        message.warning('请输入审核人姓名');
+        return false;
+      }
+      const hideLoading = message.loading({ content: '提交中...', duration: 0 });
       try {
-        await submitProgressReport(payload.value!.reportId);
+        await submitProgressReport(payload.value!.reportId, auditUserName);
         message.success('提交成功');
         emit('success');
         await loadAllData();
       } catch (error: any) {
         message.error(error.message || '提交失败');
+      } finally {
+        hideLoading();
       }
     },
   });
