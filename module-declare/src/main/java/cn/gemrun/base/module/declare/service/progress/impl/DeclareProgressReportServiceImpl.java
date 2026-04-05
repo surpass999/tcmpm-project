@@ -339,7 +339,7 @@ public class DeclareProgressReportServiceImpl implements DeclareProgressReportSe
         LambdaQueryWrapperX<DeclareProgressReportDO> wrapper = new LambdaQueryWrapperX<DeclareProgressReportDO>()
                 // .eq(deptId != null, DeclareProgressReportDO::getDeptId, deptId)
                 // .eq(reportYear != null, DeclareProgressReportDO::getReportYear, reportYear)
-                .orderByDesc(DeclareProgressReportDO::getCreateTime);
+                .orderByDesc(DeclareProgressReportDO::getId);
         List<DeclareProgressReportDO> reports = progressReportMapper.selectList(wrapper);
         if (reports.isEmpty()) return Collections.emptyList();
 
@@ -360,10 +360,14 @@ public class DeclareProgressReportServiceImpl implements DeclareProgressReportSe
 
     @Override
     public List<DeclareProgressReportVO> getReportListByProvince(String provinceCode, Integer reportYear) {
-        LambdaQueryWrapperX<DeclareProgressReportDO> wrapper = new LambdaQueryWrapperX<DeclareProgressReportDO>()
-                .eq(DeclareProgressReportDO::getProvinceCode, provinceCode)
-                .eq(reportYear != null, DeclareProgressReportDO::getReportYear, reportYear)
-                .orderByDesc(DeclareProgressReportDO::getCreateTime);
+        LambdaQueryWrapperX<DeclareProgressReportDO> wrapper = new LambdaQueryWrapperX<>();
+        wrapper.eq(DeclareProgressReportDO::getProvinceCode, provinceCode);
+        wrapper.eq(reportYear != null, DeclareProgressReportDO::getReportYear, reportYear);
+        // 只查询医院已提交审批的记录（hospitalProcessInstanceId 有值）
+        wrapper.isNotNull(DeclareProgressReportDO::getHospitalProcessInstanceId);
+        wrapper.ne(DeclareProgressReportDO::getReportStatus, ReportStatusEnum.DRAFT.getStatus());
+        wrapper.ne(DeclareProgressReportDO::getReportStatus, ReportStatusEnum.SAVED.getStatus());
+        wrapper.orderByDesc(DeclareProgressReportDO::getCreateTime);
         List<DeclareProgressReportDO> reports = progressReportMapper.selectList(wrapper);
         if (reports.isEmpty()) return Collections.emptyList();
 
@@ -431,7 +435,7 @@ public class DeclareProgressReportServiceImpl implements DeclareProgressReportSe
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void submitReport(Long id) {
+    public void submitReport(Long id, String auditUserName) {
         DeclareProgressReportDO report = progressReportMapper.selectById(id);
         if (report == null) {
             throw new RuntimeException("填报记录不存在");
@@ -471,6 +475,10 @@ public class DeclareProgressReportServiceImpl implements DeclareProgressReportSe
         String processInstanceId = processInstanceApi.createProcessInstance(
                 SecurityFrameworkUtils.getLoginUserId(), createReqDTO);
 
+        // 保存审核人姓名
+        if (StrUtil.isNotBlank(auditUserName)) {
+            report.setAuditUserName(auditUserName);
+        }
         report.setHospitalProcessInstanceId(processInstanceId);
         report.setReportStatus(ReportStatusEnum.SUBMITTED.getStatus());
         progressReportMapper.updateById(report);
@@ -614,7 +622,7 @@ public class DeclareProgressReportServiceImpl implements DeclareProgressReportSe
                 .provinceStatus(report.getProvinceStatus())
                 .provinceStatusName(getProvinceStatusName(report.getProvinceStatus()))
                 .nationalReportStatus(report.getNationalReportStatus())
-                .nationalReportStatusName(report.getNationalReportStatus() == 1 ? "已上报" : "未上报")
+                .nationalReportStatusName(getNationalReportStatusName(report.getNationalReportStatus()))
                 .nationalReportTime(report.getNationalReportTime())
                 .nationalReporterName(report.getNationalReporterName())
                 .projectType(projectType)
@@ -652,6 +660,13 @@ public class DeclareProgressReportServiceImpl implements DeclareProgressReportSe
             }
         }
         return "";
+    }
+
+    private String getNationalReportStatusName(Integer status) {
+        if (status == null) return "未上报";
+        if (status == 1) return "国家局审批中";
+        if (status == 2) return "已上报";
+        return "未上报";
     }
 
     /**

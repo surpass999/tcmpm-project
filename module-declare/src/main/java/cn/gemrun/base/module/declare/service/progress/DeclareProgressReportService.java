@@ -40,7 +40,7 @@ public interface DeclareProgressReportService {
     /**
      * 提交审核（医院内部提交给审核员）
      */
-    void submitReport(Long id);
+    void submitReport(Long id, String auditUserName);
 
     /**
      * 医院审核员审核

@@ -94,8 +94,10 @@ public class DeclareProgressReportController {
      * 提交审核
      */
     @PostMapping("/submit")
-    public CommonResult<Boolean> submitReport(@RequestParam("id") Long id) {
-        progressReportService.submitReport(id);
+    public CommonResult<Boolean> submitReport(
+            @RequestParam("id") Long id,
+            @RequestParam(value = "auditUserName", required = false) String auditUserName) {
+        progressReportService.submitReport(id, auditUserName);
         return success(true);
     }
 

@@ -4,6 +4,7 @@ import cn.gemrun.base.module.bpm.api.event.BpmTaskStatusEvent;
 import cn.gemrun.base.module.bpm.api.event.BpmTaskStatusEventListener;
 import cn.gemrun.base.module.declare.dal.dataobject.progress.DeclareProgressReportDO;
 import cn.gemrun.base.module.declare.dal.mysql.DeclareProgressReportMapper;
+import cn.gemrun.base.module.declare.enums.NationalReportStatusEnum;
 import cn.gemrun.base.module.declare.enums.ProvinceStatusEnum;
 import cn.gemrun.base.module.declare.enums.ReportStatusEnum;
 import cn.hutool.core.util.StrUtil;
@@ -77,9 +78,9 @@ public class DeclareProgressReportTaskStatusListener extends BpmTaskStatusEventL
         // 根据 bizStatus 更新业务状态
         String opinion = event.getReason();
         if ("HOSPITAL_SUBMITTED".equals(bizStatus)) {
-            // 医院提交（或重新提交），直接进入省级审核（没有院内审批节点）
+            // 医院提交（或重新提交），进入国家局审批
             report.setReportStatus(ReportStatusEnum.SUBMITTED.getStatus());
-            report.setProvinceStatus(ProvinceStatusEnum.AUDITING.getStatus());
+            report.setNationalReportStatus(NationalReportStatusEnum.AUDITING.getStatus());
             progressReportMapper.updateById(report);
 
         } else if ("HOSPITAL_APPROVED".equals(bizStatus)) {
@@ -125,6 +126,17 @@ public class DeclareProgressReportTaskStatusListener extends BpmTaskStatusEventL
                 report.setProvinceStatus(ProvinceStatusEnum.REJECTED.getStatus());
                 progressReportMapper.updateById(report);
             }
+
+        } else if ("NATION_REJECTED".equals(bizStatus)) {
+            // 国家局审批驳回，提交员可重新编辑并提交
+            report.setReportStatus(bizStatus);
+            progressReportMapper.updateById(report);
+
+        } else if ("NATION_APPROVED".equals(bizStatus)) {
+            // 国家局审批通过，已上报
+            report.setReportStatus(bizStatus);
+            report.setNationalReportStatus(NationalReportStatusEnum.REPORTED.getStatus());
+            progressReportMapper.updateById(report);
 
         } else if (StrUtil.isNotEmpty(bizStatus)) {
             report.setReportStatus(bizStatus);

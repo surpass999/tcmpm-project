@@ -16,7 +16,7 @@ import { Spin, Steps, Step, Modal } from 'ant-design-vue';
 import { message } from 'ant-design-vue';
 
 import { getProgressReportIndicatorValues } from '#/api/declare/indicator';
-import { submitProgressReport } from '#/api/declare/progress-report';
+import { submitProgressReport, getProgressReport } from '#/api/declare/progress-report';
 import { getIndicatorGroupList } from '#/api/declare/indicator-group';
 import { getHospital } from '#/api/declare/hospital';
 import {
@@ -92,6 +92,9 @@ const indicatorValuesMap = ref<Record<number, any>>({});
 const containerParsedMap = ref<Record<number, any[]>>({});
 // 容器字段定义 Map（indicatorId -> ContainerField[]，type=12 专用）
 const containerFieldDefsMap = ref<Record<number, ContainerField[]>>({});
+
+// 报告详情（用于展示审核人姓名等字段）
+const reportDetail = ref<any>(null);
 
 // 容器配置（统一解析格式）
 interface ContainerConfig {
@@ -270,6 +273,14 @@ async function loadAllData() {
         console.warn('[approval-detail] 加载医院信息失败:', e);
         hospitalInfo.value = null;
       }
+    }
+
+    // 0.1 加载报告详情（用于获取审核人姓名等字段）
+    try {
+      reportDetail.value = await getProgressReport(payload.value!.reportId);
+    } catch (e) {
+      console.warn('[approval-detail] 加载报告详情失败:', e);
+      reportDetail.value = null;
     }
 
     // 1. 加载分组信息
@@ -688,6 +699,10 @@ defineExpose({
               <div class="info-item">
                 <label class="info-label">填报年度：</label>
                 <span class="info-value">{{ payload?.reportYear }}年第{{ payload?.reportBatch }}期</span>
+              </div>
+              <div v-if="reportDetail?.auditUserName" class="info-item">
+                <label class="info-label">审核人姓名：</label>
+                <span class="info-value">{{ reportDetail.auditUserName }}</span>
               </div>
             </div>
           </div>

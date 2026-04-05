@@ -115,6 +115,12 @@ public class LambdaQueryWrapperX<T> extends LambdaQueryWrapper<T> {
     }
 
     @Override
+    public LambdaQueryWrapperX<T> ne(SFunction<T, ?> column, Object val) {
+        super.ne(column, val);
+        return this;
+    }
+
+    @Override
     public LambdaQueryWrapperX<T> orderByDesc(SFunction<T, ?> column) {
         super.orderByDesc(true, column);
         return this;

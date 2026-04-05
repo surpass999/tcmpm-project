@@ -121,8 +121,12 @@ export function getProvinceApprovedList(provinceCode: string) {
 /**
  * 提交审核
  */
-export function submitProgressReport(id: number) {
-  return requestClient.post(`/declare/progress-report/submit?id=${id}`);
+export function submitProgressReport(id: number, auditUserName?: string) {
+  const params = new URLSearchParams({ id: String(id) });
+  if (auditUserName) {
+    params.append('auditUserName', auditUserName);
+  }
+  return requestClient.post(`/declare/progress-report/submit?${params.toString()}`);
 }
 
 /**

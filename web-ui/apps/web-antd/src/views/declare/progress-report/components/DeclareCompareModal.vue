@@ -188,7 +188,9 @@ function getProvinceStatusName(status: number | null | undefined): string {
 
 /** 国家局上报状态名称 */
 function getNationalReportStatusName(status: number | null | undefined): string {
-  return Number(status) === 1 ? '已上报' : '未上报';
+  if (Number(status) === 1) return '国家局审批中';
+  if (Number(status) === 2) return '已上报';
+  return '未上报';
 }
 
 // 按指标分类（两级分组）分组的对比数据

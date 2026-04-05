@@ -84,6 +84,11 @@ public class DeclareProgressReportVO {
     private String provinceStatusName;
 
     /**
+     * 审核人姓名
+     */
+    private String auditUserName;
+
+    /**
      * 国家局上报状态
      */
     private Integer nationalReportStatus;

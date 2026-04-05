@@ -95,7 +95,7 @@ function handleRowCheckboxChange(params: { records: DeclareProgressReport[] }) {
 async function handleBatchReport() {
   const selectedRows = (gridApi.grid?.getCheckboxRecords() || []) as DeclareProgressReport[];
   const reportableRows = selectedRows.filter(
-    (row) => row.provinceStatus === 2 && row.nationalReportStatus !== 1,
+    (row) => row.provinceStatus === 2 && row.nationalReportStatus !== 2,
   );
   if (reportableRows.length === 0) {
     message.warning('请勾选省级审核通过且未上报的记录');
@@ -272,7 +272,9 @@ function getProvinceStatusName(status: number | null | undefined): string {
 }
 
 function getNationalReportStatusName(status: number | null | undefined): string {
-  return Number(status) === 1 ? '已上报' : '未上报';
+  if (Number(status) === 1) return '国家局审批中';
+  if (Number(status) === 2) return '已上报';
+  return '未上报';
 }
 
 function getRowActions(row: DeclareProgressReport) {
@@ -295,15 +297,16 @@ function getRowActions(row: DeclareProgressReport) {
     onClick: () => handleViewApprovalDetail(row),
   });
 
-  if (row.provinceStatus === 2 && row.nationalReportStatus !== 1) {
-    buttons.push({
-      label: '上报国家局',
-      type: 'link' as const,
-      icon: 'lucide:upload',
-      auth: ['declare:national-report:batch-report'],
-      onClick: () => handleSingleReport(row),
-    });
-  }
+  // 【注释】医院提交后直接到国家局，不再需要省局上报
+  // if (row.provinceStatus === 2 && row.nationalReportStatus !== 1) {
+  //   buttons.push({
+  //     label: '上报国家局',
+  //     type: 'link' as const,
+  //     icon: 'lucide:upload',
+  //     auth: ['declare:national-report:batch-report'],
+  //     onClick: () => handleSingleReport(row),
+  //   });
+  // }
 
   return buttons;
 }
@@ -378,12 +381,13 @@ const [Grid, gridApi] = useVbenVxeGrid({
         width: 120,
         slots: { default: 'reportStatus' },
       },
-      {
-        field: 'provinceStatus',
-        title: '省级审核',
-        width: 120,
-        slots: { default: 'provinceStatus' },
-      },
+      // 【注释】医院提交后直接到国家局，不再需要省局审核
+      // {
+      //   field: 'provinceStatus',
+      //   title: '省级审核',
+      //   width: 120,
+      //   slots: { default: 'provinceStatus' },
+      // },
       {
         field: 'nationalReportStatus',
         title: '国家局上报',
@@ -409,13 +413,18 @@ const [Grid, gridApi] = useVbenVxeGrid({
       ajax: {
         query: async () => {
           const allList = await getHospitalReportList(deptId.value);
-          const list = activeKey.value === 'pending'
-            ? (allList || []).filter((r) => r.reportStatus === 'SUBMITTED')
-            : (allList || []);
-          if (list.length) {
-            await loadRowBpmActions(list);
+          // 后端已过滤 hospitalProcessInstanceId 有值且状态不是 DRAFT/SAVED 的记录
+          // 前端只需按 pending/all 标签页过滤
+          const list = allList || [];
+          if (activeKey.value === 'pending') {
+            // 待审核：已提交审批但未完成的记录
+            return list.filter((r) =>
+              r.hospitalProcessInstanceId &&
+              !r.reportStatus?.endsWith('APPROVED') // 不是已通过状态
+            );
           }
-          return { list, total: list.length };
+          // 全部记录
+          return list;
         },
       },
     },
@@ -477,7 +486,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
 
     <Tabs v-model:activeKey="activeKey" @change="onTabChange" class="mb-4">
       <TabPane key="all" tab="全部记录" />
-      <TabPane key="pending" tab="待审核" />
+      <!-- <TabPane key="pending" tab="待审核" /> -->
     </Tabs>
 
     <Grid table-title="进度填报列表">
@@ -492,12 +501,13 @@ const [Grid, gridApi] = useVbenVxeGrid({
               tooltip: compareTooltip,
               onClick: handleOpenCompare,
             },
-            {
-              label: '批量上报国家局',
-              icon: 'lucide:upload',
-              auth: ['declare:national-report:batch-report'],
-              onClick: handleBatchReport,
-            },
+            // 【注释】医院提交后直接到国家局，不再需要省局上报
+            // {
+            //   label: '批量上报国家局',
+            //   icon: 'lucide:upload',
+            //   auth: ['declare:national-report:batch-report'],
+            //   onClick: handleBatchReport,
+            // },
           ]"
         />
       </template>
@@ -520,20 +530,21 @@ const [Grid, gridApi] = useVbenVxeGrid({
         </a-tag>
       </template>
 
-      <template #provinceStatus="{ row }">
+      // 【注释】医院提交后直接到国家局，不再需要省局审核
+      <!-- <template #provinceStatus="{ row }">
         <a-tag :color="getStatusColor(row.provinceStatus)" class="status-tag">
           <IconifyIcon :icon="getStatusIcon(row.provinceStatus)" class="tag-icon" />
           {{ getProvinceStatusName(row.provinceStatus) }}
         </a-tag>
-      </template>
+      </template> -->
 
       <template #nationalReportStatus="{ row }">
         <a-tag
-          :color="row.nationalReportStatus === 1 ? 'success' : 'default'"
+          :color="row.nationalReportStatus === 2 ? 'success' : 'default'"
           class="status-tag"
         >
           <IconifyIcon
-            :icon="row.nationalReportStatus === 1 ? 'lucide:check-circle' : 'lucide:minus'"
+            :icon="row.nationalReportStatus === 2 ? 'lucide:check-circle' : 'lucide:minus'"
             class="tag-icon"
           />
           {{ getNationalReportStatusName(row.nationalReportStatus) }}

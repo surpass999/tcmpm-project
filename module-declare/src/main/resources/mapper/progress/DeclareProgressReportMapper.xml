@@ -94,7 +94,7 @@
         <if test="req.nationalReportStatus != null">
             AND r.national_report_status = #{req.nationalReportStatus}
         </if>
-        ORDER BY r.create_time DESC
+        ORDER BY r.id DESC
     </select>
 
     <!-- 指标条件 SQL 片段（动态构建） -->

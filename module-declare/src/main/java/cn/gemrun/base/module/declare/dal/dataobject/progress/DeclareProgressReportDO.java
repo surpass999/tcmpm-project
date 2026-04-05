@@ -78,6 +78,11 @@ public class DeclareProgressReportDO extends BaseDO {
     private String provinceOpinion;
 
     /**
+     * 审核人姓名
+     */
+    private String auditUserName;
+
+    /**
      * 省级审核时间
      */
     private LocalDateTime provinceAuditTime;

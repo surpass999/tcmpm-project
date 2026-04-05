@@ -86,9 +86,9 @@ function handleAdvancedSearchResult(result: DeclareProgressReport[], params?: Na
   // 搜索完成后按当前 tab 过滤后加载到列表
   let filtered = result;
   if (activeKey.value === 'reported') {
-    filtered = result.filter((r) => r.nationalReportStatus === 1);
+    filtered = result.filter((r) => r.nationalReportStatus === 2);
   } else if (activeKey.value === 'unreported') {
-    filtered = result.filter((r) => r.nationalReportStatus !== 1);
+    filtered = result.filter((r) => r.nationalReportStatus === 1);
   }
   // 通过 grid 实例方法加载数据（loadData 在 gridApi.grid 上）
   gridApi.grid?.loadData(filtered);
@@ -255,7 +255,9 @@ function getProvinceStatusName(status: number | null | undefined): string {
 }
 
 function getNationalReportStatusName(status: number | null | undefined): string {
-  return Number(status) === 1 ? '已上报' : '未上报';
+  if (Number(status) === 1) return '国家局审批中';
+  if (Number(status) === 2) return '已上报';
+  return '未上报';
 }
 
 function getRowActions(row: DeclareProgressReport) {
@@ -351,12 +353,13 @@ const [Grid, gridApi] = useVbenVxeGrid({
         width: 120,
         slots: { default: 'reportStatus' },
       },
-      {
-        field: 'provinceStatus',
-        title: '省级审核',
-        width: 120,
-        slots: { default: 'provinceStatus' },
-      },
+      // 【注释】医院提交后直接到国家局，不再需要省局审核
+      // {
+      //   field: 'provinceStatus',
+      //   title: '省级审核',
+      //   width: 120,
+      //   slots: { default: 'provinceStatus' },
+      // },
       {
         field: 'nationalReportStatus',
         title: '国家局上报',
@@ -392,9 +395,9 @@ const [Grid, gridApi] = useVbenVxeGrid({
                 // 根据 tab 过滤
                 let filtered = cachedResult;
                 if (activeKey.value === 'reported') {
-                  filtered = cachedResult.filter((r) => r.nationalReportStatus === 1);
+                  filtered = cachedResult.filter((r) => r.nationalReportStatus === 2);
                 } else if (activeKey.value === 'unreported') {
-                  filtered = cachedResult.filter((r) => r.nationalReportStatus !== 1);
+                  filtered = cachedResult.filter((r) => r.nationalReportStatus === 1);
                 }
                 if (filtered.length) {
                   await loadRowBpmActions(filtered);
@@ -407,9 +410,9 @@ const [Grid, gridApi] = useVbenVxeGrid({
             // 无缓存参数时，对已有结果做 tab 前端过滤
             let filtered = advancedSearchData.value;
             if (activeKey.value === 'reported') {
-              filtered = advancedSearchData.value.filter((r) => r.nationalReportStatus === 1);
+              filtered = advancedSearchData.value.filter((r) => r.nationalReportStatus === 2);
             } else if (activeKey.value === 'unreported') {
-              filtered = advancedSearchData.value.filter((r) => r.nationalReportStatus !== 1);
+              filtered = advancedSearchData.value.filter((r) => r.nationalReportStatus === 1);
             }
             if (filtered.length) {
               await loadRowBpmActions(filtered);
@@ -420,9 +423,9 @@ const [Grid, gridApi] = useVbenVxeGrid({
           const allList = await getHospitalReportList(deptId.value);
           let list: DeclareProgressReport[] = [];
           if (activeKey.value === 'reported') {
-            list = (allList || []).filter((r) => r.nationalReportStatus === 1);
+            list = (allList || []).filter((r) => r.nationalReportStatus === 2);
           } else if (activeKey.value === 'unreported') {
-            list = (allList || []).filter((r) => r.nationalReportStatus !== 1);
+            list = (allList || []).filter((r) => r.nationalReportStatus === 1);
           } else {
             list = allList || [];
           }
@@ -496,7 +499,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
     <Tabs v-model:activeKey="activeKey" @change="onTabChange" class="mb-4">
       <TabPane key="all" tab="全部记录" />
       <TabPane key="reported" tab="已上报" />
-      <TabPane key="unreported" tab="未上报" />
+      <TabPane key="unreported" tab="待审核" />
     </Tabs>
 
     <Grid table-title="进度填报列表">
@@ -560,20 +563,21 @@ const [Grid, gridApi] = useVbenVxeGrid({
         </a-tag>
       </template>
 
-      <template #provinceStatus="{ row }">
+      // 【注释】医院提交后直接到国家局，不再需要省局审核
+      <!-- <template #provinceStatus="{ row }">
         <a-tag :color="getStatusColor(row.provinceStatus)" class="status-tag">
           <IconifyIcon :icon="getStatusIcon(row.provinceStatus)" class="tag-icon" />
           {{ getProvinceStatusName(row.provinceStatus) }}
         </a-tag>
-      </template>
+      </template> -->
 
       <template #nationalReportStatus="{ row }">
         <a-tag
-          :color="row.nationalReportStatus === 1 ? 'success' : 'default'"
+          :color="row.nationalReportStatus === 2 ? 'success' : row.nationalReportStatus === 1 ? 'warning' : 'default'"
           class="status-tag"
         >
           <IconifyIcon
-            :icon="row.nationalReportStatus === 1 ? 'lucide:check-circle' : 'lucide:minus'"
+            :icon="row.nationalReportStatus === 2 ? 'lucide:check-circle' : row.nationalReportStatus === 1 ? 'lucide:clock' : 'lucide:minus'"
             class="tag-icon"
           />
           {{ getNationalReportStatusName(row.nationalReportStatus) }}
