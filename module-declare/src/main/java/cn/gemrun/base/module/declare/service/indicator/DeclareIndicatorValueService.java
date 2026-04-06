@@ -118,4 +118,14 @@ public interface DeclareIndicatorValueService {
             Integer businessType, Long businessId,
             String indicatorCode, String fieldCode);
 
+    /**
+     * 根据填报记录ID列表批量查询指标值（用于导出）
+     *
+     * @param reportIds 填报记录ID列表
+     * @param businessType 业务类型（Integer，如3=进度填报process）
+     * @return Map<reportId, Map<indicatorCode, DeclareIndicatorValueDO>>
+     */
+    Map<Long, Map<String, DeclareIndicatorValueDO>> getValueMapByReports(
+            List<Long> reportIds, Integer businessType);
+
 }

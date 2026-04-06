@@ -1,21 +1,26 @@
 package cn.gemrun.base.module.declare.controller.admin.progress;
 
 import cn.gemrun.base.framework.common.pojo.CommonResult;
+import cn.gemrun.base.module.declare.service.progress.DeclareNationalExportService;
 import cn.gemrun.base.module.declare.service.progress.DeclareProgressReportService;
 import cn.gemrun.base.module.declare.service.progress.DeclareReportWindowService;
 import cn.gemrun.base.module.declare.vo.progress.DeclareCompareDataVO;
+import cn.gemrun.base.module.declare.vo.progress.DeclareNationalExportReqVO;
 import cn.gemrun.base.module.declare.vo.progress.DeclareNationalSearchReqVO;
 import cn.gemrun.base.module.declare.vo.progress.DeclareProgressReportAuditReqVO;
 import cn.gemrun.base.module.declare.vo.progress.DeclareProgressReportCreateReqVO;
 import cn.gemrun.base.module.declare.vo.progress.DeclareProgressReportSaveReqVO;
 import cn.gemrun.base.module.declare.vo.progress.DeclareProgressReportVO;
 import cn.gemrun.base.module.declare.vo.progress.ReportWindowVO;
+
 import javax.annotation.Resource;
+import javax.servlet.http.HttpServletResponse;
 import javax.validation.Valid;
+import java.io.IOException;
+import java.util.List;
+
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 import static cn.gemrun.base.framework.common.pojo.CommonResult.success;
 
@@ -29,6 +34,9 @@ public class DeclareProgressReportController {
 
     @Resource
     private DeclareReportWindowService reportWindowService;
+
+    @Resource
+    private DeclareNationalExportService exportService;
 
     /**
      * 创建填报记录
@@ -207,5 +215,39 @@ public class DeclareProgressReportController {
     @GetMapping("/national-list")
     public CommonResult<List<DeclareProgressReportVO>> getNationalReportList() {
         return success(progressReportService.getReportListByNational());
+    }
+
+    /**
+     * 导出国家局填报数据 (简单条件)
+     */
+    @GetMapping("/export-national")
+    public void exportNationalReport(
+            @RequestParam(value = "hospitalName", required = false) String hospitalName,
+            @RequestParam(value = "reportYear", required = false) Integer reportYear,
+            @RequestParam(value = "reportBatch", required = false) Integer reportBatch,
+            @RequestParam(value = "reportStatus", required = false) String reportStatus,
+            @RequestParam(value = "provinceStatus", required = false) Integer provinceStatus,
+            @RequestParam(value = "nationalReportStatus", required = false) Integer nationalReportStatus,
+            @RequestParam(value = "projectType", required = false) Integer projectType,
+            HttpServletResponse response) throws IOException {
+        DeclareNationalExportReqVO reqVO = new DeclareNationalExportReqVO();
+        reqVO.setHospitalName(hospitalName);
+        reqVO.setReportYear(reportYear);
+        reqVO.setReportBatch(reportBatch);
+        reqVO.setReportStatus(reportStatus);
+        reqVO.setProvinceStatus(provinceStatus);
+        reqVO.setNationalReportStatus(nationalReportStatus);
+        reqVO.setProjectType(projectType);
+        exportService.exportNationalReport(reqVO, response);
+    }
+
+    /**
+     * 导出国家局填报数据 (高级条件 - 含指标条件)
+     */
+    @PostMapping("/export-national-advanced")
+    public void exportNationalReportAdvanced(
+            @RequestBody DeclareNationalExportReqVO reqVO,
+            HttpServletResponse response) throws IOException {
+        exportService.exportNationalReportAdvanced(reqVO, response);
     }
 }

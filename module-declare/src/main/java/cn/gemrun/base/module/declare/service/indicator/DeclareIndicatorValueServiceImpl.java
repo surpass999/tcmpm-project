@@ -4,6 +4,7 @@ import cn.gemrun.base.module.declare.dal.dataobject.indicator.DeclareIndicatorVa
 import cn.gemrun.base.module.declare.dal.mysql.DeclareProgressReportMapper;
 import cn.gemrun.base.module.declare.dal.dataobject.progress.DeclareProgressReportDO;
 import cn.gemrun.base.module.declare.dal.mysql.indicator.DeclareIndicatorValueMapper;
+import cn.gemrun.base.framework.mybatis.core.query.LambdaQueryWrapperX;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -12,7 +13,9 @@ import org.springframework.util.Assert;
 import javax.annotation.Resource;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -339,6 +342,36 @@ public class DeclareIndicatorValueServiceImpl implements DeclareIndicatorValueSe
                 log.warn("[countGroupByContainerField] JSON解析失败: id={}", record.getId(), e);
             }
         }
+        return result;
+    }
+
+    @Override
+    public Map<Long, Map<String, DeclareIndicatorValueDO>> getValueMapByReports(
+            List<Long> reportIds, Integer businessType) {
+        if (reportIds == null || reportIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        // 1. 批量查询指标值
+        LambdaQueryWrapperX<DeclareIndicatorValueDO> queryWrapper = new LambdaQueryWrapperX<>();
+        queryWrapper.in(DeclareIndicatorValueDO::getBusinessId, reportIds)
+                .eq(DeclareIndicatorValueDO::getBusinessType, businessType);
+
+        List<DeclareIndicatorValueDO> allValues = indicatorValueMapper.selectList(queryWrapper);
+
+        // 2. 按 reportId 和 indicatorCode 构建双层Map
+        Map<Long, Map<String, DeclareIndicatorValueDO>> result = new LinkedHashMap<>();
+        for (Long reportId : reportIds) {
+            result.put(reportId, new LinkedHashMap<>());
+        }
+
+        for (DeclareIndicatorValueDO value : allValues) {
+            Map<String, DeclareIndicatorValueDO> reportValues = result.get(value.getBusinessId());
+            if (reportValues != null) {
+                reportValues.put(value.getIndicatorCode(), value);
+            }
+        }
+
         return result;
     }
 

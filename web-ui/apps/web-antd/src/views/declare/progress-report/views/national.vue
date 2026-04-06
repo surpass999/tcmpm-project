@@ -20,6 +20,8 @@ import ApprovalDetail from '../modules/approval-detail.vue';
 import ReturnModal from '#/components/bpm/ReturnModal.vue';
 import DeclareCompareModal from '../components/DeclareCompareModal.vue';
 import NationalAdvancedSearchModal from '../components/NationalAdvancedSearchModal.vue';
+import NationalExportModal from '../components/NationalExportModal.vue';
+import { fieldType } from '../../../bpm/components/bpmn-process-designer/package/penal/listeners/utilSelf';
 
 const BUSINESS_TYPE_KEY = 'progress_report:submit';
 
@@ -42,6 +44,9 @@ const compareModalRef = ref<InstanceType<typeof DeclareCompareModal> | null>(nul
 
 /** 高级搜索弹窗组件 ref */
 const advancedSearchModalRef = ref<InstanceType<typeof NationalAdvancedSearchModal> | null>(null);
+
+/** 导出弹窗组件 ref */
+const exportModalRef = ref<InstanceType<typeof NationalExportModal> | null>(null);
 
 /** 列表已选记录（用于数据对比） */
 const selectedRows = ref<DeclareProgressReport[]>([]);
@@ -77,6 +82,14 @@ async function handleRefresh() {
 
 function handleOpenAdvancedSearch() {
   advancedSearchModalRef.value?.open();
+}
+
+/** 打开导出弹窗 */
+function handleOpenExport() {
+  // 传递当前的高级搜索条件（如果有）
+  const conditions = isAdvancedSearchMode.value ? lastSearchParams.value : null;
+  // 复用 NationalExportModal，传入高级搜索参数
+  exportModalRef.value?.open(conditions as any);
 }
 
 function handleAdvancedSearchResult(result: DeclareProgressReport[], params?: NationalSearchParams) {
@@ -339,7 +352,13 @@ const [Grid, gridApi] = useVbenVxeGrid({
         width: 70,
         slots: { default: 'seq' },
       },
-      { field: 'hospitalName', title: '医院名称', minWidth: 200, showOverflow: true },
+      { field: 'hospitalName', title: '医院名称', minWidth: 160, showOverflow: true },
+      {
+        field: 'projectTypeShortName',
+        title: '项目类型',
+        width: 180,
+        slots: { default: 'projectTypeShortName' },
+      },
       { field: 'reportYear', title: '填报年度', width: 100 },
       {
         field: 'reportBatch',
@@ -353,6 +372,8 @@ const [Grid, gridApi] = useVbenVxeGrid({
         width: 120,
         slots: { default: 'reportStatus' },
       },
+      
+      
       // 【注释】医院提交后直接到国家局，不再需要省局审核
       // {
       //   field: 'provinceStatus',
@@ -365,6 +386,12 @@ const [Grid, gridApi] = useVbenVxeGrid({
         title: '国家局上报',
         width: 120,
         slots: { default: 'nationalReportStatus' },
+      },
+      {
+        field: 'auditUserName',
+        title: '医院审核人姓名',
+        width: 120,
+        slots: { default: 'auditUserName' },
       },
       {
         field: 'createTime',
@@ -471,6 +498,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
       ref="advancedSearchModalRef"
       @search="handleAdvancedSearchResult"
     />
+    <NationalExportModal ref="exportModalRef" />
 
     <a-modal
       v-model:open="listBpmModalVisible"
@@ -541,6 +569,12 @@ const [Grid, gridApi] = useVbenVxeGrid({
               tooltip: compareTooltip,
               onClick: handleOpenCompare,
             },
+            {
+              label: '导出Excel',
+              icon: 'lucide:download',
+              auth: ['declare/progress-report/export-national'],
+              onClick: handleOpenExport,
+            },
           ]"
         />
       </template>
@@ -563,13 +597,19 @@ const [Grid, gridApi] = useVbenVxeGrid({
         </a-tag>
       </template>
 
-      // 【注释】医院提交后直接到国家局，不再需要省局审核
+      <!-- // 【注释】医院提交后直接到国家局，不再需要省局审核 -->
       <!-- <template #provinceStatus="{ row }">
         <a-tag :color="getStatusColor(row.provinceStatus)" class="status-tag">
           <IconifyIcon :icon="getStatusIcon(row.provinceStatus)" class="tag-icon" />
           {{ getProvinceStatusName(row.provinceStatus) }}
         </a-tag>
       </template> -->
+      <template #projectTypeShortName="{ row }">
+        <span class="project-type-short-name">{{ row.projectTypeShortName }}</span>
+      </template>
+      <template #auditUserName="{ row }">
+        <span class="audit-user-name">{{ row.auditUserName }}</span>
+      </template>
 
       <template #nationalReportStatus="{ row }">
         <a-tag

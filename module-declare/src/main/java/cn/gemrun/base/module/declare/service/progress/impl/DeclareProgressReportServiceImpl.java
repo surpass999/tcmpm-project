@@ -625,6 +625,7 @@ public class DeclareProgressReportServiceImpl implements DeclareProgressReportSe
                 .nationalReportStatusName(getNationalReportStatusName(report.getNationalReportStatus()))
                 .nationalReportTime(report.getNationalReportTime())
                 .nationalReporterName(report.getNationalReporterName())
+                .auditUserName(report.getAuditUserName())
                 .projectType(projectType)
                 .projectTypeName(projectTypeName)
                 .projectTypeShortName(projectTypeShortName)

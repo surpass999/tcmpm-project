@@ -39,6 +39,8 @@ export interface DeclareProgressReport {
   creator?: string;
   createTime: string;
   updateTime: string;
+  /** 医院审核人姓名（提交审核时填写） */
+  auditUserName?: string;
 }
 
 /**
@@ -442,3 +444,48 @@ export const VALUE_TYPE_COMPONENTS: Record<number, string> = {
   11: 'multiSelect',
   12: 'dynamicContainer',
 };
+
+// ========== 国家局导出 ==========
+
+/** 导出请求参数 */
+export interface NationalExportParams {
+  /** 医院名称（模糊匹配） */
+  hospitalName?: string;
+  /** 填报年度 */
+  reportYear?: number;
+  /** 填报批次 */
+  reportBatch?: number;
+  /** 填报状态 */
+  reportStatus?: string;
+  /** 省级审核状态 */
+  provinceStatus?: number;
+  /** 国家局上报状态 */
+  nationalReportStatus?: number;
+  /** 项目类型 (1-6) */
+  projectType?: number;
+  /** 指标条件组列表 */
+  indicatorGroups?: IndicatorConditionGroup[];
+  /** 是否包含动态容器明细 */
+  includeContainerDetail?: boolean;
+  /** 填报记录ID列表（优先级最高） */
+  reportIds?: number[];
+}
+
+/**
+ * 导出国家局填报数据 (简单条件)
+ * GET 请求，所有参数通过 queryString 传递
+ */
+export function exportNationalReport(params: NationalExportParams) {
+  return requestClient.download('/declare/progress-report/export-national', { params });
+}
+
+/**
+ * 导出国家局填报数据 (高级条件)
+ * POST 请求，支持指标条件筛选
+ */
+export function exportNationalReportAdvanced(params: NationalExportParams) {
+  return requestClient.download('/declare/progress-report/export-national-advanced', {
+    method: 'POST',
+    body: params,
+  });
+}

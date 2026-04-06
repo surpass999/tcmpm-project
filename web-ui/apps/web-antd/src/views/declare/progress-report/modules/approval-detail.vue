@@ -713,9 +713,9 @@ defineExpose({
                 <label class="info-label">填报年度：</label>
                 <span class="info-value">{{ payload?.reportYear }}年第{{ payload?.reportBatch }}期</span>
               </div>
-              <div v-if="reportDetail?.auditUserName" class="info-item">
-                <label class="info-label">审核人姓名：</label>
-                <span class="info-value">{{ reportDetail.auditUserName }}</span>
+              <div class="info-item">
+                <label class="info-label">医院审核人姓名：</label>
+                <span class="info-value">{{ reportDetail?.auditUserName || '—' }}</span>
               </div>
             </div>
           </div>
