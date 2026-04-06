@@ -17,6 +17,8 @@ public class DeclareDataPermissionConfiguration {
         return rule -> {
             // 进度报表 - 按部门过滤（使用 dept_id 而非 hospital_id，因为数据权限框架需要用部门ID进行过滤）
             rule.addDeptColumn("declare_progress_report", "dept_id");
+            // 医院信息 - 按部门过滤，省局用户只能看到本部门及下级部门管辖的医院
+            rule.addDeptColumn("declare_hospital", "dept_id");
         };
     }
 

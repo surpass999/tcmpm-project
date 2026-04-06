@@ -4,10 +4,13 @@ import cn.gemrun.base.module.declare.dal.dataobject.progress.DeclareProgressRepo
 import cn.gemrun.base.module.declare.vo.progress.DeclareNationalSearchReqVO;
 import cn.gemrun.base.framework.mybatis.core.mapper.BaseMapperX;
 import cn.gemrun.base.framework.mybatis.core.query.LambdaQueryWrapperX;
+import cn.hutool.core.collection.CollUtil;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * 进度填报Mapper
@@ -80,14 +83,39 @@ public interface DeclareProgressReportMapper extends BaseMapperX<DeclareProgress
     int selectProvincePendingCount();
 
     /**
-     * 按省份统计省级审核中（province_status = 1）的记录数
+     * 按部门统计省级审核中（province_status = 1）的记录数
      */
-    int selectProvincePendingCountByProvince(String provinceCode);
+    default int selectProvincePendingCountByDeptIds(Set<Long> deptIds) {
+        if (CollUtil.isEmpty(deptIds)) {
+            return 0;
+        }
+        return selectCount(new LambdaQueryWrapperX<DeclareProgressReportDO>()
+                .in(DeclareProgressReportDO::getDeptId, deptIds)
+                .eq(DeclareProgressReportDO::getProvinceStatus, 1)).intValue();
+    }
 
     /**
-     * 按省份统计已有填报记录的医院数量（去重）
+     * 按部门统计已有填报记录的医院数量（去重，只统计已提交的记录）
      */
-    int selectReportedHospitalCountByProvince(String provinceCode);
+    default int selectReportedHospitalCountByDeptIds(Set<Long> deptIds) {
+        if (CollUtil.isEmpty(deptIds)) {
+            return 0;
+        }
+        List<DeclareProgressReportDO> reports = selectList(new LambdaQueryWrapperX<DeclareProgressReportDO>()
+                .in(DeclareProgressReportDO::getDeptId, deptIds)
+                .isNotNull(DeclareProgressReportDO::getHospitalProcessInstanceId)
+                .ne(DeclareProgressReportDO::getReportStatus, "DRAFT")
+                .ne(DeclareProgressReportDO::getReportStatus, "SAVED"));
+        if (CollUtil.isEmpty(reports)) {
+            return 0;
+        }
+        return reports.stream()
+                .map(DeclareProgressReportDO::getHospitalId)
+                .filter(id -> id != null)
+                .distinct()
+                .collect(Collectors.toSet())
+                .size();
+    }
 
     /**
      * 国家局高级搜索（基本信息 + 指标值条件）

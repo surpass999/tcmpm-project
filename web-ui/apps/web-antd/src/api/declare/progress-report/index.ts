@@ -101,6 +101,17 @@ export function getProvinceReportList(provinceCode: string, reportYear?: number)
 }
 
 /**
+ * 获取省级填报列表（通过 deptId 自动推导省份）
+ */
+export function getProvinceReportListByDept(reportYear?: number) {
+  return requestClient.get<DeclareProgressReport[]>(
+    `/declare/progress-report/province-list-by-dept${
+      reportYear ? `?reportYear=${reportYear}` : ''
+    }`,
+  );
+}
+
+/**
  * 获取省级待审核列表
  */
 export function getProvincePendingList(provinceCode: string) {

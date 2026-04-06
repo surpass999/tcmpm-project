@@ -38,29 +38,5 @@
         ORDER BY projectCount DESC
     </select>
 
-    <!-- 按省份统计医院数量 -->
-    <select id="selectCountActiveByProvince" resultType="java.lang.Integer">
-        SELECT COUNT(*)
-        FROM declare_hospital
-        WHERE province_code = #{provinceCode}
-    </select>
-
-    <!-- 按项目类型（1-6）分组统计某省份的医院数量 -->
-    <select id="selectCountGroupByProjectTypeOfProvince"
-            resultType="cn.gemrun.base.module.declare.controller.admin.dashboard.vo.DashboardStatsVO$NationalStats$ProjectTypeItem">
-        SELECT
-            project_type AS typeValue,
-            COUNT(*) AS projectCount,
-            ROUND(
-                COUNT(*) * 100.0 / NULLIF((
-                    SELECT COUNT(*) FROM declare_hospital
-                    WHERE project_type BETWEEN 1 AND 6 AND province_code = #{provinceCode}
-                ), 0), 1
-            ) AS percentage
-        FROM declare_hospital
-        WHERE project_type BETWEEN 1 AND 6 AND province_code = #{provinceCode}
-        GROUP BY project_type
-        ORDER BY project_type
-    </select>
 
 </mapper>

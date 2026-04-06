@@ -28,20 +28,6 @@
         WHERE national_report_status = 1
     </select>
 
-    <!-- 按省份统计省级审核中（province_status = 1）的记录数 -->
-    <select id="selectProvincePendingCountByProvince" resultType="java.lang.Integer">
-        SELECT COUNT(*)
-        FROM declare_progress_report
-        WHERE province_status = 1 AND province_code = #{provinceCode}
-    </select>
-
-    <!-- 按省份统计已有填报记录的医院数量（去重） -->
-    <select id="selectReportedHospitalCountByProvince" resultType="java.lang.Integer">
-        SELECT COUNT(DISTINCT hospital_id)
-        FROM declare_progress_report
-        WHERE province_code = #{provinceCode}
-    </select>
-
     <!-- ========== 国家局高级搜索 ========== -->
 
     <!-- 国家局高级搜索 -->

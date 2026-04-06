@@ -75,6 +75,15 @@ public class DeclareProgressReportController {
     }
 
     /**
+     * 获取填报列表（省级端）- 由框架数据权限自动按 dept 过滤，省局用户只看到本省数据
+     */
+    @GetMapping("/province-list-by-dept")
+    public CommonResult<List<DeclareProgressReportVO>> getProvinceReportListByDept(
+            @RequestParam(value = "reportYear", required = false) Integer reportYear) {
+        return success(progressReportService.getReportListByProvince(null, reportYear));
+    }
+
+    /**
      * 获取省级待审核列表
      */
     @GetMapping("/province-pending")

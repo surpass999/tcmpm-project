@@ -361,7 +361,7 @@ public class DeclareProgressReportServiceImpl implements DeclareProgressReportSe
     @Override
     public List<DeclareProgressReportVO> getReportListByProvince(String provinceCode, Integer reportYear) {
         LambdaQueryWrapperX<DeclareProgressReportDO> wrapper = new LambdaQueryWrapperX<>();
-        wrapper.eq(DeclareProgressReportDO::getProvinceCode, provinceCode);
+        // wrapper.eq(DeclareProgressReportDO::getProvinceCode, provinceCode);
         wrapper.eq(reportYear != null, DeclareProgressReportDO::getReportYear, reportYear);
         // 只查询医院已提交审批的记录（hospitalProcessInstanceId 有值）
         wrapper.isNotNull(DeclareProgressReportDO::getHospitalProcessInstanceId);

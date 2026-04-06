@@ -13,7 +13,7 @@ import { useUserStore } from '@vben/stores';
 
 import {
   batchNationalReport,
-  getHospitalReportList,
+  getProvinceReportListByDept,
 } from '#/api/declare/progress-report';
 import { getAvailableActionsBatch, submitBpmAction } from '#/api/bpm/action';
 import { IconifyIcon } from '@vben/icons';
@@ -404,10 +404,8 @@ const [Grid, gridApi] = useVbenVxeGrid({
     keepSource: true,
     proxyConfig: {
       ajax: {
-        query: async () => {
-          const allList = await getHospitalReportList(deptId.value);
-          // 后端已过滤 hospitalProcessInstanceId 有值且状态不是 DRAFT/SAVED 的记录
-          // 前端只需按 pending/all 标签页过滤
+        query: async (_params: any, formValues: any) => {
+          const allList = await getProvinceReportListByDept(formValues?.reportYear);
           const list = allList || [];
           return { list, total: list.length };
         },

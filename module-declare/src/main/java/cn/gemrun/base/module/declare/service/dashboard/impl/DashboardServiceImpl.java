@@ -2,11 +2,9 @@ package cn.gemrun.base.module.declare.service.dashboard.impl;
 
 import cn.gemrun.base.framework.security.core.util.SecurityFrameworkUtils;
 import cn.gemrun.base.module.declare.controller.admin.dashboard.vo.*;
-import cn.gemrun.base.module.declare.dal.dataobject.hospital.DeclareHospitalDO;
 import cn.gemrun.base.module.declare.dal.mysql.DeclareHospitalMapper;
 import cn.gemrun.base.module.declare.dal.mysql.DeclareProgressReportMapper;
 import cn.gemrun.base.module.declare.dal.mysql.achievement.AchievementMapper;
-import cn.gemrun.base.framework.mybatis.core.query.LambdaQueryWrapperX;
 import cn.gemrun.base.module.declare.enums.ProjectTypeEnum;
 import cn.gemrun.base.module.declare.service.dashboard.DashboardService;
 import cn.gemrun.base.module.declare.service.progress.DeclareReportWindowService;
@@ -132,6 +130,7 @@ public class DashboardServiceImpl implements DashboardService {
 
     /**
      * 构建省级驾驶舱专属统计数据
+     * 通过 deptService 获取当前用户可见的 deptId 树，以此过滤医院和填报数据
      */
     private DashboardStatsVO.ProvinceStats buildProvinceStats() {
         DashboardStatsVO.ProvinceStats stats = new DashboardStatsVO.ProvinceStats();
@@ -140,50 +139,37 @@ public class DashboardServiceImpl implements DashboardService {
         AdminUserRespDTO user = userId != null ? adminUserApi.getUser(userId) : null;
         Long deptId = user != null ? user.getDeptId() : null;
 
-        // 通过用户归属的医院确定省份
-        // 优先级：直接匹配 deptId（医院用户）> 在 deptId 子树中查找（省局/市局用户）
-        String provinceCode = null;
+        // 通过 deptService 获取当前用户可见的所有部门（包含自身及下级部门）
+        Set<Long> visibleDeptIds = new HashSet<>();
         if (deptId != null) {
-            DeclareHospitalDO hospital = hospitalMapper.selectByDeptId(deptId);
-            if (hospital != null) {
-                provinceCode = hospital.getProvinceCode();
-            } else {
-                // 省局/市局用户的 deptId 是医院 deptId 的祖先，
-                // 在其子树中查找任意一家医院，取其 provinceCode
-                List<DeptDO> childDepts = deptService.getChildDeptList(deptId);
-                List<Long> deptIds = childDepts.stream()
+            List<DeptDO> childDepts = deptService.getChildDeptList(deptId);
+            if (CollUtil.isNotEmpty(childDepts)) {
+                visibleDeptIds = childDepts.stream()
                         .map(DeptDO::getId)
-                        .collect(Collectors.toList());
-                deptIds.add(deptId); // 包含自身
-                List<DeclareHospitalDO> hospitals = hospitalMapper.selectList(
-                        new LambdaQueryWrapperX<DeclareHospitalDO>()
-                                .in(DeclareHospitalDO::getDeptId, deptIds)
-                                .last("LIMIT 1"));
-                if (CollUtil.isNotEmpty(hospitals)) {
-                    provinceCode = hospitals.get(0).getProvinceCode();
-                }
+                        .collect(Collectors.toCollection(HashSet::new));
             }
+            visibleDeptIds.add(deptId);
         }
 
-        log.info("[Dashboard] 省级驾驶舱 provinceCode={}", provinceCode);
-        stats.setProvinceCode(provinceCode);
+        log.info("[Dashboard] 省级驾驶舱 visibleDeptIds={}", visibleDeptIds);
+        stats.setProvinceCode(null); // 不再基于省份编码过滤
 
-        if (provinceCode != null) {
+        if (!visibleDeptIds.isEmpty()) {
             // 辖区医院总数
-            int regionProjectCount = hospitalMapper.selectCountActiveByProvince(provinceCode);
+            int regionProjectCount = hospitalMapper.selectCountActiveByDeptIds(visibleDeptIds);
             stats.setRegionProjectCount(regionProjectCount);
 
             // 已填报医院数
-            int reportedCount = progressReportMapper.selectReportedHospitalCountByProvince(provinceCode);
+            int reportedCount = progressReportMapper.selectReportedHospitalCountByDeptIds(visibleDeptIds);
             stats.setReportedHospitalCount(reportedCount);
 
             // 待审核任务数量
-            int pendingCount = progressReportMapper.selectProvincePendingCountByProvince(provinceCode);
+            int pendingCount = progressReportMapper.selectProvincePendingCountByDeptIds(visibleDeptIds);
             stats.setPendingReviewCount(pendingCount);
 
-            // 项目类型分布（按省份过滤）
+            // 项目类型分布（按部门过滤）
             List<DashboardStatsVO.NationalStats.ProjectTypeItem> typeItems =
-                    hospitalMapper.selectCountGroupByProjectTypeOfProvince(provinceCode);
+                    hospitalMapper.selectCountGroupByProjectTypeOfDeptIds(visibleDeptIds);
             if (CollUtil.isEmpty(typeItems)) {
                 typeItems = Collections.emptyList();
             }

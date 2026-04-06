@@ -27,11 +27,10 @@ const hospitalList = ref<Hospital[]>([]);
 const hospitalLoading = ref(false);
 const hospitalTotal = ref(0);
 
-async function loadHospitalList(provinceCode?: string) {
+async function loadHospitalList() {
   hospitalLoading.value = true;
   try {
     const data = await getHospitalPage({
-      provinceCode,
       status: 1,
       pageNo: 1,
       pageSize: 20,
@@ -45,15 +44,8 @@ async function loadHospitalList(provinceCode?: string) {
   }
 }
 
-watch(
-  () => props.stats?.provinceStats?.provinceCode,
-  (code) => {
-    if (code) {
-      loadHospitalList(code);
-    }
-  },
-  { immediate: true },
-);
+// 初始化时加载医院列表，数据权限在接口层自动过滤
+loadHospitalList();
 
 const hospitalColumns = [
   { title: '医院名称', dataIndex: 'hospitalName', key: 'hospitalName', ellipsis: true },
@@ -141,7 +133,7 @@ function renderChart(data: ProjectTypeItem[]) {
     <a-row :gutter="20" class="stat-row">
       <a-col :span="8">
         <StatisticCard
-          title="待审核任务"
+          title="辖区医院"
           :value="stats?.provinceStats?.pendingReviewCount || 0"
           icon="ant-design:file-text-outlined"
           color="#409eff"
