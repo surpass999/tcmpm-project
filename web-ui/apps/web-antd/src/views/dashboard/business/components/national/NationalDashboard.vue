@@ -311,10 +311,12 @@ const taskColumns = [
       </a-col>
       <a-col :span="6">
         <StatisticCard
-          title="省级待审核"
+          title="待审核"
           :value="localNationalStats?.acceptedProjectCount ?? 0"
           icon="ant-design:audit-outlined"
           color="#e6a23c"
+          clickable
+          @click="router.push('/progress-report')"
         />
       </a-col>
       <a-col :span="6">

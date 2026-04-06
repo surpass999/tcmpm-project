@@ -59,7 +59,7 @@ public class NationalStatsVO {
     private Integer midtermProjectCount;
 
     /**
-     * 已验收项目数
+     * 待国家局审核记录数（national_report_status = 1）
      */
     private Integer acceptedProjectCount;
 

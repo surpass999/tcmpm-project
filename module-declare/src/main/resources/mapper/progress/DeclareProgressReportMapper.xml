@@ -21,11 +21,11 @@
         WHERE report_status = 'SUBMITTED'
     </select>
 
-    <!-- 统计省级审核中（province_status = 1）的记录数 -->
+    <!-- 统计国家局待审核（national_report_status = 1）的记录数 -->
     <select id="selectProvincePendingCount" resultType="java.lang.Integer">
         SELECT COUNT(*)
         FROM declare_progress_report
-        WHERE province_status = 1
+        WHERE national_report_status = 1
     </select>
 
     <!-- 按省份统计省级审核中（province_status = 1）的记录数 -->
@@ -48,6 +48,7 @@
     <select id="selectNationalSearch" resultType="cn.gemrun.base.module.declare.dal.dataobject.progress.DeclareProgressReportDO">
         SELECT DISTINCT r.*
         FROM declare_progress_report r
+        LEFT JOIN declare_hospital h ON r.hospital_id = h.id
         <if test="req.indicatorGroups != null and req.indicatorGroups.size() > 0">
             <foreach collection="req.indicatorGroups" item="group" index="groupIdx" separator=" ">
                 INNER JOIN (
@@ -93,6 +94,9 @@
         </if>
         <if test="req.nationalReportStatus != null">
             AND r.national_report_status = #{req.nationalReportStatus}
+        </if>
+        <if test="req.projectType != null">
+            AND h.project_type = #{req.projectType}
         </if>
         ORDER BY r.id DESC
     </select>
@@ -233,20 +237,19 @@
                     <when test="cond.fieldType == 'number'">
                         <choose>
                             <when test="cond.operator == 'eq'">
-                                AND JSON_SEARCH(${alias}.value_str, 'one', CAST(#{cond.value} AS CHAR)) IS NOT NULL
-                                AND CAST(JSON_UNQUOTE(JSON_EXTRACT(${alias}.value_str, '$.' + cond.fieldCode)) AS DECIMAL) = CAST(#{cond.value} AS DECIMAL)
+                                AND CAST(JSON_UNQUOTE(JSON_EXTRACT(${alias}.value_str, CONCAT('$.', #{cond.fieldCode}))) AS DECIMAL) = CAST(#{cond.value} AS DECIMAL)
                             </when>
                             <when test="cond.operator == 'gt'">
-                                AND CAST(JSON_UNQUOTE(JSON_EXTRACT(${alias}.value_str, '$.' + cond.fieldCode)) AS DECIMAL) &gt; CAST(#{cond.value} AS DECIMAL)
+                                AND CAST(JSON_UNQUOTE(JSON_EXTRACT(${alias}.value_str, CONCAT('$.', #{cond.fieldCode}))) AS DECIMAL) &gt; CAST(#{cond.value} AS DECIMAL)
                             </when>
                             <when test="cond.operator == 'lt'">
-                                AND CAST(JSON_UNQUOTE(JSON_EXTRACT(${alias}.value_str, '$.' + cond.fieldCode)) AS DECIMAL) &lt; CAST(#{cond.value} AS DECIMAL)
+                                AND CAST(JSON_UNQUOTE(JSON_EXTRACT(${alias}.value_str, CONCAT('$.', #{cond.fieldCode}))) AS DECIMAL) &lt; CAST(#{cond.value} AS DECIMAL)
                             </when>
                             <when test="cond.operator == 'is_empty'">
-                                AND (JSON_EXTRACT(${alias}.value_str, '$.' + cond.fieldCode) IS NULL OR JSON_EXTRACT(${alias}.value_str, '$.' + cond.fieldCode) = 'null')
+                                AND (JSON_EXTRACT(${alias}.value_str, CONCAT('$.', #{cond.fieldCode})) IS NULL OR JSON_EXTRACT(${alias}.value_str, CONCAT('$.', #{cond.fieldCode})) = 'null')
                             </when>
                             <when test="cond.operator == 'is_not_empty'">
-                                AND JSON_EXTRACT(${alias}.value_str, '$.' + cond.fieldCode) IS NOT NULL AND JSON_EXTRACT(${alias}.value_str, '$.' + cond.fieldCode) != 'null'
+                                AND JSON_EXTRACT(${alias}.value_str, CONCAT('$.', #{cond.fieldCode})) IS NOT NULL AND JSON_EXTRACT(${alias}.value_str, CONCAT('$.', #{cond.fieldCode})) != 'null'
                             </when>
                         </choose>
                     </when>
@@ -254,31 +257,31 @@
                         <choose>
                             <when test="cond.operator == 'eq'">AND JSON_SEARCH(${alias}.value_str, 'one', #{cond.value}) IS NOT NULL</when>
                             <when test="cond.operator == 'neq'">AND JSON_SEARCH(${alias}.value_str, 'one', #{cond.value}) IS NULL</when>
-                            <when test="cond.operator == 'is_empty'">AND (JSON_EXTRACT(${alias}.value_str, '$.' + cond.fieldCode) IS NULL OR JSON_EXTRACT(${alias}.value_str, '$.' + cond.fieldCode) = 'null')</when>
-                            <when test="cond.operator == 'is_not_empty'">AND JSON_EXTRACT(${alias}.value_str, '$.' + cond.fieldCode) IS NOT NULL</when>
+                            <when test="cond.operator == 'is_empty'">AND (JSON_EXTRACT(${alias}.value_str, CONCAT('$.', #{cond.fieldCode})) IS NULL OR JSON_EXTRACT(${alias}.value_str, CONCAT('$.', #{cond.fieldCode})) = 'null')</when>
+                            <when test="cond.operator == 'is_not_empty'">AND JSON_EXTRACT(${alias}.value_str, CONCAT('$.', #{cond.fieldCode})) IS NOT NULL</when>
                         </choose>
                     </when>
                     <when test="cond.fieldType == 'text' or cond.fieldType == 'textarea'">
                         <choose>
-                            <when test="cond.operator == 'contains'">AND JSON_UNQUOTE(JSON_EXTRACT(${alias}.value_str, '$.' + cond.fieldCode)) LIKE CONCAT('%', #{cond.value}, '%')</when>
-                            <when test="cond.operator == 'eq'">AND JSON_UNQUOTE(JSON_EXTRACT(${alias}.value_str, '$.' + cond.fieldCode)) = #{cond.value}</when>
-                            <when test="cond.operator == 'is_empty'">AND (JSON_EXTRACT(${alias}.value_str, '$.' + cond.fieldCode) IS NULL OR JSON_EXTRACT(${alias}.value_str, '$.' + cond.fieldCode) = 'null' OR JSON_UNQUOTE(JSON_EXTRACT(${alias}.value_str, '$.' + cond.fieldCode)) = '')</when>
-                            <when test="cond.operator == 'is_not_empty'">AND JSON_UNQUOTE(JSON_EXTRACT(${alias}.value_str, '$.' + cond.fieldCode)) IS NOT NULL AND JSON_UNQUOTE(JSON_EXTRACT(${alias}.value_str, '$.' + cond.fieldCode)) != ''</when>
+                            <when test="cond.operator == 'contains'">AND JSON_UNQUOTE(JSON_EXTRACT(${alias}.value_str, CONCAT('$.', #{cond.fieldCode}))) LIKE CONCAT('%', #{cond.value}, '%')</when>
+                            <when test="cond.operator == 'eq'">AND JSON_UNQUOTE(JSON_EXTRACT(${alias}.value_str, CONCAT('$.', #{cond.fieldCode}))) = #{cond.value}</when>
+                            <when test="cond.operator == 'is_empty'">AND (JSON_EXTRACT(${alias}.value_str, CONCAT('$.', #{cond.fieldCode})) IS NULL OR JSON_EXTRACT(${alias}.value_str, CONCAT('$.', #{cond.fieldCode})) = 'null' OR JSON_UNQUOTE(JSON_EXTRACT(${alias}.value_str, CONCAT('$.', #{cond.fieldCode}))) = '')</when>
+                            <when test="cond.operator == 'is_not_empty'">AND JSON_UNQUOTE(JSON_EXTRACT(${alias}.value_str, CONCAT('$.', #{cond.fieldCode}))) IS NOT NULL AND JSON_UNQUOTE(JSON_EXTRACT(${alias}.value_str, CONCAT('$.', #{cond.fieldCode}))) != ''</when>
                         </choose>
                     </when>
                     <when test="cond.fieldType == 'date'">
                         <choose>
-                            <when test="cond.operator == 'eq'">AND JSON_UNQUOTE(JSON_EXTRACT(${alias}.value_str, '$.' + cond.fieldCode)) = #{cond.value}</when>
-                            <when test="cond.operator == 'gt'">AND JSON_UNQUOTE(JSON_EXTRACT(${alias}.value_str, '$.' + cond.fieldCode)) &gt; #{cond.value}</when>
-                            <when test="cond.operator == 'lt'">AND JSON_UNQUOTE(JSON_EXTRACT(${alias}.value_str, '$.' + cond.fieldCode)) &lt; #{cond.value}</when>
-                            <when test="cond.operator == 'between'">AND JSON_UNQUOTE(JSON_EXTRACT(${alias}.value_str, '$.' + cond.fieldCode)) BETWEEN #{cond.value} AND #{cond.value2}</when>
+                            <when test="cond.operator == 'eq'">AND JSON_UNQUOTE(JSON_EXTRACT(${alias}.value_str, CONCAT('$.', #{cond.fieldCode}))) = #{cond.value}</when>
+                            <when test="cond.operator == 'gt'">AND JSON_UNQUOTE(JSON_EXTRACT(${alias}.value_str, CONCAT('$.', #{cond.fieldCode}))) &gt; #{cond.value}</when>
+                            <when test="cond.operator == 'lt'">AND JSON_UNQUOTE(JSON_EXTRACT(${alias}.value_str, CONCAT('$.', #{cond.fieldCode}))) &lt; #{cond.value}</when>
+                            <when test="cond.operator == 'between'">AND JSON_UNQUOTE(JSON_EXTRACT(${alias}.value_str, CONCAT('$.', #{cond.fieldCode}))) BETWEEN #{cond.value} AND #{cond.value2}</when>
                         </choose>
                     </when>
                     <when test="cond.fieldType == 'dateRange'">
                         <choose>
                             <when test="cond.operator == 'overlaps'">
-                                AND #{cond.value} &lt;= JSON_UNQUOTE(JSON_EXTRACT(JSON_EXTRACT(${alias}.value_str, '$.' + cond.fieldCode), '$[1]'))
-                                AND #{cond.value2} &gt;= JSON_UNQUOTE(JSON_EXTRACT(JSON_EXTRACT(${alias}.value_str, '$.' + cond.fieldCode), '$[0]'))
+                                AND #{cond.value} &lt;= JSON_UNQUOTE(JSON_EXTRACT(JSON_EXTRACT(${alias}.value_str, CONCAT('$.', #{cond.fieldCode})), '$[1]'))
+                                AND #{cond.value2} &gt;= JSON_UNQUOTE(JSON_EXTRACT(JSON_EXTRACT(${alias}.value_str, CONCAT('$.', #{cond.fieldCode})), '$[0]'))
                             </when>
                         </choose>
                     </when>
