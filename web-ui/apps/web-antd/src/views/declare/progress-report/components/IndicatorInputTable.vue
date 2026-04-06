@@ -18,7 +18,7 @@
         <div
           v-for="indicator in group.indicators"
           :key="indicator.id"
-          :data-indicator-id="indicator.id"
+          :data-indicator-id="'in_' + indicator.id"
           :data-indicator-code="indicator.indicatorCode"
           class="indicator-row"
           :class="{ 'indicator-row--switch': indicator.valueType === 3 }"
@@ -389,7 +389,7 @@
                         <span v-else class="text-gray-400 text-sm">不支持的类型: {{ field.fieldType }}</span>
                         <!-- 统一错误提示 -->
                         <div
-                          v-if="getContainerFieldError(indicator.indicatorCode, entryIndex, field.fieldCode)"
+                          v-if="getContainerFieldError(indicator.indicatorCode, entryIndex, field.fieldCode) && containerFieldDirty[`${indicator.indicatorCode}:${entryIndex}:${field.fieldCode}`]"
                           class="indicator-error"
                         >
                           {{ getContainerFieldError(indicator.indicatorCode, entryIndex, field.fieldCode) }}
@@ -671,7 +671,7 @@
                         <span v-else class="text-gray-400 text-sm">不支持的类型: {{ field.fieldType }}</span>
                         <!-- 统一错误提示 -->
                         <div
-                          v-if="getContainerFieldError(indicator.indicatorCode, entryIndex, field.fieldCode)"
+                          v-if="getContainerFieldError(indicator.indicatorCode, entryIndex, field.fieldCode) && containerFieldDirty[`${indicator.indicatorCode}:${entryIndex}:${field.fieldCode}`]"
                           class="indicator-error"
                         >
                           {{ getContainerFieldError(indicator.indicatorCode, entryIndex, field.fieldCode) }}
@@ -702,7 +702,7 @@
 
               <!-- 错误提示：必填/精度/格式/范围错误 -->
               <div
-                v-if="indicator.valueType !== 12 && getTopLevelError(indicator) && topLevelFieldDirty[indicator.indicatorCode]"
+                v-if="indicator.valueType !== 12 && indicator.id && getTopLevelError(indicator) && topLevelFieldDirty['in_' + indicator.id]"
                 class="indicator-error"
               >
                 {{ getTopLevelError(indicator) }}
@@ -862,12 +862,12 @@ const containerValues = reactive<Record<string, any[]>>({});
 /** 容器字段脏标记 Map（key = `${code}:${entryIndex}:${fieldCode}`，用户交互后才显示错误） */
 const containerFieldDirty = reactive<Record<string, boolean>>({});
 
-/** 顶级指标脏标记 Map（key = indicatorCode，用户交互后才显示错误） */
+/** 顶级指标脏标记 Map（key = 'in_' + indicator.id，全局唯一，避免跨 group 同 code 互相覆盖） */
 const topLevelFieldDirty = reactive<Record<string, boolean>>({});
 
-/** 标记顶级指标为脏 */
-function markTopLevelDirty(indicatorCode: string) {
-  topLevelFieldDirty[indicatorCode] = true;
+/** 标记顶级指标为脏（key = 'in_' + indicator.id，全局唯一，避免跨 group 同 code 互相覆盖） */
+function markTopLevelDirty(indicatorId: number | undefined) {
+  if (indicatorId !== undefined) topLevelFieldDirty['in_' + indicatorId] = true;
 }
 
 /** 获取动态容器条目数组（返回空数组兜底，避免模板中 TS 报错） */
@@ -1696,15 +1696,15 @@ function validateAll(indicatorsToValidate: DeclareIndicatorApi.Indicator[]): Val
   for (const error of errors) {
     if (error.containerFieldKey) {
       containerFieldDirty[error.containerFieldKey] = true;
-    } else {
-      topLevelFieldDirty[error.indicatorCode] = true;
+    } else if (error.indicatorId !== undefined) {
+      topLevelFieldDirty['in_' + error.indicatorId] = true;
     }
   }
 
   return errors;
 }
 
-/** 逻辑规则校验（多指标时每个涉及指标各返回一个 ValidationError） */
+/** 逻辑规则校验（遍历所有指标，检查各自 logicRule） */
 function validateLogicRules(allIndicators: DeclareIndicatorApi.Indicator[]): ValidationError[] {
   const errors: ValidationError[] = [];
 
@@ -1724,31 +1724,31 @@ function validateLogicRules(allIndicators: DeclareIndicatorApi.Indicator[]): Val
     const rules = parseLogicRule(indicator.logicRule);
     if (rules.length === 0) continue;
 
-    const involvedCodes = new Set<string>();
-    for (const m of indicator.logicRule.matchAll(/\[([^\]]+)\]/g)) {
-      involvedCodes.add(m[1]!.trim());
-    }
-
     const results = validateJointRule(rules as any, codeValueMap, { triggerTiming: 'FILL' });
     const errMsg = buildLogicRuleMsg(indicator.logicRule, allIndicators, codeValueMap);
 
     if (results.length === 0) {
-      // 校验通过，清除涉及的逻辑规则错误
+      // 校验通过：清除所有涉及指标的旧 logicRule 错误
+      // 注意：一个 code 在不同 group 可能重复存在，必须遍历所有匹配 code 的指标，
+      //      用精确的 id key 清除错误，避免跨组错误残留或错误清除失败
+      const involvedCodes = new Set<string>();
+      for (const m of indicator.logicRule.matchAll(/\[([^\]]+)\]/g)) {
+        involvedCodes.add(m[1]!.trim());
+      }
       for (const code of involvedCodes) {
-        const ind = codeToIndicator.get(code);
-        if (ind?.id !== undefined) delete logicRuleErrors[String(ind.id)];
+        for (const ind of allIndicators) {
+          if (ind.indicatorCode === code && ind.id !== undefined) {
+            delete logicRuleErrors[String(ind.id)];
+          }
+        }
         delete logicRuleErrors[code];
       }
       continue;
     }
 
-    // 校验失败，设置逻辑规则错误
-    for (const code of involvedCodes) {
-      const ind = codeToIndicator.get(code);
-      errors.push({ indicatorId: ind?.id, indicatorCode: code, message: errMsg });
-      if (ind?.id !== undefined) logicRuleErrors[String(ind.id)] = errMsg;
-      logicRuleErrors[code] = errMsg;
-    }
+    // 校验失败：设置当前指标的 logicRule 错误（只用 id key，避免跨组 code 冲突）
+    errors.push({ indicatorId: indicator.id, indicatorCode: indicator.indicatorCode, message: errMsg });
+    if (indicator.id !== undefined) logicRuleErrors[String(indicator.id)] = errMsg;
   }
 
   return errors;
@@ -1762,14 +1762,14 @@ function validateLogicRuleForBlur(changedIndicator: DeclareIndicatorApi.Indicato
   const allIndicators = indicators.value;
   const changedCode = changedIndicator.indicatorCode;
 
-  const codeValueMap: Record<string, any> = {};
-  for (const ind of allIndicators) {
-    codeValueMap[ind.indicatorCode] = formValues[ind.indicatorCode];
-  }
-
   const codeToIndicator = new Map<string, DeclareIndicatorApi.Indicator>();
   for (const ind of allIndicators) {
     codeToIndicator.set(ind.indicatorCode, ind);
+  }
+
+  const codeValueMap: Record<string, any> = {};
+  for (const ind of allIndicators) {
+    codeValueMap[ind.indicatorCode] = formValues[ind.indicatorCode];
   }
 
   for (const indicator of allIndicators) {
@@ -1781,69 +1781,64 @@ function validateLogicRuleForBlur(changedIndicator: DeclareIndicatorApi.Indicato
     }
     if (!involvedCodes.has(changedCode)) continue;
 
-    // 清除旧的逻辑规则错误
+    // 清除所有涉及指标的旧 logicRule 错误（旧状态）
     for (const code of involvedCodes) {
-      const ind = codeToIndicator.get(code);
-      if (ind?.id !== undefined) delete logicRuleErrors[String(ind.id)];
+      // 遍历所有匹配 code 的指标，精确清除对应 id 的错误，避免跨组残留
+      for (const ind of allIndicators) {
+        if (ind.indicatorCode === code && ind.id !== undefined) {
+          delete logicRuleErrors[String(ind.id)];
+        }
+      }
       delete logicRuleErrors[code];
     }
+    // 标记当前指标为脏（由 handleNumberBlur/onIndicatorChange 已标记，但 validateLogicRuleForBlur 可能在首次渲染后调用，提前标记）
+    markTopLevelDirty(indicator.id);
 
     const rules = parseLogicRule(indicator.logicRule);
     const results = validateJointRule(rules as any, codeValueMap, { triggerTiming: 'FILL' });
     if (results.length === 0) continue;
 
+    // 校验失败：设置当前拥有 logicRule 的指标的 logicRule 错误（只用 id key，避免跨组 code 冲突）
     const errMsg = buildLogicRuleMsg(indicator.logicRule, allIndicators, codeValueMap);
-    for (const code of involvedCodes) {
-      const ind = codeToIndicator.get(code);
-      if (ind?.id !== undefined) logicRuleErrors[String(ind.id)] = errMsg;
-      logicRuleErrors[code] = errMsg;
-    }
+    if (indicator.id !== undefined) logicRuleErrors[String(indicator.id)] = errMsg;
   }
 }
 
 /** 获取容器字段行内错误
- * 优先级：0. 容器级 logicRule > 1. 字段级 logicRuleErrors > 2. jointRuleErrors > 3. containerFieldErrors
- * 说明：
- * - 容器级 logicRule：容器指标本身的 logicRule（如 `sales >= 100`），引用容器内字段，错误存储为 logicRuleErrors[containerCode]
- * - 字段级 logicRuleErrors：容器指标的 logicRule 引用了其他顶级指标的字段，错误存储为 logicRuleErrors[code]
- * - jointRuleErrors：validateAll 同步的字段校验错误
- * - containerFieldErrors：computed 自动计算的必填/格式错误
+ * 优先级：1. 字段级 logicRuleErrors > 2. containerFieldDirty 脏标记 > 3. containerFieldErrors
+ * 注意：容器指标本身的 logicRule 错误不在此处返回（否则会导致所有字段行同时显示同一个错误，
+ *       即使该行已填写有效值）。容器级 logicRule 错误应由容器头部单独展示，不干扰字段级错误。
  */
 function getContainerFieldError(containerCode: string, entryIndex: number, fieldCode: string): string | undefined {
   const key = `${containerCode}:${entryIndex}:${fieldCode}`;
 
-  // 1. 容器指标本身的 logicRule 失败时，所有字段行都显示该错误
-  if (logicRuleErrors[containerCode]) return logicRuleErrors[containerCode];
-
-  // 2. 字段级 logicRule 错误
+  // 1. 字段级 logicRule 错误（精确匹配到 entry + field）
   if (logicRuleErrors[key]) return logicRuleErrors[key];
 
-  // 3. 只有脏标记为 true 时才返回 computed 计算的错误（避免页面加载时误显示）
+  // 2. 只有脏标记为 true 时才返回 computed 计算的错误（避免页面加载时误显示）
   if (!containerFieldDirty[key]) return undefined;
 
-  // 4. 返回实时 computed 错误（必填/格式/精度）
+  // 3. 返回实时 computed 错误（必填/格式/精度）
   return containerFieldErrors.value[key];
 }
 
-/** 获取顶级指标行内错误（优先级：logicRuleErrors > jointRuleErrors > indicatorErrors） */
+/** 获取顶级指标行内错误（优先级：logicRuleErrors > jointRuleErrors > indicatorErrors）
+ * 优先用 indicator.id 作为 key（全局唯一，避免跨 group 同 code 互相覆盖），
+ * 后备用 indicatorCode（code 可能重复，但与 id 共存时以 id 为准）
+ */
 function getTopLevelError(indicator: DeclareIndicatorApi.Indicator): string | undefined {
-  const code = indicator.indicatorCode;
-  // 1. 优先：逻辑规则错误（validateLogicRuleForBlur / validateLogicRules 实时设置的）
-  if (logicRuleErrors[code]) return logicRuleErrors[code];
-  if (indicator.id && logicRuleErrors[String(indicator.id)]) return logicRuleErrors[String(indicator.id)];
-  // 2. 其次：validateAll 同步到 jointRuleErrors（保存时统一反馈）
-  if (jointRuleErrors[code]) return jointRuleErrors[code];
-  if (indicator.id && jointRuleErrors[String(indicator.id)]) return jointRuleErrors[String(indicator.id)];
-  // 3. 兜底：实时 computed 错误（必填/精度/范围，用户交互后即时反馈）
-  const errs = indicatorErrors.value;
-  if (errs[code]) return errs[code];
-  if (indicator.id && errs[String(indicator.id)]) return errs[String(indicator.id)];
+  // 全部用 id key（全局唯一），避免跨 group 同 code 互相覆盖
+  if (indicator.id === undefined) return undefined;
+  const idKey = String(indicator.id);
+  if (logicRuleErrors[idKey]) return logicRuleErrors[idKey];
+  if (jointRuleErrors[idKey]) return jointRuleErrors[idKey];
+  if (indicatorErrors.value[idKey]) return indicatorErrors.value[idKey];
   return undefined;
 }
 
 /** 数字类型 blur 事件 */
 function handleNumberBlur(indicator: DeclareIndicatorApi.Indicator, _event: Event) {
-  markTopLevelDirty(indicator.indicatorCode);
+  markTopLevelDirty(indicator.id);
   nextTick(() => {
     recalculateComputedIndicators();
     validateLogicRuleForBlur(indicator);
@@ -1958,7 +1953,7 @@ function parseStoredFileList(value: string | undefined): UploadFile[] {
 
 /** 指标值变化处理 */
 function onIndicatorChange(indicator: DeclareIndicatorApi.Indicator) {
-  markTopLevelDirty(indicator.indicatorCode);
+  markTopLevelDirty(indicator.id);
 
   // 如果是动态容器，将子字段值同步到 formValues
   if (indicator.valueType === 12) {
@@ -1975,15 +1970,15 @@ function onIndicatorChange(indicator: DeclareIndicatorApi.Indicator) {
   });
 }
 
-/** 容器字段失焦验证 */
+/** 容器字段失焦验证：标记脏 + 触发容器逻辑规则 + 触发所有涉及指标的联合规则 */
 function onFieldBlur(indicator: DeclareIndicatorApi.Indicator, entryIndex: number, field: DynamicField) {
   const key = `${indicator.indicatorCode}:${entryIndex}:${field.fieldCode}`;
   // 标记为脏
   containerFieldDirty[key] = true;
-  // 触发逻辑规则校验
+  // 触发逻辑规则校验：validateLogicRuleForBlur 会遍历所有涉及当前指标的 logicRule
   nextTick(() => {
     recalculateComputedIndicators();
-    validateLogicRuleForIndicator(indicator);
+    validateLogicRuleForBlur(indicator);
   });
 }
 
@@ -1993,45 +1988,8 @@ function onContainerFieldChange(indicator: DeclareIndicatorApi.Indicator, entryI
   containerFieldDirty[key] = true;
   nextTick(() => {
     recalculateComputedIndicators();
-    validateLogicRuleForIndicator(indicator);
+    validateLogicRuleForBlur(indicator);
   });
-}
-
-/** 校验单个指标的逻辑规则（实时用） */
-function validateLogicRuleForIndicator(indicator: DeclareIndicatorApi.Indicator) {
-  if (!indicator.logicRule?.trim()) return;
-
-  const codeValueMap: Record<string, any> = {};
-  for (const ind of indicators.value) {
-    codeValueMap[ind.indicatorCode] = formValues[ind.indicatorCode];
-  }
-
-  const rules = parseLogicRule(indicator.logicRule);
-  if (rules.length === 0) return;
-
-  const involvedCodes = new Set<string>();
-  for (const m of indicator.logicRule.matchAll(/\[([^\]]+)\]/g)) {
-    involvedCodes.add(m[1]!.trim());
-  }
-
-  const results = validateJointRule(rules as any, codeValueMap, { triggerTiming: 'FILL' });
-
-  if (results.length === 0) {
-    // 校验通过，清除涉及的逻辑规则错误
-    for (const code of involvedCodes) {
-      const ind = indicators.value.find(i => i.indicatorCode === code);
-      if (ind?.id !== undefined) delete logicRuleErrors[String(ind.id)];
-      delete logicRuleErrors[code];
-    }
-  } else {
-    // 校验失败，设置逻辑规则错误
-    const errMsg = buildLogicRuleMsg(indicator.logicRule, indicators.value, codeValueMap);
-    for (const code of involvedCodes) {
-      const ind = indicators.value.find(i => i.indicatorCode === code);
-      if (ind?.id !== undefined) logicRuleErrors[String(ind.id)] = errMsg;
-      logicRuleErrors[code] = errMsg;
-    }
-  }
 }
 
 /** 顶级指标错误（computed 直接计算，不存储） */
@@ -2045,9 +2003,12 @@ const indicatorErrors = computed(() => {
     const isEmpty = value === undefined || value === null || value === '';
     const isComputed = isComputedIndicator(ind);
 
+    // 优先用 id key（全局唯一，避免跨 group 同 code 互相覆盖）；无 id 时用 code key兜底
+    const idKey = ind.id !== undefined ? String(ind.id) : code;
+
     // 1. 必填校验（自动计算指标跳过，由公式决定值）
     if (ind.isRequired && isEmpty && !isComputed) {
-      errors[code] = '此项为必填';
+      errors[idKey] = '此项为必填';
       continue;
     }
 
@@ -2057,7 +2018,7 @@ const indicatorErrors = computed(() => {
       if (ind.valueType === 2) {
         const trimmed = String(value).trim();
         if (/^-?\d+(\.\d+)?$/.test(trimmed)) {
-          errors[code] = '不能输入纯数字';
+          errors[idKey] = '不能输入纯数字';
           continue;
         }
       }
@@ -2065,20 +2026,20 @@ const indicatorErrors = computed(() => {
       if (ind.valueType === 1) {
         const numVal = Number(value);
         if (isNaN(numVal)) {
-          errors[code] = '请输入有效数字';
+          errors[idKey] = '请输入有效数字';
           continue;
         }
         // 精度校验
         const cfg = parseExtraConfig(ind.extraConfig);
         const precErr = checkPrecision(numVal, cfg.precision);
         if (precErr) {
-          errors[code] = precErr;
+          errors[idKey] = precErr;
           continue;
         }
         // 范围校验
         const rangeErr = checkRange(numVal, ind.minValue ?? null, ind.maxValue ?? null);
         if (rangeErr) {
-          errors[code] = rangeErr;
+          errors[idKey] = rangeErr;
         }
       }
     }
@@ -2345,7 +2306,7 @@ function recalculateComputedIndicators() {
     }
     // 标记所有计算指标为脏，使范围错误能正确显示
     for (const ind of computedOnes) {
-      markTopLevelDirty(ind.indicatorCode);
+      markTopLevelDirty(ind.id);
     }
   });
 }
@@ -2800,14 +2761,15 @@ function getAllIndicatorValues(): Array<{
   return result;
 }
 
-/** 同步动态容器值到 formValues */
-function syncContainerValuesToForm(formValues: Record<string, any>) {
+/** 同步动态容器值到 formValues（直接使用模块级 formValues reactive） */
+function syncContainerValuesToForm() {
   for (const ind of indicators.value) {
     if (ind.valueType === 12) {
       formValues[ind.indicatorCode] = JSON.stringify(containerValues[ind.indicatorCode] || []);
     }
   }
 }
+
 
 defineExpose({
   getContainerValues,

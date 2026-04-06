@@ -40,9 +40,6 @@ const summaryModalRef = ref<InstanceType<typeof ValidationSummaryModal> | null>(
   null,
 );
 
-/** 动态容器值缓存（用于保存时传递到 IndicatorInputTable） */
-const containerValuesData = ref<Record<string, string>>({});
-
 /** 医院信息 */
 const hospitalInfo = ref<DeclareHospitalApi.Hospital | null>(null);
 
@@ -308,14 +305,10 @@ async function handleSaveDraft() {
   modalApi.lock();
   saving.value = true;
   try {
-    // 1. 同步动态容器值
-    if (indicatorTableRef.value) {
-      const containerVals = indicatorTableRef.value.getContainerValues();
-      Object.assign(containerValuesData.value, containerVals);
-      isFormDirty.value = true;
-    }
+    // 1. 同步动态容器值到 formValues（确保 getAllIndicatorValues 能拿到值）
+    indicatorTableRef.value?.syncContainerValuesToForm?.();
 
-    // 2. 触发自动计算（计算指标依赖真实值）
+    // 2. 触发自动计算
     indicatorTableRef.value?.recalculateComputedIndicators?.();
 
     // 3. 【不做验证】草稿可随时保存，无需校验必填
@@ -366,12 +359,8 @@ async function handleSave() {
   modalApi.lock();
   saving.value = true;
   try {
-    // 1. 同步动态容器值
-    if (indicatorTableRef.value) {
-      const containerVals = indicatorTableRef.value.getContainerValues();
-      Object.assign(containerValuesData.value, containerVals);
-      isFormDirty.value = true;
-    }
+    // 1. 同步动态容器值到 formValues（确保 getAllIndicatorValues 能拿到值）
+    indicatorTableRef.value?.syncContainerValuesToForm?.();
 
     // 2. 【验证必填指标】必须全部通过才能保存
     if (indicatorTableRef.value) {

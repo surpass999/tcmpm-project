@@ -83,19 +83,6 @@ const YEAR_OPTIONS = [
   { label: '2024', value: 2024 },
 ];
 
-/** 动态容器子字段类型 */
-const FIELD_TYPES = [
-  { label: '数字', value: 'number' },
-  { label: '文本', value: 'text' },
-  { label: '长文本', value: 'textarea' },
-  { label: '单选', value: 'radio' },
-  { label: '下拉', value: 'select' },
-  { label: '多选', value: 'checkbox' },
-  { label: '多选下拉', value: 'multiSelect' },
-  { label: '日期', value: 'date' },
-  { label: '日期区间', value: 'dateRange' },
-];
-
 // ========== 上次搜索状态（用于再次打开时回显） ==========
 const lastSearchParams = ref<NationalSearchParams | null>(null);
 
@@ -201,6 +188,7 @@ function parseContainerFields(optionsStr: string): Array<{ label: string; value:
       return parsed.fields.map((f: any) => ({
         label: `${f.fieldLabel || f.fieldCode} (${f.fieldType})`,
         value: f.fieldCode,
+        fieldType: f.fieldType,
       }));
     }
     // 旧数组格式（兼容）
@@ -208,6 +196,7 @@ function parseContainerFields(optionsStr: string): Array<{ label: string; value:
       return parsed.map((f: any) => ({
         label: `${f.fieldLabel || f.fieldCode} (${f.fieldType})`,
         value: f.fieldCode,
+        fieldType: f.fieldType,
       }));
     }
   } catch { /* ignore */ }
@@ -277,24 +266,6 @@ function onIndicatorChange(groupIndex: number, condIndex: number, indicatorCode:
         cond.operator = ops[0].value;
       }
     }
-  }
-}
-
-function onFieldTypeChange(groupIndex: number, condIndex: number, fieldType: string) {
-  const group = indicatorGroups.value[groupIndex];
-  if (!group) return;
-  const cond = group.conditions[condIndex];
-  if (!cond) return;
-
-  cond.fieldType = fieldType;
-  cond.operator = '';
-  cond.value = '';
-  cond.value2 = '';
-
-  // 设置默认值操作符
-  const ops = getOperatorsByFieldType(fieldType);
-  if (ops.length > 0) {
-    cond.operator = ops[0].value;
   }
 }
 
@@ -608,15 +579,6 @@ defineExpose({ open });
                     :options="getContainerFieldOptions(cond.indicatorOptions || '')"
                     allow-clear
                     @change="(val: string) => onContainerFieldChange(gIdx, cIdx, val)"
-                  />
-
-                  <a-select
-                    v-if="cond.fieldCode"
-                    v-model:value="cond.fieldType"
-                    placeholder="子字段类型"
-                    :options="FIELD_TYPES"
-                    class="field-type-select"
-                    @change="(val: string) => onFieldTypeChange(gIdx, cIdx, val)"
                   />
                 </template>
 
