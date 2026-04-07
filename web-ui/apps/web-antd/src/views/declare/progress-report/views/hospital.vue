@@ -197,6 +197,7 @@ async function handleSingleReport(row: DeclareProgressReport) {
 function handleViewApprovalDetail(row: DeclareProgressReport) {
   approvalDetailRef.value?.openWithData({
     processInstanceId: row.hospitalProcessInstanceId,
+    hospitalProcessInstanceId: row.hospitalProcessInstanceId,
     reportId: row.id,
     hospitalId: row.hospitalId,
     deptId: row.deptId,

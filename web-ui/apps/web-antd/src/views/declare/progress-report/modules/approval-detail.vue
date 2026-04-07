@@ -164,7 +164,7 @@ const currentHospitalId = computed(() => Number(userStore.userInfo?.deptId) || 0
 const canSubmitAudit = computed(
   () =>
     payload.value?.deptId === currentHospitalId.value
-    && payload.value?.hospitalProcessInstanceId === null
+    && (payload.value?.hospitalProcessInstanceId === null || payload.value?.hospitalProcessInstanceId === '')
     && payload.value?.reportStatus === 'SAVED',
 );
 
@@ -303,14 +303,8 @@ async function loadAllData() {
     try {
       reportDetail.value = await getProgressReport(payload.value!.reportId);
       // 同步最新状态，使 canSubmitAudit 等 computed 能正确响应
-      if (reportDetail.value) {
-        if (reportDetail.value.reportStatus) {
-          payload.value!.reportStatus = reportDetail.value.reportStatus;
-        }
-        // 同步 BPM 流程实例ID（驳回后重新提交需以最新值为准）
-        if (reportDetail.value.hospitalProcessInstanceId !== undefined) {
-          payload.value!.hospitalProcessInstanceId = reportDetail.value.hospitalProcessInstanceId;
-        }
+      if (reportDetail.value?.reportStatus) {
+        payload.value!.reportStatus = reportDetail.value.reportStatus;
       }
     } catch (e) {
       console.warn('[approval-detail] 加载报告详情失败:', e);
@@ -1063,7 +1057,7 @@ defineExpose({
           <div v-else class="empty-text">暂无审核记录</div>
         </div>
       </div>
-
+     
       <!-- 提交审核按钮：当前用户所在医院 && 无 BPM 流程 && 状态为 SAVED -->
       <div v-if="canSubmitAudit && !loading" class="action-buttons">
         <a-button type="primary" class="action-btn" @click="handleSubmitAudit">
@@ -1072,7 +1066,7 @@ defineExpose({
         </a-button>
       </div>
       <!-- 审批中/审批完成：显示 BPM 工作流操作按钮 -->
-      <div v-else-if="availableActions.length && payload?.reportStatus === 'SAVED'" class="action-buttons">
+      <div v-else-if="availableActions.length" class="action-buttons">
         <ActionButton
           :business-type="BUSINESS_TYPE"
           :business-id="payload?.reportId ?? 0"

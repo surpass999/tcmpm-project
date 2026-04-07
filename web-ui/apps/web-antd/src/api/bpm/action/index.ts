@@ -128,6 +128,7 @@ export async function getAvailableActionsBatch(businessType: string, businessIds
           bizStatus: setting.bizStatus,
           vars: {
             reasonRequired: todoTask.reasonRequire,
+            nodeType: todoTask.nodeType,
             rectifyProcessDefinitionKey: setting.rectifyProcessDefinitionKey,
           },
         }));

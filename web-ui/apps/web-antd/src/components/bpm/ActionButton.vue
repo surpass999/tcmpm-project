@@ -3,7 +3,7 @@
       <template v-for="action in availableActions" :key="action.key">
         <!-- 退回按钮：发起节点不显示退回按钮 -->
         <a-button
-          v-if="isReturnAction(action) && !action.vars?.isStartNode"
+          v-if="isReturnAction(action) && action.vars?.nodeType !== 10"
           :type="getActionType(action.key)"
           @click="handleActionClick(action)"
         >
@@ -68,8 +68,8 @@
       reasonRequired?: boolean;
       expertMin?: number;
       expertMax?: number;
-      isReturned?: boolean;
-      isStartNode?: boolean;
+      /** 节点类型：10 = 发起人节点 */
+      nodeType?: number;
       backStrategy?: string;
       [key: string]: any;
     };
@@ -141,8 +141,8 @@ function isReturnAction(action: BpmAction): boolean {
     const vars = action.vars || {};
     const key = action.key;
 
-    // 退回状态或发起节点：submit 改为"重新提交"
-    if ((vars.isReturned || vars.isStartNode) && (key === 'submit' || key === 'resubmit')) {
+    // 发起人节点：submit 改为"重新提交"
+    if (vars.nodeType === 10 && (key === 'submit' || key === 'resubmit')) {
       return '重新提交';
     }
 
@@ -172,7 +172,13 @@ function isReturnAction(action: BpmAction): boolean {
     currentAction.value = action;
     actionForm.value.reason = '';
 
-    // 如果需要填写理由，打开弹窗
+    // 发起人节点提交：强制填写审批留言（驳回后重新提交场景）
+    if (vars.nodeType === 10) {
+      actionModalVisible.value = true;
+      return;
+    }
+
+    // 其他操作：按 BPM 配置决定是否需要填写理由
     if (vars.reason || vars.reasonRequired) {
       actionModalVisible.value = true;
       return;
