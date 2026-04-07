@@ -190,6 +190,15 @@ async function handleSubmitAudit() {
         message.warning('请输入审核人姓名');
         return false;
       }
+      const trimmed = auditUserName.trim();
+      if (!/^[\u4e00-\u9fa5·•.·]+$/u.test(trimmed) && !/^[a-zA-Z\s·]+$/.test(trimmed)) {
+        message.warning('审核人姓名格式不正确，请输入真实姓名');
+        return false;
+      }
+      if (trimmed.length < 2 || trimmed.length > 20) {
+        message.warning('审核人姓名长度应在2-20个字符之间');
+        return false;
+      }
       const hideLoading = message.loading({ content: '提交中...', duration: 0 });
       try {
         await submitProgressReport(payload.value!.reportId, auditUserName);

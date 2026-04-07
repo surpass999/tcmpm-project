@@ -2,7 +2,7 @@
 import type { DeclareProgressReport } from '#/api/declare/progress-report';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 
-import { computed, h, nextTick, onMounted, ref } from 'vue';
+import { computed, onActivated , h, nextTick, onMounted, ref } from 'vue';
 
 import { confirm, Page, prompt, useVbenModal } from '@vben/common-ui';
 import { DICT_TYPE } from '@vben/constants';
@@ -57,6 +57,11 @@ const hospitalId = computed(() => Number(userStore.userInfo?.deptId) || 0);
 
 const canCreate = ref(false);
 
+onActivated(() => {
+  console.log('onActivated');
+  handleRefresh(); // 重新加载列表 + 窗口状态
+});
+
 onMounted(async () => {
   if (hospitalId.value) {
     try {
@@ -101,6 +106,15 @@ async function handleSubmit(row: DeclareProgressReport) {
       const auditUserName = scope.value as string;
       if (!auditUserName?.trim()) {
         message.warning('请输入审核人姓名');
+        return false;
+      }
+      const trimmed = auditUserName.trim();
+      if (!/^[\u4e00-\u9fa5·•.·]+$/u.test(trimmed) && !/^[a-zA-Z\s·]+$/.test(trimmed)) {
+        message.warning('审核人姓名格式不正确，请输入真实姓名');
+        return false;
+      }
+      if (trimmed.length < 2 || trimmed.length > 20) {
+        message.warning('审核人姓名长度应在2-20个字符之间');
         return false;
       }
       const hideLoading = message.loading({ content: '提交中...', duration: 0 });

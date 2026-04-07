@@ -2,7 +2,7 @@
 import type { DeclareProgressReport, NationalSearchParams } from '#/api/declare/progress-report';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 
-import { computed, nextTick, ref } from 'vue';
+import { computed, onActivated , nextTick, ref } from 'vue';
 
 import { Page, useVbenModal } from '@vben/common-ui';
 import { DICT_TYPE } from '@vben/constants';
@@ -60,6 +60,11 @@ const listBpmLoading = ref(false);
 const listBpmRow = ref<DeclareProgressReport | null>(null);
 const listBpmCurrentAction = ref<any>(null);
 const listBpmReason = ref('');
+
+onActivated(() => {
+  console.log('onActivated');
+  handleRefresh(); // 重新加载列表 + 窗口状态
+});
 
 /** 高级搜索状态 */
 const isAdvancedSearchMode = ref(false);
@@ -524,13 +529,13 @@ const [Grid, gridApi] = useVbenVxeGrid({
       </a-form>
     </a-modal>
 
-    <Tabs v-model:activeKey="activeKey" @change="onTabChange" class="mb-4">
+    <!-- <Tabs v-model:activeKey="activeKey" @change="onTabChange" class="mb-4">
       <TabPane key="all" tab="全部记录" />
       <TabPane key="reported" tab="已上报" />
       <TabPane key="unreported" tab="待审核" />
-    </Tabs>
+    </Tabs> -->
 
-    <Grid table-title="进度填报列表">
+    <Grid table-title="审核列表">
       <!-- 与普通搜索同一行：在「搜索」后、「收起」前（Form 的 expand-before 插槽） -->
       <template #form-expand-before>
         <span class="advanced-search-form-actions">

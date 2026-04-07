@@ -131,7 +131,7 @@ function renderChart(data: ProjectTypeItem[]) {
   <div class="province-dashboard">
     <!-- 统计卡片（3张） -->
     <a-row :gutter="20" class="stat-row">
-      <a-col :span="8">
+      <!-- <a-col :span="8">
         <StatisticCard
           title="辖区医院"
           :value="stats?.provinceStats?.pendingReviewCount || 0"
@@ -140,8 +140,8 @@ function renderChart(data: ProjectTypeItem[]) {
           clickable
           @click="router.push('/progress-report')"
         />
-      </a-col>
-      <a-col :span="8">
+      </a-col> -->
+      <a-col :span="12">
         <StatisticCard
           title="辖区项目"
           :value="stats?.provinceStats?.regionProjectCount || 0"
@@ -151,7 +151,7 @@ function renderChart(data: ProjectTypeItem[]) {
           @click="router.push('/progress-report')"
         />
       </a-col>
-      <a-col :span="8">
+      <a-col :span="12">
         <StatisticCard
           title="已填报数"
           :value="stats?.provinceStats?.reportedHospitalCount || 0"
@@ -167,7 +167,7 @@ function renderChart(data: ProjectTypeItem[]) {
     <div class="hospital-list-panel">
       <div class="panel-header">
         <h3>辖区医院</h3>
-        <a-button type="link" @click="emit('go-to-project-list')">查看全部</a-button>
+        <!-- <a-button type="link" @click="emit('go-to-project-list')">查看全部</a-button> -->
       </div>
       <a-table
         :columns="hospitalColumns"
@@ -192,12 +192,12 @@ function renderChart(data: ProjectTypeItem[]) {
     </div>
 
     <!-- 辖区项目分型统计 -->
-    <div class="type-chart-panel">
+    <!-- <div class="type-chart-panel">
       <div class="panel-header">
         <h3>辖区项目分型统计</h3>
       </div>
       <EchartsUI ref="chartRef" :style="{ height: '300px' }" />
-    </div>
+    </div> -->
   </div>
 </template>
 

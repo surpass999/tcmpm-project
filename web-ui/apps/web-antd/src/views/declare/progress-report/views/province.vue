@@ -2,7 +2,7 @@
 import type { DeclareProgressReport } from '#/api/declare/progress-report';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 
-import { computed, nextTick, ref } from 'vue';
+import { computed, onActivated , nextTick, ref } from 'vue';
 
 import { Page, useVbenModal } from '@vben/common-ui';
 import { DICT_TYPE } from '@vben/constants';
@@ -53,6 +53,12 @@ const listBpmLoading = ref(false);
 const listBpmRow = ref<DeclareProgressReport | null>(null);
 const listBpmCurrentAction = ref<any>(null);
 const listBpmReason = ref('');
+
+
+onActivated(() => {
+  console.log('onActivated');
+  handleRefresh(); // 重新加载列表 + 窗口状态
+});
 
 async function handleRefresh() {
   await nextTick();

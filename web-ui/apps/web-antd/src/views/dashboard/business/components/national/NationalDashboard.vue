@@ -364,7 +364,7 @@ const taskColumns = [
 
 
     <!-- 各项目类型医院数量分布图表 -->
-    <div class="type-completion-chart" v-loading="nationalStatsLoading">
+    <!-- <div class="type-completion-chart" v-loading="nationalStatsLoading">
       <div class="panel-header">
         <h3>各项目类型医院数量分布</h3>
       </div>
@@ -374,16 +374,16 @@ const taskColumns = [
         <span class="legend-item"><span class="dot yellow"></span>数量中等</span>
         <span class="legend-item"><span class="dot red"></span>数量较少</span>
       </div>
-    </div>
+    </div> -->
 
-    <!-- 各省医院分布图表 -->
-    <div class="national-stats" v-loading="nationalStatsLoading">
+    <!-- 各省医院分布图表 -->   <!-- <a-button type="link" @click="emit('go-to-project-list')">查看全部</a-button> -->
+    <!-- <div class="national-stats" v-loading="nationalStatsLoading">
       <div class="panel-header">
         <h3>各省医院分布（按医院数量排序）</h3>
-        <!-- <a-button type="link" @click="emit('go-to-project-list')">查看全部</a-button> -->
+       
       </div>
       <EchartsUI ref="provinceChartRef" :style="{ height: provinceChartHeight }" />
-    </div>
+    </div> -->
 
     
   </div>

@@ -103,7 +103,7 @@ onMounted(() => {
 
 <template>
   <div class="business-console" v-loading="loading">
-    <div class="console-header">
+    <div class="console-header" v-if="roleConfig[currentRole]?.label === '国家局' ">
       <div class="welcome">
         <h2>{{ roleTitle }}</h2>
         <span class="role-badge">{{ roleConfig[currentRole]?.label }}</span>
