@@ -83,20 +83,19 @@
                 'input-row--inline': indicator.valueType === 3 || indicator.valueType === 6 || indicator.valueType === 7,
               }"
             >
-              <!-- 数字类型：使用 a-input-number 支持后缀显示 -->
-              <a-input-number
+              <!-- 数字类型：使用 SafeNumberInput 支持后缀显示，blur 时只报错不校准 -->
+              <SafeNumberInput
                 v-if="indicator.valueType === 1"
-                v-model:value="formValues[indicator.indicatorCode]"
+                v-model="formValues[indicator.indicatorCode]"
                 :disabled="readonly || isComputedIndicator(indicator)"
                 :placeholder="isComputedIndicator(indicator) ? '自动计算' : `请输入数字`"
                 :min="indicator.minValue ?? 0"
-                class="w-full"
+                :max="indicator.maxValue"
+                :precision="getNumberPrecision(indicator)"
+                :suffix="indicator.unit || parseExtraConfig(indicator.extraConfig).suffix"
+                class="w-full number-input-auto-width"
                 @blur="(e: Event) => handleNumberBlur(indicator, e)"
-              >
-                <template #addonAfter v-if="indicator.unit || parseExtraConfig(indicator.extraConfig).suffix">
-                  {{ indicator.unit || parseExtraConfig(indicator.extraConfig).suffix }}
-                </template>
-              </a-input-number>
+              />
 
               <!-- 字符串类型 -->
               <a-input
@@ -298,17 +297,17 @@
                           class="w-full"
                           @blur="() => onFieldBlur(indicator, entryIndex, field)"
                         />
-                        <a-input-number
+                        <SafeNumberInput
                           v-else-if="field.fieldType === 'number'"
-                          v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
+                          v-model="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
                           :disabled="readonly"
                           :min="field.minValue ?? 0"
-                          class="w-full"
+                          :precision="field.precision"
+                          :prefix="field.prefix"
+                          :suffix="field.suffix"
+                          class="number-input-auto-width"
                           @blur="() => onFieldBlur(indicator, entryIndex, field)"
-                        >
-                          <template #addonBefore v-if="field.prefix">{{ field.prefix }}</template>
-                          <template #addonAfter v-if="field.suffix">{{ field.suffix }}</template>
-                        </a-input-number>
+                        />
                         <a-textarea
                           v-else-if="field.fieldType === 'textarea'"
                           v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
@@ -432,17 +431,17 @@
                           class="w-full"
                           @blur="() => onFieldBlur(indicator, entryIndex, field)"
                         />
-                        <a-input-number
+                        <SafeNumberInput
                           v-else-if="field.fieldType === 'number'"
-                          v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
+                          v-model="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
                           :disabled="readonly"
                           :min="field.minValue ?? 0"
-                          class="w-full"
+                          :precision="field.precision"
+                          :prefix="field.prefix"
+                          :suffix="field.suffix"
+                          class="number-input-auto-width"
                           @blur="() => onFieldBlur(indicator, entryIndex, field)"
-                        >
-                          <template #addonBefore v-if="field.prefix">{{ field.prefix }}</template>
-                          <template #addonAfter v-if="field.suffix">{{ field.suffix }}</template>
-                        </a-input-number>
+                        />
                         <a-textarea
                           v-else-if="field.fieldType === 'textarea'"
                           v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
@@ -580,17 +579,17 @@
                           class="w-full"
                           @blur="() => onFieldBlur(indicator, entryIndex, field)"
                         />
-                        <a-input-number
+                        <SafeNumberInput
                           v-else-if="field.fieldType === 'number'"
-                          v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
+                          v-model="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
                           :disabled="readonly"
                           :min="field.minValue ?? 0"
-                          class="w-full"
+                          :precision="field.precision"
+                          :prefix="field.prefix"
+                          :suffix="field.suffix"
+                          class="number-input-auto-width"
                           @blur="() => onFieldBlur(indicator, entryIndex, field)"
-                        >
-                          <template #addonBefore v-if="field.prefix">{{ field.prefix }}</template>
-                          <template #addonAfter v-if="field.suffix">{{ field.suffix }}</template>
-                        </a-input-number>
+                        />
                         <a-textarea
                           v-else-if="field.fieldType === 'textarea'"
                           v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
@@ -711,10 +710,13 @@
           </div>
 
           <!-- 右侧：上期值 -->
-          <div class="indicator-last-value">
+          <div
+            v-if="lastPeriodValues[indicator.indicatorCode]"
+            class="indicator-last-value"
+          >
             <div class="last-value-label">上期值</div>
             <div class="last-value-content">
-              {{ lastPeriodValues[indicator.indicatorCode] || '-' }}
+              {{ lastPeriodValues[indicator.indicatorCode] }}
             </div>
           </div>
         </div>
@@ -754,6 +756,7 @@ import {
 } from '#/api/declare/jointRule';
 import { uploadFile } from '#/api/infra/file';
 import { validate as validateJointRule, parseLogicRule } from '#/utils/indicatorValidator';
+import { SafeNumberInput } from '#/components/safe-number-input';
 
 interface IndicatorGroup {
   groupId: number;
@@ -2320,7 +2323,9 @@ function recalculateComputedIndicators() {
   nextTick(() => {
     for (const ind of computedOnes) {
       if (formValues[ind.indicatorCode] !== undefined) {
+        // SafeNumberInput（.safe-number-input-inner）和原版 a-input（.ant-input input）都兼容
         const el = document.querySelector(
+          `[data-indicator-code="${ind.indicatorCode}"] .safe-number-input-inner,` +
           `[data-indicator-code="${ind.indicatorCode}"] .ant-input input`
         ) as HTMLInputElement | null;
         if (el) {
@@ -2847,8 +2852,8 @@ defineExpose({
 }
 
 .indicator-row {
-  display: grid;
-  grid-template-columns: 1fr 20%;
+  display: flex;
+  align-items: flex-start;
   gap: 0;
   background: hsl(var(--card));
   border: 1px solid hsl(var(--border));
@@ -2856,7 +2861,7 @@ defineExpose({
   padding: 14px 16px;
   transition: border-color 0.2s, box-shadow 0.2s;
   position: relative;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .indicator-row::before {
@@ -2916,11 +2921,6 @@ defineExpose({
   min-width: 0;
 }
 
-.indicator-main--inline {
-  flex: none;
-  align-self: center;
-}
-
 .indicator-last-value {
   flex-shrink: 0;
   display: flex;
@@ -2931,10 +2931,11 @@ defineExpose({
   gap: 4px;
 }
 
-/* 开关/radio/checkbox 行：让 grid 列收缩到内容宽度 */
+/* 仅开关行：主区域按内容宽度，不占满整行 */
 .indicator-main--inline {
   flex: none;
   align-self: center;
+  width: 100%;
 }
 
 .indicator-label-row {
@@ -3040,24 +3041,38 @@ defineExpose({
   min-width: 0;
 }
 
-/* 开关/radio/checkbox 同行显示，不撑满宽度 */
+/* 开关同行显示，不撑满宽度 */
 .input-row--inline {
-  display: inline-flex;
+  display: flex;
   flex-direction: row;
-  align-items: center;
+  align-items: flex-start;
   flex-wrap: wrap;
   gap: 8px;
+  width: 100%;
 }
 
-.input-row--inline :deep(.ant-switch),
-.input-row--inline :deep(.ant-radio-group),
-.input-row--inline :deep(.ant-checkbox-group) {
+.input-row--inline :deep(.ant-switch) {
   width: auto !important;
   min-width: 0 !important;
 }
 
+/* 去掉 ant-radio-wrapper 默认的 margin-right，改为 gap 间距 */
+.input-row--inline :deep(.ant-radio-wrapper),
+.input-row--inline :deep(.ant-checkbox-wrapper) {
+  margin-inline-end: 0 !important;
+  white-space: normal !important;
+  word-break: break-word !important;
+}
+
 .w-full {
   width: 100%;
+}
+
+/* 数字输入框：内容撑开，最大 8 个字符宽度 */
+.number-input-auto-width {
+  width: auto;
+  max-width: 8ch;
+  min-width: 160px;
 }
 
 .indicator-error {
@@ -3072,9 +3087,12 @@ defineExpose({
   border: 1px solid hsl(var(--destructive) / 0.2);
   border-radius: 6px;
   line-height: 1.4;
+  min-width: 160px;
+  width: fit-content;
 }
 
 .indicator-last-value {
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -3210,8 +3228,39 @@ defineExpose({
   flex: unset;
 }
 
+/* 容器内数字输入框也限制最大 8 个字符宽度 */
+.entry-fields .number-input-auto-width {
+  width: auto !important;
+  max-width: 16ch;
+  min-width: 160px;
+}
+
 .text-red-500 {
   color: hsl(var(--destructive));
   font-weight: 600;
+}
+</style>
+
+<!-- 全局覆盖 ant checkbox/radio 换行问题（非 scoped 可穿透 CSS-in-JS） -->
+<style>
+.indicator-input-row.input-row--inline .ant-checkbox-group,
+.indicator-input-row.input-row--inline .ant-radio-group {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  width: 100% !important;
+  gap: 8px 16px !important;
+  line-height: 1.57 !important;
+}
+
+.indicator-input-row.input-row--inline .ant-checkbox-group .ant-checkbox-wrapper,
+.indicator-input-row.input-row--inline .ant-radio-group .ant-radio-wrapper {
+  display: flex !important;
+  width: auto !important;
+  min-width: 0 !important;
+  white-space: normal !important;
+  line-height: 1.57 !important;
+  font-size: 14px !important;
+  list-style: none !important;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji' !important;
 }
 </style>

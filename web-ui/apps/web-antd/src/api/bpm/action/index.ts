@@ -81,6 +81,7 @@ export async function getAvailableActions(businessType: string, businessId: numb
         taskId: todoTask.taskId,
         processInstanceId: taskStatus.processInstanceId,
         reasonRequire: todoTask.reasonRequire,
+        taskDefinitionKey: todoTask.taskDefinitionKey,
       },
     };
   }
@@ -129,6 +130,7 @@ export async function getAvailableActionsBatch(businessType: string, businessIds
           vars: {
             reasonRequired: todoTask.reasonRequire,
             nodeType: todoTask.nodeType,
+            taskDefinitionKey: todoTask.taskDefinitionKey,
             rectifyProcessDefinitionKey: setting.rectifyProcessDefinitionKey,
           },
         }));

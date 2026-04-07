@@ -140,7 +140,7 @@ const approvalHistory = ref<BpmTaskApi.Task[]>([]);
 const availableActions = ref<(BpmActionApi.BpmAction & { taskId?: string })[]>([]);
 
 // 任务信息（从 getAvailableActions 返回）
-const taskInfo = ref<{ taskId?: string; processInstanceId?: string; reasonRequire?: boolean } | null>(null);
+const taskInfo = ref<{ taskId?: string; processInstanceId?: string; reasonRequire?: boolean; taskDefinitionKey?: string } | null>(null);
 
 // 退回弹窗 ref
 const returnModalRef = ref<InstanceType<typeof ReturnModal> | null>(null);
@@ -405,7 +405,7 @@ async function loadAllData() {
     const rawActions = await getAvailableActions(BUSINESS_TYPE, payload.value!.reportId, 'progress');
     const buttons = !Array.isArray(rawActions) && rawActions?.actions ? rawActions.actions : {};
     taskInfo.value = !Array.isArray(rawActions) && rawActions?.taskInfo ? rawActions.taskInfo : null;
-    availableActions.value = Object.entries(buttons)
+      availableActions.value = Object.entries(buttons)
       .filter(([, setting]: [string, any]) => setting.enable)
       .map(([key, setting]: [string, any]) => ({
         key,
@@ -414,6 +414,7 @@ async function loadAllData() {
         taskId: taskInfo.value?.taskId,
         vars: {
           reasonRequired: !!taskInfo.value?.reasonRequire,
+          taskDefinitionKey: taskInfo.value?.taskDefinitionKey,
           rectifyProcessDefinitionKey: setting.rectifyProcessDefinitionKey,
         },
       }));
@@ -1072,6 +1073,7 @@ defineExpose({
           :business-id="payload?.reportId ?? 0"
           :actions="availableActions"
           :task-id="taskInfo?.taskId"
+          :is-resubmit="!!payload?.hospitalProcessInstanceId"
           @success="async () => { emit('success'); await loadAllData(); }"
           @refresh="loadAllData"
           @return="(action) => returnModalRef?.open({ taskId: action.taskId || taskInfo?.taskId || '', buttonId: action.key })"

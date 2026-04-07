@@ -396,45 +396,13 @@ function validateReportUserName(name: string): string | null {
 
 /** 保存：状态设为 SAVED，需验证所有必填指标，确认无误后可在列表页提交审核 */
 async function handleSave() {
-  // 1. 仅当 reportUserName 为空时弹出输入框（首次保存）；已有值时直接使用
-  let reportUserName = formData.value.reportUserName?.trim();
-  if (!reportUserName) {
-    reportUserName = await new Promise<string>((resolve) => {
-      prompt({
-        title: '填报人信息',
-        content: '请输入填报人真实姓名',
-        modelPropName: 'value',
-        component: () =>
-          h(Input, {
-            placeholder: '请输入填报人真实姓名',
-            allowClear: true,
-          }),
-        async beforeClose(scope) {
-          if (!scope.isConfirm) {
-            resolve('');
-            return;
-          }
-          const name = (scope.value as string) || '';
-          const error = validateReportUserName(name);
-          if (error) {
-            message.warning(error);
-            return false; // 返回 false 阻止弹窗关闭
-          }
-          resolve(name.trim());
-        },
-      });
-    });
-  }
-
-  if (!reportUserName) return; // 用户取消或校验失败
-
   modalApi.lock();
   saving.value = true;
   try {
-    // 2. 同步动态容器值到 formValues
+    // 1. 同步动态容器值到 formValues
     indicatorTableRef.value?.syncContainerValuesToForm?.();
 
-    // 3. 【验证必填指标】必须全部通过才能保存
+    // 2. 【验证必填指标】必须全部通过才能继续
     if (indicatorTableRef.value) {
       const indicators = indicatorTableRef.value.getAllIndicators?.();
       if (indicators) {
@@ -446,10 +414,10 @@ async function handleSave() {
       }
     }
 
-    // 4. 触发自动计算（在校验之后）
+    // 3. 触发自动计算（在校验之后）
     indicatorTableRef.value?.recalculateComputedIndicators?.();
 
-    // 5. 再次校验（确保计算后的值也通过验证）
+    // 4. 再次校验（确保计算后的值也通过验证）
     if (indicatorTableRef.value) {
       const indicators = indicatorTableRef.value.getAllIndicators?.();
       if (indicators) {
@@ -460,6 +428,38 @@ async function handleSave() {
         }
       }
     }
+
+    // 5. 【验证通过后】弹出填报人姓名输入框
+    let reportUserName = formData.value.reportUserName?.trim();
+    if (!reportUserName) {
+      reportUserName = await new Promise<string>((resolve) => {
+        prompt({
+          title: '填报人信息',
+          content: '请输入填报人真实姓名',
+          modelPropName: 'value',
+          component: () =>
+            h(Input, {
+              placeholder: '请输入填报人真实姓名',
+              allowClear: true,
+            }),
+          async beforeClose(scope) {
+            if (!scope.isConfirm) {
+              resolve('');
+              return;
+            }
+            const name = (scope.value as string) || '';
+            const error = validateReportUserName(name);
+            if (error) {
+              message.warning(error);
+              return false;
+            }
+            resolve(name.trim());
+          },
+        });
+      });
+    }
+
+    if (!reportUserName) return; // 用户取消或校验失败
 
     // 6. 获取所有指标值
     const rawValues = indicatorTableRef.value?.getAllIndicatorValues?.() || [];
@@ -470,7 +470,6 @@ async function handleSave() {
         valueType: item.valueType,
         value: extractValue(item),
       };
-      // type 8 日期区间：通过独立字段传递，不走 value
       if (item.valueType === 8) {
         base.value = undefined;
         base.valueDateStart = item.valueDateStart;

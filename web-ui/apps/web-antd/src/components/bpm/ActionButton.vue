@@ -38,7 +38,7 @@
         @ok="handleActionConfirm"
       >
         <a-form :model="actionForm" layout="vertical">
-          <a-form-item :label="currentAction?.vars?.reason || '审批意见'" :required="currentAction?.vars?.reasonRequired">
+          <a-form-item :label="currentAction?.vars?.reason || '审批意见'" :required="currentAction?.vars?.reasonRequired || isStartUserNode">
             <a-textarea
               v-model:value="actionForm.reason"
               :placeholder="currentAction?.vars?.reason ? `请输入${currentAction.vars.reason}` : '请输入审批意见'"
@@ -51,7 +51,7 @@
   </template>
 
   <script setup lang="ts">
-  import { ref, watch } from 'vue';
+  import { ref, computed, watch } from 'vue';
   import { message } from 'ant-design-vue';
   import { IconifyIcon } from '@vben/icons';
   import { submitBpmAction, type SubmitActionParams } from '#/api/bpm/action';
@@ -70,6 +70,8 @@
       expertMax?: number;
       /** 节点类型：10 = 发起人节点 */
       nodeType?: number;
+      /** 任务定义Key：StartUserNode = 发起人节点 */
+      taskDefinitionKey?: string;
       backStrategy?: string;
       [key: string]: any;
     };
@@ -80,11 +82,14 @@
     businessId: number;
     actions?: BpmAction[];
     taskId?: string;
+    /** 是否为驳回后重新提交（影响发起人节点的审批意见必填） */
+    isResubmit?: boolean;
     reload?: () => void;
   }
 
   const props = withDefaults(defineProps<Props>(), {
     actions: () => [],
+    isResubmit: false,
   });
   
 const emit = defineEmits<{
@@ -142,9 +147,11 @@ function isReturnAction(action: BpmAction): boolean {
     const key = action.key;
 
     // 发起人节点：submit 改为"重新提交"
-    if (vars.nodeType === 10 && (key === 'submit' || key === 'resubmit')) {
+    if (vars.taskDefinitionKey === 'StartUserNode' && (key === 'submit' || key === 'resubmit')) {
       return '重新提交';
     }
+
+    
 
     // 退回按钮显示文案
     if (isReturnAction(action)) {
@@ -172,8 +179,8 @@ function isReturnAction(action: BpmAction): boolean {
     currentAction.value = action;
     actionForm.value.reason = '';
 
-    // 发起人节点提交：强制填写审批留言（驳回后重新提交场景）
-    if (vars.nodeType === 10) {
+    // 发起人节点提交：强制填写审批留言（驳回后重新提交场景，通过 isResubmit 判断）
+    if (props.isResubmit && vars.taskDefinitionKey === 'StartUserNode') {
       actionModalVisible.value = true;
       return;
     }
@@ -191,6 +198,13 @@ function isReturnAction(action: BpmAction): boolean {
   // 确认操作
   async function handleActionConfirm() {
     if (!currentAction.value) {
+      return;
+    }
+
+    // 发起人节点提交：阻断，审批意见必填
+    const isStartUserNode = props.isResubmit && currentAction.value.vars?.taskDefinitionKey === 'StartUserNode';
+    if (isStartUserNode && !actionForm.value.reason?.trim()) {
+      message.warning('请输入审批意见后再提交');
       return;
     }
 
