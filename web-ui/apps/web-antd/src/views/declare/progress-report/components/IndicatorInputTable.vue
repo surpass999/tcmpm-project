@@ -844,6 +844,7 @@ interface DynamicField {
   showCondition?: ShowCondition;
   defaultValue?: any;
   logicRule?: string; // 容器字段的逻辑规则
+  noRepeat?: boolean; // 文本/多行文本不可重复
 }
 
 /** 容器类型枚举 */
@@ -1560,10 +1561,22 @@ function validateType12_Container(indicator: DeclareIndicatorApi.Indicator): Val
         extraRules = [(ctx) => checkSelectCount(ctx.fieldValue, ctx.field.minSelect, ctx.field.maxSelect)];
       }
 
-      if (field.fieldType === 'text') {
+      if (field.fieldType === 'text' || field.fieldType === 'textarea') {
         extraRules = [(ctx) => {
           const trimmed = String(ctx.fieldValue).trim();
-          if (/^-?\d+(\.\d+)?$/.test(trimmed)) return '不能输入纯数字';
+          if (ctx.field.fieldType === 'text' && /^-?\d+(\.\d+)?$/.test(trimmed)) {
+            return '不能输入纯数字';
+          }
+          if (ctx.field.noRepeat && trimmed) {
+            const entries = containerValues[ctx.containerCode] || [];
+            for (let j = 0; j < entries.length; j++) {
+              if (j === ctx.entryIndex) continue;
+              const otherVal = entries[j]?.[ctx.fieldCode];
+              if (String(otherVal ?? '').trim() === trimmed) {
+                return `该值与「第${j + 1}个条目」重复`;
+              }
+            }
+          }
           return null;
         }];
       }
@@ -2076,12 +2089,23 @@ const containerFieldErrors = computed(() => {
 
         // 2. 非空时校验格式
         if (!isEmpty) {
-          // 文本类型：不能输入纯数字
-          if (field.fieldType === 'text') {
+          // 文本类型 / 多行文本：不能输入纯数字
+          if (field.fieldType === 'text' || field.fieldType === 'textarea') {
             const trimmed = String(fieldValue).trim();
-            if (/^-?\d+(\.\d+)?$/.test(trimmed)) {
+            if (field.fieldType === 'text' && /^-?\d+(\.\d+)?$/.test(trimmed)) {
               errors[key] = '不能输入纯数字';
               continue;
+            }
+            // 不可重复校验（文本和多行文本都支持）
+            if (field.noRepeat && trimmed) {
+              for (let j = 0; j < entries.length; j++) {
+                if (j === i) continue;
+                const otherVal = entries[j]?.[field.fieldCode];
+                if (String(otherVal ?? '').trim() === trimmed) {
+                  errors[key] = `该值与「第${j + 1}个条目」重复`;
+                  break;
+                }
+              }
             }
           }
           if (field.fieldType === 'number') {

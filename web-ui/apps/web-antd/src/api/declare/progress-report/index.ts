@@ -41,6 +41,8 @@ export interface DeclareProgressReport {
   updateTime: string;
   /** 医院审核人姓名（提交审核时填写） */
   auditUserName?: string;
+  /** 填报人姓名（保存时填写） */
+  reportUserName?: string;
 }
 
 /**
@@ -61,6 +63,7 @@ export function saveProgressReport(data: {
   reportYear?: number;
   reportBatch?: number;
   reportStatus: string;
+  reportUserName?: string;
   values: Array<{
     indicatorId: number;
     indicatorCode: string;

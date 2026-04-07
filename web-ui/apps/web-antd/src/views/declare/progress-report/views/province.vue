@@ -394,6 +394,16 @@ const [Grid, gridApi] = useVbenVxeGrid({
         slots: { default: 'nationalReportStatus' },
       },
       {
+        field: 'reportUserName',
+        title: '医院填报人',
+        width: 100,
+      },
+      {
+        field: 'auditUserName',
+        title: '医院审核人',
+        width: 100,
+      },
+      {
         field: 'createTime',
         title: '创建时间',
         width: 180,

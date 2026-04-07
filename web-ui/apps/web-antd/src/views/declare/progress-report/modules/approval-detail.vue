@@ -46,6 +46,7 @@ interface ApprovalDetailPayload {
   projectType?: number;
   projectTypeName?: string;
   reportStatus?: string;
+  hospitalProcessInstanceId?: string;
 }
 
 // 弹窗数据载荷（由父组件的 openWithData 传入）
@@ -163,6 +164,7 @@ const currentHospitalId = computed(() => Number(userStore.userInfo?.deptId) || 0
 const canSubmitAudit = computed(
   () =>
     payload.value?.deptId === currentHospitalId.value
+    && payload.value?.hospitalProcessInstanceId === null
     && payload.value?.reportStatus === 'SAVED',
 );
 
@@ -300,6 +302,16 @@ async function loadAllData() {
     // 0.1 加载报告详情（用于获取审核人姓名等字段）
     try {
       reportDetail.value = await getProgressReport(payload.value!.reportId);
+      // 同步最新状态，使 canSubmitAudit 等 computed 能正确响应
+      if (reportDetail.value) {
+        if (reportDetail.value.reportStatus) {
+          payload.value!.reportStatus = reportDetail.value.reportStatus;
+        }
+        // 同步 BPM 流程实例ID（驳回后重新提交需以最新值为准）
+        if (reportDetail.value.hospitalProcessInstanceId !== undefined) {
+          payload.value!.hospitalProcessInstanceId = reportDetail.value.hospitalProcessInstanceId;
+        }
+      }
     } catch (e) {
       console.warn('[approval-detail] 加载报告详情失败:', e);
       reportDetail.value = null;
@@ -390,8 +402,9 @@ async function loadAllData() {
     });
     const taskStatus = taskResult?.[0];
 
-    // 7. 获取审批历史（已完成的任务）
+    // 7. 获取审批历史（已完成的任务，过滤掉系统自动取消的记录）
     approvalHistory.value = (taskStatus?.allDoneTasks || [])
+      .filter((task: any) => task.status !== 4) // 排除系统自动取消（status=5 对应 BpmTaskStatusEnum.CANCEL）
       .sort((a: any, b: any) => String(a.endTime || '').localeCompare(String(b.endTime || ''))) as any;
 
     // 8. 获取可用操作（基于待办任务）
@@ -723,9 +736,14 @@ defineExpose({
                 <span class="info-value">{{ payload?.reportYear }}年第{{ payload?.reportBatch }}期</span>
               </div>
               <div class="info-item">
+                <label class="info-label">填报人姓名：</label>
+                <span class="info-value">{{ reportDetail?.reportUserName || '—' }}</span>
+              </div>
+              <div class="info-item">
                 <label class="info-label">医院审核人姓名：</label>
                 <span class="info-value">{{ reportDetail?.auditUserName || '—' }}</span>
               </div>
+              
             </div>
           </div>
         </div>
@@ -1046,7 +1064,7 @@ defineExpose({
         </div>
       </div>
 
-      <!-- 草稿/已保存状态：显示提交审核按钮 -->
+      <!-- 提交审核按钮：当前用户所在医院 && 无 BPM 流程 && 状态为 SAVED -->
       <div v-if="canSubmitAudit && !loading" class="action-buttons">
         <a-button type="primary" class="action-btn" @click="handleSubmitAudit">
           <i class="fas fa-paper-plane mr-1" />
@@ -1054,7 +1072,7 @@ defineExpose({
         </a-button>
       </div>
       <!-- 审批中/审批完成：显示 BPM 工作流操作按钮 -->
-      <div v-else-if="availableActions.length" class="action-buttons">
+      <div v-else-if="availableActions.length && payload?.reportStatus === 'SAVED'" class="action-buttons">
         <ActionButton
           :business-type="BUSINESS_TYPE"
           :business-id="payload?.reportId ?? 0"

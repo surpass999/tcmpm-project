@@ -364,17 +364,17 @@ function getRowActions(row: DeclareProgressReport) {
   const buttons: any[] = [];
 
   const bpmActions = rowBpmActions.value[row.id] || [];
-  for (const action of bpmActions) {
-    buttons.push({
-      ...action,
-      type: 'link' as const,
-      auth: [],
-      onClick: () => handleQuickBpmAction(row, action),
-    });
-  }
+  // for (const action of bpmActions) {
+  //   buttons.push({
+  //     ...action,
+  //     type: 'link' as const,
+  //     auth: [],
+  //     onClick: () => handleQuickBpmAction(row, action),
+  //   });
+  // }
 
   buttons.push({
-    label: '查看详情',
+    label: row.reportStatus === 'SAVED'  ? '提交审核' : '查看详情',
     type: 'link' as const,
     icon: 'lucide:history',
     onClick: () => handleViewApprovalDetail(row),
@@ -390,7 +390,7 @@ function getRowActions(row: DeclareProgressReport) {
       // 保存状态：允许编辑 + 提交审核
     if (canEditStatus(row.reportStatus)) {
       buttons.push({
-        label: '编辑',
+        label: '编辑保存',
         type: 'link' as const,
         icon: 'lucide:pencil',
         auth: ['declare:progress-report:update'],
@@ -398,18 +398,18 @@ function getRowActions(row: DeclareProgressReport) {
       });
     }
     const isSaved = row.reportStatus === 'SAVED';
-    if (isSaved) {
-      buttons.push({
-        label: '提交审核',
-        type: 'link' as const,
-        icon: 'lucide:send',
-        auth: ['declare:progress-report:submit'],
-        onClick: () => handleSubmit(row),
-      });
-    }
+    // if (isSaved) {
+    //   buttons.push({
+    //     label: '提交审核',
+    //     type: 'link' as const,
+    //     icon: 'lucide:send',
+    //     auth: ['declare:progress-report:submit'],
+    //     onClick: () => handleSubmit(row),
+    //   });
+    // }
   } else if (isReturned || (isCreator && canEditStatus(row.reportStatus))) {
     buttons.push({
-      label: '编辑',
+      label: '编辑保存',
       type: 'link' as const,
       icon: 'lucide:pencil',
       auth: ['declare:progress-report:update'],
@@ -504,6 +504,11 @@ const [Grid, gridApi] = useVbenVxeGrid({
         title: '国家局上报',
         width: 120,
         slots: { default: 'nationalReportStatus' },
+      },
+      {
+        field: 'reportUserName',
+        title: '填报人',
+        width: 100,
       },
       {
         field: 'createTime',

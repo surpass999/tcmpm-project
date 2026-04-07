@@ -54,6 +54,7 @@ interface DynamicField {
   suffix?: string;
   showCondition?: ShowCondition;
   defaultValue?: any;
+  noRepeat?: boolean;
 }
 
 // 子字段类型选项
@@ -419,6 +420,7 @@ const convertOptionsToJson = () => {
           ? Object.fromEntries(Object.entries({ ...field.showCondition }).filter(([, v]) => v !== undefined))
           : undefined,
         defaultValue: field.defaultValue,
+        noRepeat: field.noRepeat === true ? true : undefined,
       }));
 
     // 统一对象格式：包含 mode 和 fields
@@ -485,6 +487,7 @@ const parseJsonToOptions = (jsonStr: string) => {
           suffix: item.suffix,
           showCondition: item.showCondition,
           defaultValue: item.defaultValue,
+          noRepeat: item.noRepeat === true,
         });
       });
       return;
@@ -516,6 +519,7 @@ const parseJsonToOptions = (jsonStr: string) => {
           suffix: item.suffix,
           showCondition: item.showCondition,
           defaultValue: item.defaultValue,
+          noRepeat: item.noRepeat === true,
         });
       });
     } else {
@@ -1067,6 +1071,8 @@ watch(
                   :max="10"
                   class="w-20"
                 />
+                <a-switch v-model:checked="field.noRepeat" size="small" />
+                <span class="text-gray-400 text-xs whitespace-nowrap">不可重复</span>
               </div>
 
               <!-- 数字类型：可配置精度、前缀、后缀 -->

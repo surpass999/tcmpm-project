@@ -2,13 +2,13 @@
 import type { DeclareProgressReport } from '#/api/declare/progress-report';
 import type { DeclareHospitalApi } from '#/api/declare/hospital';
 
-import { computed, ref, watch } from 'vue';
+import { computed, h, ref, watch } from 'vue';
 
-import { useVbenModal } from '@vben/common-ui';
+import { prompt, useVbenModal } from '@vben/common-ui';
 import { DICT_TYPE } from '@vben/constants';
 import { getDictOptions } from '@vben/hooks';
 
-import { message, Modal as AConfirmModal, Spin } from 'ant-design-vue';
+import { message, Modal as AConfirmModal, Spin, Input } from 'ant-design-vue';
 import dayjs from 'dayjs';
 
 import {
@@ -134,6 +134,7 @@ const formData = ref({
   projectTypeShortName: undefined as string | undefined,
   windowStart: undefined as string | undefined,
   windowEnd: undefined as string | undefined,
+  reportUserName: undefined as string | undefined,
 });
 
 /** 保存状态（用于禁用按钮防重复提交） */
@@ -167,13 +168,36 @@ const [Modal, modalApi] = useVbenModal({
   destroyOnClose: true,
   showCancelButton: true,
   async onBeforeClose() {
-    // 仅当新增记录(id不存在)或草稿状态(DRAFT)时，dirty 才需要弹出确认框
-    // SAVED/REJECTED/RETURNED 等已保存状态无需二次确认，直接关闭
-    const isNewOrDraft =
-      formData.value.id === undefined ||
-      formData.value.reportStatus === 'DRAFT';
+    if (!isFormDirty.value) return; // 无修改，直接关闭
 
-    if (isFormDirty.value && isNewOrDraft) {
+    const status = formData.value.reportStatus;
+
+    // SAVED 状态：有修改时提示"保存"
+    if (status === 'SAVED') {
+      return new Promise((resolve) => {
+        AConfirmModal.confirm({
+          title: '确认关闭',
+          content: '当前有未保存的修改，是否保存？',
+          okText: '保存',
+          cancelText: '不保存',
+          okButtonProps: { loading: saving.value },
+          async onOk() {
+            await handleSave(); // handleSave 会关闭弹窗
+            resolve(true);
+          },
+          async onCancel() {
+            isFormDirty.value = false;
+            resolve(true);
+          },
+        });
+      });
+    }
+
+    // 新建或草稿(DRAFT)状态：有修改时提示"保存草稿"
+    const isNewOrDraft =
+      formData.value.id === undefined || status === 'DRAFT';
+
+    if (isNewOrDraft) {
       return new Promise((resolve) => {
         AConfirmModal.confirm({
           title: '确认关闭',
@@ -182,7 +206,7 @@ const [Modal, modalApi] = useVbenModal({
           cancelText: '不保存',
           okButtonProps: { loading: saving.value },
           async onOk() {
-            await handleSaveDraft();
+            await handleSaveDraft(); // handleSaveDraft 会关闭弹窗
             resolve(true);
           },
           async onCancel() {
@@ -202,6 +226,10 @@ const [Modal, modalApi] = useVbenModal({
         reportYear: undefined,
         reportBatch: undefined,
         reportStatus: undefined,
+        projectTypeShortName: undefined,
+        windowStart: undefined,
+        windowEnd: undefined,
+        reportUserName: undefined,
       };
       hospitalInfo.value = null;
       basicHospitalInfo.value = null;
@@ -305,7 +333,7 @@ async function handleSaveDraft() {
   modalApi.lock();
   saving.value = true;
   try {
-    // 1. 同步动态容器值到 formValues（确保 getAllIndicatorValues 能拿到值）
+    // 1. 同步动态容器值到 formValues
     indicatorTableRef.value?.syncContainerValuesToForm?.();
 
     // 2. 触发自动计算
@@ -322,7 +350,6 @@ async function handleSaveDraft() {
         valueType: item.valueType,
         value: extractValue(item),
       };
-      // type 8 日期区间：通过独立字段传递，不走 value
       if (item.valueType === 8) {
         base.value = undefined;
         base.valueDateStart = item.valueDateStart;
@@ -354,15 +381,60 @@ async function handleSaveDraft() {
   }
 }
 
+/** 姓名格式校验 */
+function validateReportUserName(name: string): string | null {
+  const trimmed = name.trim();
+  if (!trimmed) return '请输入填报人姓名';
+  if (!/^[\u4e00-\u9fa5·•.·]+$/u.test(trimmed) && !/^[a-zA-Z\s·]+$/.test(trimmed)) {
+    return '填报人姓名格式不正确，请输入真实姓名';
+  }
+  if (trimmed.length < 2 || trimmed.length > 20) {
+    return '填报人姓名长度应在2-20个字符之间';
+  }
+  return null;
+}
+
 /** 保存：状态设为 SAVED，需验证所有必填指标，确认无误后可在列表页提交审核 */
 async function handleSave() {
+  // 1. 仅当 reportUserName 为空时弹出输入框（首次保存）；已有值时直接使用
+  let reportUserName = formData.value.reportUserName?.trim();
+  if (!reportUserName) {
+    reportUserName = await new Promise<string>((resolve) => {
+      prompt({
+        title: '填报人信息',
+        content: '请输入填报人真实姓名',
+        modelPropName: 'value',
+        component: () =>
+          h(Input, {
+            placeholder: '请输入填报人真实姓名',
+            allowClear: true,
+          }),
+        async beforeClose(scope) {
+          if (!scope.isConfirm) {
+            resolve('');
+            return;
+          }
+          const name = (scope.value as string) || '';
+          const error = validateReportUserName(name);
+          if (error) {
+            message.warning(error);
+            return false; // 返回 false 阻止弹窗关闭
+          }
+          resolve(name.trim());
+        },
+      });
+    });
+  }
+
+  if (!reportUserName) return; // 用户取消或校验失败
+
   modalApi.lock();
   saving.value = true;
   try {
-    // 1. 同步动态容器值到 formValues（确保 getAllIndicatorValues 能拿到值）
+    // 2. 同步动态容器值到 formValues
     indicatorTableRef.value?.syncContainerValuesToForm?.();
 
-    // 2. 【验证必填指标】必须全部通过才能保存
+    // 3. 【验证必填指标】必须全部通过才能保存
     if (indicatorTableRef.value) {
       const indicators = indicatorTableRef.value.getAllIndicators?.();
       if (indicators) {
@@ -374,10 +446,10 @@ async function handleSave() {
       }
     }
 
-    // 3. 触发自动计算（在校验之后，避免校验触发 onIndicatorChange 覆盖计算结果）
+    // 4. 触发自动计算（在校验之后）
     indicatorTableRef.value?.recalculateComputedIndicators?.();
 
-    // 4. 再次校验（确保计算后的值也通过验证）
+    // 5. 再次校验（确保计算后的值也通过验证）
     if (indicatorTableRef.value) {
       const indicators = indicatorTableRef.value.getAllIndicators?.();
       if (indicators) {
@@ -389,7 +461,7 @@ async function handleSave() {
       }
     }
 
-    // 5. 获取所有指标值
+    // 6. 获取所有指标值
     const rawValues = indicatorTableRef.value?.getAllIndicatorValues?.() || [];
     const values = rawValues.map((item: any) => {
       const base: any = {
@@ -407,12 +479,13 @@ async function handleSave() {
       return base;
     });
 
-    // 6. 调用一体化保存接口，状态为 SAVED
+    // 7. 调用一体化保存接口，状态为 SAVED，传入填报人姓名
     const id = await saveProgressReport({
       id: formData.value.id,
       reportYear: formData.value.reportYear,
       reportBatch: formData.value.reportBatch,
       reportStatus: 'SAVED',
+      reportUserName,
       values,
     });
     formData.value.id = id;

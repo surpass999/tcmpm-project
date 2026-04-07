@@ -168,7 +168,8 @@ public class DeclareProgressReportServiceImpl implements DeclareProgressReportSe
                     .hospitalName(hospital.getHospitalName())
                     .provinceCode(hospital.getProvinceCode())
                     .provinceName(hospital.getProvinceName())
-                    .reportStatus(ReportStatusEnum.DRAFT.getStatus())
+                    .reportStatus(reqVO.getReportStatus() != null ? reqVO.getReportStatus() : ReportStatusEnum.DRAFT.getStatus())
+                    .reportUserName(reqVO.getReportUserName())
                     .provinceStatus(ProvinceStatusEnum.NOT_SUBMITTED.getStatus())
                     .nationalReportStatus(NationalReportStatusEnum.NOT_REPORTED.getStatus())
                     .creator(userId != null ? userId.toString() : null)
@@ -185,6 +186,9 @@ public class DeclareProgressReportServiceImpl implements DeclareProgressReportSe
             }
             if (reqVO.getReportStatus() != null) {
                 report.setReportStatus(reqVO.getReportStatus());
+            }
+            if (reqVO.getReportUserName() != null) {
+                report.setReportUserName(reqVO.getReportUserName());
             }
             progressReportMapper.updateById(report);
         }
@@ -626,6 +630,7 @@ public class DeclareProgressReportServiceImpl implements DeclareProgressReportSe
                 .nationalReportTime(report.getNationalReportTime())
                 .nationalReporterName(report.getNationalReporterName())
                 .auditUserName(report.getAuditUserName())
+                .reportUserName(report.getReportUserName())
                 .projectType(projectType)
                 .projectTypeName(projectTypeName)
                 .projectTypeShortName(projectTypeShortName)

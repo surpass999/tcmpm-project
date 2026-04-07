@@ -83,6 +83,11 @@ public class DeclareProgressReportDO extends BaseDO {
     private String auditUserName;
 
     /**
+     * 填报人姓名（保存时填写）
+     */
+    private String reportUserName;
+
+    /**
      * 省级审核时间
      */
     private LocalDateTime provinceAuditTime;

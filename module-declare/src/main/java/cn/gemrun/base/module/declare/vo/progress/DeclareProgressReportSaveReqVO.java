@@ -34,6 +34,11 @@ public class DeclareProgressReportSaveReqVO {
     private String reportStatus;
 
     /**
+     * 填报人姓名（保存时填写）
+     */
+    private String reportUserName;
+
+    /**
      * 指标值列表
      */
     private List<IndicatorValueItem> values;
