@@ -16,6 +16,8 @@ export const overridesPreferences = defineOverridesPreferences({
     enableRefreshToken: true,
     enablePreferences: false, // 关闭偏好设置
     enableStickyPreferencesNavigationBar: false, // 关闭偏好设置导航栏吸顶
+    /** 默认头像使用系统 Logo */
+    defaultAvatar: '/static/imgs/logo/logo.png',
   },
   logo: {
     enable: true,

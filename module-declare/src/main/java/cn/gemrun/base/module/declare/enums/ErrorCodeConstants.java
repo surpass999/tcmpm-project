@@ -131,4 +131,8 @@ public interface ErrorCodeConstants {
 
     ErrorCode PROGRESS_REPORT_PROJECT_TYPE_NOT_MATCH = new ErrorCode(1_010_010_002, "所选两条记录项目类型不一致，无法对比");
 
+    ErrorCode PROGRESS_REPORT_A_NOT_EXISTS = new ErrorCode(1_010_010_003, "申报记录 A 不存在");
+
+    ErrorCode PROGRESS_REPORT_B_NOT_EXISTS = new ErrorCode(1_010_010_004, "申报记录 B 不存在");
+
 }

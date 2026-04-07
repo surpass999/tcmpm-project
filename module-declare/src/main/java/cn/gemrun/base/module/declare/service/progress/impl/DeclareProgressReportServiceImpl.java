@@ -9,6 +9,7 @@ import cn.gemrun.base.module.declare.dal.mysql.DeclareHospitalMapper;
 import cn.gemrun.base.module.declare.dal.mysql.DeclareProgressReportMapper;
 import cn.gemrun.base.module.declare.dal.mysql.indicator.DeclareIndicatorGroupMapper;
 import cn.gemrun.base.module.declare.dal.mysql.indicator.DeclareIndicatorValueMapper;
+import cn.gemrun.base.module.declare.enums.ErrorCodeConstants;
 import cn.gemrun.base.module.declare.enums.NationalReportStatusEnum;
 import cn.gemrun.base.module.declare.enums.ProvinceStatusEnum;
 import cn.gemrun.base.module.declare.enums.ReportStatusEnum;
@@ -21,6 +22,7 @@ import cn.gemrun.base.module.declare.vo.progress.*;
 import cn.gemrun.base.framework.security.core.util.SecurityFrameworkUtils;
 import cn.gemrun.base.module.system.api.user.AdminUserApi;
 import cn.gemrun.base.module.system.api.user.dto.AdminUserRespDTO;
+import cn.gemrun.base.framework.common.exception.util.ServiceExceptionUtil;
 import cn.gemrun.base.framework.mybatis.core.query.LambdaQueryWrapperX;
 import cn.gemrun.base.module.bpm.api.task.BpmProcessInstanceApi;
 import cn.gemrun.base.module.bpm.api.task.dto.BpmProcessInstanceCreateReqDTO;
@@ -687,18 +689,10 @@ public class DeclareProgressReportServiceImpl implements DeclareProgressReportSe
         DeclareProgressReportDO reportB = progressReportMapper.selectById(reportIdB);
 
         if (reportA == null) {
-            throw new RuntimeException("申报记录 A 不存在");
+            throw ServiceExceptionUtil.exception(ErrorCodeConstants.PROGRESS_REPORT_A_NOT_EXISTS);
         }
         if (reportB == null) {
-            throw new RuntimeException("申报记录 B 不存在");
-        }
-
-        // 校验省级审核状态必须为"通过"
-        if (!ProvinceStatusEnum.APPROVED.getStatus().equals(reportA.getProvinceStatus())) {
-            throw new RuntimeException("记录 A 尚未通过省级审核，无法对比");
-        }
-        if (!ProvinceStatusEnum.APPROVED.getStatus().equals(reportB.getProvinceStatus())) {
-            throw new RuntimeException("记录 B 尚未通过省级审核，无法对比");
+            throw ServiceExceptionUtil.exception(ErrorCodeConstants.PROGRESS_REPORT_B_NOT_EXISTS);
         }
 
         // 2. 校验项目类型一致，不一致则抛业务异常
@@ -716,7 +710,7 @@ public class DeclareProgressReportServiceImpl implements DeclareProgressReportSe
         }
 
         if (!java.util.Objects.equals(projectTypeA, projectTypeB)) {
-            throw new RuntimeException("所选两条记录项目类型不一致，无法对比。【记录A：" + projectTypeA + "，记录B：" + projectTypeB + "】");
+            throw ServiceExceptionUtil.exception(ErrorCodeConstants.PROGRESS_REPORT_PROJECT_TYPE_NOT_MATCH);
         }
 
         // 3. 获取该项目的指标定义列表（按一级分组 + 二级分组 + 指标代号排序）

@@ -1972,6 +1972,87 @@ public class BpmTaskServiceImpl implements BpmTaskService {
                 () -> runtimeService.trigger(execution.getId()));
     }
 
+    // 任务操作类型常量
+    /**
+     * 操作类型：通过
+     */
+    private static final int ACTION_TYPE_APPROVE = 1;
+    /**
+     * 操作类型：驳回
+     */
+    private static final int ACTION_TYPE_REJECT = 2;
+    /**
+     * 操作类型：退回
+     */
+    private static final int ACTION_TYPE_RETURN = 3;
+
+    @Override
+    public BpmTaskBatchActionRespVO batchActionTask(Long userId, BpmTaskBatchActionReqVO reqVO) {
+        int totalCount = reqVO.getTasks().size();
+        int successCount = 0;
+        int failCount = 0;
+        int skipCount = 0;
+        List<BpmTaskBatchActionRespVO.TaskResult> results = new java.util.ArrayList<>();
+
+        for (BpmTaskBatchActionReqVO.TaskItem taskItem : reqVO.getTasks()) {
+            BpmTaskBatchActionRespVO.TaskResult result = new BpmTaskBatchActionRespVO.TaskResult()
+                    .setTaskId(taskItem.getId())
+                    .setSuccess(false);
+
+            try {
+                switch (reqVO.getActionType()) {
+                    case ACTION_TYPE_APPROVE:
+                        BpmTaskApproveReqVO approveReqVO = new BpmTaskApproveReqVO()
+                                .setId(taskItem.getId())
+                                .setButtonId(taskItem.getButtonId())
+                                .setReason(reqVO.getReason())
+                                .setSignPicUrl(reqVO.getSignPicUrl())
+                                .setVariables(reqVO.getVariables())
+                                .setNextAssignees(reqVO.getNextAssignees());
+                        approveTask(userId, approveReqVO);
+                        break;
+                    case ACTION_TYPE_REJECT:
+                        BpmTaskRejectReqVO rejectReqVO = new BpmTaskRejectReqVO()
+                                .setId(taskItem.getId())
+                                .setButtonId(taskItem.getButtonId())
+                                .setReason(reqVO.getReason());
+                        rejectTask(userId, rejectReqVO);
+                        break;
+                    case ACTION_TYPE_RETURN:
+                        Assert.notBlank(taskItem.getTargetTaskDefinitionKey(), "退回到的任务 Key 不能为空");
+                        BpmTaskReturnReqVO returnReqVO = new BpmTaskReturnReqVO()
+                                .setId(taskItem.getId())
+                                .setButtonId(taskItem.getButtonId())
+                                .setTargetTaskDefinitionKey(taskItem.getTargetTaskDefinitionKey())
+                                .setReason(reqVO.getReason());
+                        returnTask(userId, returnReqVO);
+                        break;
+                    default:
+                        result.setErrorCode("UNKNOWN_ACTION_TYPE")
+                                .setErrorMsg("未知的操作类型: " + reqVO.getActionType());
+                        failCount++;
+                        results.add(result);
+                        continue;
+                }
+                result.setSuccess(true);
+                successCount++;
+            } catch (Exception e) {
+                log.error("[batchActionTask][taskId({}) 操作失败, error={}]", taskItem.getId(), e.getMessage(), e);
+                result.setErrorCode("OPERATION_FAILED")
+                        .setErrorMsg(e.getMessage());
+                failCount++;
+            }
+            results.add(result);
+        }
+
+        return new BpmTaskBatchActionRespVO()
+                .setTotalCount(totalCount)
+                .setSuccessCount(successCount)
+                .setFailCount(failCount)
+                .setSkipCount(skipCount)
+                .setResults(results);
+    }
+
     /**
      * 获得自身的代理对象，解决 AOP 生效问题
      *

@@ -13,6 +13,7 @@ import { useUserStore } from '@vben/stores';
 
 import { getHospitalReportList, getNationalReportList, nationalSearch } from '#/api/declare/progress-report';
 import { getAvailableActionsBatch, submitBpmAction } from '#/api/bpm/action';
+import { batchActionTask } from '#/api/bpm/task';
 import { IconifyIcon } from '@vben/icons';
 import { TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 
@@ -60,6 +61,15 @@ const listBpmLoading = ref(false);
 const listBpmRow = ref<DeclareProgressReport | null>(null);
 const listBpmCurrentAction = ref<any>(null);
 const listBpmReason = ref('');
+
+/** 批量审批相关状态 */
+const batchModalVisible = ref(false);
+const batchModalLoading = ref(false);
+const batchReason = ref('');
+const batchCurrentAction = ref<any>(null);
+const batchableRows = ref<DeclareProgressReport[]>([]);
+const filteredRows = ref<DeclareProgressReport[]>([]);
+const batchConfirmLoading = ref(false);
 
 onActivated(() => {
   console.log('onActivated');
@@ -130,6 +140,50 @@ const compareTooltip = computed(() => {
   if (selectedRows.value.length > 2) return '只能选择2条记录进行对比';
   if (selectedRows.value[0]?.projectType !== selectedRows.value[1]?.projectType)
     return '所选记录项目类型不同，无法对比';
+  return '';
+});
+
+/** 批量审批按钮列表（所有选中记录共有的操作） */
+const batchActions = computed(() => {
+  if (selectedRows.value.length === 0) return [];
+
+  // 统计所有选中记录的可用操作
+  const actionCountMap: Record<string, { count: number; action: any }> = {};
+
+  for (const row of selectedRows.value) {
+    const actions = rowBpmActions.value[row.id] || [];
+    for (const action of actions) {
+      const key = String(action.key);
+      if (!actionCountMap[key]) {
+        actionCountMap[key] = { count: 0, action };
+      }
+      actionCountMap[key].count++;
+    }
+  }
+
+  // 只返回所有选中行都有的公共操作
+  const totalCount = selectedRows.value.length;
+  const commonActions: any[] = [];
+
+  for (const key in actionCountMap) {
+    if (actionCountMap[key].count === totalCount) {
+      commonActions.push({
+        ...actionCountMap[key].action,
+        batchLabel: `${actionCountMap[key].action.label}（${actionCountMap[key].count}条）`,
+      });
+    }
+  }
+
+  return commonActions;
+});
+
+/** 批量审批按钮是否禁用（只要有选中记录就可用） */
+const batchDisabled = computed(() => selectedRows.value.length === 0);
+
+/** 批量审批按钮提示 */
+const batchTooltip = computed(() => {
+  if (selectedRows.value.length === 0) return '请先选择记录';
+  if (batchActions.value.length === 0) return '所选记录没有共同的审批操作';
   return '';
 });
 
@@ -209,6 +263,120 @@ async function submitListBpmAction(reason: string) {
 
 function handleListBpmModalOk() {
   void submitListBpmAction(listBpmReason.value);
+}
+
+/** 批量审批按钮点击处理 */
+function handleBatchAction() {
+  batchReason.value = '审核通过';
+
+  if (selectedRows.value.length === 0) {
+    message.warning('请先选择记录');
+    return;
+  }
+
+  // 从选中行中找出公共操作
+  if (batchActions.value.length === 0) {
+    message.warning('所选记录没有共同的审批操作');
+    return;
+  }
+
+  // 使用第一个公共操作
+  batchCurrentAction.value = batchActions.value[0];
+
+  // 筛选出可以进行该操作的记录
+  const canBatchRows: DeclareProgressReport[] = [];
+  const filtered: DeclareProgressReport[] = [];
+  const action = batchCurrentAction.value;
+
+  for (const row of selectedRows.value) {
+    const actions = rowBpmActions.value[row.id] || [];
+    const hasAction = actions.some((a: any) => a.key === action.key);
+    if (hasAction) {
+      canBatchRows.push(row);
+    } else {
+      filtered.push(row);
+    }
+  }
+
+  batchableRows.value = canBatchRows;
+  filteredRows.value = filtered;
+  batchModalVisible.value = true;
+}
+
+/** 确认批量审批 */
+async function confirmBatchAction() {
+  const action = batchCurrentAction.value;
+  const rows = batchableRows.value;
+
+  if (!action || rows.length === 0) return;
+
+  // 检查是否需要必填审批意见
+  const vars = action.vars || {};
+  if (vars.reasonRequired && !batchReason.value?.trim()) {
+    message.warning('请输入审批意见');
+    return;
+  }
+
+  batchConfirmLoading.value = true;
+
+  try {
+    // 收集所有任务的 taskId
+    const tasks = rows.map((row) => {
+      const actions = rowBpmActions.value[row.id] || [];
+      const matchedAction = actions.find((a: any) => a.key === action.key);
+      return {
+        id: matchedAction?.taskId,
+        buttonId: matchedAction?.key ? parseInt(matchedAction.key) : undefined,
+        businessId: row.id,
+      };
+    }).filter((t) => t.id);
+
+    // 判断操作类型
+    const isBack =
+      action.bizStatus === 'PROVINCE_RETURNED'
+      || action.key === '6'
+      || (action.key as string)?.toLowerCase() === 'back';
+
+    let actionType: number;
+    if (isBack) {
+      actionType = 3; // 退回
+    } else if (action.key === '2' || (action.key as string)?.toLowerCase() === 'reject') {
+      actionType = 2; // 驳回
+    } else {
+      actionType = 1; // 通过
+    }
+
+    const result = await batchActionTask({
+      actionType,
+      tasks: tasks as any[],
+      reason: batchReason.value,
+    });
+
+    // 处理结果
+    let successMsg = '';
+    if (result.successCount === result.totalCount) {
+      successMsg = `批量审批成功！共处理 ${result.successCount} 条记录`;
+    } else {
+      successMsg = `批量审批完成：成功 ${result.successCount} 条，失败 ${result.failCount} 条`;
+      if (result.failCount > 0) {
+        // 显示失败详情
+        const failedTasks = result.results.filter((r: any) => !r.success);
+        const failedMsgs = failedTasks.map((r: any) => `${r.taskId}: ${r.errorMsg}`).join('\n');
+        message.warning(`${successMsg}\n失败详情：\n${failedMsgs}`);
+        batchModalVisible.value = false;
+        await handleRefresh();
+        return;
+      }
+    }
+
+    message.success(successMsg);
+    batchModalVisible.value = false;
+    await handleRefresh();
+  } catch (e: any) {
+    message.error(e?.message || '批量审批失败');
+  } finally {
+    batchConfirmLoading.value = false;
+  }
 }
 
 function handleReturnSuccess() {
@@ -534,6 +702,50 @@ const [Grid, gridApi] = useVbenVxeGrid({
       </a-form>
     </a-modal>
 
+    <!-- 批量审批确认弹窗 -->
+    <a-modal
+      v-model:open="batchModalVisible"
+      :title="`批量${batchCurrentAction?.label || '审批'}确认`"
+      :confirm-loading="batchConfirmLoading"
+      @ok="confirmBatchAction"
+      width="600px"
+    >
+      <div class="batch-modal-content">
+        <a-alert
+          v-if="filteredRows.length > 0"
+          :message="`过滤掉了 ${filteredRows.length} 条无法批量审批的记录`"
+          :description="filteredRows.map((r) => `${r.hospitalName} - ${r.reportYear}年第${r.reportBatch}期`).join('\n')"
+          type="warning"
+          show-icon
+          class="mb-4"
+        />
+        <a-alert
+          v-if="batchableRows.length > 0"
+          :message="`本次共 ${batchableRows.length} 条符合审批的记录`"
+          :description="batchableRows.map((r) => `${r.hospitalName} - ${r.reportYear}年第${r.reportBatch}期`).join('\n')"
+          type="success"
+          show-icon
+          class="mb-4"
+        />
+      </div>
+      <a-form layout="vertical">
+        <a-form-item
+          :label="batchCurrentAction?.vars?.reason || '审批意见'"
+          :required="batchCurrentAction?.vars?.reasonRequired"
+        >
+          <a-textarea
+            v-model:value="batchReason"
+            :placeholder="
+              batchCurrentAction?.vars?.reasonRequired
+                ? '请输入审批意见（必填）'
+                : '请输入审批意见（可选）'
+            "
+            :rows="4"
+          />
+        </a-form-item>
+      </a-form>
+    </a-modal>
+
     <!-- <Tabs v-model:activeKey="activeKey" @change="onTabChange" class="mb-4">
       <TabPane key="all" tab="全部记录" />
       <TabPane key="reported" tab="已上报" />
@@ -571,6 +783,14 @@ const [Grid, gridApi] = useVbenVxeGrid({
       <template #toolbar-tools>
         <TableAction
           :actions="[
+            ...(batchActions.length > 0 ? [{
+              label: '批量审批',
+              icon: 'lucide:check-square',
+              auth: [],
+              disabled: batchDisabled,
+              tooltip: batchTooltip,
+              onClick: () => handleBatchAction(),
+            }] : []),
             {
               label: '数据对比',
               icon: 'lucide:git-compare',
@@ -703,5 +923,14 @@ const [Grid, gridApi] = useVbenVxeGrid({
   display: inline-flex;
   align-items: center;
   gap: 4px;
+}
+
+.mb-4 {
+  margin-bottom: 16px;
+}
+
+.batch-modal-content :deep(.ant-alert-description) {
+  white-space: pre-line;
+  word-break: break-all;
 }
 </style>

@@ -45,15 +45,16 @@ async function handelUpload({
 <template>
   <div v-if="profile">
     <div class="flex flex-col items-center">
-      <Tooltip title="点击上传头像">
-        <CropperAvatar
-          :show-btn="false"
-          :upload-api="handelUpload"
-          :value="avatar"
-          :width="120"
-          @change="emit('success')"
+      <!-- 头像（仅展示，禁用上传功能） -->
+      <div
+        :style="{ width: '120px', height: '120px', borderRadius: '50%', overflow: 'hidden' }"
+      >
+        <img
+          :src="avatar"
+          alt="avatar"
+          class="h-full w-full object-cover"
         />
-      </Tooltip>
+      </div>
     </div>
     <div class="mt-8">
       <Descriptions :column="2">

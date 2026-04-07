@@ -208,6 +208,77 @@ export const selectExpert = async (data: {
   return await requestClient.put('/bpm/declare/task/select-expert', data);
 };
 
+// ========== 批量审批 API ==========
+
+export namespace BpmTaskBatchActionApi {
+  /** 任务项 */
+  export interface TaskItem {
+    /** 任务编号 */
+    id: string;
+    /** 按钮 ID（对应按钮设置的 Id，用于获取 bizStatus） */
+    buttonId?: number;
+    /** 退回到的任务 Key（仅退回操作时使用） */
+    targetTaskDefinitionKey?: string;
+    /** 业务ID（用于前端定位记录） */
+    businessId?: number;
+  }
+
+  /** 批量审批请求 VO */
+  export interface ReqVO {
+    /** 任务操作类型：1=通过, 2=驳回, 3=退回 */
+    actionType: number;
+    /** 任务列表 */
+    tasks: TaskItem[];
+    /** 公共审批意见 */
+    reason?: string;
+    /** 公共签名图片URL */
+    signPicUrl?: string;
+    /** 公共流程变量 */
+    variables?: Record<string, any>;
+    /** 公共下一个节点审批人 */
+    nextAssignees?: Record<string, number[]>;
+  }
+
+  /** 任务结果 */
+  export interface TaskResult {
+    /** 任务编号 */
+    taskId: string;
+    /** 业务ID */
+    businessId?: number;
+    /** 是否成功 */
+    success: boolean;
+    /** 错误编码 */
+    errorCode?: string;
+    /** 错误信息 */
+    errorMsg?: string;
+  }
+
+  /** 批量审批响应 VO */
+  export interface RespVO {
+    /** 总任务数 */
+    totalCount: number;
+    /** 成功任务数 */
+    successCount: number;
+    /** 失败任务数 */
+    failCount: number;
+    /** 跳过任务数 */
+    skipCount: number;
+    /** 任务详情列表 */
+    results: TaskResult[];
+  }
+}
+
+/**
+ * 批量审批任务
+ * 支持批量通过、批量驳回、批量退回等操作
+ */
+export const batchActionTask = async (data: BpmTaskBatchActionApi.ReqVO) => {
+  return await requestClient.put<BpmTaskBatchActionApi.RespVO>(
+    '/bpm/declare/task/batch-action',
+    data,
+  );
+};
+
 /** 根据业务ID批量查询任务状态 */
 export namespace BpmTaskByBusinessApi {
   export interface ReqVO {

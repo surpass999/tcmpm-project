@@ -115,6 +115,14 @@ public class BpmTaskActionController {
         return success(true);
     }
 
+    @PutMapping("/batch-action")
+    @Operation(summary = "批量审批任务", description = "支持批量通过、批量驳回、批量退回等操作")
+    @PreAuthorize("isAuthenticated()")
+    public CommonResult<BpmTaskBatchActionRespVO> batchActionTask(@Valid @RequestBody BpmTaskBatchActionReqVO reqVO) {
+        BpmTaskBatchActionRespVO result = taskService.batchActionTask(getLoginUserId(), reqVO);
+        return success(result);
+    }
+
     @GetMapping("/list-by-return")
     @Operation(summary = "获取所有可退回的节点", description = "用于流程详情中退回按钮，可选择退回的节点")
     @PreAuthorize("isAuthenticated()")

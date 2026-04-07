@@ -7,6 +7,7 @@ import { message } from 'ant-design-vue';
 
 import { useVbenForm, z } from '#/adapter/form';
 import { updateUserPassword } from '#/api/system/user/profile';
+import { PASSWORD_RULES } from '#/utils/password';
 
 const [Form, formApi] = useVbenForm({
   commonConfig: {
@@ -18,18 +19,35 @@ const [Form, formApi] = useVbenForm({
       fieldName: 'oldPassword',
       label: '旧密码',
       rules: z
-        .string({ message: '请输入密码' })
-        .min(5, '密码长度不能少于 5 个字符')
-        .max(20, '密码长度不能超过 20 个字符'),
+        .string({ message: '请输入旧密码' })
+        .min(PASSWORD_RULES.MIN_LENGTH, `密码长度不能少于 ${PASSWORD_RULES.MIN_LENGTH} 个字符`)
+        .max(PASSWORD_RULES.MAX_LENGTH, `密码长度不能超过 ${PASSWORD_RULES.MAX_LENGTH} 个字符`),
     },
     {
       component: 'InputPassword',
+      fieldName: 'newPassword',
+      label: '新密码',
       dependencies: {
         rules(values) {
+          const checks = [
+            { pass: /[a-z]/.test(values.newPassword || ''), msg: '小写字母' },
+            { pass: /[A-Z]/.test(values.newPassword || ''), msg: '大写字母' },
+            { pass: /\d/.test(values.newPassword || ''), msg: '数字' },
+            { pass: /[^\da-zA-Z]/.test(values.newPassword || ''), msg: '特殊字符' },
+          ];
+          const satisfiedTypes = checks.filter((c) => c.pass).length;
+          const missing = checks
+            .filter((c) => !c.pass)
+            .map((c) => c.msg)
+            .join('、');
           return z
             .string({ message: '请输入新密码' })
-            .min(5, '密码长度不能少于 5 个字符')
-            .max(20, '密码长度不能超过 20 个字符')
+            .min(PASSWORD_RULES.MIN_LENGTH, `密码长度不能少于 ${PASSWORD_RULES.MIN_LENGTH} 个字符`)
+            .max(PASSWORD_RULES.MAX_LENGTH, `密码长度不能超过 ${PASSWORD_RULES.MAX_LENGTH} 个字符`)
+            .refine(
+              () => satisfiedTypes >= PASSWORD_RULES.MIN_COMPLEXITY,
+              `密码必须包含 ${missing} 中的至少 ${PASSWORD_RULES.MIN_COMPLEXITY} 种`,
+            )
             .refine(
               (value) => value !== values.oldPassword,
               '新旧密码不能相同',
@@ -37,18 +55,17 @@ const [Form, formApi] = useVbenForm({
         },
         triggerFields: ['newPassword', 'oldPassword'],
       },
-      fieldName: 'newPassword',
-      label: '新密码',
-      rules: 'required',
     },
     {
       component: 'InputPassword',
+      fieldName: 'confirmPassword',
+      label: '确认密码',
       dependencies: {
         rules(values) {
           return z
             .string({ message: '请输入确认密码' })
-            .min(5, '密码长度不能少于 5 个字符')
-            .max(20, '密码长度不能超过 20 个字符')
+            .min(PASSWORD_RULES.MIN_LENGTH, `密码长度不能少于 ${PASSWORD_RULES.MIN_LENGTH} 个字符`)
+            .max(PASSWORD_RULES.MAX_LENGTH, `密码长度不能超过 ${PASSWORD_RULES.MAX_LENGTH} 个字符`)
             .refine(
               (value) => value === values.newPassword,
               '新密码和确认密码不一致',
@@ -56,9 +73,6 @@ const [Form, formApi] = useVbenForm({
         },
         triggerFields: ['newPassword', 'confirmPassword'],
       },
-      fieldName: 'confirmPassword',
-      label: '确认密码',
-      rules: 'required',
     },
   ],
   resetButtonOptions: {

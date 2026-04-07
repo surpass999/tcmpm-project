@@ -274,6 +274,15 @@ public interface BpmTaskService {
      */
     void withdrawTask(Long userId, String taskId);
 
+    /**
+     * 批量审批任务
+     *
+     * @param userId 用户编号
+     * @param reqVO  批量审批请求
+     * @return 批量审批结果
+     */
+    BpmTaskBatchActionRespVO batchActionTask(Long userId, BpmTaskBatchActionReqVO reqVO);
+
     // ========== Event 事件相关方法 ==========
 
     /**

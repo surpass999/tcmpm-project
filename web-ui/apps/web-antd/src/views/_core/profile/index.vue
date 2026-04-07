@@ -11,13 +11,14 @@ import { Card, Tabs } from 'ant-design-vue';
 import { getAuthPermissionInfoApi } from '#/api';
 import { getUserProfile } from '#/api/system/user/profile';
 
-import BaseInfo from './modules/base-info.vue';
+// import BaseInfo from './modules/base-info.vue';
 import ProfileUser from './modules/profile-user.vue';
 import ResetPwd from './modules/reset-pwd.vue';
-import UserSocial from './modules/user-social.vue';
+// import UserSocial from './modules/user-social.vue';
 
 const userStore = useUserStore();
-const activeName = ref('basicInfo');
+// 基本设置已隐藏时，默认选中密码设置（勿用 basicInfo，否则无对应 TabPane 会空白）
+const activeName = ref('resetPwd');
 
 /** 加载个人信息 */
 const profile = ref<SystemUserProfileApi.UserProfileRespVO>();
@@ -50,9 +51,9 @@ onMounted(loadProfile);
       <!-- 右侧 标签页 -->
       <Card class="ml-3 w-3/5">
         <Tabs v-model:active-key="activeName" class="-mt-4">
-          <Tabs.TabPane key="basicInfo" tab="基本设置">
+          <!-- <Tabs.TabPane key="basicInfo" tab="基本设置">
             <BaseInfo :profile="profile" @success="refreshProfile" />
-          </Tabs.TabPane>
+          </Tabs.TabPane> -->
           <Tabs.TabPane key="resetPwd" tab="密码设置">
             <ResetPwd />
           </Tabs.TabPane>
