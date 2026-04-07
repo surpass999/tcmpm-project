@@ -2122,6 +2122,11 @@ const containerFieldErrors = computed(() => {
               errors[key] = precErr;
               continue;
             }
+            // 范围校验：未配置 minValue 时默认 0（没有配置入口时容器内数字不可为负）
+            const rangeErr = checkRange(numVal, field.minValue ?? 0, field.maxValue ?? null);
+            if (rangeErr) {
+              errors[key] = rangeErr;
+            }
           }
           if (field.fieldType === 'checkbox') {
             const countErr = checkSelectCount(fieldValue, field.minSelect, field.maxSelect);

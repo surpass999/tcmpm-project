@@ -61,13 +61,16 @@ const hasError = ref(false);
  */
 let isUserEditing = false;
 
-/** 初始化 / 外部清空时重置显示 */
+/** 初始化 / 外部清空/数字时重置显示 */
 watch(
   () => props.modelValue,
   (val) => {
     if (isUserEditing) return;
     if (val === null || val === undefined) {
       displayValue.value = '';
+    } else {
+      // 有值时转为字符串显示（精度格式化由父组件控制，此处原样展示）
+      displayValue.value = String(val);
     }
   },
   { immediate: true },
