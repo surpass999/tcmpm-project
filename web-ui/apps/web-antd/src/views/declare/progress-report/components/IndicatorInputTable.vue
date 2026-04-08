@@ -265,6 +265,12 @@
                     上传文件
                   </a-button>
                 </Upload>
+                <div v-if="!readonly" class="upload-hint">
+                  <span v-if="getAcceptTypes(indicator)">支持 {{ getAcceptTypes(indicator) }}</span>
+                  <span v-if="getAcceptTypes(indicator) && getMaxFileCount(indicator)">，</span>
+                  <span v-if="getMaxFileCount(indicator)">最多 {{ getMaxFileCount(indicator) }} 个</span>
+                  <span class="upload-count">({{ getFileList(indicator.indicatorCode).length }}/{{ getMaxFileCount(indicator) }})</span>
+                </div>
               </div>
 
               <!-- 动态容器类型（普通容器 vs 条件容器 vs 自动条目容器） -->
@@ -3125,6 +3131,20 @@ defineExpose({
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.upload-hint {
+  font-size: 12px;
+  color: hsl(var(--muted-foreground));
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0;
+}
+
+.upload-count {
+  color: hsl(var(--primary));
+  font-weight: 500;
 }
 
 .file-list {

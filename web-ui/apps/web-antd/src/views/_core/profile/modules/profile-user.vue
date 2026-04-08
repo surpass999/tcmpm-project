@@ -44,8 +44,8 @@ async function handelUpload({
 
 <template>
   <div v-if="profile">
-    <div class="flex flex-col items-center">
-      <!-- 头像（仅展示，禁用上传功能） -->
+    <!-- <div class="flex flex-col items-center">
+
       <div
         :style="{ width: '120px', height: '120px', borderRadius: '50%', overflow: 'hidden' }"
       >
@@ -55,7 +55,7 @@ async function handelUpload({
           class="h-full w-full object-cover"
         />
       </div>
-    </div>
+    </div> -->
     <div class="mt-8">
       <Descriptions :column="2">
         <DescriptionsItem>
@@ -106,7 +106,7 @@ async function handelUpload({
           </template>
           {{ profile.dept?.name }}
         </DescriptionsItem>
-        <DescriptionsItem>
+        <!-- <DescriptionsItem>
           <template #label>
             <div class="flex items-center">
               <IconifyIcon
@@ -121,7 +121,7 @@ async function handelUpload({
               ? profile.posts.map((post) => post.name).join(',')
               : '-'
           }}
-        </DescriptionsItem>
+        </DescriptionsItem> -->
         <DescriptionsItem>
           <template #label>
             <div class="flex items-center">
