@@ -3555,7 +3555,7 @@ defineExpose({
 }
 
 .dynamic-field-label {
-  min-width: 120px;
+  min-width: 220px;
   line-height: 32px;
   font-size: 14px;
   color: hsl(var(--foreground));

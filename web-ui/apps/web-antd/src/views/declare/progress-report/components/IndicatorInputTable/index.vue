@@ -719,6 +719,26 @@ function validateContainerFieldInstant(entry: any, indicator: DeclareIndicatorAp
           errorType: 'format',
         };
       }
+      // noRepeat 排重验证（遍历其他条目检查是否重复）
+      if (field.noRepeat && trimmed) {
+        const entries = containerValues[code] || [];
+        for (let j = 0; j < entries.length; j++) {
+          if (entries[j] === entry) continue;
+          const otherFullKey = generateContainerFieldKey(code, entries[j].rowKey, field.fieldCode);
+          const otherVal = entries[j]?.[otherFullKey];
+          if (String(otherVal ?? '').trim() === trimmed) {
+            const err = `${indicatorName}「${field.fieldLabel}」：该值与「第${j + 1}个条目」重复`;
+            containerFieldInstantErrors[fullKey] = err;
+            return {
+              indicatorId: id,
+              indicatorCode: code,
+              message: err,
+              containerFieldKey: fullKey,
+              errorType: 'range',
+            };
+          }
+        }
+      }
     }
     if (field.fieldType === 'checkbox') {
       const countErr = checkSelectCount(fieldValue, field.minSelect, field.maxSelect);
@@ -753,9 +773,14 @@ function validateAll(indicatorsToValidate: DeclareIndicatorApi.Indicator[]): Val
     if (v) errors.push(...v(indicator));
   }
   errors.push(...validateLogicRules(indicatorsToValidate));
+  // 将容器字段错误同步到即时错误状态（保存时显示）
   for (const error of errors) {
-    if (error.containerFieldKey) containerFieldDirty[error.containerFieldKey] = true;
-    else if (error.indicatorId !== undefined) topLevelFieldDirty['in_' + error.indicatorId] = true;
+    if (error.containerFieldKey) {
+      containerFieldDirty[error.containerFieldKey] = true;
+      containerFieldInstantErrors[error.containerFieldKey] = error.message;
+    } else if (error.indicatorId !== undefined) {
+      topLevelFieldDirty['in_' + error.indicatorId] = true;
+    }
   }
   return errors;
 }
@@ -2106,6 +2131,19 @@ defineExpose({
   padding: 16px;
 }
 
+/* 容器表单内部布局 */
+.conditional-container-form,
+.auto-entry-container-form,
+.dynamic-container-form {
+  max-width: 100%;
+}
+
+.entry-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
 .entry-header {
   border-bottom: 1px solid hsl(var(--border));
   padding-bottom: 8px;
@@ -2124,10 +2162,6 @@ defineExpose({
 
 .mb-4 {
   margin-bottom: 16px;
-}
-
-.space-y-3 > * + * {
-  margin-top: 12px;
 }
 </style>
 

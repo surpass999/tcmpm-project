@@ -221,6 +221,13 @@ const containerClass = computed(() => {
   overflow: hidden;
 }
 
+/* 带 number-input-auto-width 类时：内容撑开，最大 8 个字符宽度 */
+.safe-number-input-root.number-input-auto-width .safe-number-input {
+  width: auto;
+  max-width: 8ch;
+  min-width: 160px;
+}
+
 /* 无前后缀时：内边距在容器上（等同 ant 仅 input） */
 .safe-number-input:not(.has-prefix):not(.has-suffix) {
   padding: 0 11px;

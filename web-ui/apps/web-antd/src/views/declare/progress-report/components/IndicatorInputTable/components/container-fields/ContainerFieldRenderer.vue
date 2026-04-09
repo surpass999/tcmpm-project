@@ -66,6 +66,32 @@ function handleBlur(e: FocusEvent) {
   emit('fieldChange');
 }
 
+/** 文本类型失焦时验证必填 */
+function handleTextBlur(e: FocusEvent) {
+  const target = e.target as HTMLInputElement;
+  const rawValue = target?.value ?? '';
+
+  if (rawValue !== props.entry[fullKey.value]) {
+    props.entry[fullKey.value] = rawValue;
+  }
+
+  emit('blur');
+  emit('fieldChange');
+}
+
+/** 多行文本失焦时验证必填 */
+function handleTextareaBlur(e: FocusEvent) {
+  const target = e.target as HTMLInputElement;
+  const rawValue = target?.value ?? '';
+
+  if (rawValue !== props.entry[fullKey.value]) {
+    props.entry[fullKey.value] = rawValue;
+  }
+
+  emit('blur');
+  emit('fieldChange');
+}
+
 /** 选择类字段的变化处理 */
 function handleSelectChange(value: any) {
   updateValue(value);
@@ -89,11 +115,13 @@ function getValue(): any {
     class="dynamic-field-item"
     :data-container-field-key="fullKey"
   >
+    <!-- 标签 -->
     <span class="dynamic-field-label">
       {{ field.fieldLabel }}
       <span v-if="field.required" class="text-red-500">*</span>
     </span>
 
+    <!-- 输入控件 -->
     <!-- 文本类型 -->
     <a-input
       v-if="field.fieldType === 'text'"
@@ -101,9 +129,8 @@ function getValue(): any {
       :disabled="disabled"
       :placeholder="field.placeholder || `请输入${field.fieldLabel}`"
       :maxlength="field.maxLength"
-      class="w-full"
       @update:value="updateValue"
-      @change="() => emit('fieldChange')"
+      @blur="handleTextBlur"
     />
 
     <!-- 数字类型 -->
@@ -128,15 +155,14 @@ function getValue(): any {
       :placeholder="field.placeholder || `请输入${field.fieldLabel}`"
       :rows="field.rows || 3"
       :maxlength="field.maxLength"
-      class="w-full"
       @update:value="updateValue"
-      @change="() => emit('fieldChange')"
+      @blur="handleTextareaBlur"
     />
 
     <!-- 单选类型 -->
     <div
       v-else-if="field.fieldType === 'radio'"
-      class="flex flex-wrap gap-x-4 gap-y-2"
+      class="radio-group-wrapper"
     >
       <a-radio
         v-for="opt in field.options"
@@ -151,22 +177,25 @@ function getValue(): any {
     </div>
 
     <!-- 复选框类型 -->
-    <a-checkbox-group
+    <div
       v-else-if="field.fieldType === 'checkbox'"
-      :model-value="getValue()"
-      :disabled="disabled"
-      class="flex flex-wrap gap-x-4 gap-y-2"
-      @update:model-value="updateValue"
-      @change="handleSelectChange"
+      class="checkbox-group-wrapper"
     >
-      <a-checkbox
-        v-for="opt in field.options"
-        :key="opt.value"
-        :value="opt.value"
+      <a-checkbox-group
+        :model-value="getValue()"
+        :disabled="disabled"
+        @update:model-value="updateValue"
+        @change="handleSelectChange"
       >
-        {{ opt.label }}
-      </a-checkbox>
-    </a-checkbox-group>
+        <a-checkbox
+          v-for="opt in field.options"
+          :key="opt.value"
+          :value="opt.value"
+        >
+          {{ opt.label }}
+        </a-checkbox>
+      </a-checkbox-group>
+    </div>
 
     <!-- 下拉单选类型 -->
     <a-select
@@ -176,7 +205,6 @@ function getValue(): any {
       :placeholder="`请选择${field.fieldLabel}`"
       :show-search="field.showSearch"
       allow-clear
-      class="w-full"
       @update:model-value="updateValue"
       @change="handleSelectChange"
     >
@@ -197,7 +225,6 @@ function getValue(): any {
       :placeholder="`请选择${field.fieldLabel}`"
       mode="multiple"
       allow-clear
-      class="w-full"
       @update:model-value="updateValue"
       @change="handleSelectChange"
     >
@@ -217,7 +244,6 @@ function getValue(): any {
       :disabled="disabled"
       :show-time="field.format?.includes('HH')"
       :format="field.format || 'YYYY-MM-DD'"
-      class="w-full"
       @update:model-value="(val) => updateValue(val)"
       @change="handleSelectChange"
     />
@@ -229,7 +255,6 @@ function getValue(): any {
       :disabled="disabled"
       :show-time="field.format?.includes('HH')"
       :format="field.format || 'YYYY-MM-DD'"
-      class="w-full"
       @update:model-value="updateValue"
       @change="handleSelectChange"
     />
@@ -259,44 +284,59 @@ function getValue(): any {
 <style scoped>
 .dynamic-field-item {
   display: flex;
+  flex-direction: column;
   align-items: flex-start;
-  gap: 12px;
-  flex-wrap: wrap;
+  gap: 4px;
 }
 
 .dynamic-field-label {
-  min-width: 120px;
-  line-height: 32px;
+  line-height: 1.5;
   font-size: 14px;
   color: hsl(var(--foreground));
-  flex-shrink: 0;
 }
 
-.dynamic-field-item .w-full {
-  flex: 1;
-  min-width: 160px;
+.dynamic-field-item :deep(.ant-input),
+.dynamic-field-item :deep(.ant-input-number),
+.dynamic-field-item :deep(.ant-picker),
+.dynamic-field-item :deep(.ant-select),
+.dynamic-field-item :deep(.ant-input-textarea),
+.dynamic-field-item :deep(.ant-switch) {
+  width: 100%;
 }
 
+/* 数字输入框：内容撑开，最大 8 个字符宽度（与外层保持一致） */
 .number-input-auto-width {
-  width: auto !important;
-  max-width: 16ch;
+  width: auto;
+  max-width: 8ch;
   min-width: 160px;
+}
+
+/* 容器内 SafeNumberInput 的输入框本身也要跟随外层宽度 */
+.number-input-auto-width :deep(.safe-number-input) {
+  width: auto !important;
+  max-width: 8ch !important;
+  min-width: 160px !important;
+}
+
+.radio-group-wrapper,
+.checkbox-group-wrapper {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding-top: 4px;
 }
 
 .indicator-error {
-  display: flex;
-  align-items: center;
-  gap: 6px;
   color: hsl(var(--destructive));
   font-size: 12.5px;
-  margin-top: 6px;
-  padding: 6px 10px;
+  padding: 4px 8px;
   background: hsl(var(--destructive) / 0.06);
   border: 1px solid hsl(var(--destructive) / 0.2);
-  border-radius: 6px;
+  border-radius: 4px;
   line-height: 1.4;
-  min-width: 160px;
-  width: 100%;
+  word-wrap: break-word;
+  width: fit-content;
+  max-width: 100%;
 }
 
 .text-red-500 {

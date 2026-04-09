@@ -588,7 +588,8 @@ function getContainerLink(valueOptions: string): string | undefined {
 function isFieldVisible(entry: any, field: ContainerField, allFields: ContainerField[]): boolean {
   if (!field.showCondition) return true;
   const cond = field.showCondition;
-  const watchVal = entry?.[cond.watchField];
+  // 条件字段的 key 也是复合格式
+  const watchVal = entry?.[entry.rowKey + cond.watchField];
   const { operator, value } = cond;
   const watchedField = allFields.find(f => f.fieldCode === cond.watchField);
   const isBooleanWatch = watchedField?.fieldType === 'boolean';
@@ -831,43 +832,43 @@ defineExpose({
                                   <div v-if="isFieldVisible(entry, field, containerFieldDefsMap[getIndicatorId(indicator.id)] || [])" class="entry-field-display">
                                     <span class="field-label">{{ field.fieldLabel }}:</span>
                                     <span v-if="field.fieldType === 'text'" class="field-value">
-                                      {{ entry[field.fieldCode] ?? '-' }}
+                                      {{ entry[entry.rowKey + field.fieldCode] ?? '-' }}
                                     </span>
                                     <div
                                       v-else-if="field.fieldType === 'textarea'"
                                       class="field-value field-textarea"
                                     >
-                                      {{ entry[field.fieldCode] ?? '-' }}
+                                      {{ entry[entry.rowKey + field.fieldCode] ?? '-' }}
                                     </div>
                                     <span v-else-if="field.fieldType === 'number'" class="field-value">
-                                      {{ formatNumericValue(entry[field.fieldCode], field.precision) }}
+                                      {{ formatNumericValue(entry[entry.rowKey + field.fieldCode], field.precision) }}
                                     </span>
                                     <span v-else-if="field.fieldType === 'boolean'" class="field-value">
-                                      <span class="status-tag" :class="entry[field.fieldCode] ? 'status-tag-success' : 'status-tag-pending'">
-                                        {{ entry[field.fieldCode] ? '是' : '否' }}
+                                      <span class="status-tag" :class="entry[entry.rowKey + field.fieldCode] ? 'status-tag-success' : 'status-tag-pending'">
+                                        {{ entry[entry.rowKey + field.fieldCode] ? '是' : '否' }}
                                       </span>
                                     </span>
                                     <span v-else-if="field.fieldType === 'radio' || field.fieldType === 'select'" class="field-value">
-                                      {{ getOptionLabel(entry[field.fieldCode], field.options) || '-' }}
+                                      {{ getOptionLabel(entry[entry.rowKey + field.fieldCode], field.options) || '-' }}
                                     </span>
                                     <div v-else-if="field.fieldType === 'checkbox' || field.fieldType === 'multiSelect'" class="field-value option-list">
-                                      <template v-if="entry[field.fieldCode] && Array.isArray(entry[field.fieldCode]) && entry[field.fieldCode].length > 0">
-                                        <span v-for="val in entry[field.fieldCode]" :key="val" class="option-tag option-selected">
+                                      <template v-if="entry[entry.rowKey + field.fieldCode] && Array.isArray(entry[entry.rowKey + field.fieldCode]) && entry[entry.rowKey + field.fieldCode].length > 0">
+                                        <span v-for="val in entry[entry.rowKey + field.fieldCode]" :key="val" class="option-tag option-selected">
                                           {{ getOptionLabel(val, field.options) }}
                                         </span>
                                       </template>
                                       <span v-else class="field-value text-gray-400">-</span>
                                     </div>
                                     <span v-else-if="field.fieldType === 'date'" class="field-value">
-                                      {{ formatDate(entry[field.fieldCode]) || '-' }}
+                                      {{ formatDate(entry[entry.rowKey + field.fieldCode]) || '-' }}
                                     </span>
                                     <span v-else-if="field.fieldType === 'dateRange'" class="field-value">
-                                      <template v-if="entry[field.fieldCode] && Array.isArray(entry[field.fieldCode])">
-                                        {{ formatDate(entry[field.fieldCode][0]) }} ~ {{ formatDate(entry[field.fieldCode][1]) }}
+                                      <template v-if="entry[entry.rowKey + field.fieldCode] && Array.isArray(entry[entry.rowKey + field.fieldCode])">
+                                        {{ formatDate(entry[entry.rowKey + field.fieldCode][0]) }} ~ {{ formatDate(entry[entry.rowKey + field.fieldCode][1]) }}
                                       </template>
                                       <template v-else>-</template>
                                     </span>
-                                    <span v-else class="field-value">{{ entry[field.fieldCode] ?? '-' }}</span>
+                                    <span v-else class="field-value">{{ entry[entry.rowKey + field.fieldCode] ?? '-' }}</span>
                                   </div>
                                 </template>
                               </div>
@@ -969,43 +970,43 @@ defineExpose({
                                   <div v-if="isFieldVisible(entry, field, containerFieldDefsMap[getIndicatorId(indicator.id)] || [])" class="entry-field-display">
                                     <span class="field-label">{{ field.fieldLabel }}:</span>
                                     <span v-if="field.fieldType === 'text'" class="field-value">
-                                      {{ entry[field.fieldCode] ?? '-' }}
+                                      {{ entry[entry.rowKey + field.fieldCode] ?? '-' }}
                                     </span>
                                     <div
                                       v-else-if="field.fieldType === 'textarea'"
                                       class="field-value field-textarea"
                                     >
-                                      {{ entry[field.fieldCode] ?? '-' }}
+                                      {{ entry[entry.rowKey + field.fieldCode] ?? '-' }}
                                     </div>
                                     <span v-else-if="field.fieldType === 'number'" class="field-value">
-                                      {{ formatNumericValue(entry[field.fieldCode], field.precision) }}
+                                      {{ formatNumericValue(entry[entry.rowKey + field.fieldCode], field.precision) }}
                                     </span>
                                     <span v-else-if="field.fieldType === 'boolean'" class="field-value">
-                                      <span class="status-tag" :class="entry[field.fieldCode] ? 'status-tag-success' : 'status-tag-pending'">
-                                        {{ entry[field.fieldCode] ? '是' : '否' }}
+                                      <span class="status-tag" :class="entry[entry.rowKey + field.fieldCode] ? 'status-tag-success' : 'status-tag-pending'">
+                                        {{ entry[entry.rowKey + field.fieldCode] ? '是' : '否' }}
                                       </span>
                                     </span>
                                     <span v-else-if="field.fieldType === 'radio' || field.fieldType === 'select'" class="field-value">
-                                      {{ getOptionLabel(entry[field.fieldCode], field.options) || '-' }}
+                                      {{ getOptionLabel(entry[entry.rowKey + field.fieldCode], field.options) || '-' }}
                                     </span>
                                     <div v-else-if="field.fieldType === 'checkbox' || field.fieldType === 'multiSelect'" class="field-value option-list">
-                                      <template v-if="entry[field.fieldCode] && Array.isArray(entry[field.fieldCode]) && entry[field.fieldCode].length > 0">
-                                        <span v-for="val in entry[field.fieldCode]" :key="val" class="option-tag option-selected">
+                                      <template v-if="entry[entry.rowKey + field.fieldCode] && Array.isArray(entry[entry.rowKey + field.fieldCode]) && entry[entry.rowKey + field.fieldCode].length > 0">
+                                        <span v-for="val in entry[entry.rowKey + field.fieldCode]" :key="val" class="option-tag option-selected">
                                           {{ getOptionLabel(val, field.options) }}
                                         </span>
                                       </template>
                                       <span v-else class="field-value text-gray-400">-</span>
                                     </div>
                                     <span v-else-if="field.fieldType === 'date'" class="field-value">
-                                      {{ formatDate(entry[field.fieldCode]) || '-' }}
+                                      {{ formatDate(entry[entry.rowKey + field.fieldCode]) || '-' }}
                                     </span>
                                     <span v-else-if="field.fieldType === 'dateRange'" class="field-value">
-                                      <template v-if="entry[field.fieldCode] && Array.isArray(entry[field.fieldCode])">
-                                        {{ formatDate(entry[field.fieldCode][0]) }} ~ {{ formatDate(entry[field.fieldCode][1]) }}
+                                      <template v-if="entry[entry.rowKey + field.fieldCode] && Array.isArray(entry[entry.rowKey + field.fieldCode])">
+                                        {{ formatDate(entry[entry.rowKey + field.fieldCode][0]) }} ~ {{ formatDate(entry[entry.rowKey + field.fieldCode][1]) }}
                                       </template>
                                       <template v-else>-</template>
                                     </span>
-                                    <span v-else class="field-value">{{ entry[field.fieldCode] ?? '-' }}</span>
+                                    <span v-else class="field-value">{{ entry[entry.rowKey + field.fieldCode] ?? '-' }}</span>
                                   </div>
                                 </template>
                               </div>

@@ -418,7 +418,8 @@ function formatContainerDate(val: any): string {
 function isFieldVisible(entry: any, field: ContainerField, allFields: ContainerField[]): boolean {
   if (!field.showCondition) return true;
   const cond = field.showCondition;
-  const watchVal = entry?.[cond.watchField];
+  // 条件字段的 key 也是复合格式
+  const watchVal = entry?.[entry.rowKey + cond.watchField];
   const { operator, value } = cond;
   const watchedField = allFields.find(f => f.fieldCode === cond.watchField);
   const isBooleanWatch = watchedField?.fieldType === 'boolean';
@@ -454,7 +455,8 @@ function renderContainerEntry(entry: any, fields: ContainerField[], showIndex: b
   }
   for (const field of fields) {
     if (!isFieldVisible(entry, field, fields)) continue;
-    const val = entry?.[field.fieldCode];
+    // 字段值的 key 也是复合格式
+    const val = entry?.[entry.rowKey + field.fieldCode];
     let displayVal: string;
     if (val === undefined || val === null || val === '') {
       displayVal = '-';
