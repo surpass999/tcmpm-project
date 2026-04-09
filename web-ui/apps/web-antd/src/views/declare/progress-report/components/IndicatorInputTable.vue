@@ -278,16 +278,16 @@
                 <!-- 条件容器：无 header，无添加/删除按钮 -->
                 <div v-show="getContainerType(indicator.valueOptions) === 'conditional'" class="conditional-container-form">
                   <div
-                    v-for="(entry, entryIndex) in getContainerEntries(indicator.indicatorCode)"
+                    v-for="entry in getContainerEntries(indicator.indicatorCode)"
                     :key="entry.rowKey"
                     class="dynamic-entry-row mb-4"
                   >
                     <div class="entry-fields space-y-3">
                       <div
-                        v-for="field in getVisibleFields(indicator.valueOptions, entry)"
+                        v-for="field in getVisibleFields(indicator.indicatorCode, indicator.valueOptions, entry)"
                         :key="field.fieldCode"
                         class="dynamic-field-item"
-                        :data-container-field-key="`${indicator.indicatorCode}:${entryIndex}:${field.fieldCode}`"
+                        :data-container-field-key="getContainerFieldFullErrorKey(entry, indicator.indicatorCode, field.fieldCode)"
                       >
                         <span class="dynamic-field-label">
                           {{ field.fieldLabel }}
@@ -295,109 +295,121 @@
                         </span>
                         <a-input
                           v-if="field.fieldType === 'text'"
-                          v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
+                          :model-value="getEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode)"
+                          @update:model-value="(val: any) => setEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode, val)"
                           :disabled="readonly"
                           :placeholder="field.placeholder || `请输入${field.fieldLabel}`"
                           :maxlength="toNumber(field.maxLength)"
                           :show-count="field.maxLength != null"
                           class="w-full"
-                          @blur="() => onFieldBlur(indicator, entryIndex, field)"
+                          @blur="(e: FocusEvent) => onFieldBlur(indicator, entry, field, e)"
                         />
                         <SafeNumberInput
                           v-else-if="field.fieldType === 'number'"
-                          v-model="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
+                          :model-value="getEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode)"
+                          @update:model-value="(val: any) => setEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode, val)"
                           :disabled="readonly"
                           :min="field.minValue ?? 0"
                           :precision="field.precision"
                           :prefix="field.prefix"
                           :suffix="field.suffix"
                           class="number-input-auto-width"
-                          @blur="() => onFieldBlur(indicator, entryIndex, field)"
+                          @blur="(e: FocusEvent) => onFieldBlur(indicator, entry, field, e)"
                         />
                         <a-textarea
                           v-else-if="field.fieldType === 'textarea'"
-                          v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
+                          :model-value="getEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode)"
+                          @update:model-value="(val: any) => setEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode, val)"
                           :disabled="readonly"
                           :placeholder="field.placeholder || `请输入${field.fieldLabel}`"
                           :rows="field.rows || 3"
                           :maxlength="toNumber(field.maxLength)"
                           :show-count="field.maxLength != null"
                           class="w-full"
-                          @blur="() => onFieldBlur(indicator, entryIndex, field)"
+                          @blur="(e: FocusEvent) => onFieldBlur(indicator, entry, field, e)"
                         />
                         <a-radio-group
                           v-else-if="field.fieldType === 'radio'"
-                          v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
+                          :value="getEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode)"
                           :disabled="readonly"
                           class="flex flex-wrap gap-x-4 gap-y-2"
-                          @change="() => onContainerFieldChange(indicator, entryIndex, field)"
+                          @change="(val: any) => {
+                            console.log('[radio @change]', { val, valType: typeof val, optionVals: field.options?.map((o: any) => ({ v: o.value, t: typeof o.value })) });
+                            setEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode, val);
+                            onContainerFieldChange(indicator, entry, field);
+                          }"
+                        >
                         >
                           <a-radio v-for="opt in field.options" :key="opt.value" :value="opt.value">{{ opt.label }}</a-radio>
                         </a-radio-group>
                         <a-checkbox-group
                           v-else-if="field.fieldType === 'checkbox'"
-                          :value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode] || []"
+                          :value="getEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode, true)"
                           :disabled="readonly"
                           class="flex flex-wrap gap-x-4 gap-y-2"
-                          @change="(vals: string[]) => { getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode] = vals; onContainerFieldChange(indicator, entryIndex, field); }"
+                          @change="(vals: string[]) => { setEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode, vals); onContainerFieldChange(indicator, entry, field); }"
                         >
                           <a-checkbox v-for="opt in field.options" :key="opt.value" :value="opt.value">{{ opt.label }}</a-checkbox>
                         </a-checkbox-group>
                         <a-select
                           v-else-if="field.fieldType === 'select'"
-                          v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
+                          :model-value="getEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode)"
+                          @update:model-value="(val: any) => setEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode, val)"
                           :disabled="readonly"
                           :placeholder="`请选择${field.fieldLabel}`"
                           :show-search="field.showSearch"
                           allow-clear
                           class="w-full"
-                          @change="() => onContainerFieldChange(indicator, entryIndex, field)"
+                          @change="() => onContainerFieldChange(indicator, entry, field)"
                         >
                           <a-select-option v-for="opt in field.options" :key="opt.value" :value="opt.value">{{ opt.label }}</a-select-option>
                         </a-select>
                         <a-select
                           v-else-if="field.fieldType === 'multiSelect'"
-                          :value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode] || []"
+                          :value="getEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode, true)"
                           :disabled="readonly"
                           :placeholder="`请选择${field.fieldLabel}`"
                           mode="multiple"
                           allow-clear
                           class="w-full"
-                          @change="(vals: string[]) => { getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode] = vals; onContainerFieldChange(indicator, entryIndex, field); }"
+                          @change="(vals: string[]) => { setEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode, vals); onContainerFieldChange(indicator, entry, field); }"
                         >
                           <a-select-option v-for="opt in field.options" :key="opt.value" :value="opt.value">{{ opt.label }}</a-select-option>
                         </a-select>
                         <a-date-picker
                           v-else-if="field.fieldType === 'date'"
-                          v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
+                          :model-value="getEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode)"
+                          @update:model-value="(val: any) => setEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode, val)"
                           :disabled="readonly"
                           :show-time="field.format?.includes('HH')"
                           :format="field.format || 'YYYY-MM-DD'"
                           class="w-full"
-                          @blur="() => onFieldBlur(indicator, entryIndex, field)"
+                          @blur="(e: FocusEvent) => onFieldBlur(indicator, entry, field, e)"
                         />
                         <a-range-picker
                           v-else-if="field.fieldType === 'dateRange'"
-                          v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
+                          :model-value="getEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode)"
+                          @update:model-value="(val: any) => setEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode, val)"
                           :disabled="readonly"
                           :show-time="field.format?.includes('HH')"
                           :format="field.format || 'YYYY-MM-DD'"
                           class="w-full"
-                          @blur="() => onFieldBlur(indicator, entryIndex, field)"
+                          @blur="(e: FocusEvent) => onFieldBlur(indicator, entry, field, e)"
                         />
                         <a-switch
                           v-else-if="field.fieldType === 'boolean'"
-                          v-model:checked="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
+                          :checked="getEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode)"
+                          @update:checked="(val: any) => setEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode, val)"
                           :disabled="readonly"
-                          @change="() => onContainerFieldChange(indicator, entryIndex, field)"
+                          @change="() => onContainerFieldChange(indicator, entry, field)"
                         />
                         <span v-else class="text-gray-400 text-sm">不支持的类型: {{ field.fieldType }}</span>
                         <!-- 统一错误提示 -->
                         <div
-                          v-if="getContainerFieldError(indicator.indicatorCode, entryIndex, field.fieldCode) && containerFieldDirty[`${indicator.indicatorCode}:${entryIndex}:${field.fieldCode}`]"
+                          v-if="getContainerFieldError(entry, indicator.indicatorCode, field.fieldCode) && containerFieldDirty[getContainerFieldFullErrorKey(entry, indicator.indicatorCode, field.fieldCode)]"
                           class="indicator-error"
                         >
-                          {{ getContainerFieldError(indicator.indicatorCode, entryIndex, field.fieldCode) }}
+                          {{ getContainerFieldError(entry, indicator.indicatorCode, field.fieldCode) }}
                         </div>
                       </div>
                     </div>
@@ -407,21 +419,21 @@
                 <!-- 自动条目容器：有 header，有来源说明，无添加/删除按钮 -->
                 <div v-show="getContainerType(indicator.valueOptions) === 'autoEntry' && isAutoEntryVisible(indicator)" class="auto-entry-container-form">
                   <div
-                    v-for="(entry, entryIndex) in getContainerEntries(indicator.indicatorCode)"
+                    v-for="entry in getContainerEntries(indicator.indicatorCode)"
                     :key="entry.rowKey"
                     class="dynamic-entry-row mb-4"
                   >
                     <div class="entry-header flex items-center justify-between mb-2">
                       <span class="entry-label text-gray-500 text-sm font-medium">
-                        条目 {{ entryIndex + 1 }}
+                        {{ entry.rowKey }} {{ indicator.indicatorName }}
                       </span>
                     </div>
                     <div class="entry-fields space-y-3">
                       <div
-                        v-for="field in getVisibleFields(indicator.valueOptions, entry)"
+                        v-for="field in getVisibleFields(indicator.indicatorCode, indicator.valueOptions, entry)"
                         :key="field.fieldCode"
                         class="dynamic-field-item"
-                        :data-container-field-key="`${indicator.indicatorCode}:${entryIndex}:${field.fieldCode}`"
+                        :data-container-field-key="getContainerFieldFullErrorKey(entry, indicator.indicatorCode, field.fieldCode)"
                       >
                         <span class="dynamic-field-label">
                           {{ field.fieldLabel }}
@@ -429,104 +441,115 @@
                         </span>
                         <a-input
                           v-if="field.fieldType === 'text'"
-                          v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
+                          :model-value="getEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode)"
+                          @update:model-value="(val: any) => setEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode, val)"
                           :disabled="readonly"
                           :placeholder="field.placeholder || `请输入${field.fieldLabel}`"
                           :maxlength="toNumber(field.maxLength)"
                           :show-count="field.maxLength != null"
                           class="w-full"
-                          @blur="() => onFieldBlur(indicator, entryIndex, field)"
+                          @blur="(e: FocusEvent) => onFieldBlur(indicator, entry, field, e)"
                         />
                         <SafeNumberInput
                           v-else-if="field.fieldType === 'number'"
-                          v-model="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
+                          :model-value="getEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode)"
+                          @update:model-value="(val: any) => setEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode, val)"
                           :disabled="readonly"
                           :min="field.minValue ?? 0"
                           :precision="field.precision"
                           :prefix="field.prefix"
                           :suffix="field.suffix"
                           class="number-input-auto-width"
-                          @blur="() => onFieldBlur(indicator, entryIndex, field)"
+                          @blur="(e: FocusEvent) => onFieldBlur(indicator, entry, field, e)"
                         />
                         <a-textarea
                           v-else-if="field.fieldType === 'textarea'"
-                          v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
+                          :model-value="getEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode)"
+                          @update:model-value="(val: any) => setEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode, val)"
                           :disabled="readonly"
                           :placeholder="field.placeholder || `请输入${field.fieldLabel}`"
                           :rows="field.rows || 3"
                           :maxlength="toNumber(field.maxLength)"
                           :show-count="field.maxLength != null"
                           class="w-full"
-                          @blur="() => onFieldBlur(indicator, entryIndex, field)"
+                          @blur="(e: FocusEvent) => onFieldBlur(indicator, entry, field, e)"
                         />
                         <a-radio-group
                           v-else-if="field.fieldType === 'radio'"
-                          v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
+                          :value="getEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode)"
                           :disabled="readonly"
                           class="flex flex-wrap gap-x-4 gap-y-2"
-                          @change="() => onContainerFieldChange(indicator, entryIndex, field)"
+                          @change="(val: any) => {
+                            console.log('[radio @change]', { val, valType: typeof val, optionVals: field.options?.map((o: any) => ({ v: o.value, t: typeof o.value })) });
+                            setEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode, val);
+                            onContainerFieldChange(indicator, entry, field);
+                          }"
+                        >
                         >
                           <a-radio v-for="opt in field.options" :key="opt.value" :value="opt.value">{{ opt.label }}</a-radio>
                         </a-radio-group>
                         <a-checkbox-group
                           v-else-if="field.fieldType === 'checkbox'"
-                          :value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode] || []"
+                          :value="getEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode, true)"
                           :disabled="readonly"
                           class="flex flex-wrap gap-x-4 gap-y-2"
-                          @change="(vals: string[]) => { getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode] = vals; onContainerFieldChange(indicator, entryIndex, field); }"
+                          @change="(vals: string[]) => { setEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode, vals); onContainerFieldChange(indicator, entry, field); }"
                         >
                           <a-checkbox v-for="opt in field.options" :key="opt.value" :value="opt.value">{{ opt.label }}</a-checkbox>
                         </a-checkbox-group>
                         <a-select
                           v-else-if="field.fieldType === 'select'"
-                          v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
+                          :model-value="getEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode)"
+                          @update:model-value="(val: any) => setEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode, val)"
                           :disabled="readonly"
                           :placeholder="`请选择${field.fieldLabel}`"
                           :show-search="field.showSearch"
                           allow-clear
                           class="w-full"
-                          @change="() => onContainerFieldChange(indicator, entryIndex, field)"
+                          @change="() => onContainerFieldChange(indicator, entry, field)"
                         >
                           <a-select-option v-for="opt in field.options" :key="opt.value" :value="opt.value">{{ opt.label }}</a-select-option>
                         </a-select>
                         <a-select
                           v-else-if="field.fieldType === 'multiSelect'"
-                          :value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode] || []"
+                          :value="getEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode, true)"
                           :disabled="readonly"
                           :placeholder="`请选择${field.fieldLabel}`"
                           mode="multiple"
                           allow-clear
                           class="w-full"
-                          @change="(vals: string[]) => { getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode] = vals; onContainerFieldChange(indicator, entryIndex, field); }"
+                          @change="(vals: string[]) => { setEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode, vals); onContainerFieldChange(indicator, entry, field); }"
                         >
                           <a-select-option v-for="opt in field.options" :key="opt.value" :value="opt.value">{{ opt.label }}</a-select-option>
                         </a-select>
                         <a-date-picker
                           v-else-if="field.fieldType === 'date'"
-                          v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
+                          :model-value="getEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode)"
+                          @update:model-value="(val: any) => setEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode, val)"
                           :disabled="readonly"
                           :show-time="field.format?.includes('HH')"
                           :format="field.format || 'YYYY-MM-DD'"
                           class="w-full"
-                          @change="() => onContainerFieldChange(indicator, entryIndex, field)"
+                          @change="() => onContainerFieldChange(indicator, entry, field)"
                         />
                         <a-range-picker
                           v-else-if="field.fieldType === 'dateRange'"
-                          v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
+                          :model-value="getEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode)"
+                          @update:model-value="(val: any) => setEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode, val)"
                           :disabled="readonly"
                           :show-time="field.format?.includes('HH')"
                           :format="field.format || 'YYYY-MM-DD'"
                           class="w-full"
-                          @change="() => onContainerFieldChange(indicator, entryIndex, field)"
+                          @change="() => onContainerFieldChange(indicator, entry, field)"
                         />
                         <span v-else class="text-gray-400 text-sm">不支持的类型: {{ field.fieldType }}</span>
 
                         <!-- 字段错误提示 -->
                         <div
-                          v-if="getContainerFieldError(indicator.indicatorCode, entryIndex, field.fieldCode) && containerFieldDirty[`${indicator.indicatorCode}:${entryIndex}:${field.fieldCode}`]"
+                          v-if="getContainerFieldError(entry, indicator.indicatorCode, field.fieldCode) && containerFieldDirty[getContainerFieldFullErrorKey(entry, indicator.indicatorCode, field.fieldCode)]"
                           class="indicator-error"
                         >
-                          {{ getContainerFieldError(indicator.indicatorCode, entryIndex, field.fieldCode) }}
+                          {{ getContainerFieldError(entry, indicator.indicatorCode, field.fieldCode) }}
                         </div>
                       </div>
                     </div>
@@ -541,13 +564,13 @@
                 <!-- 普通动态容器：有 header，有添加/删除按钮 -->
                 <div v-show="getContainerType(indicator.valueOptions) === 'normal'" class="dynamic-container-form">
                   <div
-                    v-for="(entry, entryIndex) in getContainerEntries(indicator.indicatorCode)"
+                    v-for="entry in getContainerEntries(indicator.indicatorCode)"
                     :key="entry.rowKey"
                     class="dynamic-entry-row mb-4"
                   >
                     <div class="entry-header flex items-center justify-between mb-2">
                       <span class="entry-label text-gray-500 text-sm font-medium">
-                        条目 {{ entryIndex + 1 }} - 
+                        {{ entry.rowKey }} {{ indicator.indicatorName }}
                         <span class="text-gray-500 text-xs font-italic">
                           {{ indicator.isRequired ? '必须填写此项内容' : '如无特殊情况，请勿删除条目' }}
                         </span>
@@ -556,8 +579,8 @@
                         type="text"
                         danger
                         size="small"
-                        :disabled="entryIndex === 0 && indicator.isRequired"
-                        :title="entryIndex === 0 && indicator.isRequired ? '必填项，第一条不可删除' : ''"
+                        :disabled="extractEntryIndex(entry.rowKey) === 1 && indicator.isRequired"
+                        :title="extractEntryIndex(entry.rowKey) === 1 && indicator.isRequired ? '必填项，第一条不可删除' : ''"
                         @click="handleRemoveEntry(indicator.indicatorCode, entry.rowKey)"
                       >
                         <template #icon><IconifyIcon icon="lucide:trash-2" /></template>
@@ -566,10 +589,10 @@
                     </div>
                     <div class="entry-fields space-y-3">
                       <div
-                        v-for="field in getVisibleFields(indicator.valueOptions, entry)"
+                        v-for="field in getVisibleFields(indicator.indicatorCode, indicator.valueOptions, entry)"
                         :key="field.fieldCode"
                         class="dynamic-field-item"
-                        :data-container-field-key="`${indicator.indicatorCode}:${entryIndex}:${field.fieldCode}`"
+                        :data-container-field-key="getContainerFieldFullErrorKey(entry, indicator.indicatorCode, field.fieldCode)"
                       >
                         <span class="dynamic-field-label">
                           {{ field.fieldLabel }}
@@ -577,109 +600,121 @@
                         </span>
                         <a-input
                           v-if="field.fieldType === 'text'"
-                          v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
+                          :model-value="getEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode)"
+                          @update:model-value="(val: any) => setEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode, val)"
                           :disabled="readonly"
                           :placeholder="field.placeholder || `请输入${field.fieldLabel}`"
                           :maxlength="toNumber(field.maxLength)"
                           :show-count="field.maxLength != null"
                           class="w-full"
-                          @blur="() => onFieldBlur(indicator, entryIndex, field)"
+                          @blur="(e: FocusEvent) => onFieldBlur(indicator, entry, field, e)"
                         />
                         <SafeNumberInput
                           v-else-if="field.fieldType === 'number'"
-                          v-model="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
+                          :model-value="getEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode)"
+                          @update:model-value="(val: any) => setEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode, val)"
                           :disabled="readonly"
                           :min="field.minValue ?? 0"
                           :precision="field.precision"
                           :prefix="field.prefix"
                           :suffix="field.suffix"
                           class="number-input-auto-width"
-                          @blur="() => onFieldBlur(indicator, entryIndex, field)"
+                          @blur="(e: FocusEvent) => onFieldBlur(indicator, entry, field, e)"
                         />
                         <a-textarea
                           v-else-if="field.fieldType === 'textarea'"
-                          v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
+                          :model-value="getEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode)"
+                          @update:model-value="(val: any) => setEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode, val)"
                           :disabled="readonly"
                           :placeholder="field.placeholder || `请输入${field.fieldLabel}`"
                           :rows="field.rows || 3"
                           :maxlength="toNumber(field.maxLength)"
                           :show-count="field.maxLength != null"
                           class="w-full"
-                          @blur="() => onFieldBlur(indicator, entryIndex, field)"
+                          @blur="(e: FocusEvent) => onFieldBlur(indicator, entry, field, e)"
                         />
                         <a-radio-group
                           v-else-if="field.fieldType === 'radio'"
-                          v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
+                          :value="getEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode)"
                           :disabled="readonly"
                           class="flex flex-wrap gap-x-4 gap-y-2"
-                          @change="() => onContainerFieldChange(indicator, entryIndex, field)"
+                          @change="(val: any) => {
+                            console.log('[radio @change]', { val, valType: typeof val, optionVals: field.options?.map((o: any) => ({ v: o.value, t: typeof o.value })) });
+                            setEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode, val);
+                            onContainerFieldChange(indicator, entry, field);
+                          }"
+                        >
                         >
                           <a-radio v-for="opt in field.options" :key="opt.value" :value="opt.value">{{ opt.label }}</a-radio>
                         </a-radio-group>
                         <a-checkbox-group
                           v-else-if="field.fieldType === 'checkbox'"
-                          :value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode] || []"
+                          :value="getEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode, true)"
                           :disabled="readonly"
                           class="flex flex-wrap gap-x-4 gap-y-2"
-                          @change="(vals: string[]) => { getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode] = vals; onContainerFieldChange(indicator, entryIndex, field); }"
+                          @change="(vals: string[]) => { setEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode, vals); onContainerFieldChange(indicator, entry, field); }"
                         >
                           <a-checkbox v-for="opt in field.options" :key="opt.value" :value="opt.value">{{ opt.label }}</a-checkbox>
                         </a-checkbox-group>
                         <a-select
                           v-else-if="field.fieldType === 'select'"
-                          v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
+                          :model-value="getEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode)"
+                          @update:model-value="(val: any) => setEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode, val)"
                           :disabled="readonly"
                           :placeholder="`请选择${field.fieldLabel}`"
                           :show-search="field.showSearch"
                           allow-clear
                           class="w-full"
-                          @change="() => onContainerFieldChange(indicator, entryIndex, field)"
+                          @change="() => onContainerFieldChange(indicator, entry, field)"
                         >
                           <a-select-option v-for="opt in field.options" :key="opt.value" :value="opt.value">{{ opt.label }}</a-select-option>
                         </a-select>
                         <a-select
                           v-else-if="field.fieldType === 'multiSelect'"
-                          :value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode] || []"
+                          :value="getEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode, true)"
                           :disabled="readonly"
                           :placeholder="`请选择${field.fieldLabel}`"
                           mode="multiple"
                           allow-clear
                           class="w-full"
-                          @change="(vals: string[]) => { getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode] = vals; onContainerFieldChange(indicator, entryIndex, field); }"
+                          @change="(vals: string[]) => { setEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode, vals); onContainerFieldChange(indicator, entry, field); }"
                         >
                           <a-select-option v-for="opt in field.options" :key="opt.value" :value="opt.value">{{ opt.label }}</a-select-option>
                         </a-select>
                         <a-date-picker
                           v-else-if="field.fieldType === 'date'"
-                          v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
+                          :model-value="getEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode)"
+                          @update:model-value="(val: any) => setEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode, val)"
                           :disabled="readonly"
                           :show-time="field.format?.includes('HH')"
                           :format="field.format || 'YYYY-MM-DD'"
                           class="w-full"
-                          @blur="() => onFieldBlur(indicator, entryIndex, field)"
+                          @blur="(e: FocusEvent) => onFieldBlur(indicator, entry, field, e)"
                         />
                         <a-range-picker
                           v-else-if="field.fieldType === 'dateRange'"
-                          v-model:value="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
+                          :model-value="getEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode)"
+                          @update:model-value="(val: any) => setEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode, val)"
                           :disabled="readonly"
                           :show-time="field.format?.includes('HH')"
                           :format="field.format || 'YYYY-MM-DD'"
                           class="w-full"
-                          @blur="() => onFieldBlur(indicator, entryIndex, field)"
+                          @blur="(e: FocusEvent) => onFieldBlur(indicator, entry, field, e)"
                         />
                         <a-switch
                           v-else-if="field.fieldType === 'boolean'"
-                          v-model:checked="getEntryField(indicator.indicatorCode, entryIndex)[field.fieldCode]"
+                          :checked="getEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode)"
+                          @update:checked="(val: any) => setEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode, val)"
                           :disabled="readonly"
-                          @change="() => onContainerFieldChange(indicator, entryIndex, field)"
+                          @change="() => onContainerFieldChange(indicator, entry, field)"
                         />
                         <span v-else class="text-gray-400 text-sm">不支持的类型: {{ field.fieldType }}</span>
                         <!-- 统一错误提示 -->
                         <div
-                          v-if="getContainerFieldError(indicator.indicatorCode, entryIndex, field.fieldCode) && containerFieldDirty[`${indicator.indicatorCode}:${entryIndex}:${field.fieldCode}`]"
+                          v-if="getContainerFieldError(entry, indicator.indicatorCode, field.fieldCode) && containerFieldDirty[getContainerFieldFullErrorKey(entry, indicator.indicatorCode, field.fieldCode)]"
                           class="indicator-error"
                         >
-                          {{ getContainerFieldError(indicator.indicatorCode, entryIndex, field.fieldCode) }}
+                          {{ getContainerFieldError(entry, indicator.indicatorCode, field.fieldCode) }}
                         </div>
                       </div>
                     </div>
@@ -697,7 +732,7 @@
                     v-if="getContainerEntries(indicator.indicatorCode).length > 0"
                     class="text-gray-400 text-xs mt-1 text-right"
                   >
-                    共 {{ getContainerEntries(indicator.indicatorCode).length }} 个条目
+                    共 {{ getContainerEntries(indicator.indicatorCode).length }} 个条目（上限 {{ MAX_CONTAINER_ENTRIES }}）
                   </div>
                 </div>
               </div>
@@ -866,8 +901,8 @@ interface ContainerConfig {
   fields: DynamicField[];
 }
 
-/** 动态容器值 Map（key = indicatorCode, value = 条目数组，每项 = { rowKey: string, [fieldCode]: value }） */
-const containerValues = reactive<Record<string, any[]>>({});
+/** 动态容器值 Map（key = indicatorCode, value = rowKey -> entry 的映射，entry 自身为 reactive 确保响应式追踪） */
+const containerValues = reactive<Record<string, Record<string, any>>>({});
 
 /** 容器字段脏标记 Map（key = `${code}:${entryIndex}:${fieldCode}`，用户交互后才显示错误） */
 const containerFieldDirty = reactive<Record<string, boolean>>({});
@@ -882,12 +917,49 @@ function markTopLevelDirty(indicatorId: number | undefined) {
 
 /** 获取动态容器条目数组（返回空数组兜底，避免模板中 TS 报错） */
 function getContainerEntries(indicatorCode: string): any[] {
-  return containerValues[indicatorCode] || [];
+  const entriesMap = containerValues[indicatorCode] || {};
+  const entries = Object.values(entriesMap);
+  const containerType = entries.length
+    ? getContainerType(indicators.value.find(i => i.indicatorCode === indicatorCode)?.valueOptions || '')
+    : undefined;
+  if (containerType === 'conditional') {
+    console.debug('[条件容器 getContainerEntries]', { indicatorCode, containerType, entries, entryKeys: entries.map(e => Object.keys(e)) });
+  }
+  return entries;
 }
 
-/** 安全获取指定条目的字段对象（用于模板 v-model 绑定，避免 TS 报错） */
-function getEntryField(indicatorCode: string, entryIndex: number): any {
-  return containerValues[indicatorCode]?.[entryIndex] || {};
+/** 获取容器条目中指定字段的值（用于模板绑定）
+ * @param entry 条目对象
+ * @param indicatorCode 容器指标编码
+ * @param fieldCode 后台配置的字段编码
+ * @param isArray 是否为数组类型（复选框/多选），返回 [] 兜底
+ */
+function getEntryFieldValue(entry: any, indicatorCode: string, fieldCode: string, isArray = false): any {
+  const fullKey = generateContainerFieldKey(indicatorCode, entry.rowKey, fieldCode);
+  const val = entry?.[fullKey];
+  if (isArray) return val || [];
+  return val;
+}
+
+/** 设置容器条目中指定字段的值（用于模板绑定）
+ * @param entry 条目对象
+ * @param indicatorCode 容器指标编码
+ * @param fieldCode 后台配置的字段编码
+ * @param value 要设置的值
+ */
+function setEntryFieldValue(entry: any, indicatorCode: string, fieldCode: string, value: any) {
+  const fullKey = generateContainerFieldKey(indicatorCode, entry.rowKey, fieldCode);
+  console.log('[条件容器 setEntryFieldValue]', { fullKey, value, rowKey: entry.rowKey, fieldCode, indicatorCode });
+  entry[fullKey] = value;
+}
+
+/** 获取容器字段的错误/脏标记 key（使用完整 key 格式）
+ * @param entry 条目对象（包含 rowKey）
+ * @param indicatorCode 容器指标编码
+ * @param fieldCode 后台配置的字段编码
+ */
+function getContainerFieldFullErrorKey(entry: any, indicatorCode: string, fieldCode: string): string {
+  return generateContainerFieldKey(indicatorCode, entry.rowKey, fieldCode);
 }
 
 /** 上期值 Map（key = indicatorCode） */
@@ -1055,41 +1127,137 @@ function handleMultiSelectChange(indicator: any, selectedValues: string[]) {
   onIndicatorChange(indicator);
 }
 
-/** 生成唯一 rowKey（时间戳 + 随机数） */
-function generateRowKey(): string {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+/** 动态容器最大条目数量限制 */
+const MAX_CONTAINER_ENTRIES = 99;
+
+/** 为普通动态容器/自动条目容器生成带序号的 rowKey */
+function generateContainerRowKey(indicatorCode: string, index: number): string {
+  const paddedIndex = String(index).padStart(2, '0');
+  return `${indicatorCode}${paddedIndex}`;
+}
+
+/** 为条件容器生成 rowKey（直接使用 indicatorCode） */
+function generateConditionalRowKey(indicatorCode: string): string {
+  return indicatorCode;
+}
+
+/** 获取当前容器中已有的最大序号 */
+function getMaxEntryIndex(entries: any[]): number {
+  let maxIndex = 0;
+  for (const entry of entries) {
+    const match = entry.rowKey.match(/(\d+)$/);
+    if (match) {
+      const idx = parseInt(match[1]!, 10);
+      if (idx > maxIndex) maxIndex = idx;
+    }
+  }
+  return maxIndex;
+}
+
+/** 为容器生成下一个可用的 rowKey
+ * @returns 生成的新 rowKey，如果已达上限则返回 undefined
+ */
+function generateNextContainerRowKey(indicatorCode: string): string | undefined {
+  const entriesMap = containerValues[indicatorCode] || {};
+  const entries = Object.values(entriesMap);
+  const maxIndex = getMaxEntryIndex(entries);
+  const nextIndex = maxIndex + 1;
+  if (nextIndex > MAX_CONTAINER_ENTRIES) {
+    return undefined;
+  }
+  return generateContainerRowKey(indicatorCode, nextIndex);
+}
+
+/** 重新编排容器内所有条目的 rowKey（删除后调用） */
+function renumberContainerEntries(indicatorCode: string) {
+  const entriesMap = containerValues[indicatorCode] || {};
+  const keys = Object.keys(entriesMap);
+  keys.forEach((oldKey, idx) => {
+    const entry = entriesMap[oldKey];
+    const newRowKey = generateContainerRowKey(indicatorCode, idx + 1);
+    if (oldKey !== newRowKey) {
+      // 创建新条目并删除旧条目（reactive 属性无法修改 key，只能重建）
+      const newEntry = reactive({ rowKey: newRowKey, ...entry });
+      delete entriesMap[oldKey];
+      entriesMap[newRowKey] = newEntry;
+    }
+  });
+}
+
+/** 从 rowKey 提取序号数字（如 'code01' -> 1） */
+function extractEntryIndex(rowKey: string): number {
+  const match = rowKey.match(/(\d+)$/);
+  return match ? parseInt(match[1]!, 10) : 1;
+}
+
+/** 生成容器字段的完整 key（容器code + 条目索引 + 字段code）
+ * rowKey 已包含 indicatorCode + 序号，所以直接拼接 rowKey + fieldCode
+ * 例如：容器 502，条目 rowKey=50201，字段 code=01 -> 5020101
+ */
+function generateContainerFieldKey(
+  _indicatorCode: string,
+  rowKey: string,
+  fieldCode: string
+): string {
+  // rowKey 已经是 indicatorCode + 序号，直接拼接 fieldCode
+  const key = `${rowKey}${fieldCode}`;
+  return key;
+}
+
+/** 将旧格式 rowKey 转换为新格式（用于编辑已有数据时） */
+function migrateRowKeyToNewFormat(indicatorCode: string, entryIndex: number): string {
+  return generateContainerRowKey(indicatorCode, entryIndex + 1);
 }
 
 /** 添加条目 */
 function handleAddEntry(indicatorCode: string) {
-  if (!containerValues[indicatorCode]) {
-    containerValues[indicatorCode] = [];
+  const indicator = indicators.value.find(i => i.indicatorCode === indicatorCode);
+  if (!indicator) return;
+
+  const containerType = getContainerType(indicator.valueOptions);
+
+  // 条件容器不允许手动添加
+  if (containerType === 'conditional') {
+    return;
   }
-  const newRowKey = generateRowKey();
-  containerValues[indicatorCode].push({ rowKey: newRowKey });
+
+  if (!containerValues[indicatorCode]) {
+    containerValues[indicatorCode] = {};
+  }
+
+  // 普通/自动条目容器：使用带序号的 rowKey
+  const newRowKey = generateNextContainerRowKey(indicatorCode);
+  if (!newRowKey) {
+    message.warning(`容器 ${indicatorCode} 的条目数量已达到上限（${MAX_CONTAINER_ENTRIES}）`);
+    return;
+  }
+  // 用 reactive() 包裹 entry，使 entry[fullKey] 的修改能被 Vue 追踪
+  containerValues[indicatorCode][newRowKey] = reactive({ rowKey: newRowKey });
 }
 
 /** 删除条目 */
 function handleRemoveEntry(indicatorCode: string, rowKey: string) {
-  const entries = containerValues[indicatorCode] || [];
-  const index = entries.findIndex((e: any) => e.rowKey === rowKey);
-  if (index !== -1) {
-    // 删除前清理该条目相关的脏标记和错误（避免残留的 entryIndex 导致错误引用）
-    // ⚠️ 必须在 splice 之前清理，因为 splice 后 entryIndex 会偏移到错误的位置
-    const indicator = indicators.value.find(i => i.indicatorCode === indicatorCode);
-    if (indicator) {
-      const fields = parseDynamicFields(indicator.valueOptions);
-      for (const field of fields) {
-        const key = `${indicatorCode}:${index}:${field.fieldCode}`;
-        delete containerFieldDirty[key];
-        delete jointRuleErrors[key];
-        delete logicRuleErrors[key];
-      }
-      // 清理容器指标本身的 logicRule 错误（key = containerCode，无 entryIndex）
-      delete logicRuleErrors[indicatorCode];
+  const entriesMap = containerValues[indicatorCode] || {};
+  if (!(rowKey in entriesMap)) return;
+
+  // 清理该条目相关的脏标记和错误
+  const entry = entriesMap[rowKey];
+  const indicator = indicators.value.find(i => i.indicatorCode === indicatorCode);
+  if (indicator && entry) {
+    const fields = parseDynamicFields(indicator.valueOptions);
+    for (const field of fields) {
+      const key = generateContainerFieldKey(indicatorCode, entry.rowKey, field.fieldCode);
+      delete containerFieldDirty[key];
+      delete jointRuleErrors[key];
+      delete logicRuleErrors[key];
     }
-    containerValues[indicatorCode]!.splice(index, 1);
+    // 清理容器指标本身的 logicRule 错误（key = containerCode，无 entryIndex）
+    delete logicRuleErrors[indicatorCode];
   }
+  // 从 map 中删除该 entry
+  delete containerValues[indicatorCode]![rowKey];
+  // 删除后重新编排序号
+  renumberContainerEntries(indicatorCode);
   // 触发同步和校验
   onIndicatorChange({ indicatorCode, valueType: 12 } as any);
 }
@@ -1140,46 +1308,55 @@ function syncAutoEntryContainerCount(
   containerCode: string,
   linkedIndicatorCode: string
 ) {
-  // const linkedValue = formValues.value[linkedIndicatorCode];
   const linkedValue = formValues[linkedIndicatorCode];
-
   const targetCount = Math.max(0, Math.floor(Number(linkedValue)) || 0);
 
-  if (!containerValues[containerCode]) {
-    containerValues[containerCode] = [];
+  // 超过上限时提示用户，只取上限值
+  if (targetCount > MAX_CONTAINER_ENTRIES) {
+    message.warning(`自动条目容器最多支持 ${MAX_CONTAINER_ENTRIES} 个条目，已截断`);
   }
 
-  const currentEntries = containerValues[containerCode];
+  // 目标数量为 0 时，不做任何操作（保留已有条目，等用户输入关联指标值）
+  if (targetCount <= 0) return;
 
-  if (currentEntries.length < targetCount) {
-    // 不足：新增条目
-    while (currentEntries.length < targetCount) {
-      currentEntries.push({ rowKey: generateRowKey() });
-    }
-  } else if (currentEntries.length > targetCount) {
-    // 超出：删除末尾条目
+  if (!containerValues[containerCode]) {
+    containerValues[containerCode] = {};
+  }
+
+  const entriesMap = containerValues[containerCode];
+  const effectiveTarget = Math.min(targetCount, MAX_CONTAINER_ENTRIES);
+  const currentKeys = Object.keys(entriesMap).sort();
+
+  // 超出时：清理末尾条目的错误状态并删除
+  if (currentKeys.length > effectiveTarget) {
+    const toDelete = currentKeys.slice(effectiveTarget);
     const indicator = indicators.value.find(i => i.indicatorCode === containerCode);
     if (indicator) {
-      cleanupEntryErrors(containerCode, currentEntries.length - 1, targetCount);
-    }
-    currentEntries.splice(targetCount);
-  }
-}
-
-/** 清理被删除条目的错误状态 */
-function cleanupEntryErrors(containerCode: string, fromIndex: number, toIndex: number) {
-  const indicator = indicators.value.find(i => i.indicatorCode === containerCode);
-  if (!indicator) return;
-
-  const fields = parseDynamicFields(indicator.valueOptions);
-  for (let i = toIndex; i < fromIndex; i++) {
-    for (const field of fields) {
-      const key = `${containerCode}:${i}:${field.fieldCode}`;
-      delete containerFieldDirty[key];
-      delete jointRuleErrors[key];
-      delete logicRuleErrors[key];
+      const fields = parseDynamicFields(indicator.valueOptions);
+      for (const oldKey of toDelete) {
+        const entry = entriesMap[oldKey];
+        for (const field of fields) {
+          const key = generateContainerFieldKey(containerCode, entry.rowKey, field.fieldCode);
+          delete containerFieldDirty[key];
+          delete jointRuleErrors[key];
+          delete logicRuleErrors[key];
+        }
+        delete entriesMap[oldKey];
+      }
     }
   }
+
+  // 不足时：创建新条目
+  if (currentKeys.length < effectiveTarget) {
+    const startIndex = currentKeys.length + 1;
+    for (let i = startIndex; i <= effectiveTarget; i++) {
+      const rowKey = generateContainerRowKey(containerCode, i);
+      entriesMap[rowKey] = reactive({ rowKey });
+    }
+  }
+
+  // 重新编排序号（key 变化后自动完成）
+  renumberContainerEntries(containerCode);
 }
 
 /** 根据关联指标变化，同步所有自动条目容器 */
@@ -1236,59 +1413,132 @@ function parseExtraConfig(extraConfig: string | undefined): Record<string, any> 
 function convertContainerEntryDates(
   valueOptions: string,
   item: Record<string, any>,
+  indicatorCode?: string,
+  rowKey?: string,
 ): Record<string, any> {
   const fields = parseDynamicFields(valueOptions);
   const result: Record<string, any> = { ...item };
-  for (const field of fields) {
-    if (field.fieldType === 'date' && item[field.fieldCode]) {
-      const d = dayjs(item[field.fieldCode]);
-      if (d.isValid()) result[field.fieldCode] = d;
-    } else if (field.fieldType === 'dateRange') {
-      const [start, end] = Array.isArray(item[field.fieldCode]) ? item[field.fieldCode] : [null, null];
-      const ds = start ? dayjs(start) : null;
-      const de = end ? dayjs(end) : null;
-      result[field.fieldCode] = [ds, de];
+
+  // 如果提供了 indicatorCode 和 rowKey，说明是新格式，直接处理 fullKey
+  if (indicatorCode && rowKey) {
+    for (const field of fields) {
+      const fullKey = generateContainerFieldKey(indicatorCode, rowKey, field.fieldCode);
+      if (field.fieldType === 'date' && item[fullKey]) {
+        const d = dayjs(item[fullKey]);
+        if (d.isValid()) result[fullKey] = d;
+      } else if (field.fieldType === 'dateRange') {
+        const [start, end] = Array.isArray(item[fullKey]) ? item[fullKey] : [null, null];
+        const ds = start ? dayjs(start) : null;
+        const de = end ? dayjs(end) : null;
+        result[fullKey] = [ds, de];
+      }
+    }
+  } else {
+    // 旧格式兼容：直接使用原始 fieldCode（仅用于旧数据迁移时调用）
+    for (const field of fields) {
+      if (field.fieldType === 'date' && item[field.fieldCode]) {
+        const d = dayjs(item[field.fieldCode]);
+        if (d.isValid()) result[field.fieldCode] = d;
+      } else if (field.fieldType === 'dateRange') {
+        const [start, end] = Array.isArray(item[field.fieldCode]) ? item[field.fieldCode] : [null, null];
+        const ds = start ? dayjs(start) : null;
+        const de = end ? dayjs(end) : null;
+        result[field.fieldCode] = [ds, de];
+      }
     }
   }
+
   return result;
 }
 
-/** 判断同条目中某字段是否可见 */
-function isFieldVisible(entry: any, field: DynamicField, allFields: DynamicField[]): boolean {
+/** 迁移旧格式容器条目为新格式（fieldCode -> fullKey）
+ * 旧格式：{ rowKey: "60201", name: "张三", age: "25" }
+ * 新格式：{ rowKey: "60201", "6020101": "张三", "6020201": "张三" } 等
+ * @param item 原始条目
+ * @param valueOptions valueOptions JSON
+ * @param indicatorCode 容器指标编码
+ * @param rowKey 条目 rowKey
+ */
+function migrateContainerEntryToFullKey(
+  item: Record<string, any>,
+  valueOptions: string,
+  indicatorCode: string,
+  rowKey: string,
+): Record<string, any> {
+  const fields = parseDynamicFields(valueOptions);
+  console.log('[migrateContainerEntryToFullKey] item:', JSON.stringify(item), 'rowKey:', rowKey, 'fields:', fields.map((f: any) => ({ code: f.fieldCode, type: f.fieldType })));
+  const result: Record<string, any> = { rowKey: item.rowKey };
+
+  for (const field of fields) {
+    const fullKey = generateContainerFieldKey(indicatorCode, rowKey, field.fieldCode);
+    // 优先从 fullKey 路径读取（已存储为 fullKey 格式的数据）
+    if (item[fullKey] !== undefined) {
+      result[fullKey] = item[fullKey];
+    }
+    // 降级兼容：如果 fullKey 无值，尝试 raw fieldCode（旧格式数据）
+    else if (item[field.fieldCode] !== undefined) {
+      result[fullKey] = item[field.fieldCode];
+    }
+  }
+  console.log('[migrateContainerEntryToFullKey] result:', JSON.stringify(result));
+  return result;
+}
+
+/** 判断同条目中某字段是否可见
+ * @param entry 条目对象（包含 rowKey）
+ * @param indicatorCode 容器指标编码
+ * @param field 当前字段
+ * @param allFields 所有字段列表
+ */
+function isFieldVisible(entry: any, indicatorCode: string, field: DynamicField, allFields: DynamicField[]): boolean {
   if (!field.showCondition) return true;
   const cond = field.showCondition;
-  const watchVal = entry?.[cond.watchField];
+  const watchFieldFullKey = generateContainerFieldKey(indicatorCode, entry.rowKey, cond.watchField);
+  const watchVal = entry?.[watchFieldFullKey];
   const { operator, value } = cond;
   const watchedField = allFields.find(f => f.fieldCode === cond.watchField);
   const isBooleanWatch = watchedField?.fieldType === 'boolean';
+  let result: boolean;
   switch (operator) {
     case 'eq':
       if (isBooleanWatch) {
         const boolVal = value === 'true' || value === '1' || value === true;
-        return watchVal === boolVal;
+        result = watchVal === boolVal;
+      } else {
+        result = watchVal === value;
       }
-      return watchVal === value;
+      break;
     case 'neq':
       if (isBooleanWatch) {
         const boolVal = value === 'true' || value === '1' || value === true;
-        return watchVal !== boolVal;
+        result = watchVal !== boolVal;
+      } else {
+        result = watchVal !== value;
       }
-      return watchVal !== value;
-    case 'gt':       return Number(watchVal) > Number(value);
-    case 'gte':      return Number(watchVal) >= Number(value);
-    case 'lt':       return Number(watchVal) < Number(value);
-    case 'lte':      return Number(watchVal) <= Number(value);
-    case 'in':       return Array.isArray(value) && value.includes(watchVal);
-    case 'notEmpty': return watchVal !== undefined && watchVal !== null && watchVal !== '';
-    case 'isEmpty':  return watchVal === undefined || watchVal === null || watchVal === '';
-    default:         return true;
+      break;
+    case 'gt':       result = Number(watchVal) > Number(value); break;
+    case 'gte':      result = Number(watchVal) >= Number(value); break;
+    case 'lt':       result = Number(watchVal) < Number(value); break;
+    case 'lte':      result = Number(watchVal) <= Number(value); break;
+    case 'in':       result = Array.isArray(value) && value.includes(watchVal); break;
+    case 'notEmpty': result = watchVal !== undefined && watchVal !== null && watchVal !== ''; break;
+    case 'isEmpty':  result = watchVal === undefined || watchVal === null || watchVal === ''; break;
+    default:         result = true;
   }
+  console.debug('[isFieldVisible]', { fieldCode: field.fieldCode, hasShowCondition: !!field.showCondition, cond, watchVal, result });
+  return result;
 }
 
-/** 获取某条目中可见的字段列表（用于条件容器和动态容器两分支） */
-function getVisibleFields(valueOptions: string, entry: any): DynamicField[] {
+/** 获取某条目中可见的字段列表（用于条件容器和动态容器两分支）
+ * @param indicatorCode 容器指标编码
+ * @param valueOptions valueOptions JSON 字符串
+ * @param entry 条目对象（包含 rowKey）
+ */
+function getVisibleFields(indicatorCode: string, valueOptions: string, entry: any): DynamicField[] {
   const fields = parseDynamicFields(valueOptions);
-  return fields.filter(f => isFieldVisible(entry, f, fields));
+  const visible = fields.filter(f => isFieldVisible(entry, indicatorCode, f, fields));
+  console.log('[getVisibleFields]', { indicatorCode, rowKey: entry.rowKey, totalFields: fields.length, visibleFields: visible.map(f => ({ code: f.fieldCode, type: f.fieldType })) });
+  return visible;
 }
 
 /** 获取数字精度 */
@@ -1306,7 +1556,7 @@ interface ValidationError {
   indicatorId?: number;
   indicatorCode: string;
   message: string;
-  /** 容器字段错误 key，格式：containerCode:entryIndex:fieldCode */
+  /** 容器字段错误 key，格式：容器code + 条目序号 + 字段code（如 6020101） */
   containerFieldKey?: string;
 }
 
@@ -1381,9 +1631,9 @@ function validateContainerField(
   ctx: ContainerFieldContext,
   extraRules?: Array<(ctx: ContainerFieldContext) => string | null>,
 ) {
-  const { field, fieldValue, errors, indicatorId, containerCode, entryIndex, fieldCode, fieldLabel, indicatorName } = ctx;
+  const { field, fieldValue, errors, indicatorId, containerCode, entryIndex, fieldCode, fieldLabel, indicatorName, entry } = ctx;
   const entryLabel = `第${entryIndex + 1}个条目`;
-  const containerFieldKey = `${containerCode}:${entryIndex}:${fieldCode}`;
+  const containerFieldKey = generateContainerFieldKey(containerCode, entry.rowKey, fieldCode);
 
   // 1. 必填校验（所有字段类型，优先校验）
   if (field.required) {
@@ -1533,19 +1783,21 @@ function validateType11_User(indicator: DeclareIndicatorApi.Indicator): Validati
 function validateType12_Container(indicator: DeclareIndicatorApi.Indicator): ValidationError[] {
   const errors: ValidationError[] = [];
   const { indicatorCode: code, id, indicatorName } = indicator;
-  const entries = containerValues[code] || [];
+  const entriesMap = containerValues[code] || {};
+  const entries = Object.values(entriesMap);
   const fields = parseDynamicFields(indicator.valueOptions);
 
-  for (let i = 0; i < entries.length; i++) {
-    const entry = entries[i];
+  let entryIndex = 0;
+  for (const entry of entries) {
     for (const field of fields) {
-      if (!isFieldVisible(entry, field, fields)) continue;
+      if (!isFieldVisible(entry, code, field, fields)) continue;
 
-      const fieldValue = entry[field.fieldCode];
+      const fullKey = generateContainerFieldKey(code, entry.rowKey, field.fieldCode);
+      const fieldValue = entry[fullKey];
       const ctx: ContainerFieldContext = {
         indicatorId: id!,
         containerCode: code,
-        entryIndex: i,
+        entryIndex,
         entry,
         field,
         fieldCode: field.fieldCode,
@@ -1577,10 +1829,11 @@ function validateType12_Container(indicator: DeclareIndicatorApi.Indicator): Val
             return '不能输入纯数字';
           }
           if (ctx.field.noRepeat && trimmed) {
-            const entries = containerValues[ctx.containerCode] || [];
-            for (let j = 0; j < entries.length; j++) {
+            const allEntries = Object.values(containerValues[ctx.containerCode] || {});
+            for (let j = 0; j < allEntries.length; j++) {
               if (j === ctx.entryIndex) continue;
-              const otherVal = entries[j]?.[ctx.fieldCode];
+              const otherFullKey = generateContainerFieldKey(ctx.containerCode, allEntries[j].rowKey, ctx.fieldCode);
+              const otherVal = allEntries[j]?.[otherFullKey];
               if (String(otherVal ?? '').trim() === trimmed) {
                 return `该值与「第${j + 1}个条目」重复`;
               }
@@ -1595,11 +1848,12 @@ function validateType12_Container(indicator: DeclareIndicatorApi.Indicator): Val
       // 容器字段 logicRule 校验
       if (field.logicRule?.trim()) {
         const containerLogicRuleErrors = validateContainerFieldLogicRule(
-          indicator, field, i, entry
+          indicator, field, entryIndex, entry
         );
         errors.push(...containerLogicRuleErrors);
       }
     }
+    entryIndex++;
   }
 
   return errors;
@@ -1613,14 +1867,14 @@ function validateType12_Container(indicator: DeclareIndicatorApi.Indicator): Val
 function validateContainerFieldLogicRule(
   containerIndicator: DeclareIndicatorApi.Indicator,
   field: DynamicField,
-  entryIndex: number,
+  _entryIndex: number,
   entry: any
 ): ValidationError[] {
   const errors: ValidationError[] = [];
   const containerCode = containerIndicator.indicatorCode;
   const fieldCode = field.fieldCode;
-  const key = `${containerCode}:${entryIndex}:${fieldCode}`;
-  const fieldValue = entry[fieldCode];
+  const fullKey = generateContainerFieldKey(containerCode, entry.rowKey, fieldCode);
+  const fieldValue = entry[fullKey];
 
   // 解析 logicRule 中涉及的所有字段代码
   const involvedFieldCodes = new Set<string>();
@@ -1628,17 +1882,19 @@ function validateContainerFieldLogicRule(
     involvedFieldCodes.add(m[1]!.trim());
   }
 
-  // 构建当前条目的字段值映射（仅限当前条目内）
+  // 构建当前条目的字段值映射（仅限当前条目内，使用完整 key）
   const fieldValueMap: Record<string, any> = {};
   for (const fc of involvedFieldCodes) {
-    fieldValueMap[fc] = entry[fc];
+    const fcFullKey = generateContainerFieldKey(containerCode, entry.rowKey, fc);
+    fieldValueMap[fc] = entry[fcFullKey];
   }
   fieldValueMap[fieldCode] = fieldValue;
 
   // 将 logicRule 中的 [fieldCode] 替换为实际值
   let processedRule = field.logicRule!;
   for (const fc of involvedFieldCodes) {
-    const val = entry[fc];
+    const fcFullKey = generateContainerFieldKey(containerCode, entry.rowKey, fc);
+    const val = entry[fcFullKey];
     if (val !== undefined && val !== null && val !== '') {
       processedRule = processedRule.replace(
         new RegExp(`\\[${fc.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\]`, 'g'),
@@ -1660,7 +1916,7 @@ function validateContainerFieldLogicRule(
         indicatorId: containerIndicator.id,
         indicatorCode: containerCode,
         message: `${field.fieldLabel}：${msg}`,
-        containerFieldKey: key,
+        containerFieldKey: fullKey,
       });
     }
   } catch {
@@ -1830,9 +2086,12 @@ function validateLogicRuleForBlur(changedIndicator: DeclareIndicatorApi.Indicato
  * 优先级：1. 字段级 logicRuleErrors > 2. containerFieldDirty 脏标记 > 3. containerFieldErrors
  * 注意：容器指标本身的 logicRule 错误不在此处返回（否则会导致所有字段行同时显示同一个错误，
  *       即使该行已填写有效值）。容器级 logicRule 错误应由容器头部单独展示，不干扰字段级错误。
+ * @param entry 条目对象（包含 rowKey）
+ * @param indicatorCode 容器指标编码
+ * @param fieldCode 后台配置的字段编码
  */
-function getContainerFieldError(containerCode: string, entryIndex: number, fieldCode: string): string | undefined {
-  const key = `${containerCode}:${entryIndex}:${fieldCode}`;
+function getContainerFieldError(entry: any, indicatorCode: string, fieldCode: string): string | undefined {
+  const key = generateContainerFieldKey(indicatorCode, entry.rowKey, fieldCode);
 
   // 1. 字段级 logicRule 错误（精确匹配到 entry + field）
   if (logicRuleErrors[key]) return logicRuleErrors[key];
@@ -1979,8 +2238,8 @@ function onIndicatorChange(indicator: DeclareIndicatorApi.Indicator) {
 
   // 如果是动态容器，将子字段值同步到 formValues
   if (indicator.valueType === 12) {
-    const entries = containerValues[indicator.indicatorCode] || [];
-    formValues[indicator.indicatorCode] = JSON.stringify(entries);
+    const entriesMap = containerValues[indicator.indicatorCode] || {};
+    formValues[indicator.indicatorCode] = JSON.stringify(Object.values(entriesMap));
   }
 
   // 触发关联的自动条目容器同步
@@ -1992,12 +2251,38 @@ function onIndicatorChange(indicator: DeclareIndicatorApi.Indicator) {
   });
 }
 
-/** 容器字段失焦验证：标记脏 + 触发容器逻辑规则 + 触发所有涉及指标的联合规则 */
-function onFieldBlur(indicator: DeclareIndicatorApi.Indicator, entryIndex: number, field: DynamicField) {
-  const key = `${indicator.indicatorCode}:${entryIndex}:${field.fieldCode}`;
+/** 容器字段失焦验证：标记脏 + 触发容器逻辑规则 + 触发所有涉及指标的联合规则
+ * 注意：对于 radio/checkbox/select 等选择类字段，blur 时 DOM value 为空，
+ * 值由 @change 事件通过 setEntryFieldValue 写入，所以跳过 blur 校验避免误判必填。
+ */
+function onFieldBlur(indicator: DeclareIndicatorApi.Indicator, entry: any, field: DynamicField, event: FocusEvent) {
+  // radio / checkbox / select / cascader 等选择类字段的值由 @change 事件写入，blur 时 DOM value 为空，跳过
+  if (field.fieldType === 'radio' || field.fieldType === 'checkbox' || field.fieldType === 'select' || field.fieldType === 'cascader' || field.fieldType === 'treeSelect') {
+    return;
+  }
+
+  const key = generateContainerFieldKey(indicator.indicatorCode, entry.rowKey, field.fieldCode);
+
+  // 从 DOM 原生 input 元素读取当前值（解决 a-input 在某些情况下 @update:model-value 与 @blur 时序问题）
+  const target = event.target as HTMLInputElement;
+  const rawValue = target?.value ?? '';
+
+  // 按字段类型归一化值：number 转数字，其他保留字符串
+  let normalizedValue: any;
+  if (field.fieldType === 'number') {
+    const trimmed = rawValue.trim();
+    normalizedValue = trimmed === '' ? null : Number(trimmed);
+  } else {
+    normalizedValue = rawValue;
+  }
+
+  // 脏值比较：只有真正变化了才写入（减少不必要的响应式触发）
+  if (normalizedValue !== entry[key]) {
+    entry[key] = normalizedValue;
+  }
+
   // 标记为脏
   containerFieldDirty[key] = true;
-  // 触发逻辑规则校验：validateLogicRuleForBlur 会遍历所有涉及当前指标的 logicRule
   nextTick(() => {
     recalculateComputedIndicators();
     validateLogicRuleForBlur(indicator);
@@ -2005,8 +2290,8 @@ function onFieldBlur(indicator: DeclareIndicatorApi.Indicator, entryIndex: numbe
 }
 
 /** 容器字段值变化验证（单选/复选/下拉等选择类型） */
-function onContainerFieldChange(indicator: DeclareIndicatorApi.Indicator, entryIndex: number, field: DynamicField) {
-  const key = `${indicator.indicatorCode}:${entryIndex}:${field.fieldCode}`;
+function onContainerFieldChange(indicator: DeclareIndicatorApi.Indicator, entry: any, field: DynamicField) {
+  const key = generateContainerFieldKey(indicator.indicatorCode, entry.rowKey, field.fieldCode);
   containerFieldDirty[key] = true;
   nextTick(() => {
     recalculateComputedIndicators();
@@ -2078,21 +2363,22 @@ const containerFieldErrors = computed(() => {
     if (indicator.valueType !== 12) continue; // 仅处理容器类型
 
     const code = indicator.indicatorCode;
-    const entries = containerValues[code] || [];
+    const entriesMap = containerValues[code] || {};
+    const entries = Object.values(entriesMap);
     const fields = parseDynamicFields(indicator.valueOptions);
 
     for (let i = 0; i < entries.length; i++) {
       const entry = entries[i];
       for (const field of fields) {
-        if (!isFieldVisible(entry, field, fields)) continue;
+        if (!isFieldVisible(entry, code, field, fields)) continue;
 
-        const fieldValue = entry[field.fieldCode];
-        const key = `${code}:${i}:${field.fieldCode}`;
+        const fullKey = generateContainerFieldKey(code, entry.rowKey, field.fieldCode);
+        const fieldValue = entry[fullKey];
         const isEmpty = fieldValue === undefined || fieldValue === null || fieldValue === '';
 
         // 1. 必填校验
         if (field.required && isEmpty) {
-          errors[key] = '此项为必填';
+          errors[fullKey] = '此项为必填';
           continue;
         }
 
@@ -2102,16 +2388,17 @@ const containerFieldErrors = computed(() => {
           if (field.fieldType === 'text' || field.fieldType === 'textarea') {
             const trimmed = String(fieldValue).trim();
             if (field.fieldType === 'text' && /^-?\d+(\.\d+)?$/.test(trimmed)) {
-              errors[key] = '不能输入纯数字';
+              errors[fullKey] = '不能输入纯数字';
               continue;
             }
             // 不可重复校验（文本和多行文本都支持）
             if (field.noRepeat && trimmed) {
               for (let j = 0; j < entries.length; j++) {
                 if (j === i) continue;
-                const otherVal = entries[j]?.[field.fieldCode];
+                const otherFullKey = generateContainerFieldKey(code, entries[j].rowKey, field.fieldCode);
+                const otherVal = entries[j]?.[otherFullKey];
                 if (String(otherVal ?? '').trim() === trimmed) {
-                  errors[key] = `该值与「第${j + 1}个条目」重复`;
+                  errors[fullKey] = `该值与「第${j + 1}个条目」重复`;
                   break;
                 }
               }
@@ -2120,24 +2407,24 @@ const containerFieldErrors = computed(() => {
           if (field.fieldType === 'number') {
             const numVal = Number(fieldValue);
             if (isNaN(numVal)) {
-              errors[key] = '请输入有效数字';
+              errors[fullKey] = '请输入有效数字';
               continue;
             }
             const precErr = checkPrecision(numVal, field.precision);
             if (precErr) {
-              errors[key] = precErr;
+              errors[fullKey] = precErr;
               continue;
             }
             // 范围校验：未配置 minValue 时默认 0（没有配置入口时容器内数字不可为负）
             const rangeErr = checkRange(numVal, field.minValue ?? 0, field.maxValue ?? null);
             if (rangeErr) {
-              errors[key] = rangeErr;
+              errors[fullKey] = rangeErr;
             }
           }
           if (field.fieldType === 'checkbox') {
             const countErr = checkSelectCount(fieldValue, field.minSelect, field.maxSelect);
             if (countErr) {
-              errors[key] = countErr;
+              errors[fullKey] = countErr;
             }
           }
         }
@@ -2151,7 +2438,7 @@ const containerFieldErrors = computed(() => {
 /** 联合校验错误 Map（validateAll 将 ValidationError 同步至此，供 getContainerFieldError 读取）
  * key 格式：
  * - 顶级指标：`indicatorCode` 或 `indicatorId`
- * - 容器字段：`containerCode:entryIndex:fieldCode`
+ * - 容器字段：`容器code + 条目序号 + 字段code`（如 6020101）
  */
 const jointRuleErrors = reactive<Record<string, string>>({});
 
@@ -2512,19 +2799,38 @@ onMounted(async () => {
 
         // 初始化动态容器值：兼容旧格式（对象）和新格式（数组）
         if (vt === 12 && record.indicatorCode) {
+          const containerType = ind ? getContainerType(ind.valueOptions) : 'normal';
           const raw = value;
+          const indicatorCode = record.indicatorCode;
+          console.log('[容器初始化] indicatorCode:', indicatorCode, 'containerType:', containerType, 'raw:', JSON.stringify(raw));
+          containerValues[indicatorCode] = {};
           if (Array.isArray(raw)) {
-            containerValues[record.indicatorCode] = raw.map((item: any) => ({
-              rowKey: item.rowKey || generateRowKey(),
-              ...convertContainerEntryDates(ind!.valueOptions, item),
-            }));
+            raw.forEach((item: any, idx: number) => {
+              const rowKey = item.rowKey || migrateRowKeyToNewFormat(indicatorCode, idx);
+              const entryWithFullKey = migrateContainerEntryToFullKey(item, ind!.valueOptions, indicatorCode, rowKey);
+              const dates = convertContainerEntryDates(ind!.valueOptions, entryWithFullKey, indicatorCode, rowKey);
+              const entryData = { rowKey, ...item, ...dates };
+              containerValues[indicatorCode]![rowKey] = reactive(entryData);
+            });
           } else if (raw && typeof raw === 'object') {
             // 旧格式兼容：单个对象转为一行
-            containerValues[record.indicatorCode] = [
-              { rowKey: generateRowKey(), ...convertContainerEntryDates(ind!.valueOptions, raw) },
-            ];
+            if (containerType === 'conditional') {
+              const rowKey = generateConditionalRowKey(indicatorCode);
+              const entryWithFullKey = migrateContainerEntryToFullKey(raw, ind!.valueOptions, indicatorCode, rowKey);
+              const dates = convertContainerEntryDates(ind!.valueOptions, entryWithFullKey, indicatorCode, rowKey);
+              containerValues[indicatorCode]![rowKey] = reactive({ rowKey, ...raw, ...dates });
+            } else {
+              const rowKey = generateContainerRowKey(indicatorCode, 1);
+              const entryWithFullKey = migrateContainerEntryToFullKey(raw, ind!.valueOptions, indicatorCode, rowKey);
+              const dates = convertContainerEntryDates(ind!.valueOptions, entryWithFullKey, indicatorCode, rowKey);
+              containerValues[indicatorCode]![rowKey] = reactive({ rowKey, ...raw, ...dates });
+            }
           } else {
-            containerValues[record.indicatorCode] = [{ rowKey: generateRowKey() }];
+            if (containerType === 'conditional') {
+              containerValues[indicatorCode]![generateConditionalRowKey(indicatorCode)] = reactive({ rowKey: generateConditionalRowKey(indicatorCode) });
+            } else {
+              containerValues[indicatorCode]![generateContainerRowKey(indicatorCode, 1)] = reactive({ rowKey: generateContainerRowKey(indicatorCode, 1) });
+            }
           }
         }
       }
@@ -2541,7 +2847,18 @@ onMounted(async () => {
         if (link) continue;
       }
       if (ind.valueType === 12 && !containerValues[ind.indicatorCode]) {
-        containerValues[ind.indicatorCode] = [{ rowKey: generateRowKey() }];
+        const containerType = getContainerType(ind.valueOptions);
+        if (containerType === 'conditional') {
+          // 条件容器：rowKey 直接使用 indicatorCode
+          const rowKey = generateConditionalRowKey(ind.indicatorCode);
+          containerValues[ind.indicatorCode] = {};
+          containerValues[ind.indicatorCode]![rowKey] = reactive({ rowKey });
+        } else {
+          // 普通容器：使用带序号的 rowKey
+          const rowKey = generateContainerRowKey(ind.indicatorCode, 1);
+          containerValues[ind.indicatorCode] = {};
+          containerValues[ind.indicatorCode]![rowKey] = reactive({ rowKey });
+        }
       }
     }
 
@@ -2625,18 +2942,36 @@ watch(() => props.projectType, async (newProjectType) => {
           fileListMap[record.indicatorCode] = parseStoredFileList(value);
         }
         if (vt === 12 && record.indicatorCode) {
+          const containerType = getContainerType(ind.valueOptions);
           const raw = value;
+          const indicatorCode = record.indicatorCode;
+          containerValues[indicatorCode] = {};
           if (Array.isArray(raw)) {
-            containerValues[record.indicatorCode] = raw.map((item: any) => ({
-              rowKey: item.rowKey || generateRowKey(),
-              ...convertContainerEntryDates(ind.valueOptions, item),
-            }));
+            raw.forEach((item: any, idx: number) => {
+              const rowKey = item.rowKey || migrateRowKeyToNewFormat(indicatorCode, idx);
+              const entryWithFullKey = migrateContainerEntryToFullKey(item, ind.valueOptions, indicatorCode, rowKey);
+              const dates = convertContainerEntryDates(ind.valueOptions, entryWithFullKey, indicatorCode, rowKey);
+              const entryData = { rowKey, ...item, ...dates };
+              containerValues[indicatorCode]![rowKey] = reactive(entryData);
+            });
           } else if (raw && typeof raw === 'object') {
-            containerValues[record.indicatorCode] = [
-              { rowKey: generateRowKey(), ...convertContainerEntryDates(ind.valueOptions, raw) },
-            ];
+            if (containerType === 'conditional') {
+              const rowKey = generateConditionalRowKey(indicatorCode);
+              const entryWithFullKey = migrateContainerEntryToFullKey(raw, ind.valueOptions, indicatorCode, rowKey);
+              const dates = convertContainerEntryDates(ind.valueOptions, entryWithFullKey, indicatorCode, rowKey);
+              containerValues[indicatorCode]![rowKey] = reactive({ rowKey, ...raw, ...dates });
+            } else {
+              const rowKey = generateContainerRowKey(indicatorCode, 1);
+              const entryWithFullKey = migrateContainerEntryToFullKey(raw, ind.valueOptions, indicatorCode, rowKey);
+              const dates = convertContainerEntryDates(ind.valueOptions, entryWithFullKey, indicatorCode, rowKey);
+              containerValues[indicatorCode]![rowKey] = reactive({ rowKey, ...raw, ...dates });
+            }
           } else {
-            containerValues[record.indicatorCode] = [{ rowKey: generateRowKey() }];
+            if (containerType === 'conditional') {
+              containerValues[indicatorCode]![generateConditionalRowKey(indicatorCode)] = reactive({ rowKey: generateConditionalRowKey(indicatorCode) });
+            } else {
+              containerValues[indicatorCode]![generateContainerRowKey(indicatorCode, 1)] = reactive({ rowKey: generateContainerRowKey(indicatorCode, 1) });
+            }
           }
         }
       }
@@ -2653,7 +2988,18 @@ watch(() => props.projectType, async (newProjectType) => {
         if (link) continue;
       }
       if (ind.valueType === 12 && !containerValues[ind.indicatorCode]) {
-        containerValues[ind.indicatorCode] = [{ rowKey: generateRowKey() }];
+        const containerType = getContainerType(ind.valueOptions);
+        if (containerType === 'conditional') {
+          // 条件容器：rowKey 直接使用 indicatorCode
+          const rowKey = generateConditionalRowKey(ind.indicatorCode);
+          containerValues[ind.indicatorCode] = {};
+          containerValues[ind.indicatorCode]![rowKey] = reactive({ rowKey });
+        } else {
+          // 普通容器：使用带序号的 rowKey
+          const rowKey = generateContainerRowKey(ind.indicatorCode, 1);
+          containerValues[ind.indicatorCode] = {};
+          containerValues[ind.indicatorCode]![rowKey] = reactive({ rowKey });
+        }
       }
     }
 
@@ -2711,7 +3057,9 @@ watch(
     for (const indicator of indicators.value) {
       if (indicator.valueType !== 12) continue;
       const link = getAutoEntryLink(indicator.valueOptions);
-      if (link && formValues[link] !== undefined) {
+      if (!link) continue;
+      const linkValue = formValues[link];
+      if (linkValue !== undefined) {
         syncAutoEntryContainerCount(indicator.indicatorCode, link);
       }
     }
@@ -2724,7 +3072,7 @@ function getContainerValues(): Record<string, string> {
   const result: Record<string, string> = {};
   for (const ind of indicators.value) {
     if (ind.valueType === 12) {
-      result[ind.indicatorCode] = JSON.stringify(containerValues[ind.indicatorCode] || []);
+      result[ind.indicatorCode] = JSON.stringify(Object.values(containerValues[ind.indicatorCode] || {}));
     }
   }
   return result;
@@ -2768,7 +3116,7 @@ function getAllIndicatorValues(): Array<{
 
     // 动态容器：JSON 字符串作为 valueStr
     if (vt === 12) {
-      item.valueStr = JSON.stringify(containerValues[code] || []);
+      item.valueStr = JSON.stringify(Object.values(containerValues[code] || {}));
     } else if (vt === 1) {
       item.valueNum = String(rawValue);
     } else if (vt === 2 || vt === 6 || vt === 9 || vt === 10) {
@@ -2805,7 +3153,7 @@ function getAllIndicatorValues(): Array<{
 function syncContainerValuesToForm() {
   for (const ind of indicators.value) {
     if (ind.valueType === 12) {
-      formValues[ind.indicatorCode] = JSON.stringify(containerValues[ind.indicatorCode] || []);
+      formValues[ind.indicatorCode] = JSON.stringify(Object.values(containerValues[ind.indicatorCode] || {}));
     }
   }
 }

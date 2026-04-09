@@ -19,7 +19,7 @@ import {
 } from '#/api/declare/progress-report';
 import { getHospital, getHospitalByDeptId } from '#/api/declare/hospital';
 
-import IndicatorInputTable from '../components/IndicatorInputTable.vue';
+import IndicatorInputTable from '../components/IndicatorInputTable/index.vue';
 import ValidationSummaryModal from '../components/ValidationSummaryModal.vue';
 
 const emit = defineEmits(['success']);

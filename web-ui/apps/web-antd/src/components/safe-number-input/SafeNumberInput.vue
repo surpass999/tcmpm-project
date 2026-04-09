@@ -2,8 +2,8 @@
 import { computed, ref, watch } from 'vue';
 
 interface Props {
-  /** v-model 绑定值 */
-  modelValue?: number | null;
+  /** v-model 绑定值：支持数字、无效输入的原始字符串、空字符串 */
+  modelValue?: number | string | null;
   /** 最小值 */
   min?: number;
   /** 最大值 */
@@ -39,9 +39,9 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<{
   /**
    * 更新值（blur 时始终同步，让父组件统一做必填+精度+范围校验）
-   * 与 a-input-number 行为一致：blur 时将值同步到父组件，父组件负责所有校验
+   * emit 原始字符串：空字符串=空值，字符串=无效输入待校验，纯数字字符串=有效值
    */
-  'update:modelValue': [value: number | null];
+  'update:modelValue': [value: number | string | null];
   /** 失焦事件 */
   blur: [event: FocusEvent];
   /** 输入事件 */
@@ -66,23 +66,16 @@ watch(
   () => props.modelValue,
   (val) => {
     if (isUserEditing) return;
+    // null/undefined → 清空
     if (val === null || val === undefined) {
       displayValue.value = '';
     } else {
-      // 有值时转为字符串显示（精度格式化由父组件控制，此处原样展示）
+      // 数字或字符串都转为字符串显示（保留原始无效输入供用户编辑）
       displayValue.value = String(val);
     }
   },
   { immediate: true },
 );
-
-/** 解析输入值，返回有效数字或 null */
-function parseInputValue(input: string): number | null {
-  const trimmed = input.trim();
-  if (trimmed === '') return null;
-  const num = Number(trimmed);
-  return isNaN(num) ? null : num;
-}
 
 /** 处理输入 */
 function handleInput(event: Event) {
@@ -97,21 +90,27 @@ function handleInput(event: Event) {
 
 /**
  * 处理失焦：始终同步值，让父组件统一处理必填+精度+范围校验
- * 与 a-input-number 行为完全一致：blur 时将值（有效数字或 null）emit 到父组件，
- * 不校准、不显示组件内错误，所有校验逻辑走父组件。
+ * 与 a-input-number 行为完全一致：blur 时将值同步到父组件，
+ * emit 原始字符串（空=空值，字母=无效输入，数字=有效值）。
  */
 function handleBlur(event: FocusEvent) {
   const trimmed = displayValue.value.trim();
-  const numVal = parseInputValue(trimmed);
 
-  // 始终同步值到父组件（关键修复：不再仅有效值才 emit，与 a-input-number 行为一致）
-  emit('update:modelValue', numVal);
+  // 空输入 → emit null；有效数字 → emit 数字；无效输入 → emit 原始字符串
+  let emitValue: number | string | null;
+  if (trimmed === '') {
+    emitValue = null;
+  } else {
+    const numVal = Number(trimmed);
+    emitValue = isNaN(numVal) ? trimmed : numVal;
+  }
+  emit('update:modelValue', emitValue);
 
   // 保留原始输入用于显示，不校准
   displayValue.value = trimmed;
 
-  // 仅记录"输入了无效字符"状态用于边框变红，不由组件内显示错误
-  hasError.value = trimmed !== '' && numVal === null;
+  // 边框变红：仅在有内容但不是有效数字时
+  hasError.value = trimmed !== '' && Number(trimmed).toString() === 'NaN';
 
   // 延迟清除编辑标记，等父组件一轮响应后再允许 watch 覆盖
   setTimeout(() => {
