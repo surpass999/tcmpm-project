@@ -68,6 +68,8 @@ const isDirty = ref(false);
 const fileListMap = reactive<Record<string, UploadFile[]>>({});
 const containerValues = reactive<Record<string, Record<string, any>>>({});
 const containerFieldDirty = reactive<Record<string, boolean>>({});
+/** 容器字段即时错误（失焦时显示） */
+const containerFieldInstantErrors = reactive<Record<string, string>>({});
 const topLevelFieldDirty = reactive<Record<string, boolean>>({});
 const lastPeriodValues = ref<Record<string, string>>({});
 const jointRules = ref<DeclareIndicatorJointRuleApi.JointRule[]>([]);
@@ -639,6 +641,104 @@ function validateType12_Container(indicator: DeclareIndicatorApi.Indicator): Val
   return errors;
 }
 
+/**
+ * 容器字段即时验证（用于失焦时即时显示错误）
+ * 复用 validateType12_Container 中的单字段验证逻辑
+ */
+function validateContainerFieldInstant(entry: any, indicator: DeclareIndicatorApi.Indicator, field: DynamicField): ValidationError | null {
+  const { indicatorCode: code, id, indicatorName } = indicator;
+  const fullKey = generateContainerFieldKey(code, entry.rowKey, field.fieldCode);
+  const fieldValue = entry[fullKey];
+
+  // 清除之前的即时错误
+  delete containerFieldInstantErrors[fullKey];
+
+  // 必填校验
+  if (field.required && isEmpty(fieldValue)) {
+    const err = `${indicatorName}「${field.fieldLabel}」为必填`;
+    containerFieldInstantErrors[fullKey] = err;
+    return {
+      indicatorId: id,
+      indicatorCode: code,
+      message: err,
+      containerFieldKey: fullKey,
+      errorType: 'required',
+    };
+  }
+
+  // 非空时校验格式
+  if (!isEmpty(fieldValue)) {
+    if (field.fieldType === 'number') {
+      const numVal = Number(fieldValue);
+      if (isNaN(numVal)) {
+        const err = `${indicatorName}「${field.fieldLabel}」：请输入有效数字`;
+        containerFieldInstantErrors[fullKey] = err;
+        return {
+          indicatorId: id,
+          indicatorCode: code,
+          message: err,
+          containerFieldKey: fullKey,
+          errorType: 'format',
+        };
+      }
+      const rangeErr = checkRange(numVal, field.minValue ?? 0, field.maxValue ?? null);
+      if (rangeErr) {
+        const err = `${indicatorName}「${field.fieldLabel}」：${rangeErr}`;
+        containerFieldInstantErrors[fullKey] = err;
+        return {
+          indicatorId: id,
+          indicatorCode: code,
+          message: err,
+          containerFieldKey: fullKey,
+          errorType: 'range',
+        };
+      }
+      const precErr = checkPrecision(numVal, field.precision);
+      if (precErr) {
+        const err = `${indicatorName}「${field.fieldLabel}」：${precErr}`;
+        containerFieldInstantErrors[fullKey] = err;
+        return {
+          indicatorId: id,
+          indicatorCode: code,
+          message: err,
+          containerFieldKey: fullKey,
+          errorType: 'format',
+        };
+      }
+    }
+    if (field.fieldType === 'text' || field.fieldType === 'textarea') {
+      const trimmed = String(fieldValue).trim();
+      if (field.fieldType === 'text' && /^-?\d+(\.\d+)?$/.test(trimmed)) {
+        const err = `${indicatorName}「${field.fieldLabel}」：不能输入纯数字`;
+        containerFieldInstantErrors[fullKey] = err;
+        return {
+          indicatorId: id,
+          indicatorCode: code,
+          message: err,
+          containerFieldKey: fullKey,
+          errorType: 'format',
+        };
+      }
+    }
+    if (field.fieldType === 'checkbox') {
+      const countErr = checkSelectCount(fieldValue, field.minSelect, field.maxSelect);
+      if (countErr) {
+        const err = `${indicatorName}「${field.fieldLabel}」：${countErr}`;
+        containerFieldInstantErrors[fullKey] = err;
+        return {
+          indicatorId: id,
+          indicatorCode: code,
+          message: err,
+          containerFieldKey: fullKey,
+          errorType: 'required',
+        };
+      }
+    }
+  }
+
+  return null;
+}
+
 const validators: Record<number, (ind: DeclareIndicatorApi.Indicator) => ValidationError[]> = {
   1: validateType1_Number, 2: validateType2_Text, 3: validateType3_Boolean,
   4: validateType4_Date, 5: validateType5_RichText, 6: validateType6_Select,
@@ -738,9 +838,10 @@ function validateLogicRuleForBlur(changedIndicator: DeclareIndicatorApi.Indicato
 
 function getContainerFieldError(entry: any, indicatorCode: string, fieldCode: string): string | undefined {
   const key = generateContainerFieldKey(indicatorCode, entry.rowKey, fieldCode);
+  // 优先返回即时错误（失焦时显示）
+  if (containerFieldInstantErrors[key]) return containerFieldInstantErrors[key];
   if (logicRuleErrors[key]) return logicRuleErrors[key];
-  if (!containerFieldDirty[key]) return undefined;
-  return containerFieldErrors.value[key];
+  return containerFieldErrors[key];
 }
 
 function getTopLevelError(indicator: DeclareIndicatorApi.Indicator): string | undefined {
@@ -1061,6 +1162,8 @@ function onFieldBlur(indicator: DeclareIndicatorApi.Indicator, entry: any, field
   }
   if (normalizedValue !== entry[key]) entry[key] = normalizedValue;
   containerFieldDirty[key] = true;
+  // 触发容器字段即时验证
+  validateContainerFieldInstant(entry, indicator, field);
   nextTick(() => {
     recalculateComputedIndicators();
     validateLogicRuleForBlur(indicator);
@@ -1070,6 +1173,8 @@ function onFieldBlur(indicator: DeclareIndicatorApi.Indicator, entry: any, field
 function onContainerFieldChange(indicator: DeclareIndicatorApi.Indicator, entry: any, field: DynamicField) {
   const key = generateContainerFieldKey(indicator.indicatorCode, entry.rowKey, field.fieldCode);
   containerFieldDirty[key] = true;
+  // 触发容器字段即时验证
+  validateContainerFieldInstant(entry, indicator, field);
   nextTick(() => {
     recalculateComputedIndicators();
     validateLogicRuleForBlur(indicator);
@@ -1566,7 +1671,6 @@ defineExpose({
                         :row-key="entry.rowKey"
                         :field="field"
                         :disabled="readonly"
-                        :show-error="containerFieldDirty[getContainerFieldFullErrorKey(entry, indicator.indicatorCode, field.fieldCode)]"
                         :container-field-error="getContainerFieldError(entry, indicator.indicatorCode, field.fieldCode)"
                         @blur="() => onContainerFieldChange(indicator, entry, field)"
                         @field-change="() => onContainerFieldChange(indicator, entry, field)"
@@ -1590,7 +1694,6 @@ defineExpose({
                         :row-key="entry.rowKey"
                         :field="field"
                         :disabled="readonly"
-                        :show-error="containerFieldDirty[getContainerFieldFullErrorKey(entry, indicator.indicatorCode, field.fieldCode)]"
                         :container-field-error="getContainerFieldError(entry, indicator.indicatorCode, field.fieldCode)"
                         @blur="() => onContainerFieldChange(indicator, entry, field)"
                         @field-change="() => onContainerFieldChange(indicator, entry, field)"
@@ -1629,7 +1732,6 @@ defineExpose({
                         :row-key="entry.rowKey"
                         :field="field"
                         :disabled="readonly"
-                        :show-error="containerFieldDirty[getContainerFieldFullErrorKey(entry, indicator.indicatorCode, field.fieldCode)]"
                         :container-field-error="getContainerFieldError(entry, indicator.indicatorCode, field.fieldCode)"
                         @blur="() => onContainerFieldChange(indicator, entry, field)"
                         @field-change="() => onContainerFieldChange(indicator, entry, field)"

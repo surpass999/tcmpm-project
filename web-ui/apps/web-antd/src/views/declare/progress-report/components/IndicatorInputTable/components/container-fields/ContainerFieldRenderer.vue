@@ -17,7 +17,6 @@ interface Props {
   field: DynamicField;
   disabled?: boolean;
   containerFieldError?: string;
-  showError?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -249,7 +248,7 @@ function getValue(): any {
 
     <!-- 错误提示 -->
     <div
-      v-if="showError && containerFieldError"
+      v-if="containerFieldError"
       class="indicator-error"
     >
       {{ containerFieldError }}
