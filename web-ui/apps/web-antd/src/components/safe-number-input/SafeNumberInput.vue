@@ -24,6 +24,13 @@ interface Props {
   class?: string;
 }
 
+/**
+ * decimal(18, 4) 的最大值常量
+ * 18位数字，4位小数，整数部分14位
+ */
+const DECIMAL_18_4_MAX = 99999999999999.9999;
+const DECIMAL_18_4_MIN = -99999999999999.9999;
+
 const props = withDefaults(defineProps<Props>(), {
   modelValue: null,
   min: undefined,
@@ -92,25 +99,43 @@ function handleInput(event: Event) {
  * 处理失焦：始终同步值，让父组件统一处理必填+精度+范围校验
  * 与 a-input-number 行为完全一致：blur 时将值同步到父组件，
  * emit 原始字符串（空=空值，字母=无效输入，数字=有效值）。
+ * 超出 decimal(18,4) 范围时不修改输入，仅标记错误。
  */
 function handleBlur(event: FocusEvent) {
   const trimmed = displayValue.value.trim();
+  let emitValue: number | string | null = null;
 
-  // 空输入 → emit null；有效数字 → emit 数字；无效输入 → emit 原始字符串
-  let emitValue: number | string | null;
+  // 空输入 → emit null
   if (trimmed === '') {
     emitValue = null;
   } else {
     const numVal = Number(trimmed);
-    emitValue = isNaN(numVal) ? trimmed : numVal;
+    if (isNaN(numVal)) {
+      // 无效输入 → emit 原始字符串，标记错误
+      emitValue = trimmed;
+      hasError.value = true;
+    } else if (numVal > effectiveMax.value) {
+      // 超出最大值 → emit 原始值，标记错误但不修改输入
+      emitValue = trimmed;
+      hasError.value = true;
+    } else if (numVal < effectiveMin.value) {
+      // 超出最小值 → emit 原始值，标记错误但不修改输入
+      emitValue = trimmed;
+      hasError.value = true;
+    } else {
+      // 有效值 → emit 数字
+      emitValue = numVal;
+    }
   }
   emit('update:modelValue', emitValue);
 
-  // 保留原始输入用于显示，不校准
+  // 保留原始输入用于显示
   displayValue.value = trimmed;
 
-  // 边框变红：仅在有内容但不是有效数字时
-  hasError.value = trimmed !== '' && Number(trimmed).toString() === 'NaN';
+  // 边框变红：仅在有内容但不是有效数字时或超出范围时
+  if (trimmed !== '' && !hasError.value) {
+    hasError.value = Number(trimmed).toString() === 'NaN';
+  }
 
   // 延迟清除编辑标记，等父组件一轮响应后再允许 watch 覆盖
   setTimeout(() => {
@@ -140,6 +165,35 @@ const hasSuffix = computed(() => !!props.suffix);
 
 /** 是否有错误（组件内校验 or 父组件传入） */
 const isInErrorState = computed(() => hasError.value || !!props.errorMsg);
+
+/** 错误消息：合并内部校验错误和外部传入的错误 */
+const displayErrorMsg = computed(() => {
+  return props.errorMsg || undefined;
+});
+
+/**
+ * 有效的最大值：
+ * - 如果父组件显式传了 max，使用父组件的值（允许覆盖）
+ * - 否则默认使用 decimal(18,4) 的上限
+ */
+const effectiveMax = computed(() => {
+  if (props.max !== undefined && props.max !== null) {
+    return props.max;
+  }
+  return DECIMAL_18_4_MAX;
+});
+
+/**
+ * 有效的最小值：
+ * - 如果父组件显式传了 min，使用父组件的值
+ * - 否则默认使用 decimal(18,4) 的下限
+ */
+const effectiveMin = computed(() => {
+  if (props.min !== undefined && props.min !== null) {
+    return props.min;
+  }
+  return DECIMAL_18_4_MIN;
+});
 
 /** 根节点：纵向排列输入行 + 下方错误区（父组件统一展示时占位） */
 const rootClass = computed(() => ['safe-number-input-root', props.class]);
@@ -175,13 +229,13 @@ const containerClass = computed(() => {
       />
       <span v-if="suffix" class="safe-number-input-suffix">{{ suffix }}</span>
     </div>
-    <!-- 父组件通过 errorMsg prop 传入错误时显示，与页面其它 .indicator-error 一致 -->
+    <!-- 错误提示：组件内部校验错误或父组件传入的错误 -->
     <div
-      v-if="errorMsg"
+      v-if="displayErrorMsg"
       class="safe-number-input-explain"
       role="alert"
     >
-      {{ errorMsg }}
+      {{ displayErrorMsg }}
     </div>
   </div>
 </template>

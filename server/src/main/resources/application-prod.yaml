@@ -24,17 +24,17 @@ spring:
         stat:
           enabled: true
           log-slow-sql: true # 慢 SQL 记录
-          slow-sql-millis: 1000
+          slow-sql-millis: 2000 # 慢SQL阈值改为2秒，减少日志
           merge-sql: true
         wall:
           config:
             multi-statement-allow: true
     dynamic: # 多数据源配置
       druid: # Druid 【连接池】相关的全局配置
-        initial-size: 5 # 初始连接数
-        min-idle: 10 # 最小连接池数量
-        max-active: 50 # 最大连接池数量（生产环境建议调大）
-        max-wait: 60000 # 配置获取连接等待超时的时间，单位：毫秒（1 分钟）
+        initial-size: 2 # 初始连接数
+        min-idle: 2 # 最小连接池数量（2核机器保守配置）
+        max-active: 5 # 最大连接池数量（2核2G建议5-8）
+        max-wait: 60000  # 配置获取连接等待超时的时间，单位：毫秒（1 分钟）
         time-between-eviction-runs-millis: 30000 # 配置间隔多久才进行一次检测，检测需要关闭的空闲连接，单位：毫秒（30 秒）
         min-evictable-idle-time-millis: 300000 # 配置一个连接在池中最小生存的时间，单位：毫秒（5 分钟）
         max-evictable-idle-time-millis: 600000 # 配置一个连接在池中最大生存的时间，单位：毫秒（10 分钟）
@@ -68,9 +68,11 @@ spring:
     database: 1 # 数据库索引
 #    password: 123456 # 密码，生产环境建议开启
     redisson:
-      threads: 2          # 核心业务线程，小服务器2个足够
-      netty-threads: 2    # Netty IO线程，强制限制2个，杜绝线程爆炸
+      threads: 1          # 核心业务线程，2核机器用1个
+      netty-threads: 1    # Netty IO线程，2核机器用1个，避免线程爆炸
       single-server-config:
+        connection-minimum-idle-size: 3  # 最小空闲连接数（2核2G机器用3）
+        connection-pool-size: 6          # 连接池最大连接数（2核2G机器用6）
         retry-attempts: 2  # 最多重试2次，禁止无限重试
         retry-interval: 3000  # 重试间隔3秒，避免疯狂打日志
 
@@ -95,11 +97,11 @@ spring:
             # JobStore 实现类。可见博客：https://blog.csdn.net/weixin_42458219/article/details/122247162
             class: org.springframework.scheduling.quartz.LocalDataSourceJobStore
             isClustered: true # 是集群模式
-            clusterCheckinInterval: 15000 # 集群检查频率，单位：毫秒。默认为 15000，即 15 秒
+            clusterCheckinInterval: 60000 # 集群检查频率，单位：毫秒。默认为 15000，即 15 秒
             misfireThreshold: 60000 # misfire 阀值，单位：毫秒。
           # 线程池相关配置
           threadPool:
-            threadCount: 25 # 线程池大小。默认为 10 。
+            threadCount: 1 # 线程池大小。默认为 10 。
             threadPriority: 5 # 线程优先级
             class: org.quartz.simpl.SimpleThreadPool # 线程池类型
     jdbc: # 使用 JDBC 的 JobStore 的时候，JDBC 的配置
@@ -157,16 +159,17 @@ spring:
 
 logging:
   level:
-    root: INFO # 生产环境使用 INFO 级别
-    cn.gemrun.base: INFO
-    cn.gemrun.base.module.bpm: INFO
-    org.springframework.aop: INFO
+    root: WARN # 生产环境使用 WARN 级别，减少日志量
+    cn.gemrun.base: WARN
+    cn.gemrun.base.module.bpm: WARN
+    org.springframework.aop: WARN
+    org.quartz: WARN # 减少 Quartz 日志
   file:
     name: /var/log/${spring.application.name}/${spring.application.name}.log # 日志文件名，全路径（请确保目录存在且有写入权限）
   logback:
     rollingpolicy:
-      max-file-size: 100MB # 单个日志文件最大 100MB
-      max-history: 30 # 保留 30 天的日志
+      max-file-size: 10MB
+      max-history: 7 # 保留7天日志，减少磁盘占用
 
 --- #################### 接口文档配置（生产环境禁用）####################
 

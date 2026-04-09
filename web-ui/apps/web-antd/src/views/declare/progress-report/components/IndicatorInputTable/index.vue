@@ -467,6 +467,10 @@ function isAutoEntryVisible(indicator: any): boolean {
 
 // ==================== 校验逻辑 ====================
 
+/** 数据库 decimal(18,4) 的范围限制 */
+const DECIMAL_18_4_MAX = 90000000000.00;
+const DECIMAL_18_4_MIN = -90000000000.00;
+
 function isEmpty(value: any): boolean {
   if (value === undefined || value === null || value === '') return true;
   if (typeof value === 'string') {
@@ -482,8 +486,19 @@ function checkRequired(value: any, isRequired: boolean): string | null {
 }
 
 function checkRange(value: number, min: number | null, max: number | null): string | null {
-  if (min != null && value < min) return `不能小于 ${min}`;
-  if (max != null && value > max) return `不能大于 ${max}`;
+  // 优先使用配置的 min/max，否则使用 decimal(18,4) 的范围限制
+  if (min != null) {
+    if (value < min) return `不能小于 ${min}`;
+  } else if (value < DECIMAL_18_4_MIN) {
+    return `不能小于 ${DECIMAL_18_4_MIN}`;
+  }
+
+  if (max != null) {
+    if (value > max) return `不能大于 ${max}`;
+  } else if (value > DECIMAL_18_4_MAX) {
+    return `不能大于 ${DECIMAL_18_4_MAX}`;
+  }
+
   return null;
 }
 
@@ -523,7 +538,8 @@ function validateType1_Number(indicator: DeclareIndicatorApi.Indicator): Validat
   if (!isEmpty(value)) {
     const numVal = Number(value);
     console.log('[topLevel number] numVal:', numVal, 'checkRange result:', checkRange(numVal, minValue ?? null, maxValue ?? null));
-    if (isNaN(numVal)) { pushError(errors, code, `${indicator.indicatorCode} - ${indicator.indicatorName}：请输入有效数字`, id, undefined, 'format'); return errors; }
+    // 检查是否为有效数字（非 NaN 且非 Infinity）
+    if (isNaN(numVal) || !isFinite(numVal)) { pushError(errors, code, `${indicator.indicatorCode} - ${indicator.indicatorName}：请输入有效数字`, id, undefined, 'format'); return errors; }
     const rangeErr = checkRange(numVal, minValue ?? null, maxValue ?? null);
     if (rangeErr) pushError(errors, code, `${indicator.indicatorCode} - ${indicator.indicatorName}：${rangeErr}`, id, undefined, 'range');
     const cfg = parseExtraConfig(indicator.extraConfig);
@@ -605,11 +621,9 @@ function validateType12_Container(indicator: DeclareIndicatorApi.Indicator): Val
       if (!isEmpty(fieldValue)) {
         if (field.fieldType === 'number') {
           const numVal = Number(fieldValue);
-          console.log('[container number] value:', fieldValue, 'numVal:', numVal, 'min:', field.minValue ?? 0, 'max:', field.maxValue);
-          if (isNaN(numVal)) pushError(errors, code, `${indicatorName} ${entryLabel}「${field.fieldLabel}」：请输入有效数字`, id, fullKey, 'format');
+          if (isNaN(numVal) || !isFinite(numVal)) pushError(errors, code, `${indicatorName} ${entryLabel}「${field.fieldLabel}」：请输入有效数字`, id, fullKey, 'format');
           else {
-            const rangeErr = checkRange(numVal, field.minValue ?? 0, field.maxValue ?? null);
-            console.log('[container number] rangeErr:', rangeErr);
+            const rangeErr = checkRange(numVal, field.minValue ?? 0, field.maxValue);
             if (rangeErr) pushError(errors, code, `${indicatorName} ${entryLabel}「${field.fieldLabel}」：${rangeErr}`, id, fullKey, 'range');
             const precErr = checkPrecision(numVal, field.precision);
             if (precErr) pushError(errors, code, `${indicatorName} ${entryLabel}「${field.fieldLabel}」：${precErr}`, id, fullKey, 'format');
@@ -670,7 +684,8 @@ function validateContainerFieldInstant(entry: any, indicator: DeclareIndicatorAp
   if (!isEmpty(fieldValue)) {
     if (field.fieldType === 'number') {
       const numVal = Number(fieldValue);
-      if (isNaN(numVal)) {
+      // 检查是否为有效数字（非 NaN 且非 Infinity）
+      if (isNaN(numVal) || !isFinite(numVal)) {
         const err = `${indicatorName}「${field.fieldLabel}」：请输入有效数字`;
         containerFieldInstantErrors[fullKey] = err;
         return {
@@ -681,7 +696,7 @@ function validateContainerFieldInstant(entry: any, indicator: DeclareIndicatorAp
           errorType: 'format',
         };
       }
-      const rangeErr = checkRange(numVal, field.minValue ?? 0, field.maxValue ?? null);
+      const rangeErr = checkRange(numVal, field.minValue ?? 0, field.maxValue);
       if (rangeErr) {
         const err = `${indicatorName}「${field.fieldLabel}」：${rangeErr}`;
         containerFieldInstantErrors[fullKey] = err;
@@ -782,6 +797,194 @@ function validateAll(indicatorsToValidate: DeclareIndicatorApi.Indicator[]): Val
       topLevelFieldDirty['in_' + error.indicatorId] = true;
     }
   }
+  return errors;
+}
+
+/**
+ * 仅验证已填数据的格式、范围、精度（不做必填验证）
+ * 用于保存草稿时检查已填数据的有效性
+ */
+function validateFilledData(): ValidationError[] {
+  const errors: ValidationError[] = [];
+
+  // 1. 验证顶层指标（非容器类型）
+  for (const indicator of indicators.value) {
+    if (indicator.valueType === 12) continue; // 容器类型单独处理
+    const v = validateFilledIndicator;
+    if (v) errors.push(...v(indicator));
+  }
+
+  // 2. 验证容器指标
+  for (const indicator of indicators.value) {
+    if (indicator.valueType !== 12) continue;
+    const containerErrors = validateFilledContainer(indicator);
+    errors.push(...containerErrors);
+  }
+
+  // 3. 验证逻辑规则（只验证已填数据的关系）
+  const codeValueMap = buildCodeValueMap();
+  errors.push(...validateFilledLogicRules(indicators.value, codeValueMap));
+
+  // 将容器字段错误同步到即时错误状态
+  for (const error of errors) {
+    if (error.containerFieldKey) {
+      containerFieldDirty[error.containerFieldKey] = true;
+      containerFieldInstantErrors[error.containerFieldKey] = error.message;
+    } else if (error.indicatorId !== undefined) {
+      topLevelFieldDirty['in_' + error.indicatorId] = true;
+    }
+  }
+
+  return errors;
+}
+
+/** 验证已填的顶层指标（不做必填校验） */
+function validateFilledIndicator(indicator: DeclareIndicatorApi.Indicator): ValidationError[] {
+  const errors: ValidationError[] = [];
+  const { indicatorCode: code, id, valueType } = indicator;
+
+  // 跳过容器类型
+  if (valueType === 12) return errors;
+
+  const value = formValues[code];
+  const isEmptyVal = isEmpty(value);
+
+  // 空值不验证
+  if (isEmptyVal) return errors;
+
+  const isComputed = isComputedIndicator(indicator);
+
+  switch (valueType) {
+    case 1: { // 数字类型
+      const numVal = Number(value);
+      if (isNaN(numVal) || !isFinite(numVal)) {
+        pushError(errors, code, `${indicator.indicatorName}：请输入有效数字`, id, undefined, 'format');
+      } else {
+        const rangeErr = checkRange(numVal, indicator.minValue ?? null, indicator.maxValue ?? null);
+        if (rangeErr) pushError(errors, code, `${indicator.indicatorName}：${rangeErr}`, id, undefined, 'range');
+        const cfg = parseExtraConfig(indicator.extraConfig);
+        const precErr = checkPrecision(numVal, cfg.precision);
+        if (precErr) pushError(errors, code, `${indicator.indicatorName}：${precErr}`, id, undefined, 'format');
+      }
+      break;
+    }
+    case 2: { // 文本类型
+      const trimmed = String(value).trim();
+      if (/^-?\d+(\.\d+)?$/.test(trimmed)) {
+        pushError(errors, code, `${indicator.indicatorName}：不能输入纯数字`, id, undefined, 'format');
+      }
+      break;
+    }
+    // 其他类型暂不做额外验证
+  }
+
+  return errors;
+}
+
+/** 验证已填的容器指标（不做必填校验） */
+function validateFilledContainer(indicator: DeclareIndicatorApi.Indicator): ValidationError[] {
+  const errors: ValidationError[] = [];
+  const { indicatorCode: code, id, indicatorName } = indicator;
+  const entries = containerValues[code] || [];
+  const fields = parseDynamicFields(indicator.valueOptions);
+
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i];
+    const entryLabel = `第${i + 1}条`;
+
+    for (const field of fields) {
+      if (!isFieldVisible(entry, code, field, fields)) continue;
+      const fullKey = generateContainerFieldKey(code, entry.rowKey, field.fieldCode);
+      const fieldValue = entry[fullKey];
+      const isEmptyVal = fieldValue === undefined || fieldValue === null || fieldValue === '';
+
+      // 空值不验证
+      if (isEmptyVal) continue;
+
+      if (field.fieldType === 'number') {
+        const numVal = Number(fieldValue);
+        if (isNaN(numVal) || !isFinite(numVal)) {
+          pushError(errors, code, `${indicatorName} ${entryLabel}「${field.fieldLabel}」：请输入有效数字`, id, fullKey, 'format');
+        } else {
+          const rangeErr = checkRange(numVal, field.minValue ?? 0, field.maxValue);
+          if (rangeErr) pushError(errors, code, `${indicatorName} ${entryLabel}「${field.fieldLabel}」：${rangeErr}`, id, fullKey, 'range');
+          const precErr = checkPrecision(numVal, field.precision);
+          if (precErr) pushError(errors, code, `${indicatorName} ${entryLabel}「${field.fieldLabel}」：${precErr}`, id, fullKey, 'format');
+        }
+      } else if (field.fieldType === 'text' || field.fieldType === 'textarea') {
+        const trimmed = String(fieldValue).trim();
+        if (field.fieldType === 'text' && /^-?\d+(\.\d+)?$/.test(trimmed)) {
+          pushError(errors, code, `${indicatorName} ${entryLabel}「${field.fieldLabel}」：不能输入纯数字`, id, fullKey, 'format');
+        }
+      }
+    }
+  }
+
+  return errors;
+}
+
+/** 构建指标编码到值的映射 */
+function buildCodeValueMap(): Record<string, any> {
+  const map: Record<string, any> = {};
+  // 顶层指标
+  for (const [code, value] of Object.entries(formValues)) {
+    map[code] = value;
+  }
+  // 容器指标（取第一个条目的值作为代表）
+  for (const indicator of indicators.value) {
+    if (indicator.valueType !== 12) continue;
+    const entries = containerValues[indicator.indicatorCode] || [];
+    if (entries.length > 0) {
+      const entry = entries[0];
+      const fields = parseDynamicFields(indicator.valueOptions);
+      for (const field of fields) {
+        const fullKey = generateContainerFieldKey(indicator.indicatorCode, entry.rowKey, field.fieldCode);
+        map[field.fieldCode] = entry[fullKey];
+      }
+    }
+  }
+  return map;
+}
+
+/** 验证已填数据的逻辑规则（只验证有值的指标之间的关系） */
+function validateFilledLogicRules(indicatorsToValidate: DeclareIndicatorApi.Indicator[], codeValueMap: Record<string, any>): ValidationError[] {
+  const errors: ValidationError[] = [];
+
+  for (const indicator of indicatorsToValidate) {
+    if (!indicator.logicRule?.trim()) continue;
+    const rules = parseLogicRule(indicator.logicRule);
+    if (rules.length === 0) continue;
+
+    // 执行逻辑规则验证
+    const results = validateJointRule(rules as any, codeValueMap, { triggerTiming: 'FILL' });
+
+    // 如果验证通过（results 为空），不添加错误
+    if (results.length === 0) {
+      // 清除之前的错误
+      const involvedCodes = new Set<string>();
+      for (const m of indicator.logicRule.matchAll(/\[([^\]]+)\]/g)) involvedCodes.add(m[1]!.trim());
+      for (const code of involvedCodes) {
+        for (const ind of indicatorsToValidate) {
+          if (ind.indicatorCode === code && ind.id !== undefined) delete logicRuleErrors[String(ind.id)];
+        }
+        delete logicRuleErrors[code];
+      }
+      continue;
+    }
+
+    // 验证失败，生成错误消息
+    const errMsg = buildLogicRuleMsg(indicator.logicRule, indicatorsToValidate, codeValueMap);
+    errors.push({
+      indicatorId: indicator.id,
+      indicatorCode: indicator.indicatorCode,
+      message: errMsg,
+      containerFieldKey: undefined,
+      errorType: 'logic',
+      indicatorName: indicator.indicatorName,
+    });
+    if (indicator.id !== undefined) logicRuleErrors[String(indicator.id)] = errMsg;
+  }
+
   return errors;
 }
 
@@ -893,7 +1096,8 @@ const indicatorErrors = computed(() => {
       }
       if (ind.valueType === 1) {
         const numVal = Number(value);
-        if (isNaN(numVal)) { errors[idKey] = '请输入有效数字'; continue; }
+        // 检查是否为有效数字（非 NaN 且非 Infinity）
+        if (isNaN(numVal) || !isFinite(numVal)) { errors[idKey] = '请输入有效数字'; continue; }
         // 范围校验（含负数检查）
         const rangeErr = checkRange(numVal, ind.minValue ?? null, ind.maxValue ?? null);
         if (rangeErr) { errors[idKey] = rangeErr; continue; }
@@ -934,10 +1138,11 @@ const containerFieldErrors = computed(() => {
         if (!isEmptyVal) {
           if (field.fieldType === 'number') {
             const numVal = Number(fieldValue);
-            if (isNaN(numVal)) { errors[fullKey] = '请输入有效数字'; continue; }
+            // 检查是否为有效数字（非 NaN 且非 Infinity）
+            if (isNaN(numVal) || !isFinite(numVal)) { errors[fullKey] = '请输入有效数字'; continue; }
             const precErr = checkPrecision(numVal, field.precision);
             if (precErr) { errors[fullKey] = precErr; continue; }
-            const rangeErr = checkRange(numVal, field.minValue ?? 0, field.maxValue ?? null);
+            const rangeErr = checkRange(numVal, field.minValue ?? 0, field.maxValue);
             if (rangeErr) { errors[fullKey] = rangeErr; continue; }
           } else if (field.fieldType === 'text' || field.fieldType === 'textarea') {
             const trimmed = String(fieldValue).trim();
@@ -1008,9 +1213,12 @@ function recalculateComputedIndicators() {
     for (const ind of computedOnes) {
       const calculatedValue = calculateIndicatorValue(ind);
       if (calculatedValue !== undefined) {
-        let finalValue = calculatedValue;
         const precision = getNumberPrecision(ind);
-        if (precision !== undefined) finalValue = Number(calculatedValue.toFixed(precision));
+        const effectivePrecision = precision !== undefined ? precision : 2;
+        // 使用字符串格式化避免浮点数精度问题
+        let finalValue: number;
+        const fixedStr = calculatedValue.toFixed(effectivePrecision);
+        finalValue = parseFloat(fixedStr);
         formValues[ind.indicatorCode] = finalValue;
         changed = true;
       }
@@ -1020,7 +1228,11 @@ function recalculateComputedIndicators() {
     for (const ind of computedOnes) {
       if (formValues[ind.indicatorCode] !== undefined) {
         const el = document.querySelector(`[data-indicator-code="${ind.indicatorCode}"] .safe-number-input-inner`) as HTMLInputElement | null;
-        if (el) el.value = String(formValues[ind.indicatorCode]);
+        if (el) {
+          const precision = getNumberPrecision(ind);
+          const effectivePrecision = precision !== undefined ? precision : 2;
+          el.value = formValues[ind.indicatorCode]!.toFixed(effectivePrecision);
+        }
       }
       markTopLevelDirty(ind.id);
     }
@@ -1435,6 +1647,7 @@ defineExpose({
   getAllIndicatorValues,
   getAllIndicators: () => indicators.value,
   validateAll,
+  validateFilledData,
   recalculateComputedIndicators,
   syncContainerValuesToForm,
   containerValues,

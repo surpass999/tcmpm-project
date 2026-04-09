@@ -140,6 +140,11 @@ function show(errorList: ErrorItem[]) {
   visible.value = true;
 }
 
+/** 关闭弹窗 */
+function close() {
+  visible.value = false;
+}
+
 function handleJump(error: ErrorItem) {
   let targetEl: Element | null = null;
 
@@ -175,6 +180,9 @@ function handleJump(error: ErrorItem) {
     targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
     addHighlight(targetEl);
   }
+
+  // 关闭弹窗
+  visible.value = false;
 }
 
 function addHighlight(el: Element) {
@@ -184,7 +192,7 @@ function addHighlight(el: Element) {
   }, 2000);
 }
 
-defineExpose({ show });
+defineExpose({ show, close });
 </script>
 
 <style scoped>

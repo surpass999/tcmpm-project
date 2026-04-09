@@ -328,7 +328,7 @@ const [Modal, modalApi] = useVbenModal({
   },
 });
 
-/** 保存草稿：状态保持 DRAFT，仅记录填写进度，不做必填验证 */
+/** 保存草稿：状态保持 DRAFT，仅记录填写进度，仅验证已填数据的格式（不做必填验证） */
 async function handleSaveDraft() {
   modalApi.lock();
   saving.value = true;
@@ -339,7 +339,12 @@ async function handleSaveDraft() {
     // 2. 触发自动计算
     indicatorTableRef.value?.recalculateComputedIndicators?.();
 
-    // 3. 【不做验证】草稿可随时保存，无需校验必填
+    // 3. 验证已填数据的格式、范围、精度（不做非空验证）
+    const errors = indicatorTableRef.value?.validateFilledData?.() || [];
+    if (errors.length > 0) {
+      summaryModalRef.value?.show(errors);
+      return;
+    }
 
     // 4. 获取所有指标值
     const rawValues = indicatorTableRef.value?.getAllIndicatorValues?.() || [];
