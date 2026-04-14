@@ -336,7 +336,10 @@ async function handleSaveDraft() {
     // 1. 同步动态容器值到 formValues
     indicatorTableRef.value?.syncContainerValuesToForm?.();
 
-    // 2. 触发自动计算
+    // 2. 同步所有自动条目容器（根据当前 formValues 清理不需要的条目）
+    indicatorTableRef.value?.syncAllAutoEntryContainers?.();
+
+    // 3. 触发自动计算
     indicatorTableRef.value?.recalculateComputedIndicators?.();
 
     // 3. 验证已填数据的格式、范围、精度（不做非空验证）
@@ -407,7 +410,10 @@ async function handleSave() {
     // 1. 同步动态容器值到 formValues
     indicatorTableRef.value?.syncContainerValuesToForm?.();
 
-    // 2. 【验证必填指标】必须全部通过才能继续
+    // 2. 同步所有自动条目容器（根据当前 formValues 清理不需要的条目）
+    indicatorTableRef.value?.syncAllAutoEntryContainers?.();
+
+    // 3. 【验证必填指标】必须全部通过才能继续
     if (indicatorTableRef.value) {
       const indicators = indicatorTableRef.value.getAllIndicators?.();
       if (indicators) {

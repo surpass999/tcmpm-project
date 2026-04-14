@@ -617,11 +617,27 @@ function isFieldVisible(entry: any, field: ContainerField, allFields: ContainerF
   }
 }
 
-/** 获取选项 label */
-function getOptionLabel(val: any, options?: { value: string; label: string }[]): string {
-  if (!options || !val) return '';
-  const found = options.find(o => String(o.value) === String(val));
-  return found?.label || '';
+/** 反序列化输入型选项值 */
+function deserializeInputTypeValue(optionValue: string): { value: string; input: string } {
+  const idx = optionValue.indexOf('∵');
+  if (idx === -1) {
+    return { value: optionValue, input: '' };
+  }
+  return {
+    value: optionValue.substring(0, idx),
+    input: optionValue.substring(idx + 1),
+  };
+}
+
+/** 格式化选项值（带输入内容） */
+function formatOptionValue(val: any, options: { value: string; label: string }[]): string {
+  if (!val) return '';
+  if (typeof val === 'string' && val.includes('∵')) {
+    const deserialized = deserializeInputTypeValue(val);
+    const label = options.find(o => String(o.value) === String(deserialized.value))?.label || deserialized.value;
+    return deserialized.input ? `${label}（${deserialized.input}）` : label;
+  }
+  return options.find(o => String(o.value) === String(val))?.label || String(val);
 }
 
 function getIndicatorId(id?: number): number {
@@ -786,7 +802,7 @@ defineExpose({
                     </template>
                     <template v-else-if="indicator.valueType === 6">
                       <span class="option-tag option-selected">
-                        {{ getOptionLabel(indicatorValuesMap[getIndicatorId(indicator.id)], parseOptions(indicator.valueOptions)) || '-' }}
+                        {{ formatOptionValue(indicatorValuesMap[getIndicatorId(indicator.id)], parseOptions(indicator.valueOptions)) || '-' }}
                       </span>
                     </template>
                     <template v-else-if="indicator.valueType === 7">
@@ -795,7 +811,7 @@ defineExpose({
                           v-for="val in (indicatorValuesMap[getIndicatorId(indicator.id)] || [])"
                           :key="val"
                           class="option-tag option-selected"
-                        >{{ getOptionLabel(val, parseOptions(indicator.valueOptions)) }}</span>
+                        >{{ formatOptionValue(val, parseOptions(indicator.valueOptions)) }}</span>
                       </div>
                     </template>
                     <template v-else-if="indicator.valueType === 8">
@@ -849,12 +865,12 @@ defineExpose({
                                       </span>
                                     </span>
                                     <span v-else-if="field.fieldType === 'radio' || field.fieldType === 'select'" class="field-value">
-                                      {{ getOptionLabel(entry[entry.rowKey + field.fieldCode], field.options) || '-' }}
+                                      {{ formatOptionValue(entry[entry.rowKey + field.fieldCode], field.options) || '-' }}
                                     </span>
                                     <div v-else-if="field.fieldType === 'checkbox' || field.fieldType === 'multiSelect'" class="field-value option-list">
                                       <template v-if="entry[entry.rowKey + field.fieldCode] && Array.isArray(entry[entry.rowKey + field.fieldCode]) && entry[entry.rowKey + field.fieldCode].length > 0">
                                         <span v-for="val in entry[entry.rowKey + field.fieldCode]" :key="val" class="option-tag option-selected">
-                                          {{ getOptionLabel(val, field.options) }}
+                                          {{ formatOptionValue(val, field.options) }}
                                         </span>
                                       </template>
                                       <span v-else class="field-value text-gray-400">-</span>
@@ -924,7 +940,7 @@ defineExpose({
                     </template>
                     <template v-else-if="indicator.valueType === 6">
                       <span class="option-tag option-selected">
-                        {{ getOptionLabel(indicatorValuesMap[getIndicatorId(indicator.id)], parseOptions(indicator.valueOptions)) || '-' }}
+                        {{ formatOptionValue(indicatorValuesMap[getIndicatorId(indicator.id)], parseOptions(indicator.valueOptions)) || '-' }}
                       </span>
                     </template>
                     <template v-else-if="indicator.valueType === 7">
@@ -933,7 +949,7 @@ defineExpose({
                           v-for="val in (indicatorValuesMap[getIndicatorId(indicator.id)] || [])"
                           :key="val"
                           class="option-tag option-selected"
-                        >{{ getOptionLabel(val, parseOptions(indicator.valueOptions)) }}</span>
+                        >{{ formatOptionValue(val, parseOptions(indicator.valueOptions)) }}</span>
                       </div>
                     </template>
                     <template v-else-if="indicator.valueType === 8">
@@ -987,12 +1003,12 @@ defineExpose({
                                       </span>
                                     </span>
                                     <span v-else-if="field.fieldType === 'radio' || field.fieldType === 'select'" class="field-value">
-                                      {{ getOptionLabel(entry[entry.rowKey + field.fieldCode], field.options) || '-' }}
+                                      {{ formatOptionValue(entry[entry.rowKey + field.fieldCode], field.options) || '-' }}
                                     </span>
                                     <div v-else-if="field.fieldType === 'checkbox' || field.fieldType === 'multiSelect'" class="field-value option-list">
                                       <template v-if="entry[entry.rowKey + field.fieldCode] && Array.isArray(entry[entry.rowKey + field.fieldCode]) && entry[entry.rowKey + field.fieldCode].length > 0">
                                         <span v-for="val in entry[entry.rowKey + field.fieldCode]" :key="val" class="option-tag option-selected">
-                                          {{ getOptionLabel(val, field.options) }}
+                                          {{ formatOptionValue(val, field.options) }}
                                         </span>
                                       </template>
                                       <span v-else class="field-value text-gray-400">-</span>

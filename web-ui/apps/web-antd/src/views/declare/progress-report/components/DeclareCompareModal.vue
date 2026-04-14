@@ -289,20 +289,40 @@ function formatValue(val: any, row: any) {
       }
       return String(val);
     case 6:
-    case 10:
+    case 10: {
+      // 单选：处理输入型选项
+      if (typeof val === 'string' && val.includes('∵')) {
+        const deserialized = deserializeInputTypeValue(val);
+        const label = resolveOptionLabel(deserialized.value, row.valueOptions);
+        return deserialized.input ? `${label}（${deserialized.input}）` : label;
+      }
       return resolveOptionLabel(val, row.valueOptions);
+    }
     case 7:
-    case 11:
+    case 11: {
+      // 多选：处理输入型选项
       if (val && row.valueOptions) {
         try {
-          const selected = String(val).split(',');
+          const rawSelected = String(val).split(',');
           const options = JSON.parse(row.valueOptions);
-          return selected.map((v: string) => options.find((o: any) => String(o.value) === String(v))?.label || v).join('、');
+          const displayParts: string[] = [];
+          for (const v of rawSelected) {
+            if (v.includes('∵')) {
+              const deserialized = deserializeInputTypeValue(v);
+              const label = options.find((o: any) => String(o.value) === String(deserialized.value))?.label || deserialized.value;
+              displayParts.push(deserialized.input ? `${label}（${deserialized.input}）` : label);
+            } else {
+              const label = options.find((o: any) => String(o.value) === String(v))?.label || v;
+              displayParts.push(label);
+            }
+          }
+          return displayParts.join('、');
         } catch {
           return String(val);
         }
       }
       return String(val);
+    }
     case 9: {
       // 文件上传：显示文件名列表（换行分隔），每个文件名可点击下载
       let files: any[];
@@ -332,6 +352,18 @@ function resolveOptionLabel(value: any, valueOptions?: string) {
     const found = options.find((o: any) => String(o.value) === String(value));
     return found ? found.label : String(value);
   } catch { return String(value); }
+}
+
+// 反序列化输入型选项值
+function deserializeInputTypeValue(optionValue: string): { value: string; input: string } {
+  const idx = optionValue.indexOf('∵');
+  if (idx === -1) {
+    return { value: optionValue, input: '' };
+  }
+  return {
+    value: optionValue.substring(0, idx),
+    input: optionValue.substring(idx + 1),
+  };
 }
 
 /** 容器子字段条件显示配置 */

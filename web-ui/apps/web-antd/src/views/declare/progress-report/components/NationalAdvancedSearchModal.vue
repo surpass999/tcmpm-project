@@ -339,6 +339,13 @@ function isTextType(valueType: number): boolean {
   return valueType === 2 || valueType === 5;
 }
 
+// 提取输入型选项的纯选项值（去除输入内容）
+function extractOptionValue(rawValue: string): string {
+  if (!rawValue) return rawValue;
+  const idx = rawValue.indexOf('∵');
+  return idx > 0 ? rawValue.substring(0, idx) : rawValue;
+}
+
 async function handleSearch() {
   // 校验必填项
   if (!projectType.value) {
@@ -366,6 +373,14 @@ async function handleSearch() {
       if (!cond.indicatorCode) continue;
       if (!cond.operator) continue;
       if (needsValueInput(cond.operator) && !cond.value) continue;
+      // 提取输入型选项的纯选项值（去除输入内容）
+      if ((cond.valueType === 6 || cond.valueType === 7 || cond.valueType === 10 || cond.valueType === 11) && cond.value) {
+        cond.value = extractOptionValue(cond.value);
+      }
+      // 多选组件返回数组，转为逗号分隔字符串
+      if (Array.isArray(cond.value)) {
+        cond.value = cond.value.join(',');
+      }
       validConds.push({ ...cond });
     }
     if (validConds.length > 0) {

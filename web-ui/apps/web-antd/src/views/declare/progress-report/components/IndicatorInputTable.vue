@@ -3165,6 +3165,7 @@ defineExpose({
   validateAll,
   recalculateComputedIndicators,
   syncContainerValuesToForm,
+  syncAllAutoEntryContainers: initializeAutoEntryContainers,
   containerValues,
   isDirty,
   resetDirty,

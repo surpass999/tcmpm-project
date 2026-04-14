@@ -3,7 +3,7 @@ import type { DeclareIndicatorApi } from '#/api/declare/indicator';
 import { computed, reactive, ref, watch, nextTick } from 'vue';
 import { PlusOutlined } from '@vben/icons';
 import { useVbenModal } from '@vben/common-ui';
-import { message } from 'ant-design-vue';
+import { message, Alert as aAlert } from 'ant-design-vue';
 import { DICT_TYPE } from '@vben/constants';
 import { getDictOptions } from '@vben/hooks';
 import {
@@ -846,6 +846,25 @@ watch(
       </a-form-item>
       <!-- 选项定义（单选、多选、单选下拉、多选下拉时显示） -->
       <a-form-item v-if="showValueOptions" label="选项定义">
+        <!-- 输入型选项说明（仅单选和多选显示） -->
+        <a-alert
+          v-if="[6, 7].includes(currentValueType)"
+          message="输入型选项说明"
+          type="info"
+          show-icon
+          class="mb-3"
+        >
+          <template #description>
+            <span>当选项的</span>
+            <span class="font-mono bg-gray-100 px-1 rounded mx-1">value</span>
+            <span>大于等于</span>
+            <span class="font-mono bg-gray-100 px-1 rounded mx-1">1000</span>
+            <span>时，该选项为输入型选项，在填报时会显示输入框供用户输入补充内容。</span>
+            <br />
+            <span class="text-gray-500">例如：选项 value 设置为 1001，则该选项为输入型选项。</span>
+          </template>
+        </a-alert>
+
         <div class="w-full">
           <div v-if="optionsList.length === 0" class="text-gray-400 text-sm mb-2">
             请点击下方按钮添加选项

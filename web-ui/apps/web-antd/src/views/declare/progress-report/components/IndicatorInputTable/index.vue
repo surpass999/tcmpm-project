@@ -75,6 +75,16 @@ const lastPeriodValues = ref<Record<string, string>>({});
 const jointRules = ref<DeclareIndicatorJointRuleApi.JointRule[]>([]);
 const logicRuleErrors = reactive<Record<string, string>>({});
 
+// ==================== 输入型选项相关 ====================
+/** 输入型选项的分隔符 */
+const INPUT_VALUE_SEPARATOR = '∵';
+
+/** 输入型选项的值存储（key: indicatorCode + '_' + optionValue） */
+const inputTypeValues = reactive<Record<string, string>>({});
+
+/** 输入型选项即时错误（失焦时显示） */
+const inputTypeInstantErrors = reactive<Record<string, string>>({});
+
 // ==================== Composable 函数 ====================
 
 /** 指标分组计算属性 */
@@ -171,7 +181,7 @@ function hasIndicatorSpec(indicator: DeclareIndicatorApi.Indicator): boolean {
   );
 }
 
-function parseOptions(valueOptions: string): Array<{ value: string; label: string; exclusive?: boolean }> {
+function parseOptions(valueOptions: string): Array<{ value: string; label: string; exclusive?: boolean; inputType?: boolean }> {
   if (!valueOptions) return [];
   try {
     const parsed = JSON.parse(valueOptions);
@@ -180,6 +190,7 @@ function parseOptions(valueOptions: string): Array<{ value: string; label: strin
           value: String(item.value),
           label: item.label ?? item.value,
           exclusive: item.exclusive == true,
+          inputType: Number(item.value) >= 1000,
         }))
       : [];
   } catch {
@@ -194,6 +205,165 @@ function parseExtraConfig(extraConfig: string | undefined): Record<string, any> 
   } catch {
     return {};
   }
+}
+
+// ==================== 输入型选项辅助函数 ====================
+/** 序列化输入型选项值（保存时调用） */
+function serializeInputTypeValue(value: string, inputContent: string): string {
+  if (!inputContent) return value;
+  return `${value}${INPUT_VALUE_SEPARATOR}${inputContent}`;
+}
+
+/** 反序列化输入型选项值（读取时调用） */
+function deserializeInputTypeValue(optionValue: string): { value: string; input: string } {
+  const idx = optionValue.indexOf(INPUT_VALUE_SEPARATOR);
+  if (idx === -1) {
+    return { value: optionValue, input: '' };
+  }
+  return {
+    value: optionValue.substring(0, idx),
+    input: optionValue.substring(idx + INPUT_VALUE_SEPARATOR.length),
+  };
+}
+
+/** 校验输入内容 */
+function validateInputContent(content: string): string | null {
+  if (content.includes(INPUT_VALUE_SEPARATOR)) {
+    return `输入内容不能包含特殊符号 "∵"`;
+  }
+  if (content.trim() !== '' && /^\d+$/.test(content)) {
+    return '输入内容不能是纯数字';
+  }
+  return null;
+}
+
+/** 获取单选的原始值 */
+function getInputTypeRawValue(indicator: DeclareIndicatorApi.Indicator): string | undefined {
+  return formValues[indicator.indicatorCode];
+}
+
+/** 获取单选的纯选项值（用于 radio :value） */
+function getInputTypeOptionValue(rawValue: string | undefined): string {
+  if (!rawValue) return '';
+  return deserializeInputTypeValue(rawValue).value;
+}
+
+/** 获取多选的原始值数组 */
+function getInputTypeRawValues(indicator: DeclareIndicatorApi.Indicator): string[] {
+  const raw = formValues[indicator.indicatorCode];
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw;
+  return [raw];
+}
+
+/** 获取多选的纯选项值数组（用于 checkbox :value） */
+function getInputTypeOptionValues(rawValues: string[]): string[] {
+  return rawValues.map(v => deserializeInputTypeValue(v).value);
+}
+
+/** 是否选中了某个输入型选项 */
+function isInputTypeOptionSelected(indicator: DeclareIndicatorApi.Indicator, optionValue: string): boolean {
+  const raw = formValues[indicator.indicatorCode];
+  if (!raw) return false;
+  const values = Array.isArray(raw) ? raw : [raw];
+  return values.some(v => deserializeInputTypeValue(v).value === optionValue);
+}
+
+/** 获取输入型选项的错误信息 */
+function getInputTypeError(indicator: DeclareIndicatorApi.Indicator, opt: any): string | null {
+  const inputKey = indicator.indicatorCode + '_' + opt.value;
+  const indicatorId = indicator.id;
+  const content = inputTypeValues[inputKey] || '';
+
+  // 优先返回即时错误（失焦时设置的）
+  if (indicatorId !== undefined && logicRuleErrors[String(indicatorId)]) {
+    return logicRuleErrors[String(indicatorId)];
+  }
+
+  // 返回格式错误
+  return validateInputContent(content);
+}
+
+/** 单选变化处理 */
+function handleInputTypeRadioChange(indicator: DeclareIndicatorApi.Indicator, val: string) {
+  const inputKey = indicator.indicatorCode + '_' + val;
+  const inputContent = inputTypeValues[inputKey] || '';
+  const serialized = serializeInputTypeValue(val, inputContent);
+  formValues[indicator.indicatorCode] = serialized;
+  // 清除该指标的即时错误
+  if (indicator.id !== undefined) delete logicRuleErrors[String(indicator.id)];
+}
+
+/** 多选变化处理 */
+function handleInputTypeCheckboxChange(indicator: DeclareIndicatorApi.Indicator, vals: string[]) {
+  const serialized = vals.map(v => {
+    const inputKey = indicator.indicatorCode + '_' + v;
+    const inputContent = inputTypeValues[inputKey] || '';
+    return serializeInputTypeValue(v, inputContent);
+  });
+  formValues[indicator.indicatorCode] = serialized;
+  // 清除该指标的即时错误
+  if (indicator.id !== undefined) delete logicRuleErrors[String(indicator.id)];
+}
+
+/** 输入框失焦时的校验 */
+function onInputTypeBlur(indicator: DeclareIndicatorApi.Indicator, opt: any, value?: string) {
+  const indicatorId = indicator.id;
+  const inputKey = indicator.indicatorCode + '_' + opt.value;
+  const content = (value !== undefined ? value : inputTypeValues[inputKey]) || '';
+
+  // 同步更新 formValues（保存时使用）
+  const raw = formValues[indicator.indicatorCode];
+  if (raw) {
+    const deserialized = deserializeInputTypeValue(raw);
+    const serialized = serializeInputTypeValue(deserialized.value, content);
+    formValues[indicator.indicatorCode] = serialized;
+  }
+
+  // 清除之前的即时错误
+  delete inputTypeInstantErrors[inputKey];
+  if (indicatorId !== undefined) delete logicRuleErrors[String(indicatorId)];
+
+  // 必填校验
+  if (!content.trim()) {
+    if (indicatorId !== undefined) {
+      logicRuleErrors[String(indicatorId)] = `请填写"${opt.label}"的补充内容`;
+      markTopLevelDirty(indicatorId);
+    }
+    return;
+  }
+
+  // 格式校验
+  const error = validateInputContent(content);
+  if (error && indicatorId !== undefined) {
+    logicRuleErrors[String(indicatorId)] = `"${opt.label}"的补充内容：${error}`;
+    markTopLevelDirty(indicatorId);
+  }
+}
+
+/** 校验输入型选项是否必填（选中时必须填写内容） */
+function validateInputTypeRequired(indicator: DeclareIndicatorApi.Indicator): string | null {
+  const options = parseOptions(indicator.valueOptions);
+  const raw = formValues[indicator.indicatorCode];
+  const values = raw ? (Array.isArray(raw) ? raw : [raw]) : [];
+
+  for (const opt of options) {
+    if (opt.inputType) {
+      const isSelected = values.some(v => deserializeInputTypeValue(v).value === opt.value);
+      if (isSelected) {
+        const inputKey = indicator.indicatorCode + '_' + opt.value;
+        const content = inputTypeValues[inputKey] || '';
+        if (!content.trim()) {
+          return `请填写"${opt.label}"的补充内容`;
+        }
+        const formatError = validateInputContent(content);
+        if (formatError) {
+          return `"${opt.label}"的补充内容：${formatError}`;
+        }
+      }
+    }
+  }
+  return null;
 }
 
 function parseContainerConfig(valueOptions: string): ContainerConfig {
@@ -419,10 +589,16 @@ function syncAutoEntryContainerCount(containerCode: string, linkedIndicatorCode:
   if (targetCount > MAX_CONTAINER_ENTRIES) {
     message.warning(`自动条目容器最多支持 ${MAX_CONTAINER_ENTRIES} 个条目，已截断`);
   }
-  if (targetCount <= 0) return;
+  const effectiveTarget = Math.min(targetCount, MAX_CONTAINER_ENTRIES);
   if (!containerValues[containerCode]) containerValues[containerCode] = [];
   const currentEntries = containerValues[containerCode];
-  const effectiveTarget = Math.min(targetCount, MAX_CONTAINER_ENTRIES);
+  if (effectiveTarget <= 0) {
+    // 目标数量为 0 时，清理已有的空条目
+    if (currentEntries.length > 0) {
+      containerValues[containerCode] = [];
+    }
+    return;
+  }
   if (currentEntries.length < effectiveTarget) {
     const startIndex = currentEntries.length + 1;
     for (let i = startIndex; i <= effectiveTarget; i++) {
@@ -448,6 +624,15 @@ function checkAndSyncLinkedAutoContainers(changedCode: string) {
     if (indicator.valueType !== 12) continue;
     const link = getAutoEntryLink(indicator.valueOptions);
     if (link === changedCode) syncAutoEntryContainerCount(indicator.indicatorCode, changedCode);
+  }
+}
+
+/** 同步所有自动条目容器（在保存前调用） */
+function syncAllAutoEntryContainers() {
+  for (const indicator of indicators.value) {
+    if (indicator.valueType !== 12) continue;
+    const link = getAutoEntryLink(indicator.valueOptions);
+    if (link) syncAutoEntryContainerCount(indicator.indicatorCode, link);
   }
 }
 
@@ -576,6 +761,11 @@ function validateType6_Select(indicator: DeclareIndicatorApi.Indicator): Validat
   const errors: ValidationError[] = [];
   const reqErr = checkRequired(formValues[indicator.indicatorCode], !!indicator.isRequired);
   if (reqErr) pushError(errors, indicator.indicatorCode, `${indicator.indicatorCode} - ${indicator.indicatorName}：${reqErr}`, indicator.id, undefined, 'required');
+  // 输入型选项必填校验
+  if (!reqErr) {
+    const inputTypeErr = validateInputTypeRequired(indicator);
+    if (inputTypeErr) pushError(errors, indicator.indicatorCode, `${indicator.indicatorCode} - ${indicator.indicatorName}：${inputTypeErr}`, indicator.id, undefined, 'required');
+  }
   return errors;
 }
 function validateType7_MultiSelect(indicator: DeclareIndicatorApi.Indicator): ValidationError[] {
@@ -583,6 +773,11 @@ function validateType7_MultiSelect(indicator: DeclareIndicatorApi.Indicator): Va
   const value = formValues[indicator.indicatorCode];
   const arr = Array.isArray(value) ? value : [];
   if (indicator.isRequired && arr.length === 0) pushError(errors, indicator.indicatorCode, `${indicator.indicatorCode} - ${indicator.indicatorName}：此项为必填`, indicator.id, undefined, 'required');
+  // 输入型选项必填校验
+  if (arr.length > 0) {
+    const inputTypeErr = validateInputTypeRequired(indicator);
+    if (inputTypeErr) pushError(errors, indicator.indicatorCode, `${indicator.indicatorCode} - ${indicator.indicatorName}：${inputTypeErr}`, indicator.id, undefined, 'required');
+  }
   return errors;
 }
 function validateType8_DateRange(indicator: DeclareIndicatorApi.Indicator): ValidationError[] {
@@ -960,15 +1155,8 @@ function validateFilledLogicRules(indicatorsToValidate: DeclareIndicatorApi.Indi
 
     // 如果验证通过（results 为空），不添加错误
     if (results.length === 0) {
-      // 清除之前的错误
-      const involvedCodes = new Set<string>();
-      for (const m of indicator.logicRule.matchAll(/\[([^\]]+)\]/g)) involvedCodes.add(m[1]!.trim());
-      for (const code of involvedCodes) {
-        for (const ind of indicatorsToValidate) {
-          if (ind.indicatorCode === code && ind.id !== undefined) delete logicRuleErrors[String(ind.id)];
-        }
-        delete logicRuleErrors[code];
-      }
+      // 规则通过：只清空当前指标的 logicRule 错误（使用指标 id 作为 key）
+      if (indicator.id !== undefined) delete logicRuleErrors[String(indicator.id)];
       continue;
     }
 
@@ -1044,14 +1232,8 @@ function validateLogicRules(allIndicators: DeclareIndicatorApi.Indicator[]): Val
     if (rules.length === 0) continue;
     const results = validateJointRule(rules as any, codeValueMap, { triggerTiming: 'FILL' });
     if (results.length === 0) {
-      const involvedCodes = new Set<string>();
-      for (const m of indicator.logicRule.matchAll(/\[([^\]]+)\]/g)) involvedCodes.add(m[1]!.trim());
-      for (const code of involvedCodes) {
-        for (const ind of allIndicators) {
-          if (ind.indicatorCode === code && ind.id !== undefined) delete logicRuleErrors[String(ind.id)];
-        }
-        delete logicRuleErrors[code];
-      }
+      // 规则通过：清空该指标的 logicRule 错误（使用指标 id 作为 key）
+      if (indicator.id !== undefined) delete logicRuleErrors[String(indicator.id)];
       continue;
     }
     const errMsg = buildLogicRuleMsg(indicator.logicRule, allIndicators, codeValueMap);
@@ -1071,16 +1253,14 @@ function validateLogicRuleForBlur(changedIndicator: DeclareIndicatorApi.Indicato
     const involvedCodes = new Set<string>();
     for (const m of indicator.logicRule.matchAll(/\[([^\]]+)\]/g)) involvedCodes.add(m[1]!.trim());
     if (!involvedCodes.has(changedCode)) continue;
-    for (const code of involvedCodes) {
-      for (const ind of allIndicators) {
-        if (ind.indicatorCode === code && ind.id !== undefined) delete logicRuleErrors[String(ind.id)];
-      }
-      delete logicRuleErrors[code];
-    }
     markTopLevelDirty(indicator.id);
     const rules = parseLogicRule(indicator.logicRule);
     const results = validateJointRule(rules as any, codeValueMap, { triggerTiming: 'FILL' });
-    if (results.length === 0) continue;
+    if (results.length === 0) {
+      // 规则通过：只清空当前指标的 logicRule 错误（使用指标 id 作为 key）
+      if (indicator.id !== undefined) delete logicRuleErrors[String(indicator.id)];
+      continue;
+    }
     const errMsg = buildLogicRuleMsg(indicator.logicRule, allIndicators, codeValueMap);
     if (indicator.id !== undefined) logicRuleErrors[String(indicator.id)] = errMsg;
   }
@@ -1213,7 +1393,9 @@ function calculateIndicatorValue(indicator: DeclareIndicatorApi.Indicator): numb
       processedFormula = processedFormula.replace(match, String(value));
     }
     if (!hasAllValues) return undefined;
-    const safeFormula = processedFormula.replace(/[^0-9+\-*/.()%]/g, '');
+    // 将 % 作为百分比后缀处理：X% → X/100
+    processedFormula = processedFormula.replace(/(\d+\.?\d*)%/g, '$1/100');
+    const safeFormula = processedFormula.replace(/[^0-9+\-*/.()]/g, '');
     if (!safeFormula || safeFormula.trim() === '') return undefined;
     const result = new Function(`return ${safeFormula}`)();
     if (isNaN(result) || !isFinite(result)) return undefined;
@@ -1531,6 +1713,16 @@ async function loadIndicatorData(projectType: number, reportId?: number) {
           containerValues[indicatorCode] = [{ rowKey: containerType === 'conditional' ? generateConditionalRowKey(indicatorCode) : generateContainerRowKey(indicatorCode, 1) }];
         }
       }
+      // 解析输入型选项的值
+      if ((vt === 6 || vt === 7) && record.valueStr) {
+        const rawValues = vt === 7 ? record.valueStr.split(',') : [record.valueStr];
+        for (const v of rawValues) {
+          const deserialized = deserializeInputTypeValue(v);
+          if (deserialized.input && record.indicatorCode) {
+            inputTypeValues[record.indicatorCode + '_' + deserialized.value] = deserialized.input;
+          }
+        }
+      }
     }
   }
 
@@ -1672,6 +1864,7 @@ defineExpose({
   validateFilledData,
   recalculateComputedIndicators,
   syncContainerValuesToForm,
+  syncAllAutoEntryContainers,
   containerValues,
   isDirty,
   resetDirty,
@@ -1821,24 +2014,64 @@ defineExpose({
               <!-- 单选类型 -->
               <a-radio-group
                 v-else-if="indicator.valueType === 6"
-                :value="formValues[indicator.indicatorCode]"
+                :value="getInputTypeOptionValue(getInputTypeRawValue(indicator))"
                 :disabled="readonly"
                 class="flex flex-wrap gap-x-4 gap-y-2"
-                @update:value="(val: string) => { formValues[indicator.indicatorCode] = val; }"
+                @update:value="(val: string) => handleInputTypeRadioChange(indicator, val)"
                 @change="() => onIndicatorChange(indicator)"
               >
-                <a-radio v-for="opt in parseOptions(indicator.valueOptions)" :key="opt.value" :value="opt.value">{{ opt.label }}</a-radio>
+                <template v-for="opt in parseOptions(indicator.valueOptions)" :key="opt.value">
+                  <div class="flex items-center">
+                    <a-radio :value="opt.value" :disabled="readonly">
+                      {{ opt.label }}
+                    </a-radio>
+                    <a-input
+                      v-if="opt.inputType"
+                      size="small"
+                      class="w-36 ml-2"
+                      placeholder="请输入"
+                      :value="inputTypeValues[indicator.indicatorCode + '_' + opt.value]"
+                      :status="isInputTypeOptionSelected(indicator, opt.value) ? getInputTypeError(indicator, opt) : null"
+                      @click.stop
+                      @input="(e: any) => inputTypeValues[indicator.indicatorCode + '_' + opt.value] = e.target.value"
+                      @blur="(e: any) => onInputTypeBlur(indicator, opt, e.target.value)"
+                    />
+                    <span v-if="readonly && opt.inputType && inputTypeValues[indicator.indicatorCode + '_' + opt.value]" class="ml-1 text-gray-500">
+                      （{{ inputTypeValues[indicator.indicatorCode + '_' + opt.value] }}）
+                    </span>
+                  </div>
+                </template>
               </a-radio-group>
 
               <!-- 多选类型 -->
               <a-checkbox-group
                 v-else-if="indicator.valueType === 7"
-                :value="formValues[indicator.indicatorCode] || []"
+                :value="getInputTypeOptionValues(getInputTypeRawValues(indicator))"
                 :disabled="readonly"
                 class="flex flex-wrap gap-x-4 gap-y-2"
-                @change="(vals: string[]) => handleMultiSelectChange(indicator, vals)"
+                @change="(vals: string[]) => handleInputTypeCheckboxChange(indicator, vals)"
               >
-                <a-checkbox v-for="opt in parseOptions(indicator.valueOptions)" :key="opt.value" :value="opt.value">{{ opt.label }}</a-checkbox>
+                <template v-for="opt in parseOptions(indicator.valueOptions)" :key="opt.value">
+                  <div class="flex items-center">
+                    <a-checkbox :value="opt.value" :disabled="readonly">
+                      {{ opt.label }}
+                    </a-checkbox>
+                    <a-input
+                      v-if="opt.inputType"
+                      size="small"
+                      class="w-36 ml-2"
+                      placeholder="请输入"
+                      :value="inputTypeValues[indicator.indicatorCode + '_' + opt.value]"
+                      :status="isInputTypeOptionSelected(indicator, opt.value) ? getInputTypeError(indicator, opt) : null"
+                      @click.stop
+                      @input="(e: any) => inputTypeValues[indicator.indicatorCode + '_' + opt.value] = e.target.value"
+                      @blur="(e: any) => onInputTypeBlur(indicator, opt, e.target.value)"
+                    />
+                    <span v-if="readonly && opt.inputType && inputTypeValues[indicator.indicatorCode + '_' + opt.value]" class="ml-1 text-gray-500">
+                      （{{ inputTypeValues[indicator.indicatorCode + '_' + opt.value] }}）
+                    </span>
+                  </div>
+                </template>
               </a-checkbox-group>
 
               <!-- 单选下拉类型 -->
