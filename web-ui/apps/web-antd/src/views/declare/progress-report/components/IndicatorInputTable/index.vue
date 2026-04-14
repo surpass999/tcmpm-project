@@ -261,6 +261,11 @@ function getInputTypeOptionValues(rawValues: string[]): string[] {
   return rawValues.map(v => deserializeInputTypeValue(v).value);
 }
 
+/** 输入框的 formValues key（用于 v:if 判断输入框是否显示） */
+function getInputTypeInputFieldName(code: string, optionValue: string): string {
+  return `${code}_input_${optionValue}`;
+}
+
 /** 是否选中了某个输入型选项 */
 function isInputTypeOptionSelected(indicator: DeclareIndicatorApi.Indicator, optionValue: string): boolean {
   const raw = formValues[indicator.indicatorCode];
@@ -286,22 +291,92 @@ function getInputTypeError(indicator: DeclareIndicatorApi.Indicator, opt: any): 
 
 /** 单选变化处理 */
 function handleInputTypeRadioChange(indicator: DeclareIndicatorApi.Indicator, val: string) {
-  const inputKey = indicator.indicatorCode + '_' + val;
-  const inputContent = inputTypeValues[inputKey] || '';
-  const serialized = serializeInputTypeValue(val, inputContent);
-  formValues[indicator.indicatorCode] = serialized;
+  const options = parseOptions(indicator.valueOptions);
+  // 遍历所有选项：选中的设置子字段，取消选中的删除子字段
+  options.forEach((opt) => {
+    const inputFieldName = getInputTypeInputFieldName(indicator.indicatorCode, opt.value);
+    if (opt.value === val) {
+      const inputKey = indicator.indicatorCode + '_' + val;
+      const inputContent = inputTypeValues[inputKey] || '';
+      const serialized = serializeInputTypeValue(val, inputContent);
+      formValues[indicator.indicatorCode] = serialized;
+      formValues[inputFieldName] = inputContent;
+    } else {
+      delete formValues[inputFieldName];
+    }
+  });
   // 清除该指标的即时错误
   if (indicator.id !== undefined) delete logicRuleErrors[String(indicator.id)];
 }
 
+/** 处理多选输入型 checkbox 点击（用于互斥逻辑） */
+function handleCheckboxInputClick(indicator: DeclareIndicatorApi.Indicator, clickedValue: string, _event: MouseEvent) {
+  const options = parseOptions(indicator.valueOptions);
+  const exclusiveValues = new Set(options.filter((o) => o.exclusive).map((o) => o.value));
+  const currentRaw = formValues[indicator.indicatorCode];
+  const currentValues = currentRaw ? (Array.isArray(currentRaw) ? currentRaw.map(v => deserializeInputTypeValue(v).value) : [deserializeInputTypeValue(currentRaw).value]) : [];
+
+  // 判断用户是选中还是取消
+  const wasSelected = currentValues.includes(clickedValue);
+  const isExclusive = exclusiveValues.has(clickedValue);
+
+  let result: string[];
+
+  if (isExclusive) {
+    // 点击互斥选项：直接设置/取消互斥选项
+    if (wasSelected) {
+      // 取消互斥选项
+      result = [];
+    } else {
+      // 选中互斥选项，清空其他所有选项
+      result = [clickedValue];
+    }
+  } else {
+    // 点击非互斥选项
+    if (wasSelected) {
+      // 取消该选项
+      result = currentValues.filter(v => v !== clickedValue);
+    } else {
+      // 选中该选项，同时移除所有互斥选项
+      result = [...currentValues.filter(v => !exclusiveValues.has(v)), clickedValue];
+    }
+  }
+
+  // 调用 handleInputTypeCheckboxChange 处理结果
+  handleInputTypeCheckboxChange(indicator, result);
+}
+
 /** 多选变化处理 */
 function handleInputTypeCheckboxChange(indicator: DeclareIndicatorApi.Indicator, vals: string[]) {
-  const serialized = vals.map(v => {
+  const options = parseOptions(indicator.valueOptions);
+  const exclusiveValues = new Set(options.filter((o) => o.exclusive).map((o) => o.value));
+
+  // 互斥逻辑：如果 vals 包含互斥选项，只保留该互斥选项
+  let result: string[];
+  if (vals.some((v) => exclusiveValues.has(v))) {
+    result = [vals.find((v) => exclusiveValues.has(v))!];
+  } else {
+    result = vals;
+  }
+
+  // 序列化并更新 formValues 主字段
+  const serialized = result.map((v) => {
     const inputKey = indicator.indicatorCode + '_' + v;
     const inputContent = inputTypeValues[inputKey] || '';
     return serializeInputTypeValue(v, inputContent);
   });
   formValues[indicator.indicatorCode] = serialized;
+
+  // 同步更新 formValues 子字段（用于 v:if 判断输入框是否显示）
+  options.forEach((opt) => {
+    const inputFieldName = getInputTypeInputFieldName(indicator.indicatorCode, opt.value);
+    if (result.includes(opt.value)) {
+      formValues[inputFieldName] = inputTypeValues[indicator.indicatorCode + '_' + opt.value] || '';
+    } else {
+      delete formValues[inputFieldName];
+    }
+  });
+
   // 清除该指标的即时错误
   if (indicator.id !== undefined) delete logicRuleErrors[String(indicator.id)];
 }
@@ -311,14 +386,16 @@ function onInputTypeBlur(indicator: DeclareIndicatorApi.Indicator, opt: any, val
   const indicatorId = indicator.id;
   const inputKey = indicator.indicatorCode + '_' + opt.value;
   const content = (value !== undefined ? value : inputTypeValues[inputKey]) || '';
+  const inputFieldName = getInputTypeInputFieldName(indicator.indicatorCode, opt.value);
 
-  // 同步更新 formValues（保存时使用）
+  // 同步更新 formValues 主字段（保存时使用）以及 formValues 子字段（v:if 判断用）
   const raw = formValues[indicator.indicatorCode];
   if (raw) {
     const deserialized = deserializeInputTypeValue(raw);
     const serialized = serializeInputTypeValue(deserialized.value, content);
     formValues[indicator.indicatorCode] = serialized;
   }
+  formValues[inputFieldName] = content;
 
   // 清除之前的即时错误
   delete inputTypeInstantErrors[inputKey];
@@ -1720,6 +1797,8 @@ async function loadIndicatorData(projectType: number, reportId?: number) {
           const deserialized = deserializeInputTypeValue(v);
           if (deserialized.input && record.indicatorCode) {
             inputTypeValues[record.indicatorCode + '_' + deserialized.value] = deserialized.input;
+            // 同步设置 formValues 子字段（用于 v:if 判断输入框是否显示）
+            formValues[record.indicatorCode + '_input_' + deserialized.value] = deserialized.input;
           }
         }
       }
@@ -2026,7 +2105,7 @@ defineExpose({
                       {{ opt.label }}
                     </a-radio>
                     <a-input
-                      v-if="opt.inputType"
+                      v-if="opt.inputType && isInputTypeOptionSelected(indicator, opt.value)"
                       size="small"
                       class="w-36 ml-2"
                       placeholder="请输入"
@@ -2049,15 +2128,14 @@ defineExpose({
                 :value="getInputTypeOptionValues(getInputTypeRawValues(indicator))"
                 :disabled="readonly"
                 class="flex flex-wrap gap-x-4 gap-y-2"
-                @change="(vals: string[]) => handleInputTypeCheckboxChange(indicator, vals)"
               >
                 <template v-for="opt in parseOptions(indicator.valueOptions)" :key="opt.value">
                   <div class="flex items-center">
-                    <a-checkbox :value="opt.value" :disabled="readonly">
+                    <a-checkbox :value="opt.value" :disabled="readonly" @click="(e: MouseEvent) => handleCheckboxInputClick(indicator, opt.value, e)">
                       {{ opt.label }}
                     </a-checkbox>
                     <a-input
-                      v-if="opt.inputType"
+                      v-if="opt.inputType && isInputTypeOptionSelected(indicator, opt.value)"
                       size="small"
                       class="w-36 ml-2"
                       placeholder="请输入"
