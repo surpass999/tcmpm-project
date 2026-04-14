@@ -1976,6 +1976,38 @@ function validateAll(indicatorsToValidate: DeclareIndicatorApi.Indicator[]): Val
   return errors;
 }
 
+/** 判断是否为支持逐条目验证的容器类型（排除 conditional） */
+function isEntryBasedContainer(indicator: DeclareIndicatorApi.Indicator): boolean {
+  if (indicator.valueType !== 12) return false;
+  const containerType = getContainerType(indicator.valueOptions);
+  return ['normal', 'autoEntry'].includes(containerType);
+}
+
+/** 构建单个条目的完整值Map（用于逐条目验证） */
+function buildEntryValueMap(
+  indicator: DeclareIndicatorApi.Indicator,
+  entryNumber: number
+): Record<string, any> {
+  const map: Record<string, any> = {};
+  const containerCode = indicator.indicatorCode;
+  const entryKey = `${containerCode}${String(entryNumber).padStart(2, '0')}`;
+
+  const entries = containerValues[containerCode] || [];
+  const entry = entries.find((e: any) => e.rowKey === entryKey);
+
+  if (entry) {
+    const config = parseContainerConfig(indicator.valueOptions);
+    const fields = config.fields || [];
+
+    for (const field of fields) {
+      const fullKey = `${entryKey}${field.fieldCode}`;
+      map[fullKey] = entry[fullKey];
+    }
+  }
+
+  return map;
+}
+
 /** 逻辑规则校验（遍历所有指标，检查各自 logicRule） */
 function validateLogicRules(allIndicators: DeclareIndicatorApi.Indicator[]): ValidationError[] {
   const errors: ValidationError[] = [];
@@ -1995,6 +2027,38 @@ function validateLogicRules(allIndicators: DeclareIndicatorApi.Indicator[]): Val
 
     const rules = parseLogicRule(indicator.logicRule);
     if (rules.length === 0) continue;
+
+    // 检查是否为支持逐条目验证的容器
+    if (isEntryBasedContainer(indicator)) {
+      // 容器指标：逐条目验证
+      const containerCode = indicator.indicatorCode;
+      const entries = containerValues[containerCode] || [];
+      const entryCount = entries.length;
+
+      if (entryCount === 0) continue;
+
+      for (let entryNum = 1; entryNum <= entryCount; entryNum++) {
+        const entryRules = parseLogicRule(indicator.logicRule, entryNum);
+        if (entryRules.length === 0) continue;
+
+        const entryValueMap = buildEntryValueMap(indicator, entryNum);
+        const results = validateJointRule(entryRules as any, entryValueMap, { triggerTiming: 'FILL' });
+
+        if (results.length > 0) {
+          const entryKey = `${indicator.indicatorCode}${String(entryNum).padStart(2, '0')}`;
+          const entryLabel = `第${entryNum}个条目`;
+          errors.push({
+            indicatorId: indicator.id,
+            indicatorCode: indicator.indicatorCode,
+            message: `${entryLabel}：${results[0]?.message || '逻辑规则校验失败'}`,
+            errorType: 'logic',
+            indicatorName: indicator.indicatorName,
+            containerFieldKey: entryKey,
+          });
+        }
+      }
+      continue;
+    }
 
     const results = validateJointRule(rules as any, codeValueMap, { triggerTiming: 'FILL' });
     const errMsg = buildLogicRuleMsg(indicator.logicRule, allIndicators, codeValueMap);
@@ -2439,7 +2503,12 @@ const jointRuleErrors = reactive<Record<string, string>>({});
 const logicRuleErrors = reactive<Record<string, string>>({});
 
 /** 根据 logicRule 生成含填报要求的提示语 */
-function buildLogicRuleMsg(logicRule: string, allIndicators: typeof indicators.value, codeValueMap: Record<string, any>): string {
+function buildLogicRuleMsg(
+  logicRule: string,
+  allIndicators: typeof indicators.value,
+  codeValueMap: Record<string, any>,
+  containerIndicator?: DeclareIndicatorApi.Indicator
+): string {
   if (!logicRule) return '校验失败';
 
   // 建立 code → 指标名 的映射（优先用 allIndicators，没有的用 code 本身）
@@ -2452,8 +2521,40 @@ function buildLogicRuleMsg(logicRule: string, allIndicators: typeof indicators.v
 
   const opText: Record<string, string> = { '>=': '应大于等于', '<=': '应小于等于', '>': '应大于', '<': '应小于', '==': '应等于', '!=': '不应等于' };
 
+  // 获取容器字段的中文名称和选项标签
+  const getContainerFieldLabel = (fullKey: string): { label: string; valueText: string } => {
+    if (!containerIndicator) return { label: fullKey, valueText: codeValueMap[fullKey] !== undefined ? String(codeValueMap[fullKey]) : '未填' };
+
+    const fields = parseDynamicFields(containerIndicator.valueOptions);
+    const fieldCode = fullKey.slice(-2); // 取最后两位
+    const field = fields.find((f) => f.fieldCode === fieldCode);
+
+    if (!field) return { label: fullKey, valueText: codeValueMap[fullKey] !== undefined ? String(codeValueMap[fullKey]) : '未填' };
+
+    const val = codeValueMap[fullKey];
+    let valueText = '未填';
+    if (val !== undefined && val !== null && val !== '') {
+      // 如果是单选/多选，转换为选项标签
+      if (field.fieldType === 'radio' || field.fieldType === 'checkbox') {
+        const options = field.options || [];
+        const option = options.find((o) => o.value === String(val) || o.value === val);
+        valueText = option ? option.label : String(val);
+      } else {
+        valueText = String(val);
+      }
+    }
+
+    return { label: field.fieldLabel, valueText };
+  };
+
   // 替换 [xxx] → "指标名(实际值)"，没有实际值则显示 "指标名(未填)"
   const replaceCode = (code: string): string => {
+    // 如果是容器字段（以容器指标代码开头），获取字段标签
+    if (containerIndicator && code.startsWith(containerIndicator.indicatorCode)) {
+      const { label, valueText } = getContainerFieldLabel(code);
+      return `${label}(${valueText})`;
+    }
+
     const name = codeMap.get(code) || code;
     const val = codeValueMap[code];
     const valText = val !== undefined && val !== null && val !== '' ? String(val) : '未填';

@@ -98,6 +98,29 @@ export interface RuleConfig {
   rules: RuleConfigItem[];
 }
 
+// ==================== 容器字段简写格式支持 ====================
+
+/**
+ * 解析容器字段简写格式 (如 602_01)
+ * @param shortcut 简写格式，如 "602_01"
+ * @param entryNumber 条目编号（从1开始）
+ * @returns 完整字段Key，如 "6020101"（容器+条目编号+字段编号），或 null（不是简写格式）
+ */
+export function parseContainerFieldShortcut(shortcut: string, entryNumber: number): string | null {
+  const match = shortcut.match(/^(\d+)_(\d+)$/);
+  if (!match) return null;
+  const containerCode = match[1];  // 容器编码
+  const fieldCode = match[2];      // 字段编码
+  return `${containerCode}${String(entryNumber).padStart(2, '0')}${fieldCode}`;
+}
+
+/**
+ * 判断是否为容器字段简写格式
+ */
+export function isContainerFieldShortcut(code: string): boolean {
+  return /^\d+_\d+$/.test(code);
+}
+
 // ==================== 验证实现 ====================
 
 /**
@@ -131,7 +154,6 @@ export function validate(
     }
     return true;
   });
-  console.log('[validate:入口] filteredRules.length:', filteredRules.length);
 
   // 2. 遍历规则执行验证
   for (const rule of filteredRules) {
@@ -245,13 +267,16 @@ function validateRule(
       const currentIsEmpty = currentValue === undefined || currentValue === null || (action.formula?.length === 0 && action.indicatorCode === undefined && action.indicatorId === undefined);
       const rightIsDynamic = !!(action.compareFormula || action.compareIndicatorCode !== undefined || action.compareIndicatorId !== undefined);
       const rightIsEmpty = rightIsDynamic && (compareValue === undefined || compareValue === null || (isNaN(Number(compareValue)) && rightIsDynamic));
+
       if (currentIsEmpty || rightIsEmpty) {
         return { valid: true, ruleId: rule.id, ruleName: rule.ruleName ?? '', message: '' };
       }
 
       // 执行比较
       const operator = action.operator;
-      if (!compareValues(currentValue, operator, compareValue)) {
+      const compareResult = compareValues(currentValue, operator, compareValue);
+
+      if (!compareResult) {
         // 从 formula / compareFormula 提取所有涉及的指标代码和 ID
         const formulaCodes: string[] = [];
         const formulaIds: number[] = [];
@@ -376,22 +401,31 @@ function compareValues(current: number, operator: string, target: number): boole
     return true; // == != 左空右空 两种情况都不阻断
   }
 
+  let result: boolean;
   switch (operator) {
     case '>':
-      return current > target;
+      result = current > target;
+      break;
     case '>=':
-      return current >= target;
+      result = current >= target;
+      break;
     case '<':
-      return current < target;
+      result = current < target;
+      break;
     case '<=':
-      return current <= target;
+      result = current <= target;
+      break;
     case '==':
-      return current === target;
+      result = current === target;
+      break;
     case '!=':
-      return current !== target;
+      result = current !== target;
+      break;
     default:
-      return true;
+      result = true;
   }
+
+  return result;
 }
 
 /**
@@ -404,8 +438,11 @@ export function validateSingleRule(
   return validateRule(rule, values, {});
 }
 
-/** 解析逻辑校验字符串，返回 engine 认识的 JointRule 格式 */
-export function parseLogicRule(logicRule: string): JointRule[] {
+/** 解析逻辑校验字符串，返回 engine 认识的 JointRule 格式
+ * @param logicRule 逻辑规则字符串
+ * @param entryNumber 条目编号（从1开始），用于解析容器字段简写格式（如 602_01）
+ */
+export function parseLogicRule(logicRule: string, entryNumber: number = 1): JointRule[] {
   if (!logicRule || !logicRule.trim()) return [];
 
   const results: JointRule[] = [];
@@ -467,8 +504,9 @@ export function parseLogicRule(logicRule: string): JointRule[] {
     const operator = opMatch[2]!;
     const right = opMatch[3]!.trim();
 
-    const leftFormula = parseFormulaSide(left);
-    const rightFormula = parseFormulaSide(right);
+    // 传入 entryNumber 用于解析容器字段简写格式
+    const leftFormula = parseFormulaSide(left, entryNumber);
+    const rightFormula = parseFormulaSide(right, entryNumber);
 
     // 构造 engine action
     const action: any = {
@@ -494,8 +532,11 @@ export function parseLogicRule(logicRule: string): JointRule[] {
   return results;
 }
 
-/** 解析公式一侧（如 '[201]' 或 '201' 或 '[80201]+[80202]'），返回 FormulaItem[] */
-function parseFormulaSide(side: string): FormulaItem[] {
+/** 解析公式一侧（如 '[201]' 或 '201' 或 '[80201]+[80202]'），返回 FormulaItem[]
+ * @param side 公式侧字符串
+ * @param entryNumber 条目编号（从1开始），用于解析容器字段简写格式
+ */
+function parseFormulaSide(side: string, entryNumber: number = 1): FormulaItem[] {
   const raw = side.trim();
   if (!raw) return [];
 
@@ -516,7 +557,14 @@ function parseFormulaSide(side: string): FormulaItem[] {
     if (match[1] !== undefined) {
       // 匹配到带括号的指标引用
       const code = match[1]!.trim();
-      items.push({ valueType: 'indicator', indicatorCode: code, mathOp });
+      // 检查是否为容器字段简写格式（如 602_01）
+      const containerKey = parseContainerFieldShortcut(code, entryNumber);
+      if (containerKey) {
+        // 使用解析后的 fullKey（如 6020101）
+        items.push({ valueType: 'indicator', indicatorCode: containerKey, mathOp });
+      } else {
+        items.push({ valueType: 'indicator', indicatorCode: code, mathOp });
+      }
     } else if (match[2] !== undefined) {
       // 匹配到数字
       const numStr = match[2]!.replace(/^\+/, '');
@@ -540,11 +588,22 @@ function parseFormulaSide(side: string): FormulaItem[] {
 
     if (/^\[.+\]$/.test(trimmed)) {
       // 带括号的指标引用
-      fallbackItems.push({ valueType: 'indicator', indicatorCode: trimmed.replace(/^\[|\]$/g, ''), mathOp: trimmed.startsWith('-') ? '-' : '+' });
+      const code = trimmed.replace(/^\[|\]$/g, '');
+      const containerKey = parseContainerFieldShortcut(code, entryNumber);
+      fallbackItems.push({
+        valueType: 'indicator',
+        indicatorCode: containerKey || code,
+        mathOp: trimmed.startsWith('-') ? '-' : '+'
+      });
     } else if (/^[+\-]?\d+(\.\d+)?$/.test(trimmed)) {
       fallbackItems.push({ valueType: 'fixed', value: Number(trimmed.replace(/^\+/, '')), mathOp: trimmed.startsWith('-') ? '-' : '+' });
     } else {
-      fallbackItems.push({ valueType: 'indicator', indicatorCode: trimmed.replace(/^\[|\]$/g, ''), mathOp: trimmed.startsWith('-') ? '-' : '+' });
+      const containerKey = parseContainerFieldShortcut(trimmed, entryNumber);
+      fallbackItems.push({
+        valueType: 'indicator',
+        indicatorCode: containerKey || trimmed.replace(/^\[|\]$/g, ''),
+        mathOp: trimmed.startsWith('-') ? '-' : '+'
+      });
     }
   }
 
