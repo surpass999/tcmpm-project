@@ -238,7 +238,13 @@ public class DeclareProgressReportServiceImpl implements DeclareProgressReportSe
                 }
 
                 if (item.getValue() == null || item.getValue().toString().trim().isEmpty()) {
-                    continue; // 跳过空值
+                    // 数字类型显式设置为 null，让数据库空值能够被更新
+                    if (Integer.valueOf(1).equals(item.getValueType())) {
+                        valueDO.setValueNum(null);
+                        valueDOs.add(valueDO);
+                    }
+                    // 其他类型跳过
+                    continue;
                 }
                 setValueByType(valueDO, item.getValueType(), item.getValue());
                 valueDOs.add(valueDO);

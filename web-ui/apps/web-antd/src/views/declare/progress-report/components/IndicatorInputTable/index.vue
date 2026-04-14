@@ -1776,7 +1776,7 @@ async function loadIndicatorData(projectType: number, reportId?: number) {
             const entryWithFullKey = migrateContainerEntryToFullKey(item, ind!.valueOptions, indicatorCode, rowKey);
             return { rowKey, ...item, ...convertContainerEntryDates(ind!.valueOptions, entryWithFullKey, indicatorCode, rowKey) };
           });
-        } else if (raw && typeof raw === 'object') {
+        } else if (raw && typeof raw === 'object' && Object.keys(raw).length > 0) {
           if (containerType === 'conditional') {
             const rowKey = generateConditionalRowKey(indicatorCode);
             const entryWithFullKey = migrateContainerEntryToFullKey(raw, ind!.valueOptions, indicatorCode, rowKey);
@@ -1787,7 +1787,7 @@ async function loadIndicatorData(projectType: number, reportId?: number) {
             containerValues[indicatorCode] = [{ rowKey, ...raw, ...convertContainerEntryDates(ind!.valueOptions, entryWithFullKey, indicatorCode, rowKey) }];
           }
         } else {
-          containerValues[indicatorCode] = [{ rowKey: containerType === 'conditional' ? generateConditionalRowKey(indicatorCode) : generateContainerRowKey(indicatorCode, 1) }];
+          containerValues[indicatorCode] = [];
         }
       }
       // 解析输入型选项的值
@@ -1911,10 +1911,10 @@ function getAllIndicatorValues(): Array<{
     const code = ind.indicatorCode;
     const vt = ind.valueType;
     const rawValue = formValues[code];
-    if (rawValue === undefined || rawValue === null || rawValue === '') continue;
+    if (rawValue === undefined || rawValue === '') continue;
     const item: any = { indicatorId: ind.id!, indicatorCode: code, valueType: vt };
     if (vt === 12) item.valueStr = JSON.stringify(containerValues[code] || []);
-    else if (vt === 1) item.valueNum = String(rawValue);
+    else if (vt === 1) item.valueNum = rawValue !== null ? String(rawValue) : null;
     else if (vt === 2 || vt === 6 || vt === 9 || vt === 10) item.valueStr = String(rawValue);
     else if (vt === 3) item.valueBool = !!rawValue;
     else if (vt === 4) item.valueDate = dayjs.isDayjs(rawValue) ? rawValue.format('YYYY-MM-DD HH:mm:ss') : String(rawValue);
