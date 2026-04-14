@@ -78,8 +78,29 @@ public class DeclareIndicatorValueServiceImpl implements DeclareIndicatorValueSe
                     businessType, businessId, value.getIndicatorCode());
 
             if (existing != null) {
-                value.setId(existing.getId());
-                indicatorValueMapper.updateById(value);
+                // 使用 UpdateWrapper 显式更新，可以处理 null 值的字段
+                // 因为 MyBatis-Plus 的 updateById 默认忽略 null 字段
+                com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<DeclareIndicatorValueDO> updateWrapper =
+                        new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<DeclareIndicatorValueDO>()
+                                .eq(DeclareIndicatorValueDO::getId, existing.getId())
+                                .set(value.getValueNum() != null, DeclareIndicatorValueDO::getValueNum, value.getValueNum())
+                                .set(value.getValueNum() == null, DeclareIndicatorValueDO::getValueNum, null)
+                                .set(value.getValueStr() != null, DeclareIndicatorValueDO::getValueStr, value.getValueStr())
+                                .set(value.getValueStr() == null, DeclareIndicatorValueDO::getValueStr, null)
+                                .set(value.getValueBool() != null, DeclareIndicatorValueDO::getValueBool, value.getValueBool())
+                                .set(value.getValueBool() == null, DeclareIndicatorValueDO::getValueBool, null)
+                                .set(value.getValueDate() != null, DeclareIndicatorValueDO::getValueDate, value.getValueDate())
+                                .set(value.getValueDate() == null, DeclareIndicatorValueDO::getValueDate, null)
+                                .set(value.getValueDateStart() != null, DeclareIndicatorValueDO::getValueDateStart, value.getValueDateStart())
+                                .set(value.getValueDateStart() == null, DeclareIndicatorValueDO::getValueDateStart, null)
+                                .set(value.getValueDateEnd() != null, DeclareIndicatorValueDO::getValueDateEnd, value.getValueDateEnd())
+                                .set(value.getValueDateEnd() == null, DeclareIndicatorValueDO::getValueDateEnd, null)
+                                .set(value.getValueText() != null, DeclareIndicatorValueDO::getValueText, value.getValueText())
+                                .set(value.getValueText() == null, DeclareIndicatorValueDO::getValueText, null)
+                                .set(DeclareIndicatorValueDO::getFillTime, value.getFillTime())
+                                .set(DeclareIndicatorValueDO::getFillerId, value.getFillerId())
+                                .set(DeclareIndicatorValueDO::getIsValid, value.getIsValid());
+                indicatorValueMapper.update(null, updateWrapper);
             } else {
                 indicatorValueMapper.insert(value);
             }
