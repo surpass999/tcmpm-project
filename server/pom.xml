@@ -121,6 +121,13 @@
             <optional>true</optional>
         </dependency>
 
+        <!-- 达梦数据库驱动（支持达梦数据库迁移） -->
+        <dependency>
+            <groupId>com.dameng</groupId>
+            <artifactId>DmJdbcDriver18</artifactId>
+            <version>8.1.3.140</version>
+        </dependency>
+
         <!-- 服务保障相关 -->
         <dependency>
             <groupId>cn.gemrun</groupId>

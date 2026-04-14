@@ -60,6 +60,10 @@ public class BpmFlowableConfiguration {
             ObjectProvider<FlowableFunctionDelegate> customFlowableFunctionDelegates,
             BpmActivityBehaviorFactory bpmActivityBehaviorFactory) {
         return configuration -> {
+            // 达梦数据库适配：强制指定数据库类型为 Oracle（达梦兼容 Oracle）
+            configuration.setDatabaseType("oracle");
+            // 达梦数据库适配：禁用 Event Registry（Liquibase 与达梦不兼容）
+            configuration.setDisableEventRegistry(true);
             // 注册监听器，例如说 BpmActivityEventListener
             configuration.setEventListeners(ListUtil.toList(listeners.iterator()));
             // 设置 ActivityBehaviorFactory 实现类，用于流程任务的审核人的自定义

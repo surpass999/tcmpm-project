@@ -55,6 +55,16 @@ knife4j:
 
 # 工作流 Flowable 配置
 flowable:
+  # 达梦数据库支持：使用 Oracle 兼容模式
+  process:
+    cfg:
+      database-type: oracle
+  # 关闭 Liquibase，使用 MyBatis 自动建表
+  liquibase:
+    enabled: false
+  # 达梦数据库适配：禁用 Event Registry（Liquibase 与达梦不兼容）
+  event-registry:
+    enabled: false
   # 1. false: 默认值，Flowable 启动时，对比数据库表中保存的版本，如果不匹配。将抛出异常
   # 2. true: 启动时会对数据库中所有表进行更新操作，如果表存在，不做处理，反之，自动创建表
   # 3. create_drop: 启动时自动创建表，关闭时自动删除表

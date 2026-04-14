@@ -991,22 +991,44 @@ function validateFilledLogicRules(indicatorsToValidate: DeclareIndicatorApi.Indi
 // 逻辑规则校验
 function buildLogicRuleMsg(logicRule: string, allIndicators: typeof indicators.value, codeValueMap: Record<string, any>): string {
   if (!logicRule) return '校验失败';
-  const match = logicRule.trim().match(/^(.+?)\s*(>=|<=|>|<|==|!=)\s*(.+)$/);
-  if (!match) return '校验失败';
-  const leftRaw = match[1]!.trim();
-  const operator = match[2]!;
-  const rightRaw = match[3]!.trim();
+
   const codeMap = new Map<string, string>();
   for (const ind of allIndicators) {
     if (!codeMap.has(ind.indicatorCode)) codeMap.set(ind.indicatorCode, ind.indicatorName || ind.indicatorCode);
   }
-  const opText: Record<string, string> = { '>=': '应大于等于', '<=': '应小于等于', '>': '应大于', '<': '应小于', '==': '应等于', '!=': '不应等于' };
   const replaceCode = (code: string): string => {
     const name = codeMap.get(code) || code;
     const val = codeValueMap[code];
     const valText = val !== undefined && val !== null && val !== '' ? String(val) : '未填';
     return `${name}(${valText})`;
   };
+
+  // 处理 IF 函数格式: IF([指标1] > 阈值1, [指标2] > 阈值2, TRUE)
+  const ifMatch = logicRule.trim().match(/^IF\s*\(\s*\[([^\]]+)\]\s*([><]=?)\s*(\d+(?:\.\d+)?)\s*,\s*\[([^\]]+)\]\s*([><]=?)\s*(\d+(?:\.\d+)?)\s*,\s*TRUE\s*\)$/i);
+  if (ifMatch) {
+    const condCode = ifMatch[1]!.trim();
+    const condOp = ifMatch[2]!;
+    const condVal = ifMatch[3]!;
+    const verifyCode = ifMatch[4]!.trim();
+    const verifyOp = ifMatch[5]!;
+    const verifyVal = ifMatch[6]!;
+
+    const opText: Record<string, string> = { '>=': '应大于等于', '<=': '应小于等于', '>': '应大于', '<': '应小于' };
+
+    const condMsg = replaceCode(condCode);
+    const verifyMsg = replaceCode(verifyCode);
+
+    return `当 ${condMsg} ${condOp} ${condVal} 时, ${verifyMsg} ${opText[verifyOp] || verifyOp} ${verifyVal}`;
+  }
+
+  // 普通规则格式处理
+  const match = logicRule.trim().match(/^(.+?)\s*(>=|<=|>|<|==|!=)\s*(.+)$/);
+  if (!match) return '校验失败';
+  const leftRaw = match[1]!.trim();
+  const operator = match[2]!;
+  const rightRaw = match[3]!.trim();
+
+  const opText: Record<string, string> = { '>=': '应大于等于', '<=': '应小于等于', '>': '应大于', '<': '应小于', '==': '应等于', '!=': '不应等于' };
   const msgLeft = leftRaw.replace(/\[([^\]]+)\]/g, (_, c) => replaceCode(c.trim()));
   const msgRight = rightRaw.replace(/\[([^\]]+)\]/g, (_, c) => replaceCode(c.trim()));
   return `${msgLeft} ${opText[operator] || operator} ${msgRight}`;

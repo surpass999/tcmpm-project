@@ -51,15 +51,22 @@ spring:
         remove-abandoned-timeout: 180 # 借用超过 180 秒未归还则强制回收
       primary: master
       datasource:
+        # master:
+        #   url: jdbc:mysql://127.0.0.1:3306/yudao_db?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&rewriteBatchedStatements=true # MySQL Connector/J 8.X 连接的示例
+        #   username: yudao_db
+        #   password: TbD82zdpTrRM3hnX
+        # slave: # 模拟从库，可根据自己需要修改 # 模拟从库，可根据自己需要修改
+        #   lazy: true # 开启懒加载，保证启动速度
+        #   url: jdbc:mysql://127.0.0.1:3306/yudao_db?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&rewriteBatchedStatements=true # MySQL Connector/J 8.X 连接的示例
+        #   username: yudao_db
+        #   password: TbD82zdpTrRM3hnX
         master:
-          url: jdbc:mysql://127.0.0.1:3306/yudao_db?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&rewriteBatchedStatements=true # MySQL Connector/J 8.X 连接的示例
-          username: yudao_db
-          password: TbD82zdpTrRM3hnX
-        slave: # 模拟从库，可根据自己需要修改 # 模拟从库，可根据自己需要修改
-          lazy: true # 开启懒加载，保证启动速度
-          url: jdbc:mysql://127.0.0.1:3306/yudao_db?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&rewriteBatchedStatements=true # MySQL Connector/J 8.X 连接的示例
-          username: yudao_db
-          password: TbD82zdpTrRM3hnX
+          name: TCMPM_DB
+          url: jdbc:dm://127.0.0.1:5236?SCHEMA=TCMPM_DB
+          username: SYSDBA
+          password: Dameng123
+          driver-class-name: dm.jdbc.driver.DmDriver
+          type: com.alibaba.druid.pool.DruidDataSource
 
   # Redis 配置。Redisson 默认的配置足够使用，一般不需要进行调优
   redis:

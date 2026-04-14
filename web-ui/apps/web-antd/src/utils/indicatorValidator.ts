@@ -83,8 +83,10 @@ export interface RuleConfigItem {
   name: string;
   ruleType: number;
   condition?: {
-    indicatorName?: string;
+    indicatorCode?: string;
+    indicatorId?: number;
     operator?: string;
+    value?: number;
   };
   action: RuleAction;
 }
@@ -156,27 +158,53 @@ function validateRule(
       const action = ruleItem.action || {};
       const condition = ruleItem.condition;
 
-      // 条件判断：若配置了 not_empty 条件且当前指标为空，则跳过验证
-      if (condition?.operator === 'not_empty') {
+      // 条件判断：若配置了条件且条件不满足，则跳过验证
+      if (condition?.operator) {
         let condValue: any;
-        if (action.formula && action.formula.length > 0) {
-          condValue = calculateFormula(action.formula, values, idToCode);
-        } else if (action.indicatorCode !== undefined) {
-          condValue = values[action.indicatorCode];
-        } else if (action.indicatorId !== undefined) {
-          const code = idToCode ? idToCode.get(action.indicatorId) : undefined;
-          condValue = code !== undefined ? values[code] : values[action.indicatorId];
+        if (condition.indicatorCode !== undefined) {
+          condValue = values[condition.indicatorCode];
+        } else if (condition.indicatorId !== undefined) {
+          const code = idToCode ? idToCode.get(condition.indicatorId) : undefined;
+          condValue = code !== undefined ? values[code] : values[condition.indicatorId];
         }
-        // 显式判断空数组、空对象为"空"（不能仅依赖 isNaN）
-        const isEmptyArray = Array.isArray(condValue) && condValue.length === 0;
-        const isEmptyObject = condValue !== null && typeof condValue === 'object' && !Array.isArray(condValue) && Object.keys(condValue).length === 0;
-        const isEmpty = condValue === undefined
-            || condValue === null
-            || condValue === ''
-            || isEmptyArray
-            || isEmptyObject
-            || (typeof condValue === 'string' && condValue.trim() === '');
-        if (isEmpty) {
+
+        const condNum = Number(condValue);
+        let conditionMet = false;
+
+        switch (condition.operator) {
+          case 'not_empty':
+            const isEmptyArray = Array.isArray(condValue) && condValue.length === 0;
+            const isEmptyObject = condValue !== null && typeof condValue === 'object' && !Array.isArray(condValue) && Object.keys(condValue).length === 0;
+            const isEmpty = condValue === undefined
+                || condValue === null
+                || condValue === ''
+                || isEmptyArray
+                || isEmptyObject
+                || (typeof condValue === 'string' && condValue.trim() === '');
+            conditionMet = !isEmpty;
+            break;
+          case '>':
+            conditionMet = !isNaN(condNum) && condNum > (condition.value ?? 0);
+            break;
+          case '>=':
+            conditionMet = !isNaN(condNum) && condNum >= (condition.value ?? 0);
+            break;
+          case '<':
+            conditionMet = !isNaN(condNum) && condNum < (condition.value ?? 0);
+            break;
+          case '<=':
+            conditionMet = !isNaN(condNum) && condNum <= (condition.value ?? 0);
+            break;
+          case '==':
+            conditionMet = !isNaN(condNum) && condNum === (condition.value ?? 0);
+            break;
+          case '!=':
+            conditionMet = !isNaN(condNum) && condNum !== (condition.value ?? 0);
+            break;
+        }
+
+        // 条件不满足时，跳过验证
+        if (!conditionMet) {
           return { valid: true, ruleId: rule.id, ruleName: rule.ruleName ?? '', message: '' };
         }
       }
@@ -381,10 +409,57 @@ export function parseLogicRule(logicRule: string): JointRule[] {
   if (!logicRule || !logicRule.trim()) return [];
 
   const results: JointRule[] = [];
+
+  // 先检测是否有 IF 函数需要处理
+  const ifMatches = [...logicRule.matchAll(/IF\s*\(\s*\[([^\]]+)\]\s*>\s*(\d+(?:\.\d+)?)\s*,\s*\[([^\]]+)\]\s*([><]=?)\s*(\d+(?:\.\d+)?)\s*,\s*TRUE\s*\)/gi)];
+
+  if (ifMatches.length > 0) {
+    // 处理 IF 函数
+    for (const match of ifMatches) {
+      const conditionIndicator = match[1]!;
+      const conditionThreshold = match[2]!;
+      const verifyIndicator = match[3]!;
+      const verifyOperator = match[4]!;
+      const verifyThreshold = match[5]!;
+
+      const action: any = {
+        type: 'formula',
+        operator: verifyOperator,
+        formula: [{ valueType: 'indicator', indicatorCode: verifyIndicator, mathOp: '+' }],
+        compareType: 'fixed',
+        compareValue: Number(verifyThreshold),
+      };
+
+      results.push({
+        id: results.length + 1,
+        ruleName: `[${conditionIndicator}] > ${conditionThreshold} 时, [${verifyIndicator}] ${verifyOperator} ${verifyThreshold}`,
+        triggerTiming: 'FILL',
+        status: 1,
+        projectType: 0,
+        ruleConfig: JSON.stringify({
+          rules: [{
+            id: 1,
+            condition: {
+              indicatorCode: conditionIndicator,
+              operator: '>',
+              value: Number(conditionThreshold),
+            },
+            action,
+            name: `[${conditionIndicator}] > ${conditionThreshold} 时, [${verifyIndicator}] ${verifyOperator} ${verifyThreshold}`,
+          }],
+        }),
+      });
+    }
+
+    return results;
+  }
+
+  // 普通规则解析
   const parts = logicRule.split(/\n|；|;|AND|and|And/).filter(Boolean);
 
   for (let i = 0; i < parts.length; i++) {
     const part = parts[i]!.trim();
+
     const opMatch = part.match(/^(.+?)(>=|<=|>|<|==|!=)(.+)$/);
     if (!opMatch) continue;
 
@@ -395,7 +470,7 @@ export function parseLogicRule(logicRule: string): JointRule[] {
     const leftFormula = parseFormulaSide(left);
     const rightFormula = parseFormulaSide(right);
 
-    // 构造 engine action：当前指标=左公式，右值=右公式
+    // 构造 engine action
     const action: any = {
       type: 'formula',
       operator,
@@ -405,13 +480,13 @@ export function parseLogicRule(logicRule: string): JointRule[] {
     };
 
     results.push({
-      id: i + 1,
+      id: results.length + 1,
       ruleName: part,
       triggerTiming: 'FILL',
       status: 1,
       projectType: 0,
       ruleConfig: JSON.stringify({
-        rules: [{ id: i + 1, action, name: part }],
+        rules: [{ id: 1, action, name: part }],
       }),
     });
   }
@@ -424,16 +499,40 @@ function parseFormulaSide(side: string): FormulaItem[] {
   const raw = side.trim();
   if (!raw) return [];
 
-  // 如果整个字符串有配对括号，先整体处理
-  if (/^\[.+\]$/.test(raw)) {
-    const code = raw.replace(/^\[|\]$/g, '');
-    const mathOp = code.startsWith('-') ? '-' : '+';
-    return [{ valueType: 'indicator', indicatorCode: code.replace(/^\+|^-|^\[|\]$/g, ''), mathOp }];
+  // 使用全局匹配提取所有 [指标] 及其前后的操作符
+  // 匹配模式：[\s*内容\s*] 捕获内容，或 +/- 数字
+  const bracketPattern = /\[\s*([^\]]+?)\s*\]|\b([+\-]?\d+(?:\.\d+)?)\b/g;
+  const items: FormulaItem[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  let mathOp: '+' | '-' | '*' | '/' = '+';
+
+  while ((match = bracketPattern.exec(raw)) !== null) {
+    // 计算操作符：检查当前匹配之前的内容中最后一个操作符
+    const beforeMatch = raw.slice(lastIndex, match.index);
+    const lastOpMatch = beforeMatch.match(/[+\-*/]\s*$/);
+    mathOp = (lastOpMatch ? (lastOpMatch[0]!.trim().startsWith('-') ? '-' : '+') : '+') as '+' | '-' | '*' | '/';
+
+    if (match[1] !== undefined) {
+      // 匹配到带括号的指标引用
+      const code = match[1]!.trim();
+      items.push({ valueType: 'indicator', indicatorCode: code, mathOp });
+    } else if (match[2] !== undefined) {
+      // 匹配到数字
+      const numStr = match[2]!.replace(/^\+/, '');
+      items.push({ valueType: 'fixed', value: Number(numStr), mathOp });
+    }
+    lastIndex = match.index + match[0].length;
   }
 
-  // 无整体括号，按 + 和 - 分割
-  const tokens = raw.split(/(?=\+|-)(?![+-])/);
-  const items: FormulaItem[] = [];
+  // 如果匹配到了括号表达式，直接返回
+  if (items.length > 0) {
+    return items;
+  }
+
+  // 无括号表达式，按原有逻辑处理
+  const tokens = raw.split(/(?=[+\-*/])(?![+\-*\/])/);
+  const fallbackItems: FormulaItem[] = [];
 
   for (const token of tokens) {
     const trimmed = token.trim();
@@ -441,15 +540,15 @@ function parseFormulaSide(side: string): FormulaItem[] {
 
     if (/^\[.+\]$/.test(trimmed)) {
       // 带括号的指标引用
-      items.push({ valueType: 'indicator', indicatorCode: trimmed.replace(/^\[|\]$/g, ''), mathOp: trimmed.startsWith('-') ? '-' : '+' });
-    } else if (/^[+-]?\d+(\.\d+)?$/.test(trimmed)) {
-      items.push({ valueType: 'fixed', value: Number(trimmed.replace(/^\+/, '')), mathOp: trimmed.startsWith('-') ? '-' : '+' });
+      fallbackItems.push({ valueType: 'indicator', indicatorCode: trimmed.replace(/^\[|\]$/g, ''), mathOp: trimmed.startsWith('-') ? '-' : '+' });
+    } else if (/^[+\-]?\d+(\.\d+)?$/.test(trimmed)) {
+      fallbackItems.push({ valueType: 'fixed', value: Number(trimmed.replace(/^\+/, '')), mathOp: trimmed.startsWith('-') ? '-' : '+' });
     } else {
-      items.push({ valueType: 'indicator', indicatorCode: trimmed.replace(/^\[|\]$/g, ''), mathOp: trimmed.startsWith('-') ? '-' : '+' });
+      fallbackItems.push({ valueType: 'indicator', indicatorCode: trimmed.replace(/^\[|\]$/g, ''), mathOp: trimmed.startsWith('-') ? '-' : '+' });
     }
   }
 
-  return items;
+  return fallbackItems;
 }
 
 export default {

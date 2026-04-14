@@ -295,7 +295,7 @@
                         </span>
                         <a-input
                           v-if="field.fieldType === 'text'"
-                          :model-value="getEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode)"
+                          :model-value="(() => { const v = getEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode); console.log('[a-input text]', {code: indicator.indicatorCode, fieldCode: field.fieldCode, val: v, entryKeys: Object.keys(entry)}); return v; })()"
                           @update:model-value="(val: any) => setEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode, val)"
                           :disabled="readonly"
                           :placeholder="field.placeholder || `请输入${field.fieldLabel}`"
@@ -441,7 +441,7 @@
                         </span>
                         <a-input
                           v-if="field.fieldType === 'text'"
-                          :model-value="getEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode)"
+                          :model-value="(() => { const v = getEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode); console.log('[a-input text]', {code: indicator.indicatorCode, fieldCode: field.fieldCode, val: v, entryKeys: Object.keys(entry)}); return v; })()"
                           @update:model-value="(val: any) => setEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode, val)"
                           :disabled="readonly"
                           :placeholder="field.placeholder || `请输入${field.fieldLabel}`"
@@ -600,7 +600,7 @@
                         </span>
                         <a-input
                           v-if="field.fieldType === 'text'"
-                          :model-value="getEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode)"
+                          :model-value="(() => { const v = getEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode); console.log('[a-input text]', {code: indicator.indicatorCode, fieldCode: field.fieldCode, val: v, entryKeys: Object.keys(entry)}); return v; })()"
                           @update:model-value="(val: any) => setEntryFieldValue(entry, indicator.indicatorCode, field.fieldCode, val)"
                           :disabled="readonly"
                           :placeholder="field.placeholder || `请输入${field.fieldLabel}`"
@@ -1158,8 +1158,7 @@ function getMaxEntryIndex(entries: any[]): number {
  * @returns 生成的新 rowKey，如果已达上限则返回 undefined
  */
 function generateNextContainerRowKey(indicatorCode: string): string | undefined {
-  const entriesMap = containerValues[indicatorCode] || {};
-  const entries = Object.values(entriesMap);
+  const entries = containerValues[indicatorCode] || [];
   const maxIndex = getMaxEntryIndex(entries);
   const nextIndex = maxIndex + 1;
   if (nextIndex > MAX_CONTAINER_ENTRIES) {
@@ -1170,17 +1169,9 @@ function generateNextContainerRowKey(indicatorCode: string): string | undefined 
 
 /** 重新编排容器内所有条目的 rowKey（删除后调用） */
 function renumberContainerEntries(indicatorCode: string) {
-  const entriesMap = containerValues[indicatorCode] || {};
-  const keys = Object.keys(entriesMap);
-  keys.forEach((oldKey, idx) => {
-    const entry = entriesMap[oldKey];
-    const newRowKey = generateContainerRowKey(indicatorCode, idx + 1);
-    if (oldKey !== newRowKey) {
-      // 创建新条目并删除旧条目（reactive 属性无法修改 key，只能重建）
-      const newEntry = reactive({ rowKey: newRowKey, ...entry });
-      delete entriesMap[oldKey];
-      entriesMap[newRowKey] = newEntry;
-    }
+  const entries = containerValues[indicatorCode] || [];
+  entries.forEach((entry, idx) => {
+    entry.rowKey = generateContainerRowKey(indicatorCode, idx + 1);
   });
 }
 
@@ -1237,27 +1228,28 @@ function handleAddEntry(indicatorCode: string) {
 
 /** 删除条目 */
 function handleRemoveEntry(indicatorCode: string, rowKey: string) {
-  const entriesMap = containerValues[indicatorCode] || {};
-  if (!(rowKey in entriesMap)) return;
-
-  // 清理该条目相关的脏标记和错误
-  const entry = entriesMap[rowKey];
-  const indicator = indicators.value.find(i => i.indicatorCode === indicatorCode);
-  if (indicator && entry) {
-    const fields = parseDynamicFields(indicator.valueOptions);
-    for (const field of fields) {
-      const key = generateContainerFieldKey(indicatorCode, entry.rowKey, field.fieldCode);
-      delete containerFieldDirty[key];
-      delete jointRuleErrors[key];
-      delete logicRuleErrors[key];
+  const entries = containerValues[indicatorCode] || [];
+  const index = entries.findIndex((e: any) => e.rowKey === rowKey);
+  if (index !== -1) {
+    // 删除前清理该条目相关的脏标记和错误（避免残留的 entryIndex 导致错误引用）
+    // ⚠️ 必须在 splice 之前清理，因为 splice 后 entryIndex 会偏移到错误的位置
+    const entry = entries[index];
+    const indicator = indicators.value.find(i => i.indicatorCode === indicatorCode);
+    if (indicator && entry) {
+      const fields = parseDynamicFields(indicator.valueOptions);
+      for (const field of fields) {
+        const key = generateContainerFieldKey(indicatorCode, entry.rowKey, field.fieldCode);
+        delete containerFieldDirty[key];
+        delete jointRuleErrors[key];
+        delete logicRuleErrors[key];
+      }
+      // 清理容器指标本身的 logicRule 错误（key = containerCode，无 entryIndex）
+      delete logicRuleErrors[indicatorCode];
     }
-    // 清理容器指标本身的 logicRule 错误（key = containerCode，无 entryIndex）
-    delete logicRuleErrors[indicatorCode];
+    containerValues[indicatorCode]!.splice(index, 1);
+    // 删除后重新编排序号
+    renumberContainerEntries(indicatorCode);
   }
-  // 从 map 中删除该 entry
-  delete containerValues[indicatorCode]![rowKey];
-  // 删除后重新编排序号
-  renumberContainerEntries(indicatorCode);
   // 触发同步和校验
   onIndicatorChange({ indicatorCode, valueType: 12 } as any);
 }
@@ -1320,43 +1312,47 @@ function syncAutoEntryContainerCount(
   if (targetCount <= 0) return;
 
   if (!containerValues[containerCode]) {
-    containerValues[containerCode] = {};
+    containerValues[containerCode] = [];
   }
 
-  const entriesMap = containerValues[containerCode];
+  const currentEntries = containerValues[containerCode];
   const effectiveTarget = Math.min(targetCount, MAX_CONTAINER_ENTRIES);
-  const currentKeys = Object.keys(entriesMap).sort();
 
-  // 超出时：清理末尾条目的错误状态并删除
-  if (currentKeys.length > effectiveTarget) {
-    const toDelete = currentKeys.slice(effectiveTarget);
-    const indicator = indicators.value.find(i => i.indicatorCode === containerCode);
-    if (indicator) {
-      const fields = parseDynamicFields(indicator.valueOptions);
-      for (const oldKey of toDelete) {
-        const entry = entriesMap[oldKey];
-        for (const field of fields) {
-          const key = generateContainerFieldKey(containerCode, entry.rowKey, field.fieldCode);
-          delete containerFieldDirty[key];
-          delete jointRuleErrors[key];
-          delete logicRuleErrors[key];
-        }
-        delete entriesMap[oldKey];
-      }
-    }
-  }
-
-  // 不足时：创建新条目
-  if (currentKeys.length < effectiveTarget) {
-    const startIndex = currentKeys.length + 1;
+  if (currentEntries.length < effectiveTarget) {
+    // 直接用 for 循环生成条目，避免响应式追踪问题
+    const startIndex = currentEntries.length + 1;
     for (let i = startIndex; i <= effectiveTarget; i++) {
       const rowKey = generateContainerRowKey(containerCode, i);
-      entriesMap[rowKey] = reactive({ rowKey });
+      currentEntries.push({ rowKey });
     }
+  } else if (currentEntries.length > effectiveTarget) {
+    // 超出：删除末尾条目
+    cleanupEntryErrors(currentEntries, containerCode, currentEntries.length - 1, effectiveTarget);
+    currentEntries.splice(effectiveTarget);
   }
 
-  // 重新编排序号（key 变化后自动完成）
+  // 重新编排序号
   renumberContainerEntries(containerCode);
+}
+
+/** 清理被删除条目的错误状态
+ * @param entries 当前容器所有条目数组
+ * @param containerCode 容器编码
+ * @param fromIndex 删除起始索引（不含）
+ * @param toIndex 删除结束索引（不含）
+ */
+function cleanupEntryErrors(entries: any[], containerCode: string, fromIndex: number, toIndex: number) {
+  for (let i = toIndex; i < fromIndex; i++) {
+    const entry = entries[i];
+    if (!entry) continue;
+    const fields = parseDynamicFields(indicators.value.find(ind => ind.indicatorCode === containerCode)?.valueOptions || '{}');
+    for (const field of fields) {
+      const key = generateContainerFieldKey(containerCode, entry.rowKey, field.fieldCode);
+      delete containerFieldDirty[key];
+      delete jointRuleErrors[key];
+      delete logicRuleErrors[key];
+    }
+  }
 }
 
 /** 根据关联指标变化，同步所有自动条目容器 */
@@ -1783,12 +1779,11 @@ function validateType11_User(indicator: DeclareIndicatorApi.Indicator): Validati
 function validateType12_Container(indicator: DeclareIndicatorApi.Indicator): ValidationError[] {
   const errors: ValidationError[] = [];
   const { indicatorCode: code, id, indicatorName } = indicator;
-  const entriesMap = containerValues[code] || {};
-  const entries = Object.values(entriesMap);
+  const entries = containerValues[code] || [];
   const fields = parseDynamicFields(indicator.valueOptions);
 
-  let entryIndex = 0;
-  for (const entry of entries) {
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i];
     for (const field of fields) {
       if (!isFieldVisible(entry, code, field, fields)) continue;
 
@@ -1797,7 +1792,7 @@ function validateType12_Container(indicator: DeclareIndicatorApi.Indicator): Val
       const ctx: ContainerFieldContext = {
         indicatorId: id!,
         containerCode: code,
-        entryIndex,
+        entryIndex: i,
         entry,
         field,
         fieldCode: field.fieldCode,
@@ -1829,7 +1824,7 @@ function validateType12_Container(indicator: DeclareIndicatorApi.Indicator): Val
             return '不能输入纯数字';
           }
           if (ctx.field.noRepeat && trimmed) {
-            const allEntries = Object.values(containerValues[ctx.containerCode] || {});
+            const allEntries = containerValues[ctx.containerCode] || [];
             for (let j = 0; j < allEntries.length; j++) {
               if (j === ctx.entryIndex) continue;
               const otherFullKey = generateContainerFieldKey(ctx.containerCode, allEntries[j].rowKey, ctx.fieldCode);
@@ -1848,12 +1843,11 @@ function validateType12_Container(indicator: DeclareIndicatorApi.Indicator): Val
       // 容器字段 logicRule 校验
       if (field.logicRule?.trim()) {
         const containerLogicRuleErrors = validateContainerFieldLogicRule(
-          indicator, field, entryIndex, entry
+          indicator, field, i, entry
         );
         errors.push(...containerLogicRuleErrors);
       }
     }
-    entryIndex++;
   }
 
   return errors;
@@ -2238,8 +2232,8 @@ function onIndicatorChange(indicator: DeclareIndicatorApi.Indicator) {
 
   // 如果是动态容器，将子字段值同步到 formValues
   if (indicator.valueType === 12) {
-    const entriesMap = containerValues[indicator.indicatorCode] || {};
-    formValues[indicator.indicatorCode] = JSON.stringify(Object.values(entriesMap));
+    const entries = containerValues[indicator.indicatorCode] || [];
+    formValues[indicator.indicatorCode] = JSON.stringify(entries);
   }
 
   // 触发关联的自动条目容器同步
@@ -2363,8 +2357,7 @@ const containerFieldErrors = computed(() => {
     if (indicator.valueType !== 12) continue; // 仅处理容器类型
 
     const code = indicator.indicatorCode;
-    const entriesMap = containerValues[code] || {};
-    const entries = Object.values(entriesMap);
+    const entries = containerValues[code] || [];
     const fields = parseDynamicFields(indicator.valueOptions);
 
     for (let i = 0; i < entries.length; i++) {
@@ -2449,13 +2442,6 @@ const logicRuleErrors = reactive<Record<string, string>>({});
 function buildLogicRuleMsg(logicRule: string, allIndicators: typeof indicators.value, codeValueMap: Record<string, any>): string {
   if (!logicRule) return '校验失败';
 
-  const match = logicRule.trim().match(/^(.+?)\s*(>=|<=|>|<|==|!=)\s*(.+)$/);
-  if (!match) return '校验失败';
-
-  const leftRaw = match[1]!.trim();
-  const operator = match[2]!;
-  const rightRaw = match[3]!.trim();
-
   // 建立 code → 指标名 的映射（优先用 allIndicators，没有的用 code 本身）
   const codeMap = new Map<string, string>();
   for (const ind of allIndicators) {
@@ -2473,6 +2459,29 @@ function buildLogicRuleMsg(logicRule: string, allIndicators: typeof indicators.v
     const valText = val !== undefined && val !== null && val !== '' ? String(val) : '未填';
     return `${name}(${valText})`;
   };
+
+  // 处理 IF 函数格式: IF([指标1] > 阈值1, [指标2] > 阈值2, TRUE)
+  const ifMatch = logicRule.trim().match(/^IF\s*\(\s*\[([^\]]+)\]\s*([><]=?)\s*(\d+(?:\.\d+)?)\s*,\s*\[([^\]]+)\]\s*([><]=?)\s*(\d+(?:\.\d+)?)\s*,\s*TRUE\s*\)$/i);
+  if (ifMatch) {
+    const condCode = ifMatch[1]!.trim();
+    const condOp = ifMatch[2]!;
+    const condVal = ifMatch[3]!;
+    const verifyCode = ifMatch[4]!.trim();
+    const verifyOp = ifMatch[5]!;
+    const verifyVal = ifMatch[6]!;
+
+    const condMsg = replaceCode(condCode);
+    const verifyMsg = replaceCode(verifyCode);
+
+    return `当 ${condMsg} ${condOp} ${condVal} 时, ${verifyMsg} ${opText[verifyOp] || verifyOp} ${verifyVal}`;
+  }
+
+  // 普通规则格式处理
+  const match = logicRule.trim().match(/^(.+?)\s*(>=|<=|>|<|==|!=)\s*(.+)$/);
+  if (!match) return '校验失败';
+  const leftRaw = match[1]!.trim();
+  const operator = match[2]!;
+  const rightRaw = match[3]!.trim();
 
   const msgLeft = leftRaw.replace(/\[([^\]]+)\]/g, (_, c) => replaceCode(c.trim()));
   const msgRight = rightRaw.replace(/\[([^\]]+)\]/g, (_, c) => replaceCode(c.trim()));
@@ -2803,14 +2812,14 @@ onMounted(async () => {
           const raw = value;
           const indicatorCode = record.indicatorCode;
           console.log('[容器初始化] indicatorCode:', indicatorCode, 'containerType:', containerType, 'raw:', JSON.stringify(raw));
-          containerValues[indicatorCode] = {};
           if (Array.isArray(raw)) {
-            raw.forEach((item: any, idx: number) => {
+            containerValues[indicatorCode] = raw.map((item: any, idx: number) => {
               const rowKey = item.rowKey || migrateRowKeyToNewFormat(indicatorCode, idx);
+              // 使用 migrateContainerEntryToFullKey 统一迁移到 fullKey 格式
+              // 兼容旧数据（fieldCode）和新数据（fullKey 格式）
               const entryWithFullKey = migrateContainerEntryToFullKey(item, ind!.valueOptions, indicatorCode, rowKey);
               const dates = convertContainerEntryDates(ind!.valueOptions, entryWithFullKey, indicatorCode, rowKey);
-              const entryData = { rowKey, ...item, ...dates };
-              containerValues[indicatorCode]![rowKey] = reactive(entryData);
+              return { rowKey, ...item, ...dates };
             });
           } else if (raw && typeof raw === 'object') {
             // 旧格式兼容：单个对象转为一行
@@ -2818,18 +2827,18 @@ onMounted(async () => {
               const rowKey = generateConditionalRowKey(indicatorCode);
               const entryWithFullKey = migrateContainerEntryToFullKey(raw, ind!.valueOptions, indicatorCode, rowKey);
               const dates = convertContainerEntryDates(ind!.valueOptions, entryWithFullKey, indicatorCode, rowKey);
-              containerValues[indicatorCode]![rowKey] = reactive({ rowKey, ...raw, ...dates });
+              containerValues[indicatorCode] = [{ rowKey, ...raw, ...dates }];
             } else {
               const rowKey = generateContainerRowKey(indicatorCode, 1);
               const entryWithFullKey = migrateContainerEntryToFullKey(raw, ind!.valueOptions, indicatorCode, rowKey);
               const dates = convertContainerEntryDates(ind!.valueOptions, entryWithFullKey, indicatorCode, rowKey);
-              containerValues[indicatorCode]![rowKey] = reactive({ rowKey, ...raw, ...dates });
+              containerValues[indicatorCode] = [{ rowKey, ...raw, ...dates }];
             }
           } else {
             if (containerType === 'conditional') {
-              containerValues[indicatorCode]![generateConditionalRowKey(indicatorCode)] = reactive({ rowKey: generateConditionalRowKey(indicatorCode) });
+              containerValues[indicatorCode] = [{ rowKey: generateConditionalRowKey(indicatorCode) }];
             } else {
-              containerValues[indicatorCode]![generateContainerRowKey(indicatorCode, 1)] = reactive({ rowKey: generateContainerRowKey(indicatorCode, 1) });
+              containerValues[indicatorCode] = [{ rowKey: generateContainerRowKey(indicatorCode, 1) }];
             }
           }
         }
@@ -2850,14 +2859,10 @@ onMounted(async () => {
         const containerType = getContainerType(ind.valueOptions);
         if (containerType === 'conditional') {
           // 条件容器：rowKey 直接使用 indicatorCode
-          const rowKey = generateConditionalRowKey(ind.indicatorCode);
-          containerValues[ind.indicatorCode] = {};
-          containerValues[ind.indicatorCode]![rowKey] = reactive({ rowKey });
+          containerValues[ind.indicatorCode] = [{ rowKey: generateConditionalRowKey(ind.indicatorCode) }];
         } else {
           // 普通容器：使用带序号的 rowKey
-          const rowKey = generateContainerRowKey(ind.indicatorCode, 1);
-          containerValues[ind.indicatorCode] = {};
-          containerValues[ind.indicatorCode]![rowKey] = reactive({ rowKey });
+          containerValues[ind.indicatorCode] = [{ rowKey: generateContainerRowKey(ind.indicatorCode, 1) }];
         }
       }
     }
@@ -2945,32 +2950,30 @@ watch(() => props.projectType, async (newProjectType) => {
           const containerType = getContainerType(ind.valueOptions);
           const raw = value;
           const indicatorCode = record.indicatorCode;
-          containerValues[indicatorCode] = {};
           if (Array.isArray(raw)) {
-            raw.forEach((item: any, idx: number) => {
+            containerValues[indicatorCode] = raw.map((item: any, idx: number) => {
               const rowKey = item.rowKey || migrateRowKeyToNewFormat(indicatorCode, idx);
               const entryWithFullKey = migrateContainerEntryToFullKey(item, ind.valueOptions, indicatorCode, rowKey);
               const dates = convertContainerEntryDates(ind.valueOptions, entryWithFullKey, indicatorCode, rowKey);
-              const entryData = { rowKey, ...item, ...dates };
-              containerValues[indicatorCode]![rowKey] = reactive(entryData);
+              return { rowKey, ...item, ...dates };
             });
           } else if (raw && typeof raw === 'object') {
             if (containerType === 'conditional') {
               const rowKey = generateConditionalRowKey(indicatorCode);
               const entryWithFullKey = migrateContainerEntryToFullKey(raw, ind.valueOptions, indicatorCode, rowKey);
               const dates = convertContainerEntryDates(ind.valueOptions, entryWithFullKey, indicatorCode, rowKey);
-              containerValues[indicatorCode]![rowKey] = reactive({ rowKey, ...raw, ...dates });
+              containerValues[indicatorCode] = [{ rowKey, ...raw, ...dates }];
             } else {
               const rowKey = generateContainerRowKey(indicatorCode, 1);
               const entryWithFullKey = migrateContainerEntryToFullKey(raw, ind.valueOptions, indicatorCode, rowKey);
               const dates = convertContainerEntryDates(ind.valueOptions, entryWithFullKey, indicatorCode, rowKey);
-              containerValues[indicatorCode]![rowKey] = reactive({ rowKey, ...raw, ...dates });
+              containerValues[indicatorCode] = [{ rowKey, ...raw, ...dates }];
             }
           } else {
             if (containerType === 'conditional') {
-              containerValues[indicatorCode]![generateConditionalRowKey(indicatorCode)] = reactive({ rowKey: generateConditionalRowKey(indicatorCode) });
+              containerValues[indicatorCode] = [{ rowKey: generateConditionalRowKey(indicatorCode) }];
             } else {
-              containerValues[indicatorCode]![generateContainerRowKey(indicatorCode, 1)] = reactive({ rowKey: generateContainerRowKey(indicatorCode, 1) });
+              containerValues[indicatorCode] = [{ rowKey: generateContainerRowKey(indicatorCode, 1) }];
             }
           }
         }
@@ -2991,14 +2994,10 @@ watch(() => props.projectType, async (newProjectType) => {
         const containerType = getContainerType(ind.valueOptions);
         if (containerType === 'conditional') {
           // 条件容器：rowKey 直接使用 indicatorCode
-          const rowKey = generateConditionalRowKey(ind.indicatorCode);
-          containerValues[ind.indicatorCode] = {};
-          containerValues[ind.indicatorCode]![rowKey] = reactive({ rowKey });
+          containerValues[ind.indicatorCode] = [{ rowKey: generateConditionalRowKey(ind.indicatorCode) }];
         } else {
           // 普通容器：使用带序号的 rowKey
-          const rowKey = generateContainerRowKey(ind.indicatorCode, 1);
-          containerValues[ind.indicatorCode] = {};
-          containerValues[ind.indicatorCode]![rowKey] = reactive({ rowKey });
+          containerValues[ind.indicatorCode] = [{ rowKey: generateContainerRowKey(ind.indicatorCode, 1) }];
         }
       }
     }
@@ -3072,7 +3071,7 @@ function getContainerValues(): Record<string, string> {
   const result: Record<string, string> = {};
   for (const ind of indicators.value) {
     if (ind.valueType === 12) {
-      result[ind.indicatorCode] = JSON.stringify(Object.values(containerValues[ind.indicatorCode] || {}));
+      result[ind.indicatorCode] = JSON.stringify(containerValues[ind.indicatorCode] || []);
     }
   }
   return result;
@@ -3116,7 +3115,7 @@ function getAllIndicatorValues(): Array<{
 
     // 动态容器：JSON 字符串作为 valueStr
     if (vt === 12) {
-      item.valueStr = JSON.stringify(Object.values(containerValues[code] || {}));
+      item.valueStr = JSON.stringify(containerValues[code] || []);
     } else if (vt === 1) {
       item.valueNum = String(rawValue);
     } else if (vt === 2 || vt === 6 || vt === 9 || vt === 10) {
@@ -3153,7 +3152,7 @@ function getAllIndicatorValues(): Array<{
 function syncContainerValuesToForm() {
   for (const ind of indicators.value) {
     if (ind.valueType === 12) {
-      formValues[ind.indicatorCode] = JSON.stringify(Object.values(containerValues[ind.indicatorCode] || {}));
+      formValues[ind.indicatorCode] = JSON.stringify(containerValues[ind.indicatorCode] || []);
     }
   }
 }
@@ -3555,7 +3554,7 @@ defineExpose({
 }
 
 .dynamic-field-label {
-  min-width: 220px;
+  min-width: 120px;
   line-height: 32px;
   font-size: 14px;
   color: hsl(var(--foreground));
