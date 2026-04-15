@@ -144,6 +144,10 @@ function buildLogicRuleMsg(
           }
         }
       }
+    } else {
+      // 顶层指标：用 codeMap 查指标名称，始终附加代码前缀（如 603 → 603 - 完成交易活动的数据产品数）
+      const name = codeMap.get(fieldCode);
+      fieldLabel = name ? `${fieldCode} - ${name}` : fieldCode;
     }
 
     return { fieldLabel, thresholdText };
