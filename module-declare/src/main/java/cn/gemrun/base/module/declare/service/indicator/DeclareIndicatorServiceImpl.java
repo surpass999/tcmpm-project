@@ -7,6 +7,7 @@ import cn.gemrun.base.module.declare.dal.dataobject.indicator.DeclareIndicatorDO
 import cn.gemrun.base.module.declare.dal.mysql.indicator.DeclareIndicatorMapper;
 import cn.gemrun.base.module.declare.enums.ErrorCodeConstants;
 import cn.gemrun.base.framework.common.exception.util.ServiceExceptionUtil;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -79,9 +80,29 @@ public class DeclareIndicatorServiceImpl implements DeclareIndicatorService {
             }
         }
 
-        // 更新
-        DeclareIndicatorDO indicator = BeanUtils.toBean(updateReqVO, DeclareIndicatorDO.class);
-        indicatorMapper.updateById(indicator);
+        // 更新（使用 UpdateWrapper 显式设置所有字段，包括 null 值）
+        // 注意：MyBatis-Plus 的 updateById 默认忽略 null 字段，需要用 UpdateWrapper 显式 set null
+        LambdaUpdateWrapper<DeclareIndicatorDO> wrapper = new LambdaUpdateWrapper<>();
+        wrapper.eq(DeclareIndicatorDO::getId, updateReqVO.getId())
+                .set(DeclareIndicatorDO::getIndicatorCode, updateReqVO.getIndicatorCode())
+                .set(DeclareIndicatorDO::getIndicatorName, updateReqVO.getIndicatorName())
+                .set(DeclareIndicatorDO::getUnit, updateReqVO.getUnit())
+                .set(DeclareIndicatorDO::getLogicRule, updateReqVO.getLogicRule())
+                .set(DeclareIndicatorDO::getCalculationRule, updateReqVO.getCalculationRule())
+                .set(DeclareIndicatorDO::getValueType, updateReqVO.getValueType())
+                .set(DeclareIndicatorDO::getValueOptions, updateReqVO.getValueOptions())
+                .set(DeclareIndicatorDO::getIsRequired, updateReqVO.getIsRequired())
+                // 关键：显式 set null 值，确保 maxValue/minValue 能被正确清空
+                .set(DeclareIndicatorDO::getMinValue, updateReqVO.getMinValue())
+                .set(DeclareIndicatorDO::getMaxValue, updateReqVO.getMaxValue())
+                .set(DeclareIndicatorDO::getSort, updateReqVO.getSort())
+                .set(DeclareIndicatorDO::getShowInList, updateReqVO.getShowInList())
+                .set(DeclareIndicatorDO::getChildrenIndicatorCodes, updateReqVO.getChildrenIndicatorCodes())
+                .set(DeclareIndicatorDO::getProjectType, updateReqVO.getProjectType())
+                .set(DeclareIndicatorDO::getBusinessType, updateReqVO.getBusinessType())
+                .set(DeclareIndicatorDO::getExtraConfig, updateReqVO.getExtraConfig())
+                .set(DeclareIndicatorDO::getGroupId, updateReqVO.getGroupId());
+        indicatorMapper.update(null, wrapper);
     }
 
     /**

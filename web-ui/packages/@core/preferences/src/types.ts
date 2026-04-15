@@ -262,6 +262,15 @@ interface TransitionPreferences {
   progress: boolean;
 }
 
+interface IdleTimeoutPreferences {
+  /** 是否启用空闲超时 */
+  enable: boolean;
+  /** 超时时间（毫秒），默认 60 分钟 */
+  timeout: number;
+  /** 超时前是否自动保存草稿 */
+  autoSaveDraft: boolean;
+}
+
 interface WidgetPreferences {
   /** 是否启用全屏部件 */
   fullscreen: boolean;
@@ -292,6 +301,8 @@ interface Preferences {
   copyright: CopyrightPreferences;
   /** 底栏配置 */
   footer: FooterPreferences;
+  /** 空闲超时配置 */
+  idleTimeout: IdleTimeoutPreferences;
   /** 面包屑配置 */
   header: HeaderPreferences;
   /** logo配置 */
@@ -323,6 +334,7 @@ export type {
   BreadcrumbPreferences,
   FooterPreferences,
   HeaderPreferences,
+  IdleTimeoutPreferences,
   InitialOptions,
   LogoPreferences,
   NavigationPreferences,

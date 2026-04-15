@@ -110,6 +110,7 @@ import {
 
 // 工具函数
 import {
+  parseDynamicFields,
   getContainerType,
   getAutoEntryLink,
   extractEntryIndex,
@@ -149,6 +150,7 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   loadingChange: [loading: boolean];
+  update: [];
 }>();
 
 // ==================== 状态 ====================
@@ -316,6 +318,7 @@ watch(() => props.projectType, async (newProjectType) => {
 watch(formValues as any, () => {
   const hasAnyValue = Object.values(formValues).some((v) => v !== undefined && v !== null && v !== '');
   if (hasAnyValue) markDirty();
+  emit('update');
 }, { deep: true });
 
 // ==================== 暴露 API ====================
@@ -381,6 +384,35 @@ function doValidateFilledData() {
   return validateFilledData(indicators.value, setFieldError, clearFieldError);
 }
 
+function getFillProgress(): { total: number; filled: number; percentage: number } {
+  const all = indicators.value;
+  let filled = 0;
+  for (const ind of all) {
+    if (ind.valueType === 12) {
+      const entries = containerValues[ind.indicatorCode] || [];
+      if (entries.length > 0) {
+        const fields = parseDynamicFields(ind.valueOptions);
+        const hasAllRequired = fields
+          .filter((f) => f.required)
+          .every((f) => {
+            const key = `${entries[0].rowKey}${f.fieldCode}`;
+            const val = entries[0][key];
+            return val !== undefined && val !== null && val !== '';
+          });
+        if (hasAllRequired) filled++;
+      }
+    } else {
+      const val = formValues[ind.indicatorCode];
+      if (val !== undefined && val !== null && val !== '') filled++;
+    }
+  }
+  return {
+    total: all.length,
+    filled,
+    percentage: all.length > 0 ? Math.round((filled / all.length) * 100) : 0,
+  };
+}
+
 defineExpose({
   getContainerValues: getContainerValuesResult,
   getAllIndicatorValues,
@@ -393,6 +425,7 @@ defineExpose({
   containerValues,
   isDirty,
   resetDirty,
+  getFillProgress,
 });
 
 

@@ -21,6 +21,7 @@ import {
   smsLogin,
   socialLogin,
 } from '#/api';
+import { useIdleSessionStore } from '@vben/stores';
 import { $t } from '#/locales';
 
 export const useAuthStore = defineStore('auth', () => {
@@ -70,6 +71,10 @@ export const useAuthStore = defineStore('auth', () => {
       if (accessToken) {
         accessStore.setAccessToken(accessToken);
         accessStore.setRefreshToken(refreshToken);
+
+        // 初始化空闲会话时间
+        const idleSessionStore = useIdleSessionStore();
+        idleSessionStore.setLoginTime();
 
         // 获取用户信息并存储到 userStore、accessStore 中
         // TODO @芋艿：清理掉 accessCodes 相关的逻辑

@@ -1,6 +1,7 @@
 export { default as Breadcrumb } from './breadcrumb.vue';
 export * from './check-updates';
 export { default as AuthenticationColorToggle } from './color-toggle.vue';
+export { default as IdleTimeout } from './idle-timeout/IdleTimeout.vue';
 export * from './global-search';
 export * from './help';
 export { default as LanguageToggle } from './language-toggle.vue';

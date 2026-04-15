@@ -54,6 +54,11 @@ const defaultPreferences: Preferences = {
     fixed: false,
     height: 32,
   },
+  idleTimeout: {
+    enable: true,
+    timeout: 60 * 60 * 1000,
+    autoSaveDraft: true,
+  },
   header: {
     enable: true,
     height: 50,

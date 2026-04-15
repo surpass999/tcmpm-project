@@ -2,11 +2,13 @@
 import type { DeclareProgressReport } from '#/api/declare/progress-report';
 import type { DeclareHospitalApi } from '#/api/declare/hospital';
 
-import { computed, h, ref, watch } from 'vue';
+import { computed, h, nextTick, ref, watch } from 'vue';
 
 import { prompt, useVbenModal } from '@vben/common-ui';
 import { DICT_TYPE } from '@vben/constants';
 import { getDictOptions } from '@vben/hooks';
+import { useIdleSessionStore } from '@vben/stores';
+import { useDebounceFn } from '@vueuse/core';
 
 import { message, Modal as AConfirmModal, Spin, Input } from 'ant-design-vue';
 import dayjs from 'dayjs';
@@ -24,11 +26,17 @@ import ValidationSummaryModal from '../components/ValidationSummaryModal.vue';
 
 const emit = defineEmits(['success']);
 
+/** 空闲会话 Store */
+const idleSessionStore = useIdleSessionStore();
+
 /** 加载状态 */
 const isLoading = ref(false);
 
 /** 指标表格加载状态 */
 const isLoadingIndicators = ref(false);
+
+/** 填报进度 */
+const fillProgress = ref({ total: 0, filled: 0, percentage: 0 });
 
 /** 指标表格组件引用 */
 const indicatorTableRef = ref<InstanceType<typeof IndicatorInputTable> | null>(
@@ -218,7 +226,11 @@ const [Modal, modalApi] = useVbenModal({
     }
   },
   async onOpenChange(isOpen: boolean) {
+    // 立即设置表单打开状态（不等待后续异步操作）
+    idleSessionStore.setFormOpened(isOpen);
+
     if (!isOpen) {
+      idleSessionStore.syncFormData(null);
       formData.value = {
         id: undefined,
         hospitalId: 0,
@@ -236,8 +248,15 @@ const [Modal, modalApi] = useVbenModal({
       isFormDirty.value = false;
       // 重置子组件的 dirty 状态
       indicatorTableRef.value?.resetDirty?.();
+      // 清除超时保存回调
+      idleSessionStore.setAutoSaveDraftCallback(() => Promise.resolve());
       return;
     }
+
+    // 注入超时保存回调
+    idleSessionStore.setAutoSaveDraftCallback(async () => {
+      await handleSaveDraft();
+    });
 
     isLoading.value = true;
     try {
@@ -571,13 +590,75 @@ function handleCancel() {
 /** 指标表格加载状态变化 */
 function handleIndicatorLoadingChange(loading: boolean) {
   isLoadingIndicators.value = loading;
+  if (!loading) {
+    nextTick(() => updateFillProgress());
+  }
+}
+
+/** 更新填报进度 */
+function updateFillProgress() {
+  if (!indicatorTableRef.value?.getFillProgress) {
+    fillProgress.value = { total: 0, filled: 0, percentage: 0 };
+    return;
+  }
+  fillProgress.value = indicatorTableRef.value.getFillProgress();
 }
 
 defineExpose({ setData: modalApi.setData });
+
+/** 防抖同步表单数据到 Store（用于 idle 超时保存） */
+const debouncedSyncFormData = useDebounceFn(() => {
+  // 只在有 reportId 时同步（新建记录无 id，无法保存）
+  if (!formData.value?.id) return;
+
+  const rawValues = indicatorTableRef.value?.getAllIndicatorValues?.() || [];
+  const values = rawValues.map((item: any) => {
+    const base: any = {
+      indicatorId: item.indicatorId,
+      indicatorCode: item.indicatorCode,
+      valueType: item.valueType,
+      value: extractValue(item),
+    };
+    if (item.valueType === 8) {
+      base.value = undefined;
+      base.valueDateStart = item.valueDateStart;
+      base.valueDateEnd = item.valueDateEnd;
+    }
+    return base;
+  });
+
+  idleSessionStore.syncFormData({
+    id: formData.value.id,
+    reportYear: formData.value.reportYear,
+    reportBatch: formData.value.reportBatch,
+    reportStatus: 'DRAFT',
+    values,
+  });
+}, 500);
+
+// watch formData 变化，同步到 Store
+watch(
+  formData,
+  () => {
+    if (formData.value?.id && idleSessionStore.isFormOpened) {
+      debouncedSyncFormData();
+    }
+  },
+  { deep: true },
+);
 </script>
 
 <template>
-  <Modal :title="modalTitle" class="progress-form-modal wide-modal">
+  <Modal class="progress-form-modal wide-modal">
+    <template #title>
+      <span class="modal-title-text">{{ modalTitle }}</span>
+      <span
+        v-if="fillProgress.total > 0"
+        class="modal-title-progress"
+      >
+        已填 {{ fillProgress.filled }} 项/共 {{ fillProgress.total }} 项, 已完成 {{ fillProgress.percentage }}%
+      </span>
+    </template>
     <Spin :spinning="isLoading || isLoadingIndicators">
       <!-- 项目类型大标题（与下方「项目类型」不同源展示） -->
       <div class="project-type-title">
@@ -653,6 +734,7 @@ defineExpose({ setData: modalApi.setData });
           :report-batch="formData.reportBatch"
           :readonly="isReadonly"
           @loading-change="handleIndicatorLoadingChange"
+          @update="updateFillProgress"
         />
       </div>
     </Spin>
@@ -802,5 +884,25 @@ defineExpose({ setData: modalApi.setData });
   .hospital-info-row {
     grid-template-columns: 1fr;
   }
+}
+</style>
+
+<style>
+/* Modal title 容器设为相对定位，作为进度居中的定位基准 */
+.progress-form-modal .ant-modal-title {
+  position: relative;
+}
+
+/* 进度文本绝对居中，不影响左侧标题 */
+.modal-title-progress {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 1.125rem;
+  line-height: 1.4;
+  color: hsl(var(--primary-dark));
+  font-weight: 600;
+  pointer-events: none;
+  white-space: nowrap;
 }
 </style>

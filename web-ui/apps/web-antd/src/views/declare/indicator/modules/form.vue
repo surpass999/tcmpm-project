@@ -628,6 +628,20 @@ const [Modal, modalApi] = useVbenModal({
     convertOptionsToJson();
     // 转换扩展配置为JSON
     convertExtraConfigToJson();
+    // 处理 maxValue/minValue 为 null 的情况：
+    // 1. a-input-number 清空后返回 null（用户想清空验证）
+    // 2. 初始未设置时是 undefined（新建指标时从未填写）
+    // 3. 如果是 null，需要确保被 JSON 序列化发送（不是 undefined）
+    // 注：如果原始指标有值（不是 null），用户没改过，那么 formData.value.maxValue 仍保持原值，不受影响
+    if (formData.value) {
+      // 将 undefined 转为 null，确保后端能收到并正确处理
+      if (formData.value.minValue === undefined) {
+        formData.value.minValue = null as any;
+      }
+      if (formData.value.maxValue === undefined) {
+        formData.value.maxValue = null as any;
+      }
+    }
     // 提交表单
     const data = formData.value as DeclareIndicatorApi.IndicatorSaveParams;
     try {

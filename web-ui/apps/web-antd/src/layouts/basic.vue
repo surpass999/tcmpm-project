@@ -16,13 +16,14 @@ import {
 import {
   BasicLayout,
   Help,
+  IdleTimeout,
   LockScreen,
   Notification,
   TenantDropdown,
   UserDropdown,
 } from '@vben/layouts';
 import { preferences } from '@vben/preferences';
-import { useAccessStore, useUserStore } from '@vben/stores';
+import { useAccessStore, useIdleSessionStore, useUserStore } from '@vben/stores';
 import { formatDateTime, openWindow } from '@vben/utils';
 import { message } from 'ant-design-vue';
 
@@ -40,6 +41,7 @@ import LoginForm from '#/views/_core/authentication/login.vue';
 const userStore = useUserStore();
 const authStore = useAuthStore();
 const accessStore = useAccessStore();
+const idleSessionStore = useIdleSessionStore();
 const { hasAccessByCodes } = useAccess();
 const { destroyWatermark, updateWatermark } = useWatermark();
 const { closeOtherTabs, refreshTab } = useTabs();
@@ -130,6 +132,9 @@ function handleNotificationOpen(open: boolean) {
 
 // ========== 初始化 ==========
 onMounted(() => {
+  // 注入空闲超时登出回调
+  idleSessionStore.setLogoutCallback(() => authStore.logout());
+
   // 首次加载未读数量
   handleNotificationGetUnreadCount();
   // 轮询刷新未读数量
@@ -167,6 +172,7 @@ watch(
 
 <template>
   <BasicLayout @clear-preferences-and-logout="handleLogout">
+    <IdleTimeout />
     <template #user-dropdown>
       <UserDropdown
         :avatar
