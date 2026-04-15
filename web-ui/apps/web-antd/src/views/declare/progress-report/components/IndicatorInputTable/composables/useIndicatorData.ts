@@ -236,9 +236,21 @@ async function loadJointRules(projectType: number) {
 
 // ==================== 导出 ====================
 
+/** 按页面显示顺序返回所有指标（先一级组，再二级组，同组内按 sort 排序） */
+function getIndicatorsInDisplayOrder(): DeclareIndicatorApi.Indicator[] {
+  const result: DeclareIndicatorApi.Indicator[] = [];
+  // indicatorGroups 里一级组后紧跟其二级子组（recalcIndicatorGroups 里的 result.push(...lvl1.children)）
+  // 因此只需要遍历 + 收集本组指标，children 作为独立项会自然被遍历到
+  for (const g of indicatorGroups.value) {
+    result.push(...g.indicators);
+  }
+  return result;
+}
+
 export {
   recalcIndicatorGroups,
   loadIndicatorData,
   reloadIndicatorData,
   loadJointRules,
+  getIndicatorsInDisplayOrder,
 };

@@ -25,6 +25,7 @@ import {
   clearFieldError,
   setDirty,
 } from './useErrorKeys';
+import { getIndicatorsInDisplayOrder } from './useIndicatorData';
 
 // ==================== 核心校验逻辑 ====================
 
@@ -435,14 +436,15 @@ export const validators: Record<number, (ind: DeclareIndicatorApi.Indicator) => 
  * 验证已填数据（不做必填校验，用于保存草稿）
  */
 export function validateFilledData(
-  indicators: DeclareIndicatorApi.Indicator[],
+  _indicators: DeclareIndicatorApi.Indicator[],
   _setFieldErrorFn: (key: string, message: string, type: FieldError['errorType'], dirty?: boolean) => void,
   _clearFieldErrorFn: (key: string) => void,
 ): ValidationError[] {
   const errors: ValidationError[] = [];
+  const orderedIndicators = getIndicatorsInDisplayOrder();
 
   // 1. 验证顶层指标
-  for (const indicator of indicators) {
+  for (const indicator of orderedIndicators) {
     if (indicator.valueType === 12) continue;
     (indicator as any)._formValue = formValues[indicator.indicatorCode];
     const errs = validateFilledIndicator(indicator);
@@ -450,7 +452,7 @@ export function validateFilledData(
   }
 
   // 2. 验证容器指标
-  for (const indicator of indicators) {
+  for (const indicator of orderedIndicators) {
     if (indicator.valueType !== 12) continue;
     const entries = containerValues[indicator.indicatorCode] || [];
     const errs = validateFilledContainer(indicator, entries);
@@ -546,38 +548,37 @@ function validateFilledContainer(
  * 返回所有错误消息，用于提交时弹出
  */
 export function validateAll(
-  indicators: DeclareIndicatorApi.Indicator[],
+  _indicators: DeclareIndicatorApi.Indicator[],
   _setFieldErrorFn: (key: string, message: string, type: FieldError['errorType'], dirty?: boolean) => void,
   _clearFieldErrorFn: (key: string) => void,
 ): { messages: ValidationError[]; hasErrors: boolean } {
   const messages: ValidationError[] = [];
+  // 按页面显示顺序遍历，避免容器指标被放到最后
+  const orderedIndicators = getIndicatorsInDisplayOrder();
 
-  // 1. 顶层指标校验
-  for (const indicator of indicators) {
-    if (indicator.valueType === 12) continue;
-    (indicator as any)._formValue = formValues[indicator.indicatorCode];
-    const errs = validateIndicator(indicator);
-    if (errs.length > 0) {
-      // 转换 FieldError[] 为 ValidationError[]
-      for (const e of errs) {
-        messages.push({
-          message: e.message,
-          errorType: e.errorType,
-          indicatorId: indicator.id,
-          indicatorCode: indicator.indicatorCode,
-          indicatorName: indicator.indicatorName,
-        });
+  for (const indicator of orderedIndicators) {
+    if (indicator.valueType === 12) {
+      // 容器指标：校验所有行
+      const entries = containerValues[indicator.indicatorCode] || [];
+      const errs = validateContainer(indicator, entries);
+      if (errs.length > 0) {
+        messages.push(...errs);
       }
-    }
-  }
-
-  // 2. 容器指标校验
-  for (const indicator of indicators) {
-    if (indicator.valueType !== 12) continue;
-    const entries = containerValues[indicator.indicatorCode] || [];
-    const errs = validateContainer(indicator, entries);
-    if (errs.length > 0) {
-      messages.push(...errs);
+    } else {
+      // 普通指标
+      (indicator as any)._formValue = formValues[indicator.indicatorCode];
+      const errs = validateIndicator(indicator);
+      if (errs.length > 0) {
+        for (const e of errs) {
+          messages.push({
+            message: e.message,
+            errorType: e.errorType,
+            indicatorId: indicator.id,
+            indicatorCode: indicator.indicatorCode,
+            indicatorName: indicator.indicatorName,
+          });
+        }
+      }
     }
   }
 
@@ -588,7 +589,7 @@ export function validateAll(
  * 完整校验（调用校验函数 + 逻辑规则）
  */
 export function validateAllWithLogicRules(
-  indicators: DeclareIndicatorApi.Indicator[],
+  _indicators: DeclareIndicatorApi.Indicator[],
   setFieldErrorFn: (key: string, message: string, type: FieldError['errorType'], dirty?: boolean) => void,
   clearFieldErrorFn: (key: string) => void,
   validateLogicRulesFn: (
@@ -598,29 +599,26 @@ export function validateAllWithLogicRules(
   ) => ValidationError[],
 ): { messages: string[]; hasErrors: boolean } {
   const messages: string[] = [];
+  const orderedIndicators = getIndicatorsInDisplayOrder();
 
-  // 1. 顶层指标校验
-  for (const indicator of indicators) {
-    if (indicator.valueType === 12) continue;
-    (indicator as any)._formValue = formValues[indicator.indicatorCode];
-    const errs = validateIndicator(indicator);
-    if (errs.length > 0) {
-      messages.push(...errs.map((e) => `${indicator.indicatorName}：${e.message}`));
+  for (const indicator of orderedIndicators) {
+    if (indicator.valueType === 12) {
+      const entries = containerValues[indicator.indicatorCode] || [];
+      const errs = validateContainer(indicator, entries);
+      if (errs.length > 0) {
+        messages.push(...errs.map((e) => e.message));
+      }
+    } else {
+      (indicator as any)._formValue = formValues[indicator.indicatorCode];
+      const errs = validateIndicator(indicator);
+      if (errs.length > 0) {
+        messages.push(...errs.map((e) => `${indicator.indicatorName}：${e.message}`));
+      }
     }
   }
 
-  // 2. 容器指标校验
-  for (const indicator of indicators) {
-    if (indicator.valueType !== 12) continue;
-    const entries = containerValues[indicator.indicatorCode] || [];
-    const errs = validateContainer(indicator, entries);
-    if (errs.length > 0) {
-      messages.push(...errs.map((e) => e.message));
-    }
-  }
-
-  // 3. 逻辑规则校验
-  const logicErrors = validateLogicRulesFn(indicators, setFieldErrorFn, clearFieldErrorFn);
+  // 逻辑规则校验
+  const logicErrors = validateLogicRulesFn(orderedIndicators, setFieldErrorFn, clearFieldErrorFn);
   messages.push(...logicErrors.map((e: any) => e.message || e));
 
   return { messages, hasErrors: messages.length > 0 };

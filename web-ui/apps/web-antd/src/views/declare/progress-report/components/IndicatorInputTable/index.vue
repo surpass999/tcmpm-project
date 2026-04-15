@@ -77,6 +77,7 @@ import {
   loadIndicatorData,
   reloadIndicatorData,
   loadJointRules,
+  getIndicatorsInDisplayOrder,
 } from './composables/useIndicatorData';
 
 // 计算指标
@@ -375,10 +376,9 @@ function syncContainerValuesToForm() {
 
 function doValidateAll() {
   const { messages } = validateAll(indicators.value, setFieldError, clearFieldError);
-  // 追加逻辑规则校验结果
-  const logicErrors = validateLogicRules(indicators.value, setFieldError, clearFieldError);
-  const allMessages = [...messages, ...logicErrors];
-  return allMessages;
+  const orderedIndicators = getIndicatorsInDisplayOrder();
+  const logicErrors = validateLogicRules(orderedIndicators, setFieldError, clearFieldError);
+  return [...messages, ...logicErrors];
 }
 
 function doValidateFilledData() {
