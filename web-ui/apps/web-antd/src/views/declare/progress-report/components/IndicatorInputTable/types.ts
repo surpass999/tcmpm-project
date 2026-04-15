@@ -83,6 +83,7 @@ export interface ValidationError {
   errorType?: 'required' | 'format' | 'range' | 'logic' | 'joint';
   indicatorName?: string;
   fieldLabel?: string;
+  dirty?: boolean;
 }
 
 /** 容器字段校验上下文 */

@@ -11,7 +11,7 @@
 
 import type { DeclareIndicatorApi } from '#/api/declare/indicator';
 import { isEmpty, checkRange, checkPrecision, checkSelectCount, checkRequired } from '../utils/validators';
-import { parseDynamicFields, generateContainerFieldKey, isFieldVisible } from '../utils/container';
+import { parseDynamicFields, generateContainerFieldKey, isFieldVisible, getContainerType } from '../utils/container';
 import { parseExtraConfig } from '../utils/indicator';
 import { parseOptions } from '../utils/options';
 import type { DynamicField, ValidationError, FieldError } from '../types';
@@ -21,7 +21,6 @@ import { INPUT_VALUE_SEPARATOR, deserializeInputTypeValue } from './useFormValue
 import {
   fieldErrors,
   toTopLevelKey,
-  toContainerKey,
   toInputTypeKey,
   getFieldError,
   setFieldError,
@@ -45,10 +44,11 @@ export function validateSingleContainerField(
   entry: any,
   allEntries: any[]
 ): FieldError | null {
+  const storageKey = `${entry.rowKey}${field.fieldCode}`;
   // 必填校验
   if (field.required && isEmpty(fieldValue)) {
     return {
-      message: `${indicator.indicatorName}「${field.fieldLabel}」为必填`,
+      message: `「${storageKey} - ${field.fieldLabel}」为必填`,
       errorType: 'required',
       dirty: true,
     };
@@ -61,7 +61,7 @@ export function validateSingleContainerField(
       const numVal = Number(fieldValue);
       if (isNaN(numVal) || !isFinite(numVal)) {
         return {
-          message: `${indicator.indicatorName}「${field.fieldLabel}」：请输入有效数字`,
+          message: `「${storageKey} - ${field.fieldLabel}」：请输入有效数字`,
           errorType: 'format',
           dirty: true,
         };
@@ -69,7 +69,7 @@ export function validateSingleContainerField(
       const rangeErr = checkRange(numVal, field.minValue ?? null, field.maxValue ?? null);
       if (rangeErr) {
         return {
-          message: `${indicator.indicatorName}「${field.fieldLabel}」：${rangeErr}`,
+          message: `「${storageKey} - ${field.fieldLabel}」：${rangeErr}`,
           errorType: 'range',
           dirty: true,
         };
@@ -77,7 +77,7 @@ export function validateSingleContainerField(
       const precErr = checkPrecision(numVal, field.precision);
       if (precErr) {
         return {
-          message: `${indicator.indicatorName}「${field.fieldLabel}」：${precErr}`,
+          message: `「${storageKey} - ${field.fieldLabel}」：${precErr}`,
           errorType: 'format',
           dirty: true,
         };
@@ -89,7 +89,7 @@ export function validateSingleContainerField(
       const trimmed = String(fieldValue).trim();
       if (field.fieldType === 'text' && /^-?\d+(\.\d+)?$/.test(trimmed)) {
         return {
-          message: `${indicator.indicatorName}「${field.fieldLabel}」：不能输入纯数字`,
+          message: `「${storageKey} - ${field.fieldLabel}」：不能输入纯数字`,
           errorType: 'format',
           dirty: true,
         };
@@ -101,7 +101,7 @@ export function validateSingleContainerField(
       const countErr = checkSelectCount(fieldValue, field.minSelect, field.maxSelect);
       if (countErr) {
         return {
-          message: `${indicator.indicatorName}「${field.fieldLabel}」：${countErr}`,
+          message: `「${storageKey} - ${field.fieldLabel}」：${countErr}`,
           errorType: 'required',
           dirty: true,
         };
@@ -116,10 +116,9 @@ export function validateSingleContainerField(
         // 读取其他条目的值时使用正确的 key 格式
         const otherFullKey = generateContainerFieldKey(indicator.indicatorCode, allEntries[j].rowKey, field.fieldCode);
         const otherVal = allEntries[j]?.[otherFullKey];
-        const otherIndex = extractEntryIndex(allEntries[j].rowKey);
         if (String(otherVal ?? '').trim() === trimmed) {
           return {
-            message: `${indicator.indicatorName}「${field.fieldLabel}」：该值与「第${otherIndex}个条目」重复`,
+            message: `「${storageKey} - ${field.fieldLabel}」与「${otherFullKey} - ${field.fieldLabel}」重复`,
             errorType: 'range',
             dirty: true,
           };
@@ -131,12 +130,6 @@ export function validateSingleContainerField(
   return null;
 }
 
-/** 从 rowKey 提取序号 */
-function extractEntryIndex(rowKey: string): number {
-  const match = rowKey.match(/(\d+)$/);
-  return match ? parseInt(match[1]!, 10) : 1;
-}
-
 // ==================== 容器校验 ====================
 
 /**
@@ -144,7 +137,7 @@ function extractEntryIndex(rowKey: string): number {
  * 调用 validateSingleContainerField 遍历所有字段
  *
  * 注意：读取 entry 中的值时使用 generateContainerFieldKey（与存储 key 一致）
- *      错误 key 也使用 generateContainerFieldKey（与 validateContainerFieldOnBlur 统一）
+ *      错误 key 使用 toContainerKey（与 UI 组件统一）
  */
 export function validateContainer(
   indicator: DeclareIndicatorApi.Indicator,
@@ -152,6 +145,7 @@ export function validateContainer(
 ): ValidationError[] {
   const errors: ValidationError[] = [];
   const fields = parseDynamicFields(indicator.valueOptions);
+  const containerType = getContainerType(indicator.valueOptions);
 
   for (const entry of entries) {
     for (const field of fields) {
@@ -159,8 +153,10 @@ export function validateContainer(
       // 使用 generateContainerFieldKey 读取 entry 中的值（与存储 key 一致）
       const storageKey = generateContainerFieldKey(indicator.indicatorCode, entry.rowKey, field.fieldCode);
       const fieldValue = entry[storageKey];
-      // 使用 generateContainerFieldKey 作为错误 key（与 validateContainerFieldOnBlur 统一）
-      const fullKey = storageKey;
+      // 根据容器类型决定错误 key
+      const fullKey = containerType === 'conditional'
+        ? field.fieldCode
+        : storageKey;
       const err = validateSingleContainerField(field, fieldValue, indicator, entry, entries);
 
       if (err) {
@@ -172,6 +168,7 @@ export function validateContainer(
           indicatorId: indicator.id,
           containerFieldKey: fullKey,
           fieldLabel: field.fieldLabel,
+          dirty: true,
         });
       } else {
         delete fieldErrors[fullKey];
@@ -197,8 +194,6 @@ export function validateIndicator(indicator: DeclareIndicatorApi.Indicator): Fie
   const key = toTopLevelKey(indicator.id!);
   const value = (indicator as any)._formValue;
   const isEmptyVal = isEmpty(value);
-
-  // 必填校验
   const isRequiredAndNotComputed = indicator.isRequired && !isComputedIndicator(indicator);
   if (isRequiredAndNotComputed && isEmptyVal) {
     const err = { message: '此项为必填', errorType: 'required' as const, dirty: true };
@@ -260,15 +255,15 @@ function validateType1_Number(indicator: DeclareIndicatorApi.Indicator): Validat
   const value = formValues[code];
   const isComputed = isComputedIndicator(indicator);
   const reqErr = checkRequired(value, !!isRequired && !isComputed);
-  if (reqErr) { errors.push({ indicatorId: id, indicatorCode: code, message: `${indicator.indicatorName}：${reqErr}`, errorType: 'required' }); return errors; }
+  if (reqErr) { errors.push({ indicatorId: id, indicatorCode: code, message: `${indicator.indicatorName}：${reqErr}`, errorType: 'required', dirty: true }); return errors; }
   if (!isEmpty(value)) {
     const numVal = Number(value);
-    if (isNaN(numVal) || !isFinite(numVal)) { errors.push({ indicatorId: id, indicatorCode: code, message: `${indicator.indicatorName}：请输入有效数字`, errorType: 'format' }); return errors; }
+    if (isNaN(numVal) || !isFinite(numVal)) { errors.push({ indicatorId: id, indicatorCode: code, message: `${indicator.indicatorName}：请输入有效数字`, errorType: 'format', dirty: true }); return errors; }
     const rangeErr = checkRange(numVal, minValue ?? null, maxValue ?? null);
-    if (rangeErr) errors.push({ indicatorId: id, indicatorCode: code, message: `${indicator.indicatorName}：${rangeErr}`, errorType: 'range' });
+    if (rangeErr) errors.push({ indicatorId: id, indicatorCode: code, message: `${indicator.indicatorName}：${rangeErr}`, errorType: 'range', dirty: true });
     const cfg = parseExtraConfig(indicator.extraConfig);
     const precErr = checkPrecision(numVal, cfg.precision);
-    if (precErr) errors.push({ indicatorId: id, indicatorCode: code, message: `${indicator.indicatorName}：${precErr}`, errorType: 'format' });
+    if (precErr) errors.push({ indicatorId: id, indicatorCode: code, message: `${indicator.indicatorName}：${precErr}`, errorType: 'format', dirty: true });
   }
   return errors;
 }
@@ -277,11 +272,11 @@ function validateType2_Text(indicator: DeclareIndicatorApi.Indicator): Validatio
   const errors: ValidationError[] = [];
   const value = formValues[indicator.indicatorCode];
   const reqErr = checkRequired(value, !!indicator.isRequired);
-  if (reqErr) { errors.push({ indicatorId: indicator.id, indicatorCode: indicator.indicatorCode, message: `${indicator.indicatorName}：${reqErr}`, errorType: 'required' }); return errors; }
+  if (reqErr) { errors.push({ indicatorId: indicator.id, indicatorCode: indicator.indicatorCode, message: `${indicator.indicatorName}：${reqErr}`, errorType: 'required', dirty: true }); return errors; }
   if (!isEmpty(value)) {
     const trimmed = String(value).trim();
     if (/^-?\d+(\.\d+)?$/.test(trimmed)) {
-      errors.push({ indicatorId: indicator.id, indicatorCode: indicator.indicatorCode, message: `${indicator.indicatorName}：不能输入纯数字`, errorType: 'format' });
+      errors.push({ indicatorId: indicator.id, indicatorCode: indicator.indicatorCode, message: `${indicator.indicatorName}：不能输入纯数字`, errorType: 'format', dirty: true });
     }
   }
   return errors;
@@ -291,7 +286,7 @@ function validateType3_Boolean(_: DeclareIndicatorApi.Indicator): ValidationErro
 function validateType4_Date(indicator: DeclareIndicatorApi.Indicator): ValidationError[] {
   const errors: ValidationError[] = [];
   const reqErr = checkRequired(formValues[indicator.indicatorCode], !!indicator.isRequired);
-  if (reqErr) errors.push({ indicatorId: indicator.id, indicatorCode: indicator.indicatorCode, message: `${indicator.indicatorName}：${reqErr}`, errorType: 'required' });
+  if (reqErr) errors.push({ indicatorId: indicator.id, indicatorCode: indicator.indicatorCode, message: `${indicator.indicatorName}：${reqErr}`, errorType: 'required', dirty: true });
   return errors;
 }
 
@@ -326,33 +321,33 @@ function validateType5_RichText(indicator: DeclareIndicatorApi.Indicator): Valid
 function validateType6_Select(indicator: DeclareIndicatorApi.Indicator): ValidationError[] {
   const errors: ValidationError[] = [];
   const reqErr = checkRequired(formValues[indicator.indicatorCode], !!indicator.isRequired);
-  if (reqErr) { errors.push({ indicatorId: indicator.id, indicatorCode: indicator.indicatorCode, message: `${indicator.indicatorName}：${reqErr}`, errorType: 'required' }); return errors; }
+  if (reqErr) { errors.push({ indicatorId: indicator.id, indicatorCode: indicator.indicatorCode, message: `${indicator.indicatorName}：${reqErr}`, errorType: 'required', dirty: true }); return errors; }
   const inputTypeErr = validateInputTypeRequired(indicator);
-  if (inputTypeErr) errors.push({ indicatorId: indicator.id, indicatorCode: indicator.indicatorCode, message: `${indicator.indicatorName}：${inputTypeErr}`, errorType: 'required' });
+  if (inputTypeErr) errors.push({ indicatorId: indicator.id, indicatorCode: indicator.indicatorCode, message: `${indicator.indicatorName}：${inputTypeErr}`, errorType: 'required', dirty: true });
   return errors;
 }
 function validateType7_MultiSelect(indicator: DeclareIndicatorApi.Indicator): ValidationError[] {
   const errors: ValidationError[] = [];
   const value = formValues[indicator.indicatorCode];
   const arr = Array.isArray(value) ? value : [];
-  if (indicator.isRequired && arr.length === 0) errors.push({ indicatorId: indicator.id, indicatorCode: indicator.indicatorCode, message: `${indicator.indicatorName}：此项为必填`, errorType: 'required' });
+  if (indicator.isRequired && arr.length === 0) errors.push({ indicatorId: indicator.id, indicatorCode: indicator.indicatorCode, message: `${indicator.indicatorName}：此项为必填`, errorType: 'required', dirty: true });
   if (arr.length > 0) {
     const inputTypeErr = validateInputTypeRequired(indicator);
-    if (inputTypeErr) errors.push({ indicatorId: indicator.id, indicatorCode: indicator.indicatorCode, message: `${indicator.indicatorName}：${inputTypeErr}`, errorType: 'required' });
+    if (inputTypeErr) errors.push({ indicatorId: indicator.id, indicatorCode: indicator.indicatorCode, message: `${indicator.indicatorName}：${inputTypeErr}`, errorType: 'required', dirty: true });
   }
   return errors;
 }
 function validateType8_DateRange(indicator: DeclareIndicatorApi.Indicator): ValidationError[] {
   const errors: ValidationError[] = [];
   const reqErr = checkRequired(formValues[indicator.indicatorCode], !!indicator.isRequired);
-  if (reqErr) errors.push({ indicatorId: indicator.id, indicatorCode: indicator.indicatorCode, message: `${indicator.indicatorName}：${reqErr}`, errorType: 'required' });
+  if (reqErr) errors.push({ indicatorId: indicator.id, indicatorCode: indicator.indicatorCode, message: `${indicator.indicatorName}：${reqErr}`, errorType: 'required', dirty: true });
   return errors;
 }
 function validateType9_File(indicator: DeclareIndicatorApi.Indicator): ValidationError[] {
   const errors: ValidationError[] = [];
   const value = formValues[indicator.indicatorCode];
   const isFileEmpty = isEmpty(value) || value === '[]' || value === '[ ]';
-  if (indicator.isRequired && isFileEmpty) errors.push({ indicatorId: indicator.id, indicatorCode: indicator.indicatorCode, message: `${indicator.indicatorName}：此项为必填`, errorType: 'required' });
+  if (indicator.isRequired && isFileEmpty) errors.push({ indicatorId: indicator.id, indicatorCode: indicator.indicatorCode, message: `${indicator.indicatorName}：此项为必填`, errorType: 'required', dirty: true });
   return errors;
 }
 function validateType10_Dept(indicator: DeclareIndicatorApi.Indicator): ValidationError[] { return validateType6_Select(indicator); }
@@ -360,7 +355,7 @@ function validateType11_User(indicator: DeclareIndicatorApi.Indicator): Validati
 
 function validateType12_Container(indicator: DeclareIndicatorApi.Indicator): ValidationError[] {
   const errors: ValidationError[] = [];
-  const { indicatorCode: code, id, indicatorName } = indicator;
+  const { indicatorCode: code, id } = indicator;
   const entries = containerValues[code] || [];
   const fields = parseDynamicFields(indicator.valueOptions);
 
@@ -375,9 +370,10 @@ function validateType12_Container(indicator: DeclareIndicatorApi.Indicator): Val
         errors.push({
           indicatorId: id,
           indicatorCode: code,
-          message: `${indicatorName} 第${i + 1}个条目「${field.fieldLabel}」：${err.message}`,
+          message: err.message,
           containerFieldKey: fullKey,
           errorType: err.errorType,
+          dirty: true,
         });
       }
     }
@@ -440,20 +436,20 @@ function validateFilledIndicator(
     case 1: {
       const numVal = Number(value);
       if (isNaN(numVal) || !isFinite(numVal)) {
-        errors.push({ indicatorId: id, indicatorCode: code, message: `${indicator.indicatorName}：请输入有效数字`, errorType: 'format' });
+        errors.push({ indicatorId: id, indicatorCode: code, message: `${indicator.indicatorName}：请输入有效数字`, errorType: 'format', dirty: true });
       } else {
         const rangeErr = checkRange(numVal, indicator.minValue ?? null, indicator.maxValue ?? null);
-        if (rangeErr) errors.push({ indicatorId: id, indicatorCode: code, message: `${indicator.indicatorName}：${rangeErr}`, errorType: 'range' });
+        if (rangeErr) errors.push({ indicatorId: id, indicatorCode: code, message: `${indicator.indicatorName}：${rangeErr}`, errorType: 'range', dirty: true });
         const cfg = parseExtraConfig(indicator.extraConfig);
         const precErr = checkPrecision(numVal, cfg.precision);
-        if (precErr) errors.push({ indicatorId: id, indicatorCode: code, message: `${indicator.indicatorName}：${precErr}`, errorType: 'format' });
+        if (precErr) errors.push({ indicatorId: id, indicatorCode: code, message: `${indicator.indicatorName}：${precErr}`, errorType: 'format', dirty: true });
       }
       break;
     }
     case 2: {
       const trimmed = String(value).trim();
       if (/^-?\d+(\.\d+)?$/.test(trimmed)) {
-        errors.push({ indicatorId: id, indicatorCode: code, message: `${indicator.indicatorName}：不能输入纯数字`, errorType: 'format' });
+        errors.push({ indicatorId: id, indicatorCode: code, message: `${indicator.indicatorName}：不能输入纯数字`, errorType: 'format', dirty: true });
       }
       break;
     }
@@ -468,7 +464,7 @@ function validateFilledContainer(
   entries: any[]
 ): ValidationError[] {
   const errors: ValidationError[] = [];
-  const { indicatorCode: code, id, indicatorName } = indicator;
+  const { indicatorCode: code, id } = indicator;
   const fields = parseDynamicFields(indicator.valueOptions);
 
   for (let i = 0; i < entries.length; i++) {
@@ -485,17 +481,17 @@ function validateFilledContainer(
       if (field.fieldType === 'number') {
         const numVal = Number(fieldValue);
         if (isNaN(numVal) || !isFinite(numVal)) {
-          errors.push({ indicatorId: id, indicatorCode: code, message: `${indicatorName} 第${i + 1}条「${field.fieldLabel}」：请输入有效数字`, containerFieldKey: fullKey, errorType: 'format' });
+          errors.push({ indicatorId: id, indicatorCode: code, message: `「${fullKey}」：请输入有效数字`, containerFieldKey: fullKey, errorType: 'format', dirty: true });
         } else {
           const rangeErr = checkRange(numVal, field.minValue ?? undefined, field.maxValue ?? undefined);
-          if (rangeErr) errors.push({ indicatorId: id, indicatorCode: code, message: `${indicatorName} 第${i + 1}条「${field.fieldLabel}」：${rangeErr}`, containerFieldKey: fullKey, errorType: 'range' });
+          if (rangeErr) errors.push({ indicatorId: id, indicatorCode: code, message: `「${fullKey}」：${rangeErr}`, containerFieldKey: fullKey, errorType: 'range', dirty: true });
           const precErr = checkPrecision(numVal, field.precision);
-          if (precErr) errors.push({ indicatorId: id, indicatorCode: code, message: `${indicatorName} 第${i + 1}条「${field.fieldLabel}」：${precErr}`, containerFieldKey: fullKey, errorType: 'format' });
+          if (precErr) errors.push({ indicatorId: id, indicatorCode: code, message: `「${fullKey}」：${precErr}`, containerFieldKey: fullKey, errorType: 'format', dirty: true });
         }
       } else if (field.fieldType === 'text' || field.fieldType === 'textarea') {
         const trimmed = String(fieldValue).trim();
         if (field.fieldType === 'text' && /^-?\d+(\.\d+)?$/.test(trimmed)) {
-          errors.push({ indicatorId: id, indicatorCode: code, message: `${indicatorName} 第${i + 1}条「${field.fieldLabel}」：不能输入纯数字`, containerFieldKey: fullKey, errorType: 'format' });
+          errors.push({ indicatorId: id, indicatorCode: code, message: `「${fullKey}」：不能输入纯数字`, containerFieldKey: fullKey, errorType: 'format', dirty: true });
         }
       }
     }
@@ -596,7 +592,6 @@ export function validateAllWithLogicRules(
  * 返回错误消息（用于显示），同时写入 fieldErrors
  *
  * 注意：读取 entry 中的值时使用 generateContainerFieldKey（与存储 key 一致）
- *      错误 key 也使用 generateContainerFieldKey（与 validateContainer 统一）
  */
 export function validateContainerFieldOnBlur(
   entry: any,
@@ -604,11 +599,12 @@ export function validateContainerFieldOnBlur(
   field: DynamicField,
   allEntries: any[]
 ): string | null {
-  // 使用 generateContainerFieldKey 读取 entry 中的值（与存储 key 一致）
+  const containerType = getContainerType(indicator.valueOptions);
   const storageKey = generateContainerFieldKey(indicator.indicatorCode, entry.rowKey, field.fieldCode);
   const fieldValue = entry[storageKey];
-  // 使用 generateContainerFieldKey 作为错误 key（与 validateContainer 统一）
-  const fullKey = storageKey;
+  const fullKey = containerType === 'conditional'
+    ? field.fieldCode
+    : storageKey;
 
   const err = validateSingleContainerField(field, fieldValue, indicator, entry, allEntries);
 
@@ -636,14 +632,21 @@ export function validateTopLevelOnBlur(indicator: DeclareIndicatorApi.Indicator,
 /** 获取容器字段错误（兼容旧接口，支持 entry 对象形式） */
 export function getContainerFieldError(
   entryOrCode: any | string,
-  indicatorCode: string,
-  fieldCode: string
+  _indicatorCode: string,
+  fieldCode: string,
+  containerType: 'normal' | 'autoEntry' | 'conditional' = 'normal'
 ): string | undefined {
   const rowKey = typeof entryOrCode === 'string' ? entryOrCode : entryOrCode?.rowKey;
   if (!rowKey) return undefined;
-  // 使用 generateContainerFieldKey 生成错误 key（与校验函数统一）
-  const fullKey = generateContainerFieldKey(indicatorCode, String(rowKey), fieldCode);
-  return getFieldError(fullKey);
+
+  let key: string;
+  if (containerType === 'conditional') {
+    key = fieldCode;
+  } else {
+    key = `${rowKey}${fieldCode}`;
+  }
+
+  return getFieldError(key);
 }
 
 /** 获取顶层指标错误（兼容旧接口） */
@@ -676,15 +679,25 @@ export function clearInputTypeError(indicatorCode: string, optionValue: string):
 }
 
 /** 清除容器字段错误（兼容旧接口） */
-export function clearContainerFieldError(indicatorCode: string, rowKey: string, fieldCode: string): void {
-  const fullKey = generateContainerFieldKey(indicatorCode, rowKey, fieldCode);
-  clearFieldError(fullKey);
+export function clearContainerFieldError(
+  _indicatorCode: string,
+  rowKey: string,
+  fieldCode: string,
+  containerType: 'normal' | 'autoEntry' | 'conditional' = 'normal'
+): void {
+  const key = containerType === 'conditional' ? fieldCode : `${rowKey}${fieldCode}`;
+  clearFieldError(key);
 }
 
 /** 设置容器字段脏标记（兼容旧接口） */
-export function markContainerFieldDirty(indicatorCode: string, rowKey: string, fieldCode: string): void {
-  const fullKey = generateContainerFieldKey(indicatorCode, rowKey, fieldCode);
-  setDirty(fullKey);
+export function markContainerFieldDirty(
+  _indicatorCode: string,
+  rowKey: string,
+  fieldCode: string,
+  containerType: 'normal' | 'autoEntry' | 'conditional' = 'normal'
+): void {
+  const key = containerType === 'conditional' ? fieldCode : `${rowKey}${fieldCode}`;
+  setDirty(key);
 }
 
 /** 设置顶层指标脏标记（兼容旧接口） */

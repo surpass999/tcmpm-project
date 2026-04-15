@@ -448,44 +448,67 @@ export function parseLogicRule(logicRule: string, entryNumber: number = 1): Join
   const results: JointRule[] = [];
 
   // 先检测是否有 IF 函数需要处理
-  const ifMatches = [...logicRule.matchAll(/IF\s*\(\s*\[([^\]]+)\]\s*>\s*(\d+(?:\.\d+)?)\s*,\s*\[([^\]]+)\]\s*([><]=?)\s*(\d+(?:\.\d+)?)\s*,\s*TRUE\s*\)/gi)];
+  // 格式: IF([indicator] condOp condVal, [verify] verifyOp verifyVal, [verify] verifyOp verifyVal, ..., TRUE)
+  // 使用非贪婪匹配中间部分，然后按 ", [" 分割多个 verify 表达式
+  const ifMatches = [...logicRule.matchAll(/IF\s*\(\s*\[([^\]]+)\]\s*(==|!=|<=|>=|<|>)\s*(\d+(?:\.\d+)?)\s*,\s*(.+?)\s*,\s*TRUE\s*\)/gi)];
+  console.log('[indicatorValidator] IF regex matched count:', ifMatches.length, '| rule:', logicRule);
 
   if (ifMatches.length > 0) {
     // 处理 IF 函数
     for (const match of ifMatches) {
       const conditionIndicator = match[1]!;
-      const conditionThreshold = match[2]!;
-      const verifyIndicator = match[3]!;
-      const verifyOperator = match[4]!;
-      const verifyThreshold = match[5]!;
+      const conditionOperator = match[2]!;  // ==, !=, >, >=, <, <=
+      const conditionThreshold = match[3]!;  // 条件阈值
+      // 解析多个 verify 表达式: 按 ", [" 分割，然后每个解析为 [indicator] op value
+      const verifyPart = match[4]!;
+      const verifyExprs = verifyPart.split(/\s*,\s*(?=\[)/);
 
-      const action: any = {
-        type: 'formula',
-        operator: verifyOperator,
-        formula: [{ valueType: 'indicator', indicatorCode: verifyIndicator, mathOp: '+' }],
-        compareType: 'fixed',
-        compareValue: Number(verifyThreshold),
-      };
+      // 展开容器简写格式（如 502_07 → 5020107）
+      const conditionIndicatorExpanded = isContainerFieldShortcut(conditionIndicator)
+        ? parseContainerFieldShortcut(conditionIndicator, entryNumber) || conditionIndicator
+        : conditionIndicator;
 
-      results.push({
-        id: results.length + 1,
-        ruleName: `[${conditionIndicator}] > ${conditionThreshold} 时, [${verifyIndicator}] ${verifyOperator} ${verifyThreshold}`,
-        triggerTiming: 'FILL',
-        status: 1,
-        projectType: 0,
-        ruleConfig: JSON.stringify({
-          rules: [{
-            id: 1,
-            condition: {
-              indicatorCode: conditionIndicator,
-              operator: '>',
-              value: Number(conditionThreshold),
-            },
-            action,
-            name: `[${conditionIndicator}] > ${conditionThreshold} 时, [${verifyIndicator}] ${verifyOperator} ${verifyThreshold}`,
-          }],
-        }),
-      });
+      for (const expr of verifyExprs) {
+        const verifyMatch = expr.trim().match(/^\[([^\]]+)\]\s*(==|!=|<=|>=|<|>)\s*(\d+(?:\.\d+)?)$/);
+        if (!verifyMatch) continue;
+
+        const verifyIndicatorRaw = verifyMatch[1]!;
+        const verifyOperator = verifyMatch[2]!;
+        const verifyThreshold = verifyMatch[3]!;
+
+        // 展开容器简写格式（如 502_07 → 5020107）
+        const verifyIndicator = isContainerFieldShortcut(verifyIndicatorRaw)
+          ? parseContainerFieldShortcut(verifyIndicatorRaw, entryNumber) || verifyIndicatorRaw
+          : verifyIndicatorRaw;
+
+        const action: any = {
+          type: 'formula',
+          operator: verifyOperator,
+          formula: [{ valueType: 'indicator', indicatorCode: verifyIndicator, mathOp: '+' }],
+          compareType: 'fixed',
+          compareValue: Number(verifyThreshold),
+        };
+
+        results.push({
+          id: results.length + 1,
+          ruleName: `[${conditionIndicatorExpanded}] ${conditionOperator} ${conditionThreshold} 时, ${expr.trim()}`,
+          triggerTiming: 'FILL',
+          status: 1,
+          projectType: 0,
+          ruleConfig: JSON.stringify({
+            rules: [{
+              id: 1,
+              condition: {
+                indicatorCode: conditionIndicatorExpanded,
+                operator: conditionOperator,
+                value: Number(conditionThreshold),
+              },
+              action,
+              name: `[${conditionIndicatorExpanded}] ${conditionOperator} ${conditionThreshold} 时, ${expr.trim()}`,
+            }],
+          }),
+        });
+      }
     }
 
     return results;

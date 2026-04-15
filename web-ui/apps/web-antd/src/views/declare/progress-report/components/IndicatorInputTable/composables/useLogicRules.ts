@@ -13,7 +13,8 @@ import { isEmpty } from '../utils/validators';
 import type { ValidationError, FieldError } from '../types';
 import { formValues } from './useFormValues';
 import { containerValues, isEntryBasedContainer, getContainerEntryCount } from './useContainerValues';
-import { parseDynamicFields } from '../utils/container';
+import { parseDynamicFields, generateContainerFieldKey, getContainerType } from '../utils/container';
+import { fieldErrors } from './useErrorKeys';
 
 /** 判断是否为自动计算指标 */
 function isComputedIndicator(indicator: DeclareIndicatorApi.Indicator): boolean {
@@ -42,6 +43,29 @@ function buildEntryValueMap(
       const fullKey = `${entryKey}${field.fieldCode}`;
       map[fullKey] = entry[fullKey];
     }
+  }
+
+  return map;
+}
+
+/**
+ * 构建条件容器的值映射
+ * 条件容器字段值存储在 entry[fieldCode] 中，如 entry["01"]
+ * logicRule 格式：[01] > 0（直接使用字段 code）
+ */
+function buildEntryValueMapForConditional(
+  indicator: DeclareIndicatorApi.Indicator
+): Record<string, any> {
+  const map: Record<string, any> = {};
+  const entries = containerValues[indicator.indicatorCode] || [];
+  if (entries.length === 0) return map;
+
+  const entry = entries[0]; // 条件容器只有一条
+  const fields = parseDynamicFields(indicator.valueOptions);
+
+  for (const field of fields) {
+    // 条件容器：字段 key = fieldCode（如 01）
+    map[field.fieldCode] = entry[field.fieldCode];
   }
 
   return map;
@@ -99,6 +123,32 @@ function buildLogicRuleMsg(
     return { label: field.fieldLabel, valueText };
   };
 
+  /** 根据字段代码和阈值获取字段信息 + 阈值文本（label for select/radio/checkbox） */
+  const getFieldAndThresholdText = (fieldCode: string, threshold: string): { fieldLabel: string; thresholdText: string } => {
+    let fieldLabel = fieldCode;
+    let thresholdText = threshold;
+
+    if (containerIndicator) {
+      const fields = parseDynamicFields(containerIndicator.valueOptions);
+      // fieldCode 可能是简写（502_05）也可能是完整 key（5020105）
+      const shortCode = fieldCode.slice(-2);
+      const field = fields.find((f) => f.fieldCode === shortCode || f.fieldCode === fieldCode);
+
+      if (field) {
+        fieldLabel = field.fieldLabel;
+        if (field.fieldType === 'radio' || field.fieldType === 'select' || field.fieldType === 'checkbox') {
+          const options = field.options || [];
+          const option = options.find((o) => o.value === threshold || o.value === String(threshold));
+          if (option) {
+            thresholdText = `"${option.label}"`;
+          }
+        }
+      }
+    }
+
+    return { fieldLabel, thresholdText };
+  };
+
   const replaceCode = (code: string): string => {
     let fullKey = code;
     if (isContainerFieldShortcut(code) && entryNumber !== undefined) {
@@ -119,7 +169,32 @@ function buildLogicRuleMsg(
     return `${name}(${valText})`;
   };
 
-  const ifMatch = logicRule.trim().match(/^IF\s*\(\s*\[([^\]]+)\]\s*([><]=?)\s*(\d+(?:\.\d+)?)\s*,\s*\[([^\]]+)\]\s*([><]=?)\s*(\d+(?:\.\d+)?)\s*,\s*TRUE\s*\)$/i);
+  // 支持多 verify 表达式的 IF 函数: IF([cond] op val, [v1] op1 v1, [v2] op2 v2, ..., TRUE)
+  const ifMultiMatch = logicRule.trim().match(/^IF\s*\(\s*\[([^\]]+)\]\s*(==|!=|<=|>=|<|>)\s*(\d+(?:\.\d+)?)\s*,\s*(.+)\s*,\s*TRUE\s*\)$/i);
+  if (ifMultiMatch) {
+    const condCode = ifMultiMatch[1]!.trim();
+    const condOp = ifMultiMatch[2]!;
+    const condVal = ifMultiMatch[3]!;
+    const verifyPart = ifMultiMatch[4]!;
+    const condOpText: Record<string, string> = { '==': '等于', '!=': '不等于', '>': '大于', '>=': '大于等于', '<': '小于', '<=': '小于等于' };
+    const opText: Record<string, string> = { '>=': '应大于等于', '<=': '应小于等于', '>': '应大于', '<': '应小于', '==': '应等于', '!=': '不应等于' };
+
+    // 条件阈值也需要显示 label
+    const { fieldLabel: condFieldLabel, thresholdText: condThresholdText } = getFieldAndThresholdText(condCode, condVal);
+    const verifyExprs = verifyPart.split(/\s*,\s*(?=\[)/);
+    const verifyMsgs = verifyExprs.map((expr) => {
+      const vm = expr.trim().match(/^\[([^\]]+)\]\s*(==|!=|<=|>=|<|>)\s*(\d+(?:\.\d+)?)$/);
+      if (!vm) return expr.trim();
+      const fieldCode = vm[1]!.trim();
+      const { fieldLabel, thresholdText } = getFieldAndThresholdText(fieldCode, vm[3]!);
+      return `${fieldLabel} ${opText[vm[2]!] || vm[2]} ${thresholdText}`;
+    });
+
+    return `当 ${condFieldLabel} ${condOpText[condOp] || condOp} ${condThresholdText} 时, ${verifyMsgs.join('; ')}`;
+  }
+
+  // 原有单 verify IF (兼容)
+  const ifMatch = logicRule.trim().match(/^IF\s*\(\s*\[([^\]]+)\]\s*(==|!=|<=|>=|<|>)\s*(\d+(?:\.\d+)?)\s*,\s*\[([^\]]+)\]\s*(==|!=|<=|>=|<|>)\s*(\d+(?:\.\d+)?)\s*,\s*TRUE\s*\)$/i);
   if (ifMatch) {
     const condCode = ifMatch[1]!.trim();
     const condOp = ifMatch[2]!;
@@ -128,12 +203,14 @@ function buildLogicRuleMsg(
     const verifyOp = ifMatch[5]!;
     const verifyVal = ifMatch[6]!;
 
+    const condOpText: Record<string, string> = { '==': '等于', '!=': '不等于', '>': '大于', '>=': '大于等于', '<': '小于', '<=': '小于等于' };
     const opText: Record<string, string> = { '>=': '应大于等于', '<=': '应小于等于', '>': '应大于', '<': '应小于' };
 
-    const condMsg = replaceCode(condCode);
-    const verifyMsg = replaceCode(verifyCode);
+    // 条件阈值也需要显示 label
+    const { fieldLabel: condFieldLabel, thresholdText: condThresholdText } = getFieldAndThresholdText(condCode, condVal);
+    const { fieldLabel: verifyFieldLabel, thresholdText: verifyThresholdText } = getFieldAndThresholdText(verifyCode, verifyVal);
 
-    return `当 ${condMsg} ${condOp} ${condVal} 时, ${verifyMsg} ${opText[verifyOp] || verifyOp} ${verifyVal}`;
+    return `当 ${condFieldLabel} ${condOpText[condOp] || condOp} ${condThresholdText} 时, ${verifyFieldLabel} ${opText[verifyOp] || verifyOp} ${verifyThresholdText}`;
   }
 
   const match = logicRule.trim().match(/^(.+?)\s*(>=|<=|>|<|==|!=)\s*(.+)$/);
@@ -145,7 +222,7 @@ function buildLogicRuleMsg(
   const opText: Record<string, string> = { '>=': '应大于等于', '<=': '应小于等于', '>': '应大于', '<': '应小于', '==': '应等于', '!=': '不应等于' };
   const msgLeft = leftRaw.replace(/\[([^\]]+)\]/g, (_, c) => replaceCode(c.trim()));
   const msgRight = rightRaw.replace(/\[([^\]]+)\]/g, (_, c) => replaceCode(c.trim()));
-  return `${msgLeft} ${opText[operator] || operator} ${msgRight}`;
+  return `「${msgLeft}」 ${opText[operator] || operator} 「${msgRight}」`;
 }
 
 // ==================== 查找字段 ====================
@@ -171,13 +248,32 @@ function findFirstFilledFieldCode(indicator: DeclareIndicatorApi.Indicator, entr
 // ==================== 清除容器逻辑规则错误 ====================
 
 function clearContainerLogicRuleErrors(indicator: DeclareIndicatorApi.Indicator, clearFieldError: (key: string) => void) {
+  const containerType = getContainerType(indicator.valueOptions);
   const entries = containerValues[indicator.indicatorCode] || [];
-  for (const entry of entries) {
+
+  // 只清除逻辑规则类型的错误，不清除基础验证错误（required/format/range）
+  const shouldClear = (key: string) => {
+    const err = fieldErrors[key];
+    // 只清除逻辑规则错误；基础验证错误（required/format/range）由基础验证逻辑自行管理
+    return !err || err.errorType === 'logic' || err.errorType === 'joint';
+  };
+
+  if (containerType === 'conditional') {
     const fields = parseDynamicFields(indicator.valueOptions);
     for (const field of fields) {
-      // 必须与 setFieldError 的 key 格式一致（toContainerKey = 'c:' + indicatorCode + ':' + rowKey + ':' + fieldCode）
-      const fieldKey = `c:${indicator.indicatorCode}:${entry.rowKey}:${field.fieldCode}`;
-      clearFieldError(fieldKey);
+      if (shouldClear(field.fieldCode)) {
+        clearFieldError(field.fieldCode);
+      }
+    }
+  } else {
+    for (const entry of entries) {
+      const fields = parseDynamicFields(indicator.valueOptions);
+      for (const field of fields) {
+        const fieldKey = `${entry.rowKey}${field.fieldCode}`;
+        if (shouldClear(fieldKey)) {
+          clearFieldError(fieldKey);
+        }
+      }
     }
   }
 }
@@ -199,22 +295,38 @@ function validateLogicRules(
   for (const indicator of allIndicators) {
     if (!indicator.logicRule?.trim()) continue;
 
-    if (isEntryBasedContainer(indicator)) {
-      const entryCount = getContainerEntryCount(indicator.indicatorCode);
+    const containerType = getContainerType(indicator.valueOptions);
+
+    if (isEntryBasedContainer(indicator) || containerType === 'conditional') {
+      // 条件容器的 entryCount = 1（固定一条）
+      const entryCount = containerType === 'conditional'
+        ? 1
+        : getContainerEntryCount(indicator.indicatorCode);
       if (entryCount === 0) continue;
 
       for (let entryNum = 1; entryNum <= entryCount; entryNum++) {
-        const rules = parseLogicRule(indicator.logicRule, entryNum);
+        // 条件容器的 entryKey 直接用 rowKey（= indicatorCode）
+        const entryKey = containerType === 'conditional'
+          ? indicator.indicatorCode
+          : `${indicator.indicatorCode}${String(entryNum).padStart(2, '0')}`;
+
+        const rules = parseLogicRule(indicator.logicRule, containerType === 'conditional' ? 1 : entryNum);
+        console.log('[LogicRuleBlur] parseLogicRule result:', JSON.stringify(rules, null, 2));
         if (rules.length === 0) continue;
 
-        const entryValueMap = buildEntryValueMap(indicator, entryNum);
+        // 条件容器用不同的值映射函数
+        const entryValueMap = containerType === 'conditional'
+          ? buildEntryValueMapForConditional(indicator)
+          : buildEntryValueMap(indicator, entryNum);
+
         const results = validateJointRule(rules as any, entryValueMap, { triggerTiming: 'FILL' });
 
         if (results.length === 0) continue;
 
-        const errMsg = buildLogicRuleMsg(indicator.logicRule, allIndicators, entryValueMap, entryNum, indicator);
-        const entryKey = `${indicator.indicatorCode}${String(entryNum).padStart(2, '0')}`;
+        const errMsg = buildLogicRuleMsg(indicator.logicRule, allIndicators, entryValueMap,
+          containerType === 'conditional' ? 1 : entryNum, indicator);
 
+        // 提取 fieldCode
         let fieldCode = '';
         if (results[0]?.involvedIndicatorCodes?.length) {
           const involvedCode = results[0].involvedIndicatorCodes.find((c) =>
@@ -225,9 +337,9 @@ function validateLogicRules(
           }
         }
 
-        if (!fieldCode) {
-          const fields = parseDynamicFields(indicator.valueOptions);
-          for (const field of fields) {
+        const allFields = parseDynamicFields(indicator.valueOptions);
+        if (!fieldCode && containerType !== 'conditional') {
+          for (const field of allFields) {
             const fullKey = `${entryKey}${field.fieldCode}`;
             const val = entryValueMap[fullKey];
             if (val !== undefined && val !== null && val !== '') {
@@ -235,23 +347,31 @@ function validateLogicRules(
               break;
             }
           }
-          if (!fieldCode && fields.length > 0) {
-            fieldCode = fields[0]?.fieldCode ?? '';
+          if (!fieldCode && allFields.length > 0) {
+            fieldCode = allFields[0]?.fieldCode ?? '';
           }
         }
 
-        const containerFieldKey = fieldCode ? `${entryKey}${fieldCode}` : entryKey;
-        // 格式必须与 toContainerKey 一致：c:indicatorCode:rowKey:fieldCode（带冒号）
-        const fullKey = `c:${indicator.indicatorCode}:${containerFieldKey}`;
-        setFieldError(fullKey, `${errMsg}（第${entryNum}个条目）`, 'logic', false);
+        // ========== 根据容器类型决定错误 key ==========
+        let finalFieldCode = fieldCode;
+        if (!finalFieldCode) {
+          finalFieldCode = allFields?.[0]?.fieldCode ?? '';
+        }
+        const fullKey = containerType === 'conditional'
+          ? finalFieldCode
+          : `${entryKey}${finalFieldCode}`;
+        // =============================================
+
+        const errMsgWithKey = `「${fullKey}」：${errMsg}`;
+        setFieldError(fullKey, errMsgWithKey, 'logic', false);
 
         errors.push({
           indicatorId: indicator.id,
           indicatorCode: indicator.indicatorCode,
-          message: `${errMsg}（第${entryNum}个条目）`,
+          message: errMsgWithKey,
           errorType: 'logic',
           indicatorName: indicator.indicatorName,
-          containerFieldKey,
+          containerFieldKey: fullKey,
         });
       }
     } else {
@@ -283,16 +403,19 @@ function validateLogicRuleForBlur(
 ) {
   const changedCode = changedIndicator.indicatorCode;
 
-  // ========== 基础验证检查 ==========
-  // 只有基础验证通过后才进行逻辑验证
-  // 对于必填指标，如果值为空，跳过逻辑验证
-  if (changedIndicator.isRequired && !isComputedIndicator(changedIndicator)) {
+  console.log('[LogicRuleBlur] called, changedCode:', changedCode, 'valueType:', changedIndicator.valueType);
+
+  // ========== 基础验证检查（仅对非容器指标生效） ==========
+  // 容器指标的值在 containerValues 中，不在 formValues 中，跳过此检查
+  // 容器字段的必填校验由 validateContainerFieldOnBlur 单独处理
+  if (changedIndicator.valueType !== 12 && changedIndicator.isRequired && !isComputedIndicator(changedIndicator)) {
     const value = formValues[changedIndicator.indicatorCode];
     const isEmpty = value === undefined || value === null || value === '' ||
       (typeof value === 'string' && value.trim() === '') ||
       (Array.isArray(value) && value.length === 0);
     if (isEmpty) {
       // 基础验证未通过，跳过逻辑验证
+      console.log('[LogicRuleBlur] skipped: non-container required indicator is empty');
       return;
     }
   }
@@ -312,6 +435,8 @@ function validateLogicRuleForBlur(
     let involvesChanged = involvedCodes.has(changedCode);
     if (!involvesChanged && changedIndicator.valueType === 12) {
       for (const code of involvedCodes) {
+        // 容器字段简写格式：502_07，检查 changedCode（容器code）是否为前缀
+        // 例如 changedCode='502'，code='502_07' → '502_07'.startsWith('502_') → true
         if (isContainerFieldShortcut(code) && code.startsWith(changedCode + '_')) {
           involvesChanged = true;
           break;
@@ -323,39 +448,45 @@ function validateLogicRuleForBlur(
 
     if (indicator.id !== undefined) setDirty(`t:${indicator.id}`);
 
-    if (isEntryBasedContainer(indicator)) {
-      const entryCount = getContainerEntryCount(indicator.indicatorCode);
+    const containerType = getContainerType(indicator.valueOptions);
+
+    if (isEntryBasedContainer(indicator) || containerType === 'conditional') {
+      // 条件容器的 entryCount = 1（固定一条）
+      const entryCount = containerType === 'conditional'
+        ? 1
+        : getContainerEntryCount(indicator.indicatorCode);
       if (entryCount === 0) continue;
 
-      interface FieldErr { entryNum: number; fieldCode: string; errMsg: string }
-      const fieldErrors: FieldErr[] = [];
+      interface ContainerFieldErr { entryNum: number; fieldCode: string; errMsg: string }
+      const logicFieldErrors: ContainerFieldErr[] = [];
 
       for (let entryNum = 1; entryNum <= entryCount; entryNum++) {
-        // ========== 容器字段基础验证检查 ==========
-        // 检查该条目所有必填字段是否有值
-        const fields = parseDynamicFields(indicator.valueOptions);
-        let entryPassesBasicValidation = true;
-        for (const field of fields) {
-          if (field.required) {
-            const entryKey = `${indicator.indicatorCode}${String(entryNum).padStart(2, '0')}`;
-            const fullKey = `${entryKey}${field.fieldCode}`;
-            const fieldValue = containerValues[indicator.indicatorCode]?.find((e: any) => e.rowKey === entryKey)?.[fullKey];
-            const isFieldEmpty = isEmpty(fieldValue);
-            if (isFieldEmpty) {
-              entryPassesBasicValidation = false;
-              break;
-            }
-          }
-        }
-        // 基础验证未通过，跳过该条目的逻辑验证
-        if (!entryPassesBasicValidation) continue;
-        // ========== 容器字段基础验证检查结束 ==========
+        // 条件容器的 entryKey 直接用 rowKey（= indicatorCode）
+        const entryKey = containerType === 'conditional'
+          ? indicator.indicatorCode
+          : `${indicator.indicatorCode}${String(entryNum).padStart(2, '0')}`;
 
-        const rules = parseLogicRule(indicator.logicRule, entryNum);
+        const rules = parseLogicRule(indicator.logicRule, containerType === 'conditional' ? 1 : entryNum);
+        console.log('[LogicRuleBlur] parseLogicRule result:', JSON.stringify(rules, null, 2));
         if (rules.length === 0) continue;
 
-        const entryValueMap = buildEntryValueMap(indicator, entryNum);
+        console.log('[LogicRuleBlur] entry:', {
+          indicatorCode: indicator.indicatorCode,
+          containerType,
+          entryNum,
+          entryKey,
+          logicRule: indicator.logicRule,
+        });
+
+        // 条件容器用不同的值映射函数
+        const entryValueMap = containerType === 'conditional'
+          ? buildEntryValueMapForConditional(indicator)
+          : buildEntryValueMap(indicator, entryNum);
+
+        console.log('[LogicRuleBlur] entryValueMap:', entryValueMap);
+
         const results = validateJointRule(rules as any, entryValueMap, { triggerTiming: 'FILL' });
+        console.log('[LogicRuleBlur] results:', results);
 
         if (results.length > 0) {
           const involvedCodesRes = results[0]?.involvedIndicatorCodes || [];
@@ -364,16 +495,18 @@ function validateLogicRuleForBlur(
             if (code.startsWith(indicator.indicatorCode)) {
               hasSpecificFieldError = true;
               const fieldCode = code.slice(-2);
-              const errMsg = buildLogicRuleMsg(indicator.logicRule, allIndicators, entryValueMap, entryNum, indicator);
-              fieldErrors.push({ entryNum, fieldCode, errMsg });
+              const errMsg = buildLogicRuleMsg(indicator.logicRule, allIndicators, entryValueMap,
+                containerType === 'conditional' ? 1 : entryNum, indicator);
+              logicFieldErrors.push({ entryNum, fieldCode, errMsg });
             }
           }
 
           if (!hasSpecificFieldError) {
-            const errMsg = buildLogicRuleMsg(indicator.logicRule, allIndicators, entryValueMap, entryNum, indicator);
+            const errMsg = buildLogicRuleMsg(indicator.logicRule, allIndicators, entryValueMap,
+              containerType === 'conditional' ? 1 : entryNum, indicator);
             const firstFieldCode = findFirstFilledFieldCode(indicator, entryNum);
             if (firstFieldCode) {
-              fieldErrors.push({ entryNum, fieldCode: firstFieldCode, errMsg });
+              logicFieldErrors.push({ entryNum, fieldCode: firstFieldCode, errMsg });
             }
           }
         }
@@ -381,12 +514,17 @@ function validateLogicRuleForBlur(
 
       clearContainerLogicRuleErrors(indicator, clearFieldError);
 
-      if (fieldErrors.length > 0) {
-        const firstError = fieldErrors[0]!;
-        const entryKey = `${indicator.indicatorCode}${String(firstError.entryNum).padStart(2, '0')}`;
-        const fieldKey = `c:${indicator.indicatorCode}:${entryKey}:${firstError.fieldCode}`;
-        setFieldError(fieldKey, firstError.errMsg, 'logic', false);
-        setDirty(fieldKey);
+      if (logicFieldErrors.length > 0) {
+        const firstError = logicFieldErrors[0]!;
+        let errorKey: string;
+        if (containerType === 'conditional') {
+          errorKey = firstError.fieldCode;
+        } else {
+          const entryKey = `${indicator.indicatorCode}${String(firstError.entryNum).padStart(2, '0')}`;
+          errorKey = `${entryKey}${firstError.fieldCode}`;
+        }
+        setFieldError(errorKey, firstError.errMsg, 'logic', false);
+        setDirty(errorKey);
       }
     } else {
       const rules = parseLogicRule(indicator.logicRule, 1);
@@ -449,12 +587,13 @@ function validateFilledLogicRules(
           const containerFieldKey = fieldCode ? `${entryKey}${fieldCode}` : entryKey;
           // 格式必须与 toContainerKey 一致：c:indicatorCode:rowKey:fieldCode（带冒号）
           const fullKey = `c:${indicator.indicatorCode}:${containerFieldKey}`;
-          setFieldError(fullKey, `${errMsg}（第${entryNum}个条目）`, 'logic', false);
+          const errMsgWithKey = `「${containerFieldKey}」：${errMsg}`;
+          setFieldError(fullKey, errMsgWithKey, 'logic', false);
 
           errors.push({
             indicatorId: indicator.id,
             indicatorCode: indicator.indicatorCode,
-            message: `${errMsg}（第${entryNum}个条目）`,
+            message: errMsgWithKey,
             errorType: 'logic',
             indicatorName: indicator.indicatorName,
             containerFieldKey,

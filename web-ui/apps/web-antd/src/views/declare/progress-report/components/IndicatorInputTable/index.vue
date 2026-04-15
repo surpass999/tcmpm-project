@@ -222,26 +222,40 @@ function handleMultiSelectChange(indicator: any, selectedValues: string[]) {
 function onIndicatorChange(indicator: DeclareIndicatorApi.Indicator) {
   if (indicator.id !== undefined) {
     markTopLevelDirty(indicator.id);
-    // 清除该指标的旧错误（在验证前清除，确保正确值能消除错误）
-    clearFieldError(toTopLevelKey(indicator.id));
+    const key = toTopLevelKey(indicator.id);
+    clearFieldError(key);
   }
   if (indicator.valueType === 12) {
     const entries = containerValues[indicator.indicatorCode] || [];
     formValues[indicator.indicatorCode] = JSON.stringify(entries);
   }
   checkAndSyncLinkedAutoContainers(indicator.indicatorCode, indicators.value);
+  // 设置 _formValue，确保 validateIndicator 能读取到当前值
+  (indicator as any)._formValue = formValues[indicator.indicatorCode];
+  validateIndicator(indicator);
   setTimeout(() => {
     validateLogicRuleForBlur(indicator, indicators.value, setFieldError, clearFieldError, setDirty);
   }, 0);
 }
 
 function onContainerFieldChange(indicator: DeclareIndicatorApi.Indicator, entry: any, field: DynamicField) {
-  markContainerFieldDirty(indicator.indicatorCode, entry.rowKey, field.fieldCode);
+  const containerType = getContainerType(indicator.valueOptions);
+  markContainerFieldDirty(indicator.indicatorCode, entry.rowKey, field.fieldCode, containerType);
   validateContainerFieldOnBlur(entry, indicator, field, containerValues[indicator.indicatorCode] || []);
   setTimeout(() => {
     recalculateComputedIndicators(indicators.value);
     validateLogicRuleForBlur(indicator, indicators.value, setFieldError, clearFieldError, setDirty);
   }, 0);
+}
+
+/**
+ * 容器字段变更（仅基础验证，用于 @field-change 事件）
+ * 不触发逻辑验证，避免与 blur 重复
+ */
+function onContainerFieldBasicChange(indicator: DeclareIndicatorApi.Indicator, entry: any, field: DynamicField) {
+  const containerType = getContainerType(indicator.valueOptions);
+  markContainerFieldDirty(indicator.indicatorCode, entry.rowKey, field.fieldCode, containerType);
+  validateContainerFieldOnBlur(entry, indicator, field, containerValues[indicator.indicatorCode] || []);
 }
 
 // ==================== 生命周期 ====================
@@ -341,7 +355,10 @@ function syncContainerValuesToForm() {
 
 function doValidateAll() {
   const { messages } = validateAll(indicators.value, setFieldError, clearFieldError);
-  return messages; // ValidationError[]
+  // 追加逻辑规则校验结果
+  const logicErrors = validateLogicRules(indicators.value, setFieldError, clearFieldError);
+  const allMessages = [...messages, ...logicErrors];
+  return allMessages;
 }
 
 function doValidateFilledData() {
@@ -546,7 +563,7 @@ defineExpose({
               >
                 <template v-for="opt in parseOptions(indicator.valueOptions)" :key="opt.value">
                   <div class="flex items-center">
-                    <a-checkbox :value="opt.value" :disabled="readonly" @click="(e: MouseEvent) => handleCheckboxInputClick(indicator, opt.value, e)">
+                    <a-checkbox :value="opt.value" :disabled="readonly" @click="(e: MouseEvent) => { handleCheckboxInputClick(indicator, opt.value, e); onIndicatorChange(indicator); }">
                       {{ opt.label }}
                     </a-checkbox>
                     <a-input
@@ -657,9 +674,9 @@ defineExpose({
                         :row-key="entry.rowKey"
                         :field="field"
                         :disabled="readonly"
-                        :container-field-error="getContainerFieldError(entry, indicator.indicatorCode, field.fieldCode)"
+                        :container-field-error="getContainerFieldError(entry, indicator.indicatorCode, field.fieldCode, 'conditional')"
                         @blur="() => onContainerFieldChange(indicator, entry, field)"
-                        @field-change="() => onContainerFieldChange(indicator, entry, field)"
+                        @field-change="() => onContainerFieldBasicChange(indicator, entry, field)"
                       />
                     </div>
                   </div>
@@ -680,9 +697,9 @@ defineExpose({
                         :row-key="entry.rowKey"
                         :field="field"
                         :disabled="readonly"
-                        :container-field-error="getContainerFieldError(entry, indicator.indicatorCode, field.fieldCode)"
+                        :container-field-error="getContainerFieldError(entry, indicator.indicatorCode, field.fieldCode, 'autoEntry')"
                         @blur="() => onContainerFieldChange(indicator, entry, field)"
-                        @field-change="() => onContainerFieldChange(indicator, entry, field)"
+                        @field-change="() => onContainerFieldBasicChange(indicator, entry, field)"
                       />
                     </div>
                   </div>
@@ -718,9 +735,9 @@ defineExpose({
                         :row-key="entry.rowKey"
                         :field="field"
                         :disabled="readonly"
-                        :container-field-error="getContainerFieldError(entry, indicator.indicatorCode, field.fieldCode)"
+                        :container-field-error="getContainerFieldError(entry, indicator.indicatorCode, field.fieldCode, 'normal')"
                         @blur="() => onContainerFieldChange(indicator, entry, field)"
-                        @field-change="() => onContainerFieldChange(indicator, entry, field)"
+                        @field-change="() => onContainerFieldBasicChange(indicator, entry, field)"
                       />
                     </div>
                   </div>

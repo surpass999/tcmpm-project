@@ -44,6 +44,7 @@ export function handleInputTypeRadioChange(indicator: DeclareIndicatorApi.Indica
 
 /** 处理多选输入型 checkbox 点击（用于互斥逻辑） */
 export function handleCheckboxInputClick(indicator: DeclareIndicatorApi.Indicator, clickedValue: string, _event: MouseEvent) {
+  console.log('[DEBUG handleCheckboxInputClick] indicatorId:', indicator.id, 'clickedValue:', clickedValue, 'formValue before:', formValues[indicator.indicatorCode]);
   const options = parseOptions(indicator.valueOptions);
   const exclusiveValues = new Set(options.filter((o) => o.exclusive).map((o) => o.value));
   const currentRaw = formValues[indicator.indicatorCode];
@@ -73,6 +74,7 @@ export function handleCheckboxInputClick(indicator: DeclareIndicatorApi.Indicato
   }
 
   handleInputTypeCheckboxChange(indicator, result);
+  console.log('[DEBUG handleCheckboxInputClick] formValue after:', formValues[indicator.indicatorCode]);
 }
 
 /** 多选变化处理 */

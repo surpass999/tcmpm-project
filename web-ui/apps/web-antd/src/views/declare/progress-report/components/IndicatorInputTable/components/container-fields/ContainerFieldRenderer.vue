@@ -32,6 +32,12 @@ const emit = defineEmits<{
 /** 计算字段的完整 key */
 const fullKey = computed(() => `${props.rowKey}${props.field.fieldCode}`);
 
+/** 容器字段的显示标签 */
+const fieldLabel = computed(() => `${fullKey.value} - ${props.field.fieldLabel}`);
+
+/** 容器字段的 placeholder */
+const fieldPlaceholder = computed(() => `请输入${fieldLabel.value}`);
+
 /** 读取字段值 */
 const fieldValue = computed(() => {
   return props.entry?.[fullKey.value];
@@ -46,7 +52,6 @@ function updateValue(value: any) {
 
 /** 失焦处理 */
 function handleBlur(e: FocusEvent) {
-  // 从 DOM 原生 input 元素读取当前值
   const target = e.target as HTMLInputElement;
   const rawValue = target?.value ?? '';
   let normalizedValue: any;
@@ -98,6 +103,13 @@ function handleSelectChange(value: any) {
   emit('blur');
 }
 
+/** 单选类型的变化处理（需要触发 blur 以触发逻辑验证） */
+function handleRadioChange(value: string) {
+  updateValue(value);
+  emit('blur');
+  emit('fieldChange');
+}
+
 /** 判断是否为数组类型（复选框/多选） */
 function isArrayField(): boolean {
   return props.field.fieldType === 'checkbox' || props.field.fieldType === 'multiSelect';
@@ -117,7 +129,7 @@ function getValue(): any {
   >
     <!-- 标签 -->
     <span class="dynamic-field-label">
-      {{ field.fieldLabel }}
+      {{ fieldLabel }}
       <span v-if="field.required" class="text-red-500">*</span>
     </span>
 
@@ -127,7 +139,7 @@ function getValue(): any {
       v-if="field.fieldType === 'text'"
       :value="fieldValue"
       :disabled="disabled"
-      :placeholder="field.placeholder || `请输入${field.fieldLabel}`"
+      :placeholder="fieldPlaceholder"
       :maxlength="field.maxLength"
       @update:value="updateValue"
       @blur="handleTextBlur"
@@ -143,6 +155,7 @@ function getValue(): any {
       :prefix="field.prefix"
       :suffix="field.suffix"
       class="number-input-auto-width"
+      :placeholder="fieldPlaceholder"
       @update:model-value="updateValue"
       @blur="handleBlur"
     />
@@ -152,7 +165,7 @@ function getValue(): any {
       v-else-if="field.fieldType === 'textarea'"
       :value="fieldValue"
       :disabled="disabled"
-      :placeholder="field.placeholder || `请输入${field.fieldLabel}`"
+      :placeholder="fieldPlaceholder"
       :rows="field.rows || 3"
       :maxlength="field.maxLength"
       @update:value="updateValue"
@@ -170,7 +183,7 @@ function getValue(): any {
         :value="String(opt.value)"
         :checked="String(fieldValue ?? '') === String(opt.value)"
         :disabled="disabled"
-        @change="updateValue(String(opt.value))"
+        @change="handleRadioChange(String(opt.value))"
       >
         {{ opt.label }}
       </a-radio>
@@ -202,7 +215,7 @@ function getValue(): any {
       v-else-if="field.fieldType === 'select'"
       :model-value="fieldValue"
       :disabled="disabled"
-      :placeholder="`请选择${field.fieldLabel}`"
+      :placeholder="`请选择${fieldLabel}`"
       :show-search="field.showSearch"
       allow-clear
       @update:model-value="updateValue"
@@ -222,7 +235,7 @@ function getValue(): any {
       v-else-if="field.fieldType === 'multiSelect'"
       :model-value="getValue()"
       :disabled="disabled"
-      :placeholder="`请选择${field.fieldLabel}`"
+      :placeholder="`请选择${fieldLabel}`"
       mode="multiple"
       allow-clear
       @update:model-value="updateValue"
@@ -244,7 +257,7 @@ function getValue(): any {
       :disabled="disabled"
       :show-time="field.format?.includes('HH')"
       :format="field.format || 'YYYY-MM-DD'"
-      @update:model-value="(val) => updateValue(val)"
+      @update:model-value="(val: any) => updateValue(val)"
       @change="handleSelectChange"
     />
 
