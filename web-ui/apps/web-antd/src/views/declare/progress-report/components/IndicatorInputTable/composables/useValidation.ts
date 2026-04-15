@@ -21,9 +21,7 @@ import { INPUT_VALUE_SEPARATOR, deserializeInputTypeValue } from './useFormValue
 import {
   fieldErrors,
   toTopLevelKey,
-  toInputTypeKey,
   getFieldError,
-  setFieldError,
   clearFieldError,
   setDirty,
 } from './useErrorKeys';
@@ -193,6 +191,7 @@ export function validateIndicator(indicator: DeclareIndicatorApi.Indicator): Fie
   const errors: FieldError[] = [];
   const key = toTopLevelKey(indicator.id!);
   const value = (indicator as any)._formValue;
+  console.log('[validateIndicator] indicator:', indicator.indicatorCode, 'valueType:', indicator.valueType, 'value:', JSON.stringify(value), 'id:', indicator.id, 'isRequired:', indicator.isRequired);
   const isEmptyVal = isEmpty(value);
   const isRequiredAndNotComputed = indicator.isRequired && !isComputedIndicator(indicator);
   if (isRequiredAndNotComputed && isEmptyVal) {
@@ -235,6 +234,49 @@ export function validateIndicator(indicator: DeclareIndicatorApi.Indicator): Fie
         const err = { message: '不能输入纯数字', errorType: 'format' as const, dirty: true };
         fieldErrors[key] = err;
         errors.push(err);
+      }
+    }
+
+    // 单选/多选类型：输入型选项必填校验
+    if (indicator.valueType === 6 || indicator.valueType === 7) {
+      const raw = formValues[indicator.indicatorCode];
+      console.log('[validateIndicator] type6/7 raw:', JSON.stringify(raw));
+      const options = parseOptions(indicator.valueOptions);
+      console.log('[validateIndicator] options:', options.map(o => ({ value: o.value, inputType: o.inputType })));
+      for (const opt of options) {
+        if (opt.inputType) {
+          const isSelected = (() => {
+            if (indicator.valueType === 7) {
+              const arr = Array.isArray(raw) ? raw : (raw ? [raw] : []);
+              console.log('[validateIndicator] type7 arr:', JSON.stringify(arr), 'opt.value:', opt.value);
+              return arr.some((v: string) => deserializeInputTypeValue(v).value === opt.value);
+            } else {
+              const des = raw ? deserializeInputTypeValue(raw) : null;
+              console.log('[validateIndicator] type6 des:', JSON.stringify(des), 'opt.value:', opt.value);
+              return des?.value === opt.value;
+            }
+          })();
+          console.log('[validateIndicator] isSelected:', isSelected);
+          if (isSelected) {
+            const inputKey = indicator.indicatorCode + '_' + opt.value;
+            const content = inputTypeValues[inputKey] || '';
+            console.log('[validateIndicator] inputKey:', inputKey, 'content:', JSON.stringify(content));
+            if (!content.trim()) {
+              console.log('[validateIndicator] 必填错误');
+              const err = { message: `请填写"${opt.label}"的补充内容`, errorType: 'required' as const, dirty: true };
+              fieldErrors[key] = err;
+              errors.push(err);
+            } else {
+              const trimmed = content.trim();
+              if (/^\d+$/.test(trimmed)) {
+                console.log('[validateIndicator] 格式错误-纯数字');
+                const err = { message: `"${opt.label}"的补充内容：输入内容不能是纯数字`, errorType: 'format' as const, dirty: true };
+                fieldErrors[key] = err;
+                errors.push(err);
+              }
+            }
+          }
+        }
       }
     }
   }
@@ -510,6 +552,7 @@ export function validateAll(
   _clearFieldErrorFn: (key: string) => void,
 ): { messages: ValidationError[]; hasErrors: boolean } {
   const messages: ValidationError[] = [];
+  console.log('[validateAll] 调用，indicators:', indicators.map(i => ({ code: i.indicatorCode, vt: i.valueType, id: i.id })));
 
   // 1. 顶层指标校验
   for (const indicator of indicators) {
@@ -540,6 +583,7 @@ export function validateAll(
     }
   }
 
+  console.log('[validateAll] 返回 messages:', JSON.stringify(messages));
   return { messages, hasErrors: messages.length > 0 };
 }
 
@@ -652,30 +696,6 @@ export function getContainerFieldError(
 /** 获取顶层指标错误（兼容旧接口） */
 export function getTopLevelError(indicatorId: number): string | undefined {
   return getFieldError(toTopLevelKey(indicatorId));
-}
-
-/** 获取输入型选项错误（支持两种调用方式：旧版 indicator+opt 对象，新版 indicatorCode+optionValue） */
-export function getInputTypeError(
-  entry: any,
-  indicatorCode: string,
-  fieldCode?: string
-): string | undefined {
-  // 如果第一个参数有 rowKey，说明是旧版容器字段调用
-  if (entry && typeof entry === 'object' && 'rowKey' in entry) {
-    return getFieldError(toInputTypeKey(indicatorCode, fieldCode || ''));
-  }
-  // 标准调用：getInputTypeError(indicatorCode, optionValue)
-  return getFieldError(toInputTypeKey(String(entry), indicatorCode));
-}
-
-/** 设置输入型选项错误（兼容旧接口） */
-export function setInputTypeError(indicatorCode: string, optionValue: string, message: string): void {
-  setFieldError(toInputTypeKey(indicatorCode, optionValue), message, 'required', true);
-}
-
-/** 清除输入型选项错误（兼容旧接口） */
-export function clearInputTypeError(indicatorCode: string, optionValue: string): void {
-  clearFieldError(toInputTypeKey(indicatorCode, optionValue));
 }
 
 /** 清除容器字段错误（兼容旧接口） */

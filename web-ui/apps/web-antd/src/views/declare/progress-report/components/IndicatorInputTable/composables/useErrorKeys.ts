@@ -44,7 +44,9 @@ export function setFieldError(
 
 /** 清除错误 */
 export function clearFieldError(key: string): void {
-  delete fieldErrors[key];
+  if (fieldErrors[key]) {
+    delete fieldErrors[key];
+  }
 }
 
 /** 设置脏标记 */

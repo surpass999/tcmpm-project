@@ -11,6 +11,7 @@ export const DECIMAL_18_4_MIN = -90000000000.0;
 /** 判断值是否为空 */
 export function isEmpty(value: any): boolean {
   if (value === undefined || value === null) return true;
+  if (typeof value === 'number') return false;  // NaN/Infinity 也视为非空（交给格式校验处理）
   if (typeof value === 'string') {
     const t = value.trim();
     if (t === '' || t === '[]' || t === '[ ]') return true;

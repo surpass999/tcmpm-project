@@ -255,7 +255,8 @@ function clearContainerLogicRuleErrors(indicator: DeclareIndicatorApi.Indicator,
   const shouldClear = (key: string) => {
     const err = fieldErrors[key];
     // 只清除逻辑规则错误；基础验证错误（required/format/range）由基础验证逻辑自行管理
-    return !err || err.errorType === 'logic' || err.errorType === 'joint';
+    if (!err) return true;
+    return err.errorType === 'logic' || err.errorType === 'joint';
   };
 
   if (containerType === 'conditional') {

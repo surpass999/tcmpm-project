@@ -11,13 +11,18 @@
 import type { DeclareIndicatorApi } from '#/api/declare/indicator';
 import { parseOptions } from '../utils/options';
 import {
+  toTopLevelKey,
+  setFieldError,
+  clearFieldError,
+} from './useErrorKeys';
+import {
   formValues,
   inputTypeValues,
-  INPUT_VALUE_SEPARATOR,
   serializeInputTypeValue,
   deserializeInputTypeValue,
   validateInputContent,
   getInputTypeInputFieldName,
+  isInputTypeOptionSelected,
 } from './useFormValues';
 
 // ==================== 单选变化处理 ====================
@@ -122,6 +127,25 @@ export function onInputTypeBlur(indicator: DeclareIndicatorApi.Indicator, opt: a
     formValues[indicator.indicatorCode] = serialized;
   }
   formValues[inputFieldName] = content;
+
+  // 只有选项被选中时才校验：必填 + 格式
+  const isSelected = isInputTypeOptionSelected(indicator.indicatorCode, raw, opt.value);
+
+  if (!isSelected) {
+    clearFieldError(toTopLevelKey(indicator.id!));
+    return;
+  }
+
+  if (!content.trim()) {
+    setFieldError(toTopLevelKey(indicator.id!), `请填写"${opt.label}"的补充内容`, 'required', true);
+  } else {
+    const formatErr = validateInputContent(content);
+    if (formatErr) {
+      setFieldError(toTopLevelKey(indicator.id!), `"${opt.label}"的补充内容：${formatErr}`, 'required', true);
+    } else {
+      clearFieldError(toTopLevelKey(indicator.id!));
+    }
+  }
 }
 
 // ==================== 输入型选项必填校验 ====================

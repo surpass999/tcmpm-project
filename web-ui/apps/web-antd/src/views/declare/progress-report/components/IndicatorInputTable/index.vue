@@ -14,7 +14,7 @@
  * - composables/useFileUpload.ts       → 文件上传
  */
 
-import { ref, watch } from 'vue';
+import { ref, computed, watch } from 'vue';
 import dayjs from 'dayjs';
 
 import { IconifyIcon, PlusOutlined } from '@vben/icons';
@@ -44,6 +44,9 @@ import {
   markTopLevelDirty,
   markContainerFieldDirty,
 } from './composables/useValidation';
+
+// 错误 key 工具（toInputTypeKey）
+import { toInputTypeKey, fieldErrors } from './composables/useErrorKeys';
 
 // 表单值
 import {
@@ -89,7 +92,6 @@ import {
   getInputTypeOptionValue,
   getInputTypeOptionValues,
   isInputTypeOptionSelected,
-  getInputTypeError,
   onInputTypeBlur,
 } from './composables/useInputTypeOptions';
 
@@ -154,6 +156,20 @@ const emit = defineEmits<{
 const mounted = ref(false);
 
 // ==================== 辅助函数 ====================
+
+/** 获取输入型选项的错误信息（用 computed 包装确保响应式追踪） */
+const inputTypeErrorMap = computed(() => {
+  const result: Record<string, string | undefined> = {};
+  for (const key of Object.keys(fieldErrors)) {
+    result[key] = fieldErrors[key]?.message;
+  }
+  return result;
+});
+
+function getInputTypeError(indicatorCode: string, optionValue: string): string | null {
+  const key = toInputTypeKey(indicatorCode, optionValue);
+  return inputTypeErrorMap.value[key] ?? null;
+}
 
 const MAX_CONTAINER_ENTRIES = 99;
 
@@ -542,7 +558,7 @@ defineExpose({
                       class="w-36 ml-2"
                       placeholder="请输入"
                       :value="inputTypeValues[indicator.indicatorCode + '_' + opt.value]"
-                      :status="isInputTypeOptionSelected(indicator.indicatorCode, formValues[indicator.indicatorCode], opt.value) ? getInputTypeError(indicator, opt) : null"
+                      :status="isInputTypeOptionSelected(indicator.indicatorCode, formValues[indicator.indicatorCode], opt.value) ? getInputTypeError(indicator.indicatorCode, opt.value) : null"
                       @click.stop
                       @input="(e: any) => inputTypeValues[indicator.indicatorCode + '_' + opt.value] = e.target.value"
                       @blur="(e: any) => onInputTypeBlur(indicator, opt, e.target.value)"
@@ -572,7 +588,7 @@ defineExpose({
                       class="w-36 ml-2"
                       placeholder="请输入"
                       :value="inputTypeValues[indicator.indicatorCode + '_' + opt.value]"
-                      :status="isInputTypeOptionSelected(indicator.indicatorCode, formValues[indicator.indicatorCode], opt.value) ? getInputTypeError(indicator, opt) : null"
+                      :status="isInputTypeOptionSelected(indicator.indicatorCode, formValues[indicator.indicatorCode], opt.value) ? getInputTypeError(indicator.indicatorCode, opt.value) : null"
                       @click.stop
                       @input="(e: any) => inputTypeValues[indicator.indicatorCode + '_' + opt.value] = e.target.value"
                       @blur="(e: any) => onInputTypeBlur(indicator, opt, e.target.value)"

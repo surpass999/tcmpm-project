@@ -54,17 +54,9 @@ function updateValue(value: any) {
 function handleBlur(e: FocusEvent) {
   const target = e.target as HTMLInputElement;
   const rawValue = target?.value ?? '';
-  let normalizedValue: any;
 
-  if (props.field.fieldType === 'number') {
-    const trimmed = rawValue.trim();
-    normalizedValue = trimmed === '' ? null : Number(trimmed);
-  } else {
-    normalizedValue = rawValue;
-  }
-
-  if (normalizedValue !== props.entry[fullKey.value]) {
-    props.entry[fullKey.value] = normalizedValue;
+  if (rawValue !== props.entry[fullKey.value]) {
+    props.entry[fullKey.value] = rawValue;
   }
 
   emit('blur');
