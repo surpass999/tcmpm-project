@@ -67,6 +67,13 @@ export interface ContainerConfig {
   fields: DynamicField[];
 }
 
+/** 统一错误（替代 7 个分散错误状态 + 2 个脏追踪状态） */
+export interface FieldError {
+  message: string
+  errorType: 'required' | 'format' | 'range' | 'logic' | 'joint'
+  dirty: boolean
+}
+
 /** 校验错误 */
 export interface ValidationError {
   indicatorId?: number;

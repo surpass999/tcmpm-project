@@ -1,161 +1,106 @@
 /**
- * 计算指标逻辑 composable
+ * useComputedIndicators - 自动计算指标
+ *
+ * 负责：
+ * - 自动计算指标值
+ * - 重新计算触发
  */
 
+import { nextTick } from 'vue';
 import type { DeclareIndicatorApi } from '#/api/declare/indicator';
+import { formValues } from './useFormValues';
+import { getNumberPrecision } from '../utils/indicator';
+import { setDirty } from './useValidation';
 
-export interface UseComputedIndicatorsOptions {
-  formValues: Record<string, any>;
-  indicators: typeof import('vue').ref<DeclareIndicatorApi.Indicator[]>;
+// ==================== 辅助函数 ====================
+
+function getIndicatorValue(indicatorCode: string): number | undefined {
+  const value = formValues[indicatorCode];
+  if (value === undefined || value === null || value === '') return undefined;
+  return Number(value);
 }
 
-export function useComputedIndicators() {
-  /** 获取指标值 */
-  function getIndicatorValue(formValues: Record<string, any>, indicatorCode: string): number | undefined {
-    const value = formValues[indicatorCode];
-    if (value === undefined || value === null || value === '') {
-      return undefined;
-    }
-    return Number(value);
-  }
+function calculateIndicatorValue(indicator: DeclareIndicatorApi.Indicator): number | undefined {
+  if (!indicator.calculationRule) return undefined;
+  try {
+    let formula = indicator.calculationRule;
+    const indicatorMatches = formula.match(/\[[^\]]+\]/g) || [];
+    let hasAllValues = true;
+    let processedFormula = formula;
 
-  /** 计算指标值 */
-  function calculateIndicatorValue(
-    indicator: DeclareIndicatorApi.Indicator,
-    formValues: Record<string, any>,
-  ): number | undefined {
-    if (!indicator.calculationRule) return undefined;
-
-    try {
-      let formula = indicator.calculationRule;
-      const indicatorMatches = formula.match(/\[[^\]]+\]/g) || [];
-
-      let hasAllValues = true;
-      let processedFormula = formula;
-
-      for (const match of indicatorMatches) {
-        const code = match.replace(/[\[\]]/g, '');
-        const value = getIndicatorValue(formValues, code);
-
-        if (value === undefined) {
-          hasAllValues = false;
-          break;
-        }
-        processedFormula = processedFormula.replace(match, String(value));
-      }
-
-      if (!hasAllValues) return undefined;
-
-      const safeFormula = processedFormula.replace(/[^0-9+\-*/.()%]/g, '');
-      if (!safeFormula || safeFormula.trim() === '') return undefined;
-
-      const result = new Function(`return ${safeFormula}`)();
-      if (isNaN(result) || !isFinite(result)) return undefined;
-
-      return result;
-    } catch {
-      return undefined;
-    }
-  }
-
-  /** 解析指标公式中的依赖指标代码列表 */
-  function parseCalcDependencies(calcRule: string): string[] {
-    if (!calcRule) return [];
-    const matches = calcRule.match(/\[[^\]]+\]/g) || [];
-    return matches.map((m) => m.replace(/[\[\]]/g, ''));
-  }
-
-  /** 拓扑排序 */
-  function sortIndicatorsTopological(
-    computedOnes: DeclareIndicatorApi.Indicator[],
-  ): DeclareIndicatorApi.Indicator[] {
-    const codeToInd = new Map<string, DeclareIndicatorApi.Indicator>();
-    computedOnes.forEach((ind) => codeToInd.set(ind.indicatorCode, ind));
-
-    const inDegree = new Map<string, number>();
-    const deps = new Map<string, string[]>();
-
-    computedOnes.forEach((ind) => {
-      const depsCodes = parseCalcDependencies(ind.calculationRule || '');
-      inDegree.set(ind.indicatorCode, 0);
-      deps.set(ind.indicatorCode, []);
-      depsCodes.forEach((depCode) => {
-        if (codeToInd.has(depCode)) {
-          deps.get(ind.indicatorCode)!.push(depCode);
-          inDegree.set(ind.indicatorCode, (inDegree.get(ind.indicatorCode) || 0) + 1);
-        }
-      });
-    });
-
-    const queue: string[] = [];
-    inDegree.forEach((deg, code) => {
-      if (deg === 0) queue.push(code);
-    });
-
-    const sorted: DeclareIndicatorApi.Indicator[] = [];
-    while (queue.length > 0) {
-      const code = queue.shift()!;
-      const ind = codeToInd.get(code)!;
-      sorted.push(ind);
-      const myDeps = deps.get(code) || [];
-      myDeps.forEach((depCode) => {
-        const newDeg = (inDegree.get(depCode) || 1) - 1;
-        inDegree.set(depCode, newDeg);
-        if (newDeg === 0) queue.push(depCode);
-      });
+    for (const match of indicatorMatches) {
+      const code = match.replace(/[\[\]]/g, '');
+      const value = getIndicatorValue(code);
+      if (value === undefined) { hasAllValues = false; break; }
+      processedFormula = processedFormula.replace(match, String(value));
     }
 
-    computedOnes.forEach((ind) => {
-      if (!sorted.includes(ind)) sorted.push(ind);
-    });
+    if (!hasAllValues) return undefined;
 
-    return sorted;
+    // 将 % 作为百分比后缀处理：X% → X/100
+    processedFormula = processedFormula.replace(/(\d+\.?\d*)%/g, '$1/100');
+
+    const safeFormula = processedFormula.replace(/[^0-9+\-*/.()]/g, '');
+    if (!safeFormula || safeFormula.trim() === '') return undefined;
+
+    const result = new Function(`return ${safeFormula}`)();
+    if (isNaN(result) || !isFinite(result)) return undefined;
+
+    return result;
+  } catch {
+    return undefined;
   }
+}
 
-  /** 重新计算所有计算指标 */
-  function recalculateComputedIndicators(
-    indicators: DeclareIndicatorApi.Indicator[],
-    formValues: Record<string, any>,
-    getNumberPrecision?: (indicator: DeclareIndicatorApi.Indicator) => number | undefined,
-  ) {
-    const computedOnes = indicators.filter(
-      (ind) => ind.calculationRule && ind.calculationRule.trim(),
-    );
-    if (computedOnes.length === 0) return;
+// ==================== 重新计算 ====================
 
-    const MAX_PASSES = computedOnes.length + 1;
-    let changed = true;
-    let pass = 0;
+function recalculateComputedIndicators(indicators: DeclareIndicatorApi.Indicator[]) {
+  const computedOnes = indicators.filter((ind) => {
+    return !!(ind.calculationRule && ind.calculationRule.trim());
+  });
 
-    while (changed && pass < MAX_PASSES) {
-      changed = false;
-      pass++;
+  if (computedOnes.length === 0) return;
 
-      const sorted = sortIndicatorsTopological(computedOnes);
-      for (const ind of sorted) {
-        const calculatedValue = calculateIndicatorValue(ind, formValues);
-        if (calculatedValue !== undefined) {
-          let finalValue: number = calculatedValue;
+  const MAX_PASSES = computedOnes.length + 1;
+  let changed = true;
+  let pass = 0;
 
-          if (getNumberPrecision) {
-            const precision = getNumberPrecision(ind);
-            if (precision !== undefined) {
-              finalValue = Number(calculatedValue.toFixed(precision));
-            }
-          }
-
-          formValues[ind.indicatorCode] = finalValue;
-          changed = true;
-        }
+  while (changed && pass < MAX_PASSES) {
+    changed = false;
+    pass++;
+    for (const ind of computedOnes) {
+      const calculatedValue = calculateIndicatorValue(ind);
+      if (calculatedValue !== undefined) {
+        const precision = getNumberPrecision(ind);
+        const effectivePrecision = precision !== undefined ? precision : 2;
+        const fixedStr = calculatedValue.toFixed(effectivePrecision);
+        const finalValue = parseFloat(fixedStr);
+        formValues[ind.indicatorCode] = finalValue;
+        changed = true;
       }
     }
   }
 
-  return {
-    getIndicatorValue,
-    calculateIndicatorValue,
-    parseCalcDependencies,
-    sortIndicatorsTopological,
-    recalculateComputedIndicators,
-  };
+  // 更新 DOM 中的输入框显示值
+  nextTick(() => {
+    for (const ind of computedOnes) {
+      if (formValues[ind.indicatorCode] !== undefined) {
+        const el = document.querySelector(`[data-indicator-code="${ind.indicatorCode}"] .safe-number-input-inner`) as HTMLInputElement | null;
+        if (el) {
+          const precision = getNumberPrecision(ind);
+          const effectivePrecision = precision !== undefined ? precision : 2;
+          el.value = formValues[ind.indicatorCode]!.toFixed(effectivePrecision);
+        }
+      }
+      if (ind.id !== undefined) setDirty(`t:${ind.id}`);
+    }
+  });
 }
+
+// ==================== 导出 ====================
+
+export {
+  getIndicatorValue,
+  calculateIndicatorValue,
+  recalculateComputedIndicators,
+};
