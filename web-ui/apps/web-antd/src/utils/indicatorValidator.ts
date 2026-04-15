@@ -451,7 +451,7 @@ export function parseLogicRule(logicRule: string, entryNumber: number = 1): Join
   // 格式: IF([indicator] condOp condVal, [verify] verifyOp verifyVal, [verify] verifyOp verifyVal, ..., TRUE)
   // 使用非贪婪匹配中间部分，然后按 ", [" 分割多个 verify 表达式
   const ifMatches = [...logicRule.matchAll(/IF\s*\(\s*\[([^\]]+)\]\s*(==|!=|<=|>=|<|>)\s*(\d+(?:\.\d+)?)\s*,\s*(.+?)\s*,\s*TRUE\s*\)/gi)];
-  console.log('[indicatorValidator] IF regex matched count:', ifMatches.length, '| rule:', logicRule);
+  // console.log('[indicatorValidator] IF regex matched count:', ifMatches.length, '| rule:', logicRule);
 
   if (ifMatches.length > 0) {
     // 处理 IF 函数

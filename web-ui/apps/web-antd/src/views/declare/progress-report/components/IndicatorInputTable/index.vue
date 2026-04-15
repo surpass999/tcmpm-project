@@ -14,7 +14,7 @@
  * - composables/useFileUpload.ts       → 文件上传
  */
 
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, nextTick } from 'vue';
 import dayjs from 'dayjs';
 
 import { IconifyIcon, PlusOutlined } from '@vben/icons';
@@ -156,6 +156,7 @@ const emit = defineEmits<{
 // ==================== 状态 ====================
 
 const mounted = ref(false);
+const rootRef = ref<HTMLElement>();
 
 // ==================== 辅助函数 ====================
 
@@ -426,13 +427,81 @@ defineExpose({
   isDirty,
   resetDirty,
   getFillProgress,
+  scrollToField,
 });
+
+/** 滚动到指定字段（容器字段或顶层指标） */
+function scrollToField(containerFieldKey?: string, indicatorCode?: string) {
+  let el: Element | null = null;
+  if (containerFieldKey) {
+    el = rootRef.value?.querySelector(`[data-container-field-key="${containerFieldKey}"]`) ?? null;
+  }
+  if (!el && indicatorCode) {
+    el = rootRef.value?.querySelector(`[data-indicator-code="${indicatorCode}"]`) ?? null;
+  }
+  if (!el) return;
+
+  nextTick(() => {
+    scrollToEl(el!);
+  });
+}
+
+/** 对单个元素执行滚动和高亮 */
+function scrollToEl(el: Element) {
+  const rect = el.getBoundingClientRect();
+  console.log('[scrollToEl] 元素:', el.tagName, el.className, 'rect:', rect);
+  if (!rect || rect.width === 0 || rect.height === 0) {
+    const indicatorRow = (el as HTMLElement).closest?.('[data-indicator-code]') as HTMLElement | null;
+    if (indicatorRow) {
+      console.log('[scrollToEl] 尺寸为0，回退到 indicator-row');
+      indicatorRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      addHighlight(indicatorRow);
+    }
+    return;
+  }
+
+  // 找到真正的滚动容器（遍历 .indicator-area 的祖先链，找第一个 overflow 为 auto/scroll 的元素）
+  let scrollContainer: HTMLElement | null = null;
+  let cur: HTMLElement | null = document.querySelector('.indicator-area');
+  while (cur) {
+    const overflow = getComputedStyle(cur).overflowY;
+    if (overflow === 'auto' || overflow === 'scroll') {
+      scrollContainer = cur;
+      break;
+    }
+    cur = cur.parentElement;
+  }
+  console.log('[scrollToEl] 滚动容器:', scrollContainer?.tagName, scrollContainer?.className, 'scrollTop:', scrollContainer?.scrollTop, 'clientHeight:', scrollContainer?.clientHeight, 'scrollHeight:', scrollContainer?.scrollHeight, 'overflow:', getComputedStyle(scrollContainer!).overflowY);
+  if (!scrollContainer) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    addHighlight(el);
+    return;
+  }
+
+  const targetRect = el.getBoundingClientRect();
+  const containerRect = scrollContainer.getBoundingClientRect();
+  // 元素在容器坐标系中的 scrollTop = 容器当前 scrollTop + (元素视口top - 容器视口top)
+  const relativeTop = scrollContainer.scrollTop + (targetRect.top - containerRect.top);
+  // 不做居中，防止对顶部元素计算出负值被 clamp 为 0
+  const newScrollTop = Math.max(0, relativeTop - 20);
+  console.log('[scrollToEl] 计算: relativeTop=', relativeTop, 'newScrollTop=', newScrollTop);
+  scrollContainer.scrollTo({ top: newScrollTop, behavior: 'smooth' });
+  addHighlight(el);
+}
+
+/** 高亮元素 */
+function addHighlight(el: Element) {
+  el.classList.add('indicator-highlight');
+  setTimeout(() => {
+    el.classList.remove('indicator-highlight');
+  }, 1500);
+}
 
 
 </script>
 
 <template>
-  <div class="indicator-form-wrapper">
+  <div ref="rootRef" class="indicator-form-wrapper">
     <!-- 按分组显示指标 -->
     <div
       v-for="group in indicatorGroups"

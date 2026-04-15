@@ -611,6 +611,9 @@ const debouncedSyncFormData = useDebounceFn(() => {
   // 只在有 reportId 时同步（新建记录无 id，无法保存）
   if (!formData.value?.id) return;
 
+  // 同步容器值到 formValues，确保 getAllIndicatorValues 能取到容器数据
+  indicatorTableRef.value?.syncContainerValuesToForm?.();
+
   const rawValues = indicatorTableRef.value?.getAllIndicatorValues?.() || [];
   const values = rawValues.map((item: any) => {
     const base: any = {
@@ -740,7 +743,7 @@ watch(
     </Spin>
 
     <!-- 验证汇总弹窗 -->
-    <ValidationSummaryModal ref="summaryModalRef" />
+    <ValidationSummaryModal ref="summaryModalRef" :scroll-to-field-ref="indicatorTableRef" />
 
     <template #footer>
       <a-button @click="handleCancel">取消</a-button>

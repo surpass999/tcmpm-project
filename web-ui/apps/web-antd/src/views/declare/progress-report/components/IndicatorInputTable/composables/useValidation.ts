@@ -191,7 +191,6 @@ export function validateIndicator(indicator: DeclareIndicatorApi.Indicator): Fie
   const errors: FieldError[] = [];
   const key = toTopLevelKey(indicator.id!);
   const value = (indicator as any)._formValue;
-  console.log('[validateIndicator] indicator:', indicator.indicatorCode, 'valueType:', indicator.valueType, 'value:', JSON.stringify(value), 'id:', indicator.id, 'isRequired:', indicator.isRequired);
   const isEmptyVal = isEmpty(value);
   const isRequiredAndNotComputed = indicator.isRequired && !isComputedIndicator(indicator);
   if (isRequiredAndNotComputed && isEmptyVal) {
@@ -552,7 +551,6 @@ export function validateAll(
   _clearFieldErrorFn: (key: string) => void,
 ): { messages: ValidationError[]; hasErrors: boolean } {
   const messages: ValidationError[] = [];
-  console.log('[validateAll] 调用，indicators:', indicators.map(i => ({ code: i.indicatorCode, vt: i.valueType, id: i.id })));
 
   // 1. 顶层指标校验
   for (const indicator of indicators) {
@@ -583,7 +581,6 @@ export function validateAll(
     }
   }
 
-  console.log('[validateAll] 返回 messages:', JSON.stringify(messages));
   return { messages, hasErrors: messages.length > 0 };
 }
 

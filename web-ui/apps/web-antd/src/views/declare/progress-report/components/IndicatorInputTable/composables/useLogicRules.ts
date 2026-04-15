@@ -408,7 +408,7 @@ function validateLogicRuleForBlur(
 ) {
   const changedCode = changedIndicator.indicatorCode;
 
-  console.log('[LogicRuleBlur] called, changedCode:', changedCode, 'valueType:', changedIndicator.valueType);
+  // console.log('[LogicRuleBlur] called, changedCode:', changedCode, 'valueType:', changedIndicator.valueType);
 
   // ========== 基础验证检查（仅对非容器指标生效） ==========
   // 容器指标的值在 containerValues 中，不在 formValues 中，跳过此检查

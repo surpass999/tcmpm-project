@@ -80,6 +80,12 @@ interface ErrorItem {
   fieldLabel?: string;
 }
 
+const props = defineProps<{
+  scrollToFieldRef?: {
+    scrollToField: (containerFieldKey?: string, indicatorCode?: string) => void;
+  } | null;
+}>();
+
 const visible = ref(false);
 const errors = ref<ErrorItem[]>([]);
 const activeKeys = ref<string[]>([]);
@@ -103,12 +109,8 @@ const groupedErrors = computed(() => {
   };
 
   for (const error of errors.value) {
-    const type = error.errorType || 'format';
-    if (groups[type]) {
-      groups[type].push(error);
-    } else {
-      groups.format.push(error);
-    }
+    const type = (error.errorType || 'format') as keyof typeof groups;
+    (groups as any)[type]?.push(error);
   }
 
   // 过滤空分组
@@ -146,51 +148,10 @@ function close() {
 }
 
 function handleJump(error: ErrorItem) {
-  // 优先通过 containerFieldKey 定位（容器字段）
-  if (error.containerFieldKey) {
-    const fieldEl = document.querySelector(
-      `[data-container-field-key="${error.containerFieldKey}"]`,
-    );
-    if (fieldEl) {
-      const closestScroll = fieldEl.closest('.indicator-area') as HTMLElement | null;
-      (closestScroll || fieldEl).scrollIntoView({ behavior: 'smooth', block: 'center' });
-      addHighlight(fieldEl);
-      closeModalAfterScroll();
-      return;
-    }
-  }
-
-  // 顶级指标或容器行统一通过 indicatorCode 定位（最稳定）
-  const indicatorCode = error.indicatorCode;
-  if (indicatorCode) {
-    const rowEl = document.querySelector(
-      `[data-indicator-code="${indicatorCode}"]`,
-    );
-    if (rowEl) {
-      const closestScroll = rowEl.closest('.indicator-area') as HTMLElement | null;
-      (closestScroll || rowEl).scrollIntoView({ behavior: 'smooth', block: 'center' });
-      addHighlight(rowEl);
-      closeModalAfterScroll();
-      return;
-    }
-  }
-
-  // 完全找不到对应元素时直接关闭弹窗
   visible.value = false;
-}
-
-/** 延迟关闭弹窗，确保滚动动画完成后再关闭 */
-function closeModalAfterScroll() {
   setTimeout(() => {
-    visible.value = false;
-  }, 500);
-}
-
-function addHighlight(el: Element) {
-  el.classList.add('indicator-highlight');
-  setTimeout(() => {
-    el.classList.remove('indicator-highlight');
-  }, 2000);
+    props.scrollToFieldRef?.scrollToField(error.containerFieldKey, error.indicatorCode);
+  }, 300);
 }
 
 defineExpose({ show, close });
