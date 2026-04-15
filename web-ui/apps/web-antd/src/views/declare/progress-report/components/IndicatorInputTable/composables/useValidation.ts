@@ -14,7 +14,7 @@ import { isEmpty, checkRange, checkPrecision, checkSelectCount, checkRequired } 
 import { parseDynamicFields, generateContainerFieldKey, isFieldVisible } from '../utils/container';
 import { parseExtraConfig } from '../utils/indicator';
 import { parseOptions } from '../utils/options';
-import type { DynamicField, ValidationError } from '../types';
+import type { DynamicField, ValidationError, FieldError } from '../types';
 import { formValues, inputTypeValues } from './useFormValues';
 import { containerValues } from './useContainerValues';
 import { INPUT_VALUE_SEPARATOR, deserializeInputTypeValue } from './useFormValues';
@@ -22,11 +22,11 @@ import {
   fieldErrors,
   toTopLevelKey,
   toContainerKey,
+  toInputTypeKey,
   getFieldError,
   setFieldError,
   clearFieldError,
   setDirty,
-  clearAllErrors,
 } from './useErrorKeys';
 
 // ==================== 核心校验逻辑 ====================
@@ -34,6 +34,9 @@ import {
 /**
  * 单个容器字段校验（供即时校验和提交校验共用）
  * 消除 validateContainerFieldInstant 和 validateType12_Container 的重复
+ *
+ * 注意：读取 entry 中的值时使用 generateContainerFieldKey（与存储 key 一致）
+ *      错误 key 使用 toContainerKey（与 UI 组件统一）
  */
 export function validateSingleContainerField(
   field: DynamicField,
@@ -42,8 +45,6 @@ export function validateSingleContainerField(
   entry: any,
   allEntries: any[]
 ): FieldError | null {
-  const fullKey = toContainerKey(indicator.indicatorCode, entry.rowKey, field.fieldCode);
-
   // 必填校验
   if (field.required && isEmpty(fieldValue)) {
     return {
@@ -112,9 +113,9 @@ export function validateSingleContainerField(
       const trimmed = String(fieldValue).trim();
       for (let j = 0; j < allEntries.length; j++) {
         if (allEntries[j] === entry) continue;
+        // 读取其他条目的值时使用正确的 key 格式
         const otherFullKey = generateContainerFieldKey(indicator.indicatorCode, allEntries[j].rowKey, field.fieldCode);
         const otherVal = allEntries[j]?.[otherFullKey];
-        const entryIndex = extractEntryIndex(entry.rowKey);
         const otherIndex = extractEntryIndex(allEntries[j].rowKey);
         if (String(otherVal ?? '').trim() === trimmed) {
           return {
@@ -141,24 +142,37 @@ function extractEntryIndex(rowKey: string): number {
 /**
  * 容器整表校验（遍历所有条目）
  * 调用 validateSingleContainerField 遍历所有字段
+ *
+ * 注意：读取 entry 中的值时使用 generateContainerFieldKey（与存储 key 一致）
+ *      错误 key 也使用 generateContainerFieldKey（与 validateContainerFieldOnBlur 统一）
  */
 export function validateContainer(
   indicator: DeclareIndicatorApi.Indicator,
   entries: any[]
-): FieldError[] {
-  const errors: FieldError[] = [];
+): ValidationError[] {
+  const errors: ValidationError[] = [];
   const fields = parseDynamicFields(indicator.valueOptions);
 
   for (const entry of entries) {
     for (const field of fields) {
       if (!isFieldVisible(entry, indicator.indicatorCode, field, fields)) continue;
-      const fullKey = toContainerKey(indicator.indicatorCode, entry.rowKey, field.fieldCode);
-      const fieldValue = entry[fullKey];
+      // 使用 generateContainerFieldKey 读取 entry 中的值（与存储 key 一致）
+      const storageKey = generateContainerFieldKey(indicator.indicatorCode, entry.rowKey, field.fieldCode);
+      const fieldValue = entry[storageKey];
+      // 使用 generateContainerFieldKey 作为错误 key（与 validateContainerFieldOnBlur 统一）
+      const fullKey = storageKey;
       const err = validateSingleContainerField(field, fieldValue, indicator, entry, entries);
 
       if (err) {
         fieldErrors[fullKey] = err;
-        errors.push(err);
+        errors.push({
+          message: err.message,
+          errorType: err.errorType,
+          indicatorCode: indicator.indicatorCode,
+          indicatorId: indicator.id,
+          containerFieldKey: fullKey,
+          fieldLabel: field.fieldLabel,
+        });
       } else {
         delete fieldErrors[fullKey];
       }
@@ -180,7 +194,7 @@ function isComputedIndicator(indicator: DeclareIndicatorApi.Indicator): boolean 
  */
 export function validateIndicator(indicator: DeclareIndicatorApi.Indicator): FieldError[] {
   const errors: FieldError[] = [];
-  const key = toTopLevelKey(indicator.id);
+  const key = toTopLevelKey(indicator.id!);
   const value = (indicator as any)._formValue;
   const isEmptyVal = isEmpty(value);
 
@@ -228,6 +242,11 @@ export function validateIndicator(indicator: DeclareIndicatorApi.Indicator): Fie
         errors.push(err);
       }
     }
+  }
+
+  // 清除无错误时的错误
+  if (errors.length === 0) {
+    delete fieldErrors[key];
   }
 
   return errors;
@@ -380,16 +399,16 @@ export const validators: Record<number, (ind: DeclareIndicatorApi.Indicator) => 
  */
 export function validateFilledData(
   indicators: DeclareIndicatorApi.Indicator[],
-  setFieldErrorFn: (key: string, message: string, type: FieldError['errorType'], dirty?: boolean) => void,
-  clearFieldErrorFn: (key: string) => void,
-): FieldError[] {
-  const errors: FieldError[] = [];
+  _setFieldErrorFn: (key: string, message: string, type: FieldError['errorType'], dirty?: boolean) => void,
+  _clearFieldErrorFn: (key: string) => void,
+): ValidationError[] {
+  const errors: ValidationError[] = [];
 
   // 1. 验证顶层指标
   for (const indicator of indicators) {
     if (indicator.valueType === 12) continue;
     (indicator as any)._formValue = formValues[indicator.indicatorCode];
-    const errs = validateFilledIndicator(indicator, setFieldErrorFn);
+    const errs = validateFilledIndicator(indicator);
     errors.push(...errs);
   }
 
@@ -397,7 +416,7 @@ export function validateFilledData(
   for (const indicator of indicators) {
     if (indicator.valueType !== 12) continue;
     const entries = containerValues[indicator.indicatorCode] || [];
-    const errs = validateFilledContainer(indicator, setFieldErrorFn);
+    const errs = validateFilledContainer(indicator, entries);
     errors.push(...errs);
   }
 
@@ -407,7 +426,6 @@ export function validateFilledData(
 /** 验证已填的顶层指标（不做必填校验） */
 function validateFilledIndicator(
   indicator: DeclareIndicatorApi.Indicator,
-  setFieldErrorFn: (key: string, message: string, type: FieldError['errorType'], dirty?: boolean) => void
 ): ValidationError[] {
   const errors: ValidationError[] = [];
   const { indicatorCode: code, id, valueType } = indicator;
@@ -417,8 +435,6 @@ function validateFilledIndicator(
   const value = formValues[code];
   const isEmptyVal = isEmpty(value);
   if (isEmptyVal) return errors;
-
-  const isComputed = isComputedIndicator(indicator);
 
   switch (valueType) {
     case 1: {
@@ -449,11 +465,10 @@ function validateFilledIndicator(
 /** 验证已填的容器指标（不做必填校验） */
 function validateFilledContainer(
   indicator: DeclareIndicatorApi.Indicator,
-  setFieldErrorFn: (key: string, message: string, type: FieldError['errorType'], dirty?: boolean) => void
+  entries: any[]
 ): ValidationError[] {
   const errors: ValidationError[] = [];
   const { indicatorCode: code, id, indicatorName } = indicator;
-  const entries = containerValues[code] || [];
   const fields = parseDynamicFields(indicator.valueOptions);
 
   for (let i = 0; i < entries.length; i++) {
@@ -495,10 +510,10 @@ function validateFilledContainer(
  */
 export function validateAll(
   indicators: DeclareIndicatorApi.Indicator[],
-  setFieldErrorFn: (key: string, message: string, type: FieldError['errorType'], dirty?: boolean) => void,
-  clearFieldErrorFn: (key: string) => void,
-): { messages: string[]; hasErrors: boolean } {
-  const messages: string[] = [];
+  _setFieldErrorFn: (key: string, message: string, type: FieldError['errorType'], dirty?: boolean) => void,
+  _clearFieldErrorFn: (key: string) => void,
+): { messages: ValidationError[]; hasErrors: boolean } {
+  const messages: ValidationError[] = [];
 
   // 1. 顶层指标校验
   for (const indicator of indicators) {
@@ -506,7 +521,16 @@ export function validateAll(
     (indicator as any)._formValue = formValues[indicator.indicatorCode];
     const errs = validateIndicator(indicator);
     if (errs.length > 0) {
-      messages.push(...errs.map((e) => `${indicator.indicatorName}：${e.message}`));
+      // 转换 FieldError[] 为 ValidationError[]
+      for (const e of errs) {
+        messages.push({
+          message: e.message,
+          errorType: e.errorType,
+          indicatorId: indicator.id,
+          indicatorCode: indicator.indicatorCode,
+          indicatorName: indicator.indicatorName,
+        });
+      }
     }
   }
 
@@ -516,7 +540,7 @@ export function validateAll(
     const entries = containerValues[indicator.indicatorCode] || [];
     const errs = validateContainer(indicator, entries);
     if (errs.length > 0) {
-      messages.push(...errs.map((e) => e.message));
+      messages.push(...errs);
     }
   }
 
@@ -570,6 +594,9 @@ export function validateAllWithLogicRules(
 /**
  * 容器字段失焦即时校验
  * 返回错误消息（用于显示），同时写入 fieldErrors
+ *
+ * 注意：读取 entry 中的值时使用 generateContainerFieldKey（与存储 key 一致）
+ *      错误 key 也使用 generateContainerFieldKey（与 validateContainer 统一）
  */
 export function validateContainerFieldOnBlur(
   entry: any,
@@ -577,8 +604,11 @@ export function validateContainerFieldOnBlur(
   field: DynamicField,
   allEntries: any[]
 ): string | null {
-  const fullKey = toContainerKey(indicator.indicatorCode, entry.rowKey, field.fieldCode);
-  const fieldValue = entry[fullKey];
+  // 使用 generateContainerFieldKey 读取 entry 中的值（与存储 key 一致）
+  const storageKey = generateContainerFieldKey(indicator.indicatorCode, entry.rowKey, field.fieldCode);
+  const fieldValue = entry[storageKey];
+  // 使用 generateContainerFieldKey 作为错误 key（与 validateContainer 统一）
+  const fullKey = storageKey;
 
   const err = validateSingleContainerField(field, fieldValue, indicator, entry, allEntries);
 
@@ -595,10 +625,10 @@ export function validateContainerFieldOnBlur(
  * 顶层指标即时校验
  */
 export function validateTopLevelOnBlur(indicator: DeclareIndicatorApi.Indicator, value: any): string | null {
-  const key = toTopLevelKey(indicator.id);
+  toTopLevelKey(indicator.id!); // 初始化脏标记
   (indicator as any)._formValue = value;
   const errs = validateIndicator(indicator);
-  return errs.length > 0 ? errs[0].message : null;
+  return errs.length > 0 ? errs[0]!.message : null;
 }
 
 // ==================== 兼容旧接口 ====================
@@ -611,7 +641,9 @@ export function getContainerFieldError(
 ): string | undefined {
   const rowKey = typeof entryOrCode === 'string' ? entryOrCode : entryOrCode?.rowKey;
   if (!rowKey) return undefined;
-  return getFieldError(toContainerKey(indicatorCode, String(rowKey), fieldCode));
+  // 使用 generateContainerFieldKey 生成错误 key（与校验函数统一）
+  const fullKey = generateContainerFieldKey(indicatorCode, String(rowKey), fieldCode);
+  return getFieldError(fullKey);
 }
 
 /** 获取顶层指标错误（兼容旧接口） */
@@ -645,12 +677,14 @@ export function clearInputTypeError(indicatorCode: string, optionValue: string):
 
 /** 清除容器字段错误（兼容旧接口） */
 export function clearContainerFieldError(indicatorCode: string, rowKey: string, fieldCode: string): void {
-  clearFieldError(toContainerKey(indicatorCode, rowKey, fieldCode));
+  const fullKey = generateContainerFieldKey(indicatorCode, rowKey, fieldCode);
+  clearFieldError(fullKey);
 }
 
 /** 设置容器字段脏标记（兼容旧接口） */
 export function markContainerFieldDirty(indicatorCode: string, rowKey: string, fieldCode: string): void {
-  setDirty(toContainerKey(indicatorCode, rowKey, fieldCode));
+  const fullKey = generateContainerFieldKey(indicatorCode, rowKey, fieldCode);
+  setDirty(fullKey);
 }
 
 /** 设置顶层指标脏标记（兼容旧接口） */

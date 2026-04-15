@@ -44,6 +44,9 @@ export function extractContainerValue(record: any): Record<string, any> {
   }
 }
 
+/** 从 record 提取容器值（extractContainerValue 的别名，供 useContainerValues 使用） */
+export const extractContainerValueFromRecord = extractContainerValue;
+
 /** 解析已存储的文件列表 */
 export function parseStoredFileList(value: string | undefined): UploadFile[] {
   if (!value) return [];

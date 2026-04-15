@@ -9,6 +9,7 @@
  */
 
 import type { DeclareIndicatorApi } from '#/api/declare/indicator';
+import { parseOptions } from '../utils/options';
 import {
   formValues,
   inputTypeValues,

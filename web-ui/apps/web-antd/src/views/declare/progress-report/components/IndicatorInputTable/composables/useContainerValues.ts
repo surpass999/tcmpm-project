@@ -22,6 +22,8 @@ import {
   getMaxEntryIndex,
 } from '../utils/container';
 import { convertContainerEntryDates, migrateContainerEntryToFullKey, migrateRowKeyToNewFormat } from '../utils/extractors';
+import { formValues } from './useFormValues';
+import { indicators } from './useIndicatorData';
 
 // ==================== 容器值状态 ====================
 
@@ -168,7 +170,7 @@ function initializeAutoEntryContainers(indicators: DeclareIndicatorApi.Indicator
     if (indicator.valueType !== 12) continue;
     const link = getAutoEntryLink(indicator.valueOptions);
     if (link) {
-      const linkedValue = (indicator as any).__linkedValue__;
+      const linkedValue = formValues[link];
       if (linkedValue !== undefined) {
         syncAutoEntryContainerCount(indicator.indicatorCode, link, linkedValue);
       }
@@ -181,23 +183,24 @@ function checkAndSyncLinkedAutoContainers(changedCode: string, indicators: Decla
     if (indicator.valueType !== 12) continue;
     const link = getAutoEntryLink(indicator.valueOptions);
     if (link === changedCode) {
-      const linkedIndicator = indicators.find((i) => i.indicatorCode === changedCode);
-      if (linkedIndicator) {
-        syncAutoEntryContainerCount(indicator.indicatorCode, changedCode, (linkedIndicator as any).__formValue__);
+      const linkedValue = formValues[changedCode];
+      if (linkedValue !== undefined) {
+        syncAutoEntryContainerCount(indicator.indicatorCode, changedCode, linkedValue);
       }
     }
   }
 }
 
 /** 同步所有自动条目容器（在保存前调用） */
-function syncAllAutoEntryContainers(indicators: DeclareIndicatorApi.Indicator[]) {
-  for (const indicator of indicators) {
+function syncAllAutoEntryContainers(_indicators?: DeclareIndicatorApi.Indicator[]) {
+  const allIndicators = _indicators ?? indicators.value;
+  for (const indicator of allIndicators) {
     if (indicator.valueType !== 12) continue;
     const link = getAutoEntryLink(indicator.valueOptions);
     if (link) {
-      const linkedIndicator = indicators.find((i) => i.indicatorCode === link);
-      if (linkedIndicator) {
-        syncAutoEntryContainerCount(indicator.indicatorCode, link, (linkedIndicator as any).__formValue__);
+      const linkedValue = formValues[link];
+      if (linkedValue !== undefined) {
+        syncAutoEntryContainerCount(indicator.indicatorCode, link, linkedValue);
       }
     }
   }
@@ -210,6 +213,7 @@ function getLinkedIndicatorName(indicator: any): string {
   return linkedIndicator?.indicatorName || link;
 }
 
+/** 判断自动条目容器是否应显示（至少需要 1 个条目的值） */
 function isAutoEntryVisible(indicator: any): boolean {
   const link = getAutoEntryLink(indicator.valueOptions);
   if (!link) return false;

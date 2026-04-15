@@ -32,10 +32,13 @@ import type { DynamicField } from './types';
 import {
   setFieldError,
   clearFieldError,
+  clearAllErrors,
+  toTopLevelKey,
   setDirty,
   getContainerFieldError,
   getTopLevelError,
   validateContainerFieldOnBlur,
+  validateIndicator,
   validateAll,
   validateFilledData,
   markTopLevelDirty,
@@ -181,6 +184,11 @@ function getLinkedIndicatorName(indicator: any): string {
 function handleNumberBlur(indicator: DeclareIndicatorApi.Indicator, _event: Event) {
   if (indicator.id !== undefined) markTopLevelDirty(indicator.id);
   checkAndSyncLinkedAutoContainers(indicator.indicatorCode, indicators.value);
+  // 先设置 _formValue，确保 validateIndicator 能读取到当前值
+  (indicator as any)._formValue = formValues[indicator.indicatorCode];
+  // 清除该指标的旧错误（如果值已修复则错误消失；仍有问题会被 validateIndicator 重新设置）
+  if (indicator.id !== undefined) clearFieldError(toTopLevelKey(indicator.id));
+  validateIndicator(indicator);
   setTimeout(() => {
     recalculateComputedIndicators(indicators.value);
     validateLogicRuleForBlur(indicator, indicators.value, setFieldError, clearFieldError, setDirty);
@@ -212,7 +220,11 @@ function handleMultiSelectChange(indicator: any, selectedValues: string[]) {
 }
 
 function onIndicatorChange(indicator: DeclareIndicatorApi.Indicator) {
-  if (indicator.id !== undefined) markTopLevelDirty(indicator.id);
+  if (indicator.id !== undefined) {
+    markTopLevelDirty(indicator.id);
+    // 清除该指标的旧错误（在验证前清除，确保正确值能消除错误）
+    clearFieldError(toTopLevelKey(indicator.id));
+  }
   if (indicator.valueType === 12) {
     const entries = containerValues[indicator.indicatorCode] || [];
     formValues[indicator.indicatorCode] = JSON.stringify(entries);
@@ -241,6 +253,7 @@ onMounted(async () => {
   if (props.projectType === undefined) return;
   emit('loadingChange', true);
   try {
+    clearAllErrors();
     await loadIndicatorData(props.projectType, props.reportId, props.hospitalId, props.reportYear, props.reportBatch);
     await loadJointRules(props.projectType);
     recalculateComputedIndicators(indicators.value);
@@ -257,6 +270,7 @@ watch(() => props.projectType, async (newProjectType) => {
   if (newProjectType === undefined) return;
   emit('loadingChange', true);
   try {
+    clearAllErrors();
     await reloadIndicatorData(newProjectType, props.reportId, props.hospitalId, props.reportYear, props.reportBatch);
     await loadJointRules(newProjectType);
     recalculateComputedIndicators(indicators.value);
@@ -326,7 +340,8 @@ function syncContainerValuesToForm() {
 }
 
 function doValidateAll() {
-  return validateAll(indicators.value, setFieldError, clearFieldError);
+  const { messages } = validateAll(indicators.value, setFieldError, clearFieldError);
+  return messages; // ValidationError[]
 }
 
 function doValidateFilledData() {

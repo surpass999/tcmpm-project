@@ -9,10 +9,16 @@
 
 import type { DeclareIndicatorApi } from '#/api/declare/indicator';
 import { validate as validateJointRule, parseLogicRule, parseContainerFieldShortcut, isContainerFieldShortcut } from '#/utils/indicatorValidator';
+import { isEmpty } from '../utils/validators';
 import type { ValidationError, FieldError } from '../types';
 import { formValues } from './useFormValues';
 import { containerValues, isEntryBasedContainer, getContainerEntryCount } from './useContainerValues';
 import { parseDynamicFields } from '../utils/container';
+
+/** 判断是否为自动计算指标 */
+function isComputedIndicator(indicator: DeclareIndicatorApi.Indicator): boolean {
+  return !!(indicator.calculationRule && indicator.calculationRule.trim());
+}
 
 // ==================== 构建值映射 ====================
 
@@ -169,7 +175,8 @@ function clearContainerLogicRuleErrors(indicator: DeclareIndicatorApi.Indicator,
   for (const entry of entries) {
     const fields = parseDynamicFields(indicator.valueOptions);
     for (const field of fields) {
-      const fieldKey = `${indicator.indicatorCode}${entry.rowKey}${field.fieldCode}`;
+      // 必须与 setFieldError 的 key 格式一致（toContainerKey = 'c:' + indicatorCode + ':' + rowKey + ':' + fieldCode）
+      const fieldKey = `c:${indicator.indicatorCode}:${entry.rowKey}:${field.fieldCode}`;
       clearFieldError(fieldKey);
     }
   }
@@ -234,7 +241,8 @@ function validateLogicRules(
         }
 
         const containerFieldKey = fieldCode ? `${entryKey}${fieldCode}` : entryKey;
-        const fullKey = `c:${containerFieldKey}`;
+        // 格式必须与 toContainerKey 一致：c:indicatorCode:rowKey:fieldCode（带冒号）
+        const fullKey = `c:${indicator.indicatorCode}:${containerFieldKey}`;
         setFieldError(fullKey, `${errMsg}（第${entryNum}个条目）`, 'logic', false);
 
         errors.push({
@@ -264,6 +272,7 @@ function validateLogicRules(
 
 /**
  * 失焦时校验（只校验涉及当前指标的规则）
+ * 基础验证权重更高：如果基础验证（必填）没通过，则跳过逻辑验证
  */
 function validateLogicRuleForBlur(
   changedIndicator: DeclareIndicatorApi.Indicator,
@@ -273,6 +282,22 @@ function validateLogicRuleForBlur(
   setDirty: (key: string) => void,
 ) {
   const changedCode = changedIndicator.indicatorCode;
+
+  // ========== 基础验证检查 ==========
+  // 只有基础验证通过后才进行逻辑验证
+  // 对于必填指标，如果值为空，跳过逻辑验证
+  if (changedIndicator.isRequired && !isComputedIndicator(changedIndicator)) {
+    const value = formValues[changedIndicator.indicatorCode];
+    const isEmpty = value === undefined || value === null || value === '' ||
+      (typeof value === 'string' && value.trim() === '') ||
+      (Array.isArray(value) && value.length === 0);
+    if (isEmpty) {
+      // 基础验证未通过，跳过逻辑验证
+      return;
+    }
+  }
+  // ========== 基础验证检查结束 ==========
+
   const codeValueMap: Record<string, any> = {};
   for (const ind of allIndicators) codeValueMap[ind.indicatorCode] = formValues[ind.indicatorCode];
 
@@ -306,6 +331,26 @@ function validateLogicRuleForBlur(
       const fieldErrors: FieldErr[] = [];
 
       for (let entryNum = 1; entryNum <= entryCount; entryNum++) {
+        // ========== 容器字段基础验证检查 ==========
+        // 检查该条目所有必填字段是否有值
+        const fields = parseDynamicFields(indicator.valueOptions);
+        let entryPassesBasicValidation = true;
+        for (const field of fields) {
+          if (field.required) {
+            const entryKey = `${indicator.indicatorCode}${String(entryNum).padStart(2, '0')}`;
+            const fullKey = `${entryKey}${field.fieldCode}`;
+            const fieldValue = containerValues[indicator.indicatorCode]?.find((e: any) => e.rowKey === entryKey)?.[fullKey];
+            const isFieldEmpty = isEmpty(fieldValue);
+            if (isFieldEmpty) {
+              entryPassesBasicValidation = false;
+              break;
+            }
+          }
+        }
+        // 基础验证未通过，跳过该条目的逻辑验证
+        if (!entryPassesBasicValidation) continue;
+        // ========== 容器字段基础验证检查结束 ==========
+
         const rules = parseLogicRule(indicator.logicRule, entryNum);
         if (rules.length === 0) continue;
 
@@ -314,15 +359,17 @@ function validateLogicRuleForBlur(
 
         if (results.length > 0) {
           const involvedCodesRes = results[0]?.involvedIndicatorCodes || [];
+          let hasSpecificFieldError = false;
           for (const code of involvedCodesRes) {
             if (code.startsWith(indicator.indicatorCode)) {
+              hasSpecificFieldError = true;
               const fieldCode = code.slice(-2);
               const errMsg = buildLogicRuleMsg(indicator.logicRule, allIndicators, entryValueMap, entryNum, indicator);
               fieldErrors.push({ entryNum, fieldCode, errMsg });
             }
           }
 
-          if (fieldErrors.length === 0 || fieldErrors[fieldErrors.length - 1]?.entryNum !== entryNum) {
+          if (!hasSpecificFieldError) {
             const errMsg = buildLogicRuleMsg(indicator.logicRule, allIndicators, entryValueMap, entryNum, indicator);
             const firstFieldCode = findFirstFilledFieldCode(indicator, entryNum);
             if (firstFieldCode) {
@@ -337,7 +384,7 @@ function validateLogicRuleForBlur(
       if (fieldErrors.length > 0) {
         const firstError = fieldErrors[0]!;
         const entryKey = `${indicator.indicatorCode}${String(firstError.entryNum).padStart(2, '0')}`;
-        const fieldKey = `c:${entryKey}${firstError.fieldCode}`;
+        const fieldKey = `c:${indicator.indicatorCode}:${entryKey}:${firstError.fieldCode}`;
         setFieldError(fieldKey, firstError.errMsg, 'logic', false);
         setDirty(fieldKey);
       }
@@ -400,7 +447,8 @@ function validateFilledLogicRules(
           }
 
           const containerFieldKey = fieldCode ? `${entryKey}${fieldCode}` : entryKey;
-          const fullKey = `c:${containerFieldKey}`;
+          // 格式必须与 toContainerKey 一致：c:indicatorCode:rowKey:fieldCode（带冒号）
+          const fullKey = `c:${indicator.indicatorCode}:${containerFieldKey}`;
           setFieldError(fullKey, `${errMsg}（第${entryNum}个条目）`, 'logic', false);
 
           errors.push({

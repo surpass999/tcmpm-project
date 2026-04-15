@@ -146,43 +146,44 @@ function close() {
 }
 
 function handleJump(error: ErrorItem) {
-  let targetEl: Element | null = null;
-
+  // 优先通过 containerFieldKey 定位（容器字段）
   if (error.containerFieldKey) {
-    // 容器字段定位
-    targetEl = document.querySelector(
+    const fieldEl = document.querySelector(
       `[data-container-field-key="${error.containerFieldKey}"]`,
     );
-
-    // 父级容器行定位
-    const parentRow = targetEl?.closest('.indicator-row');
-    if (parentRow) {
-      parentRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (fieldEl) {
+      const closestScroll = fieldEl.closest('.indicator-area') as HTMLElement | null;
+      (closestScroll || fieldEl).scrollIntoView({ behavior: 'smooth', block: 'center' });
+      addHighlight(fieldEl);
+      closeModalAfterScroll();
+      return;
     }
-  } else if (error.indicatorId) {
-    // 顶级指标定位
-    targetEl = document.querySelector(
-      `[data-indicator-id="in_${error.indicatorId}"]`,
-    );
-    if (!targetEl && error.indicatorCode) {
-      targetEl = document.querySelector(
-        `[data-indicator-code="${error.indicatorCode}"]`,
-      );
-    }
-  } else if (error.indicatorCode) {
-    targetEl = document.querySelector(
-      `[data-indicator-code="${error.indicatorCode}"]`,
-    );
   }
 
-  // 执行滚动 + 高亮
-  if (targetEl) {
-    targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    addHighlight(targetEl);
+  // 顶级指标或容器行统一通过 indicatorCode 定位（最稳定）
+  const indicatorCode = error.indicatorCode;
+  if (indicatorCode) {
+    const rowEl = document.querySelector(
+      `[data-indicator-code="${indicatorCode}"]`,
+    );
+    if (rowEl) {
+      const closestScroll = rowEl.closest('.indicator-area') as HTMLElement | null;
+      (closestScroll || rowEl).scrollIntoView({ behavior: 'smooth', block: 'center' });
+      addHighlight(rowEl);
+      closeModalAfterScroll();
+      return;
+    }
   }
 
-  // 关闭弹窗
+  // 完全找不到对应元素时直接关闭弹窗
   visible.value = false;
+}
+
+/** 延迟关闭弹窗，确保滚动动画完成后再关闭 */
+function closeModalAfterScroll() {
+  setTimeout(() => {
+    visible.value = false;
+  }, 500);
 }
 
 function addHighlight(el: Element) {

@@ -10,11 +10,13 @@ export const DECIMAL_18_4_MIN = -90000000000.0;
 
 /** 判断值是否为空 */
 export function isEmpty(value: any): boolean {
-  if (value === undefined || value === null || value === '') return true;
+  if (value === undefined || value === null) return true;
   if (typeof value === 'string') {
     const t = value.trim();
     if (t === '' || t === '[]' || t === '[ ]') return true;
+    return false;
   }
+  if (Array.isArray(value)) return value.length === 0;
   return false;
 }
 

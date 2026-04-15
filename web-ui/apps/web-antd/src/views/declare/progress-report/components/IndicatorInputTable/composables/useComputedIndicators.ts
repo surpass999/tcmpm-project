@@ -11,6 +11,7 @@ import type { DeclareIndicatorApi } from '#/api/declare/indicator';
 import { formValues } from './useFormValues';
 import { getNumberPrecision } from '../utils/indicator';
 import { setDirty } from './useValidation';
+import { indicators } from './useIndicatorData';
 
 // ==================== 辅助函数 ====================
 
@@ -54,12 +55,11 @@ function calculateIndicatorValue(indicator: DeclareIndicatorApi.Indicator): numb
 
 // ==================== 重新计算 ====================
 
-function recalculateComputedIndicators(indicators: DeclareIndicatorApi.Indicator[]) {
-  const computedOnes = indicators.filter((ind) => {
+function recalculateComputedIndicators(_indicators?: DeclareIndicatorApi.Indicator[]) {
+  const allIndicators = _indicators ?? indicators.value;
+  const computedOnes = allIndicators.filter((ind) => {
     return !!(ind.calculationRule && ind.calculationRule.trim());
   });
-
-  if (computedOnes.length === 0) return;
 
   const MAX_PASSES = computedOnes.length + 1;
   let changed = true;

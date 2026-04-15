@@ -27,10 +27,9 @@ import { formValues } from './useFormValues';
 import { fileListMap } from './useFileUpload';
 import { containerValues, initializeAutoEntryContainers, initializeNormalContainers } from './useContainerValues';
 import { restoreInputTypeValues } from './useInputTypeOptions';
-import { clearAllErrors } from './useValidation';
-import { extractValue, parseStoredFileList } from '../utils/extractors';
+import { clearAllErrors } from './useErrorKeys';
+import { extractValue, parseStoredFileList, migrateContainerEntryToFullKey, migrateRowKeyToNewFormat, convertContainerEntryDates, extractContainerValueFromRecord } from '../utils/extractors';
 import { getContainerType, getAutoEntryLink, parseDynamicFields, generateContainerRowKey, generateConditionalRowKey } from '../utils/container';
-import { migrateContainerEntryToFullKey, migrateRowKeyToNewFormat, convertContainerEntryDates, extractContainerValueFromRecord } from '../utils/extractors';
 
 // ==================== 状态 ====================
 
@@ -220,6 +219,7 @@ async function reloadIndicatorData(
 ) {
   groupInfoMap.value = {};
   Object.keys(formValues).forEach((key) => delete formValues[key]);
+  Object.keys(containerValues).forEach((key) => delete containerValues[key]);
   await loadIndicatorData(projectType, reportId, hospitalId, reportYear, reportBatch);
 }
 

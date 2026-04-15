@@ -414,30 +414,20 @@ async function handleSave() {
     indicatorTableRef.value?.syncAllAutoEntryContainers?.();
 
     // 3. 【验证必填指标】必须全部通过才能继续
-    if (indicatorTableRef.value) {
-      const indicators = indicatorTableRef.value.getAllIndicators?.();
-      if (indicators) {
-        const errors = indicatorTableRef.value.validateAll(indicators);
-        if (errors.length > 0) {
-          summaryModalRef.value?.show(errors);
-          return;
-        }
-      }
+    const firstErrors = indicatorTableRef.value?.validateAll?.();
+    if (firstErrors && firstErrors.length > 0) {
+      summaryModalRef.value?.show(firstErrors);
+      return;
     }
 
-    // 3. 触发自动计算（在校验之后）
+    // 4. 触发自动计算（在校验之后）
     indicatorTableRef.value?.recalculateComputedIndicators?.();
 
-    // 4. 再次校验（确保计算后的值也通过验证）
-    if (indicatorTableRef.value) {
-      const indicators = indicatorTableRef.value.getAllIndicators?.();
-      if (indicators) {
-        const errors = indicatorTableRef.value.validateAll(indicators);
-        if (errors.length > 0) {
-          summaryModalRef.value?.show(errors);
-          return;
-        }
-      }
+    // 5. 再次校验（确保计算后的值也通过验证）
+    const secondErrors = indicatorTableRef.value?.validateAll?.();
+    if (secondErrors && secondErrors.length > 0) {
+      summaryModalRef.value?.show(secondErrors);
+      return;
     }
 
     // 5. 【验证通过后】弹出填报人姓名输入框

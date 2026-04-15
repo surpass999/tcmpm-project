@@ -101,12 +101,11 @@ export function isFieldVisible(
   entry: any,
   indicatorCode: string,
   field: DynamicField,
-  allFields: DynamicField[],
-  generateContainerFieldKeyFn: (indicatorCode: string, rowKey: string, fieldCode: string) => string
+  allFields: DynamicField[]
 ): boolean {
   if (!field.showCondition) return true;
   const cond = field.showCondition;
-  const watchFieldFullKey = generateContainerFieldKeyFn(indicatorCode, entry.rowKey, cond.watchField);
+  const watchFieldFullKey = generateContainerFieldKey(indicatorCode, entry.rowKey, cond.watchField);
   const watchVal = entry?.[watchFieldFullKey];
   const { operator, value } = cond;
   const watchedField = allFields.find((f) => f.fieldCode === cond.watchField);
