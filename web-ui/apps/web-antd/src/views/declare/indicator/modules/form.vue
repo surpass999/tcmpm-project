@@ -751,12 +751,19 @@ const [Modal, modalApi] = useVbenModal({
     }
     // 提交表单
     const data = formData.value as DeclareIndicatorApi.IndicatorSaveParams;
+    console.log('[指标表单] 准备保存指标:', JSON.stringify(data, null, 2));
     try {
-      await (formData.value?.id ? updateIndicator(data) : createIndicator(data));
+      const isUpdate = !!formData.value?.id;
+      console.log('[指标表单] 发送请求:', isUpdate ? '更新指标' : '创建指标', data.indicatorCode);
+      await (isUpdate ? updateIndicator(data) : createIndicator(data));
+      console.log('[指标表单] 保存成功:', data.indicatorCode);
       // 关闭并提示
       await modalApi.close();
       emit('success');
       message.success($t('ui.actionMessage.operationSuccess'));
+    } catch (error: any) {
+      console.error('[指标表单] 保存失败:', error);
+      message.error(error?.message || error?.response?.data?.message || '保存失败');
     } finally {
       modalApi.unlock();
     }

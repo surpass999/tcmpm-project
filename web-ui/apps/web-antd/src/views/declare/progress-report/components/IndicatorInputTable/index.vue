@@ -45,6 +45,8 @@ import {
   markContainerFieldDirty,
 } from './composables/useValidation';
 
+import { fieldErrors } from './composables/useErrorKeys';
+
 
 // 表单值
 import {
@@ -316,10 +318,13 @@ function handleMultiSelectChange(indicator: any, selectedValues: string[]) {
 }
 
 function onIndicatorChange(indicator: DeclareIndicatorApi.Indicator) {
+  console.log('[onIndicatorChange] called, indicatorCode:', indicator.indicatorCode, 'valueType:', indicator.valueType);
   if (indicator.id !== undefined) {
     markTopLevelDirty(indicator.id);
     const key = toTopLevelKey(indicator.id);
+    console.log('[onIndicatorChange] clearing errors for key:', key);
     clearFieldError(key);
+    console.log('[onIndicatorChange] after clear, fieldErrors:', JSON.stringify(fieldErrors));
   }
   if (indicator.valueType === 12) {
     const entries = containerValues[indicator.indicatorCode] || [];
@@ -328,7 +333,10 @@ function onIndicatorChange(indicator: DeclareIndicatorApi.Indicator) {
   checkAndSyncLinkedAutoContainers(indicator.indicatorCode, indicators.value);
   // 设置 _formValue，确保 validateIndicator 能读取到当前值
   (indicator as any)._formValue = formValues[indicator.indicatorCode];
-  validateIndicator(indicator);
+  console.log('[onIndicatorChange] _formValue:', JSON.stringify((indicator as any)._formValue));
+  const errs = validateIndicator(indicator);
+  console.log('[onIndicatorChange] validateIndicator errors:', JSON.stringify(errs));
+  console.log('[onIndicatorChange] after validate, fieldErrors:', JSON.stringify(fieldErrors));
   setTimeout(() => {
     validateLogicRuleForBlur(indicator, indicators.value, setFieldError, clearFieldError, setDirty);
     // 上期对比规则校验（仅在有上期值时）

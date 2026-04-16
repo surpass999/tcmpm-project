@@ -202,19 +202,24 @@ function isComputedIndicator(indicator: DeclareIndicatorApi.Indicator): boolean 
  * 顶层指标校验（必填 + 格式 + 范围）
  */
 export function validateIndicator(indicator: DeclareIndicatorApi.Indicator): FieldError[] {
+  console.log('[validateIndicator] called, indicatorCode:', indicator.indicatorCode, 'valueType:', indicator.valueType, 'isRequired:', indicator.isRequired);
   const errors: FieldError[] = [];
   const key = toTopLevelKey(indicator.id!);
+  console.log('[validateIndicator] key:', key);
 
   // 检查指标是否可见，不可见则不校验
   // 内联联动逻辑，避免循环依赖
   const linkageState = evaluateIndicatorLinkage(indicator, formValues);
+  console.log('[validateIndicator] linkageState:', JSON.stringify(linkageState));
   if (linkageState?.type === 'show' && !linkageState.enabled) {
+    console.log('[validateIndicator] indicator hidden by linkage, clearing and returning');
     clearFieldError(key);
     return [];
   }
 
   const value = (indicator as any)._formValue;
   const isEmptyVal = isEmpty(value);
+  console.log('[validateIndicator] value:', JSON.stringify(value), 'isEmpty:', isEmptyVal);
 
   // 使用联动必填判断
   let required = indicator.isRequired;
@@ -222,10 +227,12 @@ export function validateIndicator(indicator: DeclareIndicatorApi.Indicator): Fie
     required = linkageState.enabled;
   }
   const isRequiredAndNotComputed = required && !isComputedIndicator(indicator);
+  console.log('[validateIndicator] required:', required, 'isRequiredAndNotComputed:', isRequiredAndNotComputed);
   if (isRequiredAndNotComputed && isEmptyVal) {
     const err = { message: '此项为必填', errorType: 'required' as const, dirty: true };
     fieldErrors[key] = err;
     errors.push(err);
+    console.log('[validateIndicator] EMPTY REQUIRED error set, errors:', JSON.stringify(errors));
     return errors;
   }
 
