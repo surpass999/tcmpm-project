@@ -3,7 +3,7 @@ package cn.gemrun.base.module.declare.controller.admin.indicator.vo;
 import lombok.Data;
 
 /**
- * 指标联合规则 Response VO
+ * 指标上期对比规则 Response VO
  *
  * @author Gemini
  */
@@ -36,7 +36,7 @@ public class DeclareIndicatorJointRuleRespVO {
     private String processNode;
 
     /**
-     * 规则配置（JSON格式）
+     * 规则配置（JSON格式）- 上期对比规则配置
      */
     private String ruleConfig;
 

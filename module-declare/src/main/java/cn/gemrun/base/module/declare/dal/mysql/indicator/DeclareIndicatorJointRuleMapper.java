@@ -8,7 +8,7 @@ import org.apache.ibatis.annotations.Mapper;
 import java.util.List;
 
 /**
- * 指标联合规则 Mapper
+ * 指标上期对比规则 Mapper
  *
  * @author Gemini
  */

@@ -60,6 +60,10 @@ export const MenuOutlined = createIconifyIcon('ant-design:menu-outlined');
 
 export const PlusOutlined = createIconifyIcon('ant-design:plus-outlined');
 
+export const DeleteOutlined = createIconifyIcon('ant-design:delete-outlined');
+
+export const DragOutlined = createIconifyIcon('ant-design:drag-outlined');
+
 export const CloseCircleFilled = createIconifyIcon(
   'ant-design:close-circle-filled',
 );

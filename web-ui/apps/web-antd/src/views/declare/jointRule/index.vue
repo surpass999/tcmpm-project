@@ -20,22 +20,18 @@ const [FormModal, formModalApi] = useVbenModal({
   destroyOnClose: true,
 });
 
-/** 刷新表格 */
 function handleRefresh() {
   gridApi.query();
 }
 
-/** 创建规则 */
 function handleCreate() {
   formModalApi.setData(null).open();
 }
 
-/** 编辑规则 */
 function handleEdit(row: DeclareIndicatorJointRuleApi.JointRule) {
   formModalApi.setData(row).open();
 }
 
-/** 删除规则 */
 async function handleDelete(row: DeclareIndicatorJointRuleApi.JointRule) {
   const hideLoading = message.loading({
     content: $t('ui.actionMessage.deleting', [row.id]),
@@ -58,21 +54,21 @@ const [Grid, gridApi] = useVbenVxeGrid({
     columns: useGridColumns(),
     height: 'auto',
     keepSource: true,
-      proxyConfig: {
-        ajax: {
-          query: async ({ page }, formValues) => {
-            const res = await getJointRulePage({
-              pageNo: page.currentPage,
-              pageSize: page.pageSize,
-              ...formValues,
-            });
-            return {
-              list: res?.list ?? res ?? [],
-              total: res?.total ?? 0,
-            };
-          },
+    proxyConfig: {
+      ajax: {
+        query: async ({ page }, formValues) => {
+          const res = await getJointRulePage({
+            pageNo: page.currentPage,
+            pageSize: page.pageSize,
+            ...formValues,
+          });
+          return {
+            list: res?.list ?? res ?? [],
+            total: res?.total ?? 0,
+          };
         },
       },
+    },
     rowConfig: {
       keyField: 'id',
       isHover: true,
@@ -88,12 +84,12 @@ const [Grid, gridApi] = useVbenVxeGrid({
 <template>
   <Page auto-content-height>
     <FormModal @success="handleRefresh" />
-    <Grid table-title="指标联合规则管理">
+    <Grid table-title="上期对比规则管理">
       <template #toolbar-tools>
         <TableAction
           :actions="[
             {
-              label: $t('ui.actionTitle.create', ['联合规则']),
+              label: $t('ui.actionTitle.create', ['上期对比规则']),
               type: 'primary',
               icon: ACTION_ICON.ADD,
               auth: ['declare:jointRule:create'],

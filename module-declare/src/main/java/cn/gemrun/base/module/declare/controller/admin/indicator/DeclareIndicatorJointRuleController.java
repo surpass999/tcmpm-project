@@ -17,11 +17,11 @@ import javax.validation.Valid;
 import java.util.List;
 
 /**
- * 指标联合规则管理 Controller
+ * 指标上期对比规则管理 Controller
  *
  * @author Gemini
  */
-@Tag(name = "管理后台 - 指标联合规则管理")
+@Tag(name = "管理后台 - 指标上期对比规则管理")
 @RestController
 @RequestMapping("/declare/indicator-joint-rule")
 @Validated
@@ -32,48 +32,48 @@ public class DeclareIndicatorJointRuleController {
     private DeclareIndicatorJointRuleService jointRuleService;
 
     @PostMapping("/create")
-    @Operation(summary = "创建联合规则")
+    @Operation(summary = "创建上期对比规则")
     public CommonResult<Long> createJointRule(@Valid @RequestBody DeclareIndicatorJointRuleSaveReqVO reqVO) {
         return CommonResult.success(jointRuleService.createJointRule(reqVO));
     }
 
     @PutMapping("/update")
-    @Operation(summary = "更新联合规则")
+    @Operation(summary = "更新上期对比规则")
     public CommonResult<Boolean> updateJointRule(@Valid @RequestBody DeclareIndicatorJointRuleSaveReqVO reqVO) {
         jointRuleService.updateJointRule(reqVO);
         return CommonResult.success(true);
     }
 
     @DeleteMapping("/delete")
-    @Operation(summary = "删除联合规则")
+    @Operation(summary = "删除上期对比规则")
     public CommonResult<Boolean> deleteJointRule(@RequestParam("id") Long id) {
         jointRuleService.deleteJointRule(id);
         return CommonResult.success(true);
     }
 
     @GetMapping("/get")
-    @Operation(summary = "获取联合规则")
+    @Operation(summary = "获取上期对比规则")
     public CommonResult<DeclareIndicatorJointRuleRespVO> getJointRule(@RequestParam("id") Long id) {
         DeclareIndicatorJointRuleDO jointRule = jointRuleService.getJointRule(id);
         return CommonResult.success(BeanUtils.toBean(jointRule, DeclareIndicatorJointRuleRespVO.class));
     }
 
     @GetMapping("/page")
-    @Operation(summary = "获取联合规则分页")
+    @Operation(summary = "获取上期对比规则分页")
     public CommonResult<PageResult<DeclareIndicatorJointRuleRespVO>> getJointRulePage(@Valid DeclareIndicatorJointRulePageReqVO pageReqVO) {
         PageResult<DeclareIndicatorJointRuleDO> pageResult = jointRuleService.getJointRulePage(pageReqVO);
         return CommonResult.success(BeanUtils.toBean(pageResult, DeclareIndicatorJointRuleRespVO.class));
     }
 
     @GetMapping("/list")
-    @Operation(summary = "获取联合规则列表")
+    @Operation(summary = "获取上期对比规则列表")
     public CommonResult<List<DeclareIndicatorJointRuleRespVO>> getJointRuleList() {
         List<DeclareIndicatorJointRuleDO> list = jointRuleService.getJointRuleList();
         return CommonResult.success(BeanUtils.toBean(list, DeclareIndicatorJointRuleRespVO.class));
     }
 
     @GetMapping("/enabled-list")
-    @Operation(summary = "获取启用的联合规则列表")
+    @Operation(summary = "获取启用的上期对比规则列表")
     public CommonResult<List<DeclareIndicatorJointRuleRespVO>> getEnabledJointRules(
             @RequestParam(value = "projectType", required = false) Integer projectType,
             @RequestParam(value = "processNode", required = false) String processNode,
