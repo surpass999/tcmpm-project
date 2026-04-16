@@ -5,6 +5,7 @@ import cn.gemrun.base.framework.common.util.object.BeanUtils;
 import cn.gemrun.base.framework.security.core.util.SecurityFrameworkUtils;
 import cn.gemrun.base.module.declare.controller.admin.indicator.vo.DeclareIndicatorValueRespVO;
 import cn.gemrun.base.module.declare.controller.admin.indicator.vo.DeclareIndicatorValueSaveReqVO;
+import cn.gemrun.base.module.declare.controller.admin.indicator.vo.LastPeriodValuesRespVO;
 import cn.gemrun.base.module.declare.dal.dataobject.indicator.DeclareIndicatorValueDO;
 import cn.gemrun.base.module.declare.service.indicator.DeclareIndicatorValueService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -85,6 +86,26 @@ public class DeclareIndicatorValueController {
             @RequestParam(value = "businessType", required = false, defaultValue = "3") Integer businessType) {
         return CommonResult.success(
                 indicatorValueService.getLastPeriodIndicatorValues(hospitalId, reportYear, reportBatch, businessType));
+    }
+
+    @GetMapping("/last-period-values-with-raw")
+    @Operation(summary = "获取上期指标值（包含显示值和原始值，用于填报参考和 inputType 解析）")
+    @Parameter(name = "hospitalId", description = "医院ID", required = true)
+    @Parameter(name = "reportYear", description = "填报年度", required = true)
+    @Parameter(name = "reportBatch", description = "填报批次", required = true)
+    @Parameter(name = "businessType", description = "业务类型", required = false)
+    @PreAuthorize("isAuthenticated()")
+    public CommonResult<LastPeriodValuesRespVO> getLastPeriodIndicatorValuesWithRaw(
+            @RequestParam("hospitalId") Long hospitalId,
+            @RequestParam("reportYear") Integer reportYear,
+            @RequestParam("reportBatch") Integer reportBatch,
+            @RequestParam(value = "businessType", required = false, defaultValue = "3") Integer businessType) {
+        Map<String, Map<String, String>> result = indicatorValueService.getLastPeriodIndicatorValuesWithRaw(
+                hospitalId, reportYear, reportBatch, businessType);
+        return CommonResult.success(LastPeriodValuesRespVO.builder()
+                .display(result.get("display"))
+                .raw(result.get("raw"))
+                .build());
     }
 
     @GetMapping("/progress-report-values")

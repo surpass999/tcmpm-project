@@ -42,9 +42,11 @@ export function setFieldError(
   fieldErrors[key] = { message, errorType, dirty };
 }
 
-/** 清除错误 */
+/** 清除错误（必填错误不能被清除，防止误删导致 messages 引用对象变空） */
 export function clearFieldError(key: string): void {
   if (fieldErrors[key]) {
+    // 必填错误不能被清除（必填错误优先级最高）
+    if (fieldErrors[key].errorType === 'required') return;
     delete fieldErrors[key];
   }
 }

@@ -17,8 +17,15 @@ interface Props {
   field: DynamicField;
   disabled?: boolean;
   containerFieldError?: string;
-  /** 容器指标的上期值字段映射 */
-  containerLastValues?: Record<string, string>;
+  /** 当前条目在列表中的索引（从0开始） */
+  entryIndex?: number;
+  /** 容器上期值列表（支持多条目） */
+  containerLastValues?: ContainerEntryLastValue[];
+}
+
+export interface ContainerEntryLastValue {
+  rowKey: string;
+  fieldValues: Record<string, string>;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -115,32 +122,41 @@ function getValue(): any {
   return isArrayField() ? (val || []) : val;
 }
 
-/** 当前字段的上期参考值（raw value → label 格式化） */
+/** 当前字段的上期参考值（按 entryIndex 取对应条目） */
 const fieldLastValue = computed(() => {
-  const raw = props.containerLastValues?.[props.field.fieldCode];
-  if (!raw) return null;
-  const { fieldType, options } = props.field;
-  if (!options || options.length === 0) return raw;
-  if (fieldType === 'checkbox' || fieldType === 'multiSelect') {
-    const parts = raw.split(',');
-    const labels = parts.map((v) => {
-      const opt = options.find((o) => String(o.value) === v.trim());
-      return opt ? opt.label : v;
-    });
-    return labels.join('、');
-  } else {
-    const opt = options.find((o) => String(o.value) === raw);
-    return opt ? opt.label : raw;
+  if (
+    props.entryIndex !== undefined &&
+    props.containerLastValues &&
+    props.entryIndex < props.containerLastValues.length
+  ) {
+    const entry = props.containerLastValues[props.entryIndex];
+    // 使用 fullKey（rowKey+fieldCode）精确匹配，与 containerLastPeriodValues 的 fieldValues key 对应
+    const raw = entry?.fieldValues?.[fullKey.value];
+    if (!raw) return null;
+    const { fieldType, options } = props.field;
+    if (!options || options.length === 0) return raw;
+    if (fieldType === 'checkbox' || fieldType === 'multiSelect') {
+      const parts = raw.split(',');
+      const labels = parts.map((v) => {
+        const opt = options.find((o) => String(o.value) === v.trim());
+        return opt ? opt.label : v;
+      });
+      return labels.join('、');
+    } else {
+      const opt = options.find((o) => String(o.value) === raw);
+      return opt ? opt.label : raw;
+    }
   }
+  return null;
 });
 
-/** 控件区是否有上期值（用于条件 class） */
+/** 控件区是否有上期值 */
 const hasLastValue = computed(() => !!fieldLastValue.value);
 
-/** 控件区 class */
+/** 控件区 class（垂直堆叠：控件 + 上期值独立一行） */
 const controlAreaClass = computed(() => ({
-  'field-control-area': true,
-  'field-control-area--has-last': hasLastValue.value,
+  'field-control-row': true,
+  'field-control-row--has-last': hasLastValue.value,
 }));
 </script>
 
@@ -149,12 +165,8 @@ const controlAreaClass = computed(() => ({
     class="field-row"
     :data-container-field-key="fullKey"
   >
-    <span class="dynamic-field-label">
-      {{ fieldLabel }}
-      <span v-if="field.required" class="text-red-500">*</span>
-    </span>
-
-    <div :class="controlAreaClass">
+    <div class="field-control-col">
+      <div class="field-label-row">{{ fieldLabel }}<span v-if="field.required" class="text-red-500">*</span></div>
       <!-- 文本类型 -->
       <a-input
         v-if="field.fieldType === 'text'"
@@ -170,7 +182,7 @@ const controlAreaClass = computed(() => ({
       <!-- 数字类型 -->
       <SafeNumberInput
         v-else-if="field.fieldType === 'number'"
-        class="cf-control cf-number"
+        class="cf-control cf-number number-input-auto-width"
         :model-value="fieldValue"
         :disabled="disabled"
         :min="field.minValue ?? 0"
@@ -198,7 +210,7 @@ const controlAreaClass = computed(() => ({
       <!-- 单选类型 -->
       <div
         v-else-if="field.fieldType === 'radio'"
-        class="cf-control radio-group-wrapper"
+        class="radio-group-wrapper"
       >
         <a-radio
           v-for="opt in field.options"
@@ -215,7 +227,7 @@ const controlAreaClass = computed(() => ({
       <!-- 复选框类型 -->
       <div
         v-else-if="field.fieldType === 'checkbox'"
-        class="cf-control checkbox-group-wrapper"
+        class="checkbox-group-wrapper"
       >
         <a-checkbox-group
           :model-value="getValue()"
@@ -312,20 +324,20 @@ const controlAreaClass = computed(() => ({
       <!-- 不支持的类型 -->
       <span v-else class="text-gray-400 text-sm">不支持的类型: {{ field.fieldType }}</span>
 
-      <!-- 字段级上期参考值（显示在控件右侧） -->
-      <span
+      <!-- 上期参考值：显示在控件下方，与普通字段上期值样式一致 -->
+      <div
         v-if="fieldLastValue"
-        class="field-last-value-inline"
+        class="inline-last-value"
       >
-        上期：{{ fieldLastValue }}
-      </span>
+        <span class="last-value-prefix">上期：</span>
+        <span class="last-value-text">{{ fieldLastValue }}</span>
+      </div>
     </div>
 
-    <!-- 错误提示：在 field-row 末尾，占满整行 -->
+    <!-- 错误提示 -->
     <div
       v-if="containerFieldError"
       class="indicator-error"
-      style="width: 100%;"
     >
       {{ containerFieldError }}
     </div>
@@ -333,48 +345,29 @@ const controlAreaClass = computed(() => ({
 </template>
 
 <style scoped>
-/* 容器内字段同行排列：标签 + 控件区 */
+/* 容器内字段：垂直堆叠（标签行 → 控件行 → 上期值行 → 错误提示行） */
 .field-row {
   display: flex;
-  align-items: center;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 8px;
   width: 100%;
 }
 
-/* 控件区：flex-grow 占据剩余空间 */
-.field-control-area {
+/* 控件列：垂直堆叠 */
+.field-control-col {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 8px;
   flex: 1;
-  min-width: 0;
-  flex-wrap: wrap;
+  min-width: 200px;
 }
 
-/* 无上期值 → 控件占满整行（除开关外） */
-.field-control-area:not(.field-control-area--has-last) .cf-control:not(.ant-switch) {
-  width: 100%;
-}
-
-/* 有上期值 → 控件宽度 auto，上期值紧跟其后（覆盖全局 width:100%!important） */
-.field-control-area--has-last .cf-control {
-  width: auto !important;
-  flex-shrink: 0;
-}
-
-/* 有上期值 → radio/checkbox 组宽度 auto */
-.field-control-area--has-last .radio-group-wrapper,
-.field-control-area--has-last .checkbox-group-wrapper {
-  width: auto !important;
-  flex-shrink: 0;
-}
-
-.dynamic-field-label {
+.field-label-row {
   font-size: 14px;
   color: hsl(var(--foreground));
-  white-space: nowrap;
-  flex-shrink: 0;
+  font-weight: 500;
+  line-height: 1.4;
+  margin-bottom: 2px;
 }
 
 .radio-group-wrapper,
@@ -402,11 +395,21 @@ const controlAreaClass = computed(() => ({
   font-weight: 600;
 }
 
-.field-last-value-inline {
-  font-size: 12px;
-  color: hsl(var(--success));
-  opacity: 0.75;
+/* 上期值样式：与 index.vue 普通字段上期值一致 */
+.inline-last-value {
+  font-size: 14px;
+  color: hsl(var(--muted-foreground));
   white-space: nowrap;
-  flex-shrink: 0;
+  margin: 4px 0px;
+}
+
+.last-value-prefix {
+  font-weight: 600;
+  color: hsl(var(--muted-foreground));
+}
+
+.last-value-text {
+  color: hsl(var(--success));
+  font-weight: 500;
 }
 </style>

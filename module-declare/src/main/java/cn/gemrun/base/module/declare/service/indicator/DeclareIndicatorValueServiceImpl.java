@@ -172,6 +172,43 @@ public class DeclareIndicatorValueServiceImpl implements DeclareIndicatorValueSe
         return result;
     }
 
+    @Override
+    public Map<String, Map<String, String>> getLastPeriodIndicatorValuesWithRaw(Long hospitalId, Integer reportYear, Integer reportBatch, Integer businessType) {
+        if (businessType == null) {
+            businessType = 3;
+        }
+        int lastBatch = reportBatch - 1;
+        int lastYear = reportYear;
+        if (lastBatch < 1) {
+            lastBatch = 4;
+            lastYear = reportYear - 1;
+        }
+        DeclareProgressReportDO lastReport = progressReportMapper.selectByHospitalAndPeriod(hospitalId, lastYear, lastBatch);
+        if (lastReport == null) {
+            Map<String, Map<String, String>> result = new HashMap<>();
+            result.put("display", new HashMap<>());
+            result.put("raw", new HashMap<>());
+            return result;
+        }
+        List<DeclareIndicatorValueDO> values = indicatorValueMapper.selectByBusiness(businessType, lastReport.getId());
+        Map<String, String> displayResult = new HashMap<>();
+        Map<String, String> rawResult = new HashMap<>();
+        for (DeclareIndicatorValueDO value : values) {
+            String displayValue = getDisplayValue(value);
+            if (displayValue != null) {
+                displayResult.put(value.getIndicatorCode(), displayValue);
+            }
+            // 原始 valueStr（包含 inputType 的 ∵ 分隔符）
+            if (value.getValueStr() != null) {
+                rawResult.put(value.getIndicatorCode(), value.getValueStr());
+            }
+        }
+        Map<String, Map<String, String>> result = new HashMap<>();
+        result.put("display", displayResult);
+        result.put("raw", rawResult);
+        return result;
+    }
+
     private String getDisplayValue(DeclareIndicatorValueDO value) {
         if (value == null) {
             return null;
@@ -180,8 +217,29 @@ public class DeclareIndicatorValueServiceImpl implements DeclareIndicatorValueSe
             case 1: // 数字
                 return value.getValueNum() != null ? value.getValueNum().toPlainString() : null;
             case 2: // 字符串
-            case 9: // 文件上传
                 return value.getValueStr();
+            case 9: { // 文件上传
+                String valueStr = value.getValueStr();
+                if (valueStr == null || valueStr.trim().isEmpty()) return null;
+                // 解析 JSON 数组，提取文件名列表
+                try {
+                    ObjectMapper mapper = new ObjectMapper();
+                    List<Map<String, Object>> files = mapper.readValue(valueStr,
+                        new TypeReference<List<Map<String, Object>>>() {});
+                    if (files == null || files.isEmpty()) return null;
+                    List<String> fileNames = new java.util.ArrayList<>();
+                    for (Map<String, Object> file : files) {
+                        Object name = file.get("name");
+                        if (name != null) {
+                            fileNames.add(name.toString());
+                        }
+                    }
+                    return String.join("、", fileNames);
+                } catch (Exception e) {
+                    // 解析失败，返回原始字符串
+                    return valueStr;
+                }
+            }
             case 3: // 布尔
                 if (value.getValueBool() != null) {
                     return value.getValueBool() ? "1" : "0";
@@ -240,7 +298,7 @@ public class DeclareIndicatorValueServiceImpl implements DeclareIndicatorValueSe
     /**
      * 根据指标ID和原始值，映射为 label（或 label 列表）
      * @param indicatorId 指标ID（唯一，不会跨医院重复）
-     * @param rawValue 原始值（单选传 "1"，多选传 "1,2,3"）
+     * @param rawValue 原始值（单选传 "1"，多选传 "1,2,3"，带 inputType 时格式为 "1∵输入内容,2"）
      * @param isMulti 是否多选模式
      * @return label（或用顿号连接的 label 列表），找不到则返回原始值
      */
@@ -265,7 +323,8 @@ public class DeclareIndicatorValueServiceImpl implements DeclareIndicatorValueSe
                 StringBuilder sb = new StringBuilder();
                 String[] parts = rawValue.split(",");
                 for (int i = 0; i < parts.length; i++) {
-                    String trimmed = parts[i].trim();
+                    // 去掉 inputType 的分隔符及其后面的内容，只保留纯 value
+                    String trimmed = extractPureValue(parts[i].trim());
                     for (Map<String, Object> opt : options) {
                         if (String.valueOf(opt.get("value")).equals(trimmed)) {
                             sb.append(opt.get("label"));
@@ -276,8 +335,10 @@ public class DeclareIndicatorValueServiceImpl implements DeclareIndicatorValueSe
                 }
                 return sb.toString();
             } else {
+                // 去掉 inputType 的分隔符及其后面的内容
+                String pureValue = extractPureValue(rawValue);
                 for (Map<String, Object> opt : options) {
-                    if (String.valueOf(opt.get("value")).equals(rawValue)) {
+                    if (String.valueOf(opt.get("value")).equals(pureValue)) {
                         return String.valueOf(opt.get("label"));
                     }
                 }
@@ -286,6 +347,16 @@ public class DeclareIndicatorValueServiceImpl implements DeclareIndicatorValueSe
             log.warn("[getOptionLabelById] 解析指标 options 失败: indicatorId={}", indicatorId, e);
         }
         return isMulti ? rawValue : rawValue;
+    }
+
+    /**
+     * 提取纯 value（去掉 inputType 的 ∵ 分隔符及其后面的内容）
+     * 例如："1∵输入内容" -> "1"
+     */
+    private String extractPureValue(String value) {
+        if (value == null) return null;
+        int idx = value.indexOf("∵");
+        return idx >= 0 ? value.substring(0, idx) : value;
     }
 
     @Override

@@ -14,7 +14,7 @@ import dayjs from 'dayjs';
 import type { DeclareIndicatorApi } from '#/api/declare/indicator';
 import {
   getIndicatorsByBusinessType,
-  getLastPeriodValues,
+  getLastPeriodValuesWithRaw,
   getProgressReportIndicatorValues,
 } from '#/api/declare/indicator';
 import { getIndicatorGroupTreeByProjectType } from '#/api/declare/indicator-group';
@@ -39,8 +39,11 @@ export const groupInfoMap = ref<Record<number, GroupInfo>>({});
 /** 指标列表 */
 export const indicators = ref<DeclareIndicatorApi.Indicator[]>([]);
 
-/** 上期值 */
+/** 上期值（显示 label） */
 export const lastPeriodValues = ref<Record<string, string>>({});
+
+/** 上期原始值（用于解析 inputType 输入内容）：{ indicatorCode: valueStr } */
+export const lastPeriodRawValues = ref<Record<string, string>>({});
 
 /** 联合规则 */
 export const jointRules = ref<DeclareIndicatorJointRuleApi.JointRule[]>([]);
@@ -124,8 +127,9 @@ export async function loadLastPeriodValues(
     return;
   }
   try {
-    const lastValues = await getLastPeriodValues(hospitalId, reportYear, reportBatch);
-    lastPeriodValues.value = lastValues || {};
+    const result = await getLastPeriodValuesWithRaw(hospitalId, reportYear, reportBatch);
+    lastPeriodValues.value = result.display || {};
+    lastPeriodRawValues.value = result.raw || {};
   } catch (error) {
     console.error('[loadLastPeriodValues] 加载上期值失败:', error);
   }
@@ -218,10 +222,11 @@ async function loadIndicatorData(
   initializeAutoEntryContainers(indicatorData);
   initializeNormalContainers(indicatorData);
 
-  // 加载上期值
+  // 加载上期值（包含 display label 和 raw valueStr）
   if (hospitalId && reportYear !== undefined && reportBatch !== undefined) {
-    const lastValues = await getLastPeriodValues(hospitalId, reportYear, reportBatch);
-    lastPeriodValues.value = lastValues || {};
+    const result = await getLastPeriodValuesWithRaw(hospitalId, reportYear, reportBatch);
+    lastPeriodValues.value = result.display || {};
+    lastPeriodRawValues.value = result.raw || {};
   }
 
   // 重新计算分组

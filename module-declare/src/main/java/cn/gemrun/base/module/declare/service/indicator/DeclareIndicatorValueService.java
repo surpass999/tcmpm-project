@@ -75,6 +75,17 @@ public interface DeclareIndicatorValueService {
     Map<String, String> getLastPeriodIndicatorValues(Long hospitalId, Integer reportYear, Integer reportBatch, Integer businessType);
 
     /**
+     * 获取填报指标值（上期），包含显示值和原始值
+     *
+     * @param hospitalId 医院ID
+     * @param reportYear  填报年度
+     * @param reportBatch 填报批次
+     * @param businessType 业务类型（默认为3：进度填报）
+     * @return 包含 display（显示值）和 raw（原始 valueStr）的 Map
+     */
+    Map<String, Map<String, String>> getLastPeriodIndicatorValuesWithRaw(Long hospitalId, Integer reportYear, Integer reportBatch, Integer businessType);
+
+    /**
      * 更新指标值
      *
      * @param id     指标值ID

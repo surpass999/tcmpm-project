@@ -45,8 +45,6 @@ import {
   markContainerFieldDirty,
 } from './composables/useValidation';
 
-// 错误 key 工具（toInputTypeKey）
-import { toInputTypeKey, fieldErrors } from './composables/useErrorKeys';
 
 // 表单值
 import {
@@ -54,7 +52,6 @@ import {
   isDirty,
   markDirty,
   resetDirty,
-  inputTypeValues,
 } from './composables/useFormValues';
 
 // 容器值
@@ -73,6 +70,7 @@ import {
 import {
   indicators,
   lastPeriodValues,
+  lastPeriodRawValues,
   indicatorGroups,
   loadIndicatorData,
   reloadIndicatorData,
@@ -86,15 +84,16 @@ import { recalculateComputedIndicators } from './composables/useComputedIndicato
 
 // 工具函数
 import { parseOptions } from './utils/options';
-import { getLastValueDisplayText, formatLastValueNumber } from './utils/lastValue';
+import { formatLastValueNumber, parseInputTypeLastPeriodRaw } from './utils/lastValue';
 
 // 输入型选项
 import {
   handleInputTypeRadioChange,
   handleCheckboxInputClick,
-  isInputTypeOptionSelected,
   onInputTypeBlur,
+  getInputTypeLastPeriodContent,
 } from './composables/useInputTypeOptions';
+import { inputTypeValues, getPureCheckboxValues, serializeInputTypeValue } from './composables/useFormValues';
 
 // 文件上传
 import {
@@ -163,44 +162,47 @@ const rootRef = ref<HTMLElement>();
 
 // ==================== 辅助函数 ====================
 
-/** 获取输入型选项的错误信息（用 computed 包装确保响应式追踪） */
-const inputTypeErrorMap = computed(() => {
-  const result: Record<string, string | undefined> = {};
-  for (const key of Object.keys(fieldErrors)) {
-    result[key] = fieldErrors[key]?.message;
+/** 容器上期值（支持多条目），fieldValues 使用 fullKey（rowKey+fieldCode）以便精确匹配 */
+interface ContainerEntryLastValue {
+  rowKey: string;
+  fieldValues: Record<string, string>;
+}
+const containerLastPeriodValues = computed(() => {
+  const result: Record<string, ContainerEntryLastValue[]> = {};
+  for (const [indicatorCode, rawValue] of Object.entries(lastPeriodValues.value)) {
+    if (!rawValue) continue;
+    try {
+      const parsed = JSON.parse(rawValue);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        result[indicatorCode] = parsed.map((row: any, idx: number) => {
+          const rowKey = row.rowKey || `last_${idx}`;
+          const fieldValues: Record<string, string> = {};
+          for (const [key, val] of Object.entries(row)) {
+            if (key !== 'rowKey' && val != null) {
+              // fieldCode 可能是 fullKey（带 rowKey 前缀），也可能是纯 fieldCode，全部保留
+              fieldValues[key] = String(val);
+            }
+          }
+          return { rowKey, fieldValues };
+        });
+      }
+    } catch { /* ignore */ }
   }
   return result;
 });
 
-/** 容器指标的上期值字段映射：{ indicatorCode: { fieldCode: rawValue } } */
-const containerLastValuesMap = computed(() => {
+/** 单选/多选指标的 inputType 输入内容：{ indicatorCode: { optionValue: inputContent } } */
+const lastPeriodRawContents = computed(() => {
   const result: Record<string, Record<string, string>> = {};
-  for (const [indicatorCode, rawValue] of Object.entries(lastPeriodValues)) {
-    if (!rawValue) continue;
-    try {
-      // valueStr 存的是 JSON 数组：[{"rowKey":"xxx","fieldCode":"val", ...}, ...]
-      const parsed = JSON.parse(rawValue);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        const firstRow = parsed[0];
-        const fieldValues: Record<string, string> = {};
-        for (const [key, val] of Object.entries(firstRow)) {
-          if (key !== 'rowKey' && val != null) {
-            fieldValues[key] = String(val);
-          }
-        }
-        result[indicatorCode] = fieldValues;
-      }
-    } catch {
-      // 非 JSON 字符串，忽略
+  for (const ind of indicators.value) {
+    if (ind.valueType !== 6 && ind.valueType !== 7) continue;
+    const raw = lastPeriodRawValues.value[ind.indicatorCode];
+    if (raw) {
+      result[ind.indicatorCode] = parseInputTypeLastPeriodRaw(raw, ind.valueType);
     }
   }
   return result;
 });
-
-function getInputTypeError(indicatorCode: string, optionValue: string): string | null {
-  const key = toInputTypeKey(indicatorCode, optionValue);
-  return inputTypeErrorMap.value[key] ?? null;
-}
 
 const MAX_CONTAINER_ENTRIES = 99;
 
@@ -226,6 +228,27 @@ function getLinkedIndicatorName(indicator: any): string {
   return linkedIndicator?.indicatorName || link;
 }
 
+/** 格式化单选/多选上期值（拼接 inputType 输入内容） */
+function getFormattedLastPeriodValue(indicator: DeclareIndicatorApi.Indicator): string {
+  const label = lastPeriodValues.value[indicator.indicatorCode] || '';
+  const contents = lastPeriodRawContents.value[indicator.indicatorCode] || {};
+  if (Object.keys(contents).length === 0) return label;
+  const options = parseOptions(indicator.valueOptions);
+  const labelParts = label.split('、');
+  const parts: string[] = [];
+  for (const part of labelParts) {
+    const trimmed = part.trim();
+    if (!trimmed) continue;
+    const opt = options.find((o) => o.label === trimmed);
+    if (opt && contents[opt.value]) {
+      parts.push(`${trimmed}（${contents[opt.value]}）`);
+    } else {
+      parts.push(trimmed);
+    }
+  }
+  return parts.join('、');
+}
+
 // ==================== 事件处理 ====================
 
 function handleNumberBlur(indicator: DeclareIndicatorApi.Indicator, _event: Event) {
@@ -243,26 +266,13 @@ function handleNumberBlur(indicator: DeclareIndicatorApi.Indicator, _event: Even
 }
 
 function handleMultiSelectChange(indicator: any, selectedValues: string[]) {
-  const prevValues = Array.isArray(formValues[indicator.indicatorCode]) ? [...formValues[indicator.indicatorCode]] : [];
-  const options = parseOptions(indicator.valueOptions);
-  const exclusiveValues = new Set(options.filter((o) => o.exclusive).map((o) => o.value));
-  if (exclusiveValues.size === 0) {
-    formValues[indicator.indicatorCode] = selectedValues;
-    onIndicatorChange(indicator);
-    return;
-  }
-  const prevSet = new Set(prevValues);
-  const addedValues = selectedValues.filter((v) => !prevSet.has(v));
-  let result: string[];
-  if (addedValues.some((v) => exclusiveValues.has(v))) {
-    const exclusiveAdded = addedValues.find((v) => exclusiveValues.has(v));
-    result = exclusiveAdded !== undefined ? [exclusiveAdded] : [...selectedValues];
-  } else if (addedValues.length > 0) {
-    result = selectedValues.filter((v) => !exclusiveValues.has(v));
-  } else {
-    result = [...selectedValues];
-  }
-  formValues[indicator.indicatorCode] = result;
+  // 序列化所有选中的值（添加 inputType 内容）
+  const serialized = selectedValues.map((v) => {
+    const inputKey = indicator.indicatorCode + '_' + v;
+    const inputContent = inputTypeValues[inputKey] || '';
+    return serializeInputTypeValue(v, inputContent);
+  });
+  formValues[indicator.indicatorCode] = serialized;
   onIndicatorChange(indicator);
 }
 
@@ -650,168 +660,302 @@ function addHighlight(el: Element) {
                 </div>
               </div>
 
-              <!-- 字符串类型 -->
-              <a-input
-                v-else-if="indicator.valueType === 2"
-                v-model="formValues[indicator.indicatorCode]"
-                :disabled="readonly"
-                :placeholder="`请输入${indicator.indicatorName}`"
-                :maxlength="getMaxLength(indicator)"
-                show-count
-                class="w-full"
-                @change="() => onIndicatorChange(indicator)"
-              />
-
-              <!-- 布尔类型（开关） -->
-              <a-switch
-                v-else-if="indicator.valueType === 3"
-                v-model="formValues[indicator.indicatorCode]"
-                :disabled="readonly"
-                :checked-children="getBooleanLabels(indicator).true"
-                :un-checked-children="getBooleanLabels(indicator).false"
-                class="switch-auto-width"
-                @change="() => onIndicatorChange(indicator)"
-              />
-
-              <!-- 日期类型 -->
-              <a-date-picker
-                v-else-if="indicator.valueType === 4"
-                v-model="formValues[indicator.indicatorCode]"
-                :disabled="readonly"
-                :show-time="getDateFormat(indicator).includes('HH')"
-                :format="getDateFormat(indicator)"
-                @change="() => onIndicatorChange(indicator)"
-              />
-
-              <!-- 长文本类型 -->
-              <a-textarea
-                v-else-if="indicator.valueType === 5"
-                v-model="formValues[indicator.indicatorCode]"
-                :disabled="readonly"
-                :placeholder="`请输入${indicator.indicatorName}`"
-                :rows="isRichText(indicator) ? 4 : 2"
-                :maxlength="getMaxLength(indicator)"
-                :show-count="!!getMaxLength(indicator)"
-                class="w-full"
-                @change="() => onIndicatorChange(indicator)"
-              />
-
-              <!-- 单选/多选类型（合并条件，内联上期值到右侧） -->
+              <!-- 非数字/单选多选类型：每种控件独立一行显示上期值 -->
               <div
-                v-else-if="indicator.valueType === 6 || indicator.valueType === 7"
-                class="flex flex-wrap gap-x-4 gap-y-2"
-                style="align-items: flex-start;"
+                v-else-if="indicator.valueType === 2"
+                style="display: flex; flex-direction: column; gap: 4px; align-items: flex-start;"
               >
-                <template v-if="indicator.valueType === 6">
-                  <template v-for="opt in parseOptions(indicator.valueOptions)" :key="opt.value">
-                    <div class="flex items-center">
-                      <a-radio
-                        :value="opt.value"
-                        :disabled="readonly"
-                        @click="() => { handleInputTypeRadioChange(indicator, opt.value); onIndicatorChange(indicator); }"
-                      >
-                        {{ opt.label }}
-                      </a-radio>
-                      <a-input
-                        v-if="opt.inputType && isInputTypeOptionSelected(indicator.indicatorCode, formValues[indicator.indicatorCode], opt.value)"
-                        size="small"
-                        class="w-36 ml-2"
-                        placeholder="请输入"
-                        :value="inputTypeValues[indicator.indicatorCode + '_' + opt.value]"
-                        :status="isInputTypeOptionSelected(indicator.indicatorCode, formValues[indicator.indicatorCode], opt.value) ? getInputTypeError(indicator.indicatorCode, opt.value) : null"
-                        @click.stop
-                        @input="(e: any) => inputTypeValues[indicator.indicatorCode + '_' + opt.value] = e.target.value"
-                        @blur="(e: any) => onInputTypeBlur(indicator, opt, e.target.value)"
-                      />
-                      <span v-if="readonly && opt.inputType && inputTypeValues[indicator.indicatorCode + '_' + opt.value]" class="ml-1 text-gray-500">
-                        （{{ inputTypeValues[indicator.indicatorCode + '_' + opt.value] }}）
-                      </span>
-                    </div>
-                  </template>
-                </template>
-                <template v-else>
-                  <template v-for="opt in parseOptions(indicator.valueOptions)" :key="opt.value">
-                    <div class="flex items-center">
-                      <a-checkbox :value="opt.value" :disabled="readonly" @click="(e: MouseEvent) => { handleCheckboxInputClick(indicator, opt.value, e); onIndicatorChange(indicator); }">
-                        {{ opt.label }}
-                      </a-checkbox>
-                      <a-input
-                        v-if="opt.inputType && isInputTypeOptionSelected(indicator.indicatorCode, formValues[indicator.indicatorCode], opt.value)"
-                        size="small"
-                        class="w-36 ml-2"
-                        placeholder="请输入"
-                        :value="inputTypeValues[indicator.indicatorCode + '_' + opt.value]"
-                        :status="isInputTypeOptionSelected(indicator.indicatorCode, formValues[indicator.indicatorCode], opt.value) ? getInputTypeError(indicator.indicatorCode, opt.value) : null"
-                        @click.stop
-                        @input="(e: any) => inputTypeValues[indicator.indicatorCode + '_' + opt.value] = e.target.value"
-                        @blur="(e: any) => onInputTypeBlur(indicator, opt, e.target.value)"
-                      />
-                      <span v-if="readonly && opt.inputType && inputTypeValues[indicator.indicatorCode + '_' + opt.value]" class="ml-1 text-gray-500">
-                        （{{ inputTypeValues[indicator.indicatorCode + '_' + opt.value] }}）
-                      </span>
-                    </div>
-                  </template>
-                </template>
-
-                <!-- 上期值：在选项下方、错误提示上方 -->
+                <a-input
+                  v-model="formValues[indicator.indicatorCode]"
+                  :disabled="readonly"
+                  :placeholder="`请输入${indicator.indicatorName}`"
+                  :maxlength="getMaxLength(indicator)"
+                  show-count
+                  class="w-full"
+                  @change="() => onIndicatorChange(indicator)"
+                />
                 <div
                   v-if="lastPeriodValues[indicator.indicatorCode]"
                   class="inline-last-value"
-                  style="width: 100%; margin-top: 4px;"
                 >
                   <span class="last-value-prefix">上期：</span>
                   <span class="last-value-text">{{ lastPeriodValues[indicator.indicatorCode] }}</span>
                 </div>
-
-                <!-- 错误提示：在选项下方 -->
                 <div
                   v-if="indicator.id && getTopLevelError(indicator.id)"
                   class="indicator-error"
-                  style="width: 100%; margin-top: 4px;"
+                >
+                  {{ getTopLevelError(indicator.id) }}
+                </div>
+              </div>
+              <div
+                v-else-if="indicator.valueType === 3"
+                style="display: flex; flex-direction: column; gap: 4px; align-items: flex-start;"
+              >
+                <a-switch
+                  v-model="formValues[indicator.indicatorCode]"
+                  :disabled="readonly"
+                  :checked-children="getBooleanLabels(indicator).true"
+                  :un-checked-children="getBooleanLabels(indicator).false"
+                  class="switch-auto-width"
+                  @change="() => onIndicatorChange(indicator)"
+                />
+                <div
+                  v-if="lastPeriodValues[indicator.indicatorCode]"
+                  class="inline-last-value"
+                >
+                  <span class="last-value-prefix">上期：</span>
+                  <span class="last-value-text">{{ lastPeriodValues[indicator.indicatorCode] }}</span>
+                </div>
+                <div
+                  v-if="indicator.id && getTopLevelError(indicator.id)"
+                  class="indicator-error"
+                >
+                  {{ getTopLevelError(indicator.id) }}
+                </div>
+              </div>
+              <div
+                v-else-if="indicator.valueType === 4"
+                style="display: flex; flex-direction: column; gap: 4px; align-items: flex-start;"
+              >
+                <a-date-picker
+                  v-model="formValues[indicator.indicatorCode]"
+                  :disabled="readonly"
+                  :show-time="getDateFormat(indicator).includes('HH')"
+                  :format="getDateFormat(indicator)"
+                  @change="() => onIndicatorChange(indicator)"
+                />
+                <div
+                  v-if="lastPeriodValues[indicator.indicatorCode]"
+                  class="inline-last-value"
+                >
+                  <span class="last-value-prefix">上期：</span>
+                  <span class="last-value-text">{{ lastPeriodValues[indicator.indicatorCode] }}</span>
+                </div>
+                <div
+                  v-if="indicator.id && getTopLevelError(indicator.id)"
+                  class="indicator-error"
+                >
+                  {{ getTopLevelError(indicator.id) }}
+                </div>
+              </div>
+              <div
+                v-else-if="indicator.valueType === 5"
+                style="display: flex; flex-direction: column; gap: 4px; align-items: flex-start;"
+              >
+                <a-textarea
+                  v-model="formValues[indicator.indicatorCode]"
+                  :disabled="readonly"
+                  :placeholder="`请输入${indicator.indicatorName}`"
+                  :rows="isRichText(indicator) ? 4 : 2"
+                  :maxlength="getMaxLength(indicator)"
+                  :show-count="!!getMaxLength(indicator)"
+                  class="w-full"
+                  @change="() => onIndicatorChange(indicator)"
+                />
+                <div
+                  v-if="lastPeriodValues[indicator.indicatorCode]"
+                  class="inline-last-value"
+                >
+                  <span class="last-value-prefix">上期：</span>
+                  <span class="last-value-text">{{ lastPeriodValues[indicator.indicatorCode] }}</span>
+                </div>
+                <div
+                  v-if="indicator.id && getTopLevelError(indicator.id)"
+                  class="indicator-error"
+                >
+                  {{ getTopLevelError(indicator.id) }}
+                </div>
+              </div>
+              <div
+                v-else-if="indicator.valueType === 10"
+                style="display: flex; flex-direction: column; gap: 4px; align-items: flex-start;"
+              >
+                <a-select
+                  v-model="formValues[indicator.indicatorCode]"
+                  :disabled="readonly"
+                  :placeholder="`请选择${indicator.indicatorName}`"
+                  :show-search="getShowSearch(indicator)"
+                  allow-clear
+                  @change="() => onIndicatorChange(indicator)"
+                >
+                  <a-select-option v-for="opt in parseOptions(indicator.valueOptions)" :key="opt.value" :value="opt.value">{{ opt.label }}</a-select-option>
+                </a-select>
+                <div
+                  v-if="lastPeriodValues[indicator.indicatorCode]"
+                  class="inline-last-value"
+                >
+                  <span class="last-value-prefix">上期：</span>
+                  <span class="last-value-text">{{ lastPeriodValues[indicator.indicatorCode] }}</span>
+                </div>
+                <div
+                  v-if="indicator.id && getTopLevelError(indicator.id)"
+                  class="indicator-error"
+                >
+                  {{ getTopLevelError(indicator.id) }}
+                </div>
+              </div>
+              <div
+                v-else-if="indicator.valueType === 11"
+                style="display: flex; flex-direction: column; gap: 4px; align-items: flex-start;"
+              >
+                <a-select
+                  :value="formValues[indicator.indicatorCode] || []"
+                  :disabled="readonly"
+                  :placeholder="`请选择${indicator.indicatorName}`"
+                  mode="multiple"
+                  :show-search="getShowSearch(indicator)"
+                  allow-clear
+                  @change="(vals: string[]) => handleMultiSelectChange(indicator, vals)"
+                >
+                  <a-select-option v-for="opt in parseOptions(indicator.valueOptions)" :key="opt.value" :value="opt.value">{{ opt.label }}</a-select-option>
+                </a-select>
+                <div
+                  v-if="lastPeriodValues[indicator.indicatorCode]"
+                  class="inline-last-value"
+                >
+                  <span class="last-value-prefix">上期：</span>
+                  <span class="last-value-text">{{ lastPeriodValues[indicator.indicatorCode] }}</span>
+                </div>
+                <div
+                  v-if="indicator.id && getTopLevelError(indicator.id)"
+                  class="indicator-error"
+                >
+                  {{ getTopLevelError(indicator.id) }}
+                </div>
+              </div>
+              <div
+                v-else-if="indicator.valueType === 8"
+                style="display: flex; flex-direction: column; gap: 4px; align-items: flex-start;"
+              >
+                <a-range-picker
+                  v-model="formValues[indicator.indicatorCode]"
+                  :disabled="readonly"
+                  :show-time="getDateFormat(indicator).includes('HH')"
+                  :format="getDateFormat(indicator)"
+                  @change="() => onIndicatorChange(indicator)"
+                />
+                <div
+                  v-if="lastPeriodValues[indicator.indicatorCode]"
+                  class="inline-last-value"
+                >
+                  <span class="last-value-prefix">上期：</span>
+                  <span class="last-value-text">{{ lastPeriodValues[indicator.indicatorCode] }}</span>
+                </div>
+                <div
+                  v-if="indicator.id && getTopLevelError(indicator.id)"
+                  class="indicator-error"
                 >
                   {{ getTopLevelError(indicator.id) }}
                 </div>
               </div>
 
-              <!-- 单选下拉类型 -->
-              <a-select
-                v-else-if="indicator.valueType === 10"
-                v-model="formValues[indicator.indicatorCode]"
-                :disabled="readonly"
-                :placeholder="`请选择${indicator.indicatorName}`"
-                :show-search="getShowSearch(indicator)"
-                allow-clear
-                @change="() => onIndicatorChange(indicator)"
+              <!-- 单选类型（valueType=6）：独立一行显示上期值 -->
+              <div
+                v-else-if="indicator.valueType === 6"
+                style="display: flex; flex-direction: column; gap: 4px; align-items: flex-start;"
               >
-                <a-select-option v-for="opt in parseOptions(indicator.valueOptions)" :key="opt.value" :value="opt.value">{{ opt.label }}</a-select-option>
-              </a-select>
+                <div
+                  class="indicator-input-row"
+                  :class="{ 'input-row--inline': true }"
+                >
+                  <a-radio-group
+                    :value="formValues[indicator.indicatorCode]"
+                    :disabled="readonly"
+                    @change="(e: any) => { handleInputTypeRadioChange(indicator, e.target.value); onIndicatorChange(indicator); }"
+                  >
+                    <template v-for="opt in parseOptions(indicator.valueOptions)" :key="opt.value">
+                      <a-radio :value="opt.value">
+                        {{ opt.label }}
+                      </a-radio>
+                      <!-- 输入型选项：选中后显示输入框 -->
+                      <a-input
+                        v-if="opt.inputType && formValues[indicator.indicatorCode] === opt.value"
+                        :value="inputTypeValues[indicator.indicatorCode + '_' + opt.value] || ''"
+                        :disabled="readonly"
+                        :placeholder="getInputTypeLastPeriodContent(lastPeriodRawValues, indicator.indicatorCode, opt.value) ? '上期：' + getInputTypeLastPeriodContent(lastPeriodRawValues, indicator.indicatorCode, opt.value) : '请输入补充内容'"
+                        style="display: inline-block; width: 200px; padding: 0px 0px 0px 4px; border-radius: 4px; vertical-align: middle;"
+                        @input="(e: any) => { inputTypeValues[indicator.indicatorCode + '_' + opt.value] = e.target.value; onInputTypeBlur(indicator, opt, e.target.value); }"
+                        @blur="() => { onIndicatorChange(indicator); }"
+                      />
+                    </template>
+                  </a-radio-group>
+                </div>
+                <div
+                  v-if="lastPeriodValues[indicator.indicatorCode]"
+                  class="inline-last-value"
+                >
+                  <span class="last-value-prefix">上期：</span>
+                  <span class="last-value-text">{{ getFormattedLastPeriodValue(indicator) }}</span>
+                </div>
+                <div
+                  v-if="indicator.id && getTopLevelError(indicator.id)"
+                  class="indicator-error"
+                >
+                  {{ getTopLevelError(indicator.id) }}
+                </div>
+              </div>
 
-              <!-- 多选下拉类型 -->
-              <a-select
-                v-else-if="indicator.valueType === 11"
-                :value="formValues[indicator.indicatorCode] || []"
-                :disabled="readonly"
-                :placeholder="`请选择${indicator.indicatorName}`"
-                mode="multiple"
-                :show-search="getShowSearch(indicator)"
-                allow-clear
-                @change="(vals: string[]) => handleMultiSelectChange(indicator, vals)"
+              <!-- 多选类型（valueType=7）：独立一行显示上期值 -->
+              <div
+                v-else-if="indicator.valueType === 7"
+                style="display: flex; flex-direction: column; gap: 4px; align-items: flex-start;"
               >
-                <a-select-option v-for="opt in parseOptions(indicator.valueOptions)" :key="opt.value" :value="opt.value">{{ opt.label }}</a-select-option>
-              </a-select>
+                <div
+                  class="indicator-input-row"
+                  :class="{ 'input-row--inline': true }"
+                >
+                  <a-checkbox-group
+                    :value="getPureCheckboxValues(indicator.indicatorCode)"
+                    :disabled="readonly"
+                    class="flex flex-wrap gap-x-4 gap-y-2"
+                    @change="(vals: string[]) => handleMultiSelectChange(indicator, vals)"
+                  >
+                    <!-- 普通选项 -->
+                    <template v-for="opt in parseOptions(indicator.valueOptions)" :key="'normal-' + opt.value">
+                      <a-checkbox
+                        v-if="!opt.inputType"
+                        :value="opt.value"
+                      >
+                        {{ opt.label }}
+                      </a-checkbox>
+                    </template>
+                    <!-- 输入型选项 -->
+                    <template v-for="opt in parseOptions(indicator.valueOptions)" :key="'input-' + opt.value">
+                      <template v-if="opt.inputType">
+                        <a-checkbox :value="opt.value">
+                          {{ opt.label }}
+                        </a-checkbox>
+                        <a-input
+                          v-if="(formValues[indicator.indicatorCode] || []).includes(opt.value)"
+                          :value="inputTypeValues[indicator.indicatorCode + '_' + opt.value] || ''"
+                          :disabled="readonly"
+                          :placeholder="getInputTypeLastPeriodContent(lastPeriodRawValues, indicator.indicatorCode, opt.value) ? '上期：' + getInputTypeLastPeriodContent(lastPeriodRawValues, indicator.indicatorCode, opt.value) : '请输入补充内容'"
+                          style="display: inline-block; width: 200px; padding: 0px 0px 0px 4px; border-radius: 4px; vertical-align: middle;"
+                          @input="(e: any) => { inputTypeValues[indicator.indicatorCode + '_' + opt.value] = e.target.value; onInputTypeBlur(indicator, opt, e.target.value); }"
+                          @blur="() => { onIndicatorChange(indicator); }"
+                        />
+                      </template>
+                    </template>
+                  </a-checkbox-group>
+                </div>
+                <div
+                  v-if="lastPeriodValues[indicator.indicatorCode]"
+                  class="inline-last-value"
+                >
+                  <span class="last-value-prefix">上期：</span>
+                  <span class="last-value-text">{{ getFormattedLastPeriodValue(indicator) }}</span>
+                </div>
+                <div
+                  v-if="indicator.id && getTopLevelError(indicator.id)"
+                  class="indicator-error"
+                >
+                  {{ getTopLevelError(indicator.id) }}
+                </div>
+              </div>
 
-              <!-- 日期区间类型 -->
-              <a-range-picker
-                v-else-if="indicator.valueType === 8"
-                v-model="formValues[indicator.indicatorCode]"
-                :disabled="readonly"
-                :show-time="getDateFormat(indicator).includes('HH')"
-                :format="getDateFormat(indicator)"
-                @change="() => onIndicatorChange(indicator)"
-              />
-
-              <!-- 文件上传类型 -->
-              <div v-else-if="indicator.valueType === 9" class="file-upload-wrapper">
+              <!-- 文件上传类型（valueType=9 无错误内联，在此兜底） -->
+              <template v-else-if="indicator.valueType === 9">
                 <div v-if="getFileList(fileListMap, indicator.indicatorCode).length > 0" class="file-list">
                   <div v-for="(file, index) in getFileList(fileListMap, indicator.indicatorCode)" :key="index" class="file-item">
                     <IconifyIcon icon="lucide:file-text" class="file-icon" />
@@ -840,14 +984,29 @@ function addHighlight(el: Element) {
                   <span v-if="getMaxFileCount(indicator)">最多 {{ getMaxFileCount(indicator) }} 个</span>
                   <span class="upload-count">({{ getFileList(fileListMap, indicator.indicatorCode).length }}/{{ getMaxFileCount(indicator) }})</span>
                 </div>
-              </div>
+                <!-- 上期值显示 -->
+                <div
+                  v-if="lastPeriodValues[indicator.indicatorCode]"
+                  class="inline-last-value"
+                >
+                  <span class="last-value-prefix">上期：</span>
+                  <span class="last-value-text">{{ lastPeriodValues[indicator.indicatorCode] }}</span>
+                </div>
+                <!-- 错误提示 -->
+                <div
+                  v-if="indicator.id && getTopLevelError(indicator.id)"
+                  class="indicator-error"
+                >
+                  {{ getTopLevelError(indicator.id) }}
+                </div>
+              </template>
 
               <!-- 动态容器类型 -->
-              <div v-else-if="indicator.valueType === 12">
+              <template v-else-if="indicator.valueType === 12">
                 <!-- 条件容器 -->
                 <div v-show="getContainerType(indicator.valueOptions) === 'conditional'" class="conditional-container-form">
                   <div
-                    v-for="entry in getContainerEntries(indicator.indicatorCode)"
+                    v-for="(entry, entryIdx) in getContainerEntries(indicator.indicatorCode)"
                     :key="entry.rowKey"
                     class="dynamic-entry-row mb-4"
                   >
@@ -860,18 +1019,25 @@ function addHighlight(el: Element) {
                         :row-key="entry.rowKey"
                         :field="field"
                         :disabled="readonly"
+                        :entry-index="0"
+                        :container-last-values="containerLastPeriodValues[indicator.indicatorCode]"
                         :container-field-error="getContainerFieldError(entry, indicator.indicatorCode, field.fieldCode, 'conditional')"
-                        :container-last-values="containerLastValuesMap[indicator.indicatorCode]"
                         @blur="() => onContainerFieldChange(indicator, entry, field)"
                         @field-change="() => onContainerFieldBasicChange(indicator, entry, field)"
                       />
                     </div>
                   </div>
+                  <div
+                    v-if="containerLastPeriodValues[indicator.indicatorCode]?.length"
+                    class="container-last-period-summary"
+                  >
+                    共 {{ containerLastPeriodValues[indicator.indicatorCode]!.length }} 条上期数据
+                  </div>
                 </div>
 
                 <!-- 自动条目容器 -->
                 <div v-show="getContainerType(indicator.valueOptions) === 'autoEntry' && isAutoEntryVisible(indicator)" class="auto-entry-container-form">
-                  <div v-for="entry in getContainerEntries(indicator.indicatorCode)" :key="entry.rowKey" class="dynamic-entry-row mb-4">
+                  <div v-for="(entry, entryIdx) in getContainerEntries(indicator.indicatorCode)" :key="entry.rowKey" class="dynamic-entry-row mb-4">
                     <div class="entry-header flex items-center justify-between mb-2">
                       <span class="entry-label text-gray-500 text-sm font-medium">{{ entry.rowKey }} {{ indicator.indicatorName }}</span>
                     </div>
@@ -884,19 +1050,26 @@ function addHighlight(el: Element) {
                         :row-key="entry.rowKey"
                         :field="field"
                         :disabled="readonly"
+                        :entry-index="entryIdx"
+                        :container-last-values="containerLastPeriodValues[indicator.indicatorCode]"
                         :container-field-error="getContainerFieldError(entry, indicator.indicatorCode, field.fieldCode, 'autoEntry')"
-                        :container-last-values="containerLastValuesMap[indicator.indicatorCode]"
                         @blur="() => onContainerFieldChange(indicator, entry, field)"
                         @field-change="() => onContainerFieldBasicChange(indicator, entry, field)"
                       />
                     </div>
+                  </div>
+                  <div
+                    v-if="containerLastPeriodValues[indicator.indicatorCode]?.length"
+                    class="container-last-period-summary"
+                  >
+                    共 {{ containerLastPeriodValues[indicator.indicatorCode]!.length }} 条上期数据
                   </div>
                   <div class="text-gray-400 text-xs mt-2">（由「{{ getLinkedIndicatorName(indicator) }}」指标自动生成，数量不可调整）</div>
                 </div>
 
                 <!-- 普通动态容器 -->
                 <div v-show="getContainerType(indicator.valueOptions) === 'normal'" class="dynamic-container-form">
-                  <div v-for="entry in getContainerEntries(indicator.indicatorCode)" :key="entry.rowKey" class="dynamic-entry-row mb-4">
+                  <div v-for="(entry, entryIdx) in getContainerEntries(indicator.indicatorCode)" :key="entry.rowKey" class="dynamic-entry-row mb-4">
                     <div class="entry-header flex items-center justify-between mb-2">
                       <span class="entry-label text-gray-500 text-sm font-medium">
                         {{ entry.rowKey }} {{ indicator.indicatorName }}
@@ -923,12 +1096,19 @@ function addHighlight(el: Element) {
                         :row-key="entry.rowKey"
                         :field="field"
                         :disabled="readonly"
+                        :entry-index="entryIdx"
+                        :container-last-values="containerLastPeriodValues[indicator.indicatorCode]"
                         :container-field-error="getContainerFieldError(entry, indicator.indicatorCode, field.fieldCode, 'normal')"
-                        :container-last-values="containerLastValuesMap[indicator.indicatorCode]"
                         @blur="() => onContainerFieldChange(indicator, entry, field)"
                         @field-change="() => onContainerFieldBasicChange(indicator, entry, field)"
                       />
                     </div>
+                  </div>
+                  <div
+                    v-if="containerLastPeriodValues[indicator.indicatorCode]?.length"
+                    class="container-last-period-summary"
+                  >
+                    共 {{ containerLastPeriodValues[indicator.indicatorCode]!.length }} 条上期数据
                   </div>
                   <a-button type="dashed" class="w-full mt-2" :disabled="readonly" @click="handleAddEntry(indicator.indicatorCode)">
                     <template #icon><PlusOutlined /></template>
@@ -938,26 +1118,10 @@ function addHighlight(el: Element) {
                     共 {{ getContainerEntries(indicator.indicatorCode).length }} 个条目（上限 {{ MAX_CONTAINER_ENTRIES }}）
                   </div>
                 </div>
-              </div>
+              </template>
 
               <!-- 未知类型兜底 -->
               <span v-else class="text-gray-400 text-sm">暂不支持该类型</span>
-
-              <!-- 错误提示：仅显示在未内联错误提示的类型上 -->
-              <div
-                v-if="indicator.valueType !== 12 && indicator.valueType !== 1 && indicator.valueType !== 6 && indicator.valueType !== 7 && indicator.id && getTopLevelError(indicator.id)"
-                class="indicator-error"
-              >
-                {{ getTopLevelError(indicator.id) }}
-              </div>
-            </div>
-          </div>
-
-          <!-- 右侧：上期值（单选/多选/数字/下拉/日期已内联到控件旁，此处仅显示其他类型） -->
-          <div v-if="lastPeriodValues[indicator.indicatorCode] && indicator.valueType !== 6 && indicator.valueType !== 7 && indicator.valueType !== 1 && indicator.valueType !== 4 && indicator.valueType !== 8 && indicator.valueType !== 10 && indicator.valueType !== 11" class="indicator-last-value">
-            <div class="last-value-label">上期值</div>
-            <div class="last-value-content">
-              {{ getLastValueDisplayText(lastPeriodValues[indicator.indicatorCode], indicator.valueType, indicator.valueOptions) }}
             </div>
           </div>
         </div>
@@ -1175,9 +1339,10 @@ function addHighlight(el: Element) {
 }
 
 .inline-last-value {
-  font-size: 12.5px;
+  font-size: 14px;
   color: hsl(var(--muted-foreground));
   white-space: nowrap;
+  margin: 4px 0px;
 }
 
 .last-value-prefix {
@@ -1352,6 +1517,13 @@ function addHighlight(el: Element) {
 .text-red-500 {
   color: hsl(var(--destructive));
   font-weight: 600;
+}
+
+.container-last-period-summary {
+  font-size: 12px;
+  color: hsl(var(--muted-foreground));
+  padding: 4px 0 2px;
+  text-align: right;
 }
 
 .mb-4 {

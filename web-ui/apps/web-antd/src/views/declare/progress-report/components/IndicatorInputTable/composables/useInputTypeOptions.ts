@@ -25,7 +25,49 @@ import {
   isInputTypeOptionSelected,
 } from './useFormValues';
 
-// ==================== 单选变化处理 ====================
+// ==================== 获取上期输入内容 ====================
+
+/** 获取某个选项的上期输入内容 */
+export function getInputTypeLastPeriodContent(
+  lastPeriodRawValues: Record<string, string>,
+  indicatorCode: string,
+  optionValue: string,
+): string {
+  const raw = lastPeriodRawValues[indicatorCode];
+  if (!raw) return '';
+  try {
+    return parseInputTypeLastPeriodRaw(raw, 6)[optionValue] || '';
+  } catch {
+    return '';
+  }
+}
+
+/** 解析 raw valueStr 为 inputType content map：{ optionValue: content } */
+function parseInputTypeLastPeriodRaw(raw: string, valueType: number): Record<string, string> {
+  const result: Record<string, string> = {};
+  if (!raw) return result;
+  const parts = valueType === 7 ? raw.split(',') : [raw];
+  for (const part of parts) {
+    const idx = part.indexOf('∵');
+    if (idx !== -1) {
+      const value = part.substring(0, idx);
+      const input = part.substring(idx + 1);
+      result[value] = input;
+    }
+  }
+  return result;
+}
+
+/** 输入型选项内容变化处理（同步到 inputTypeValues 和 formValues） */
+export function onInputTypeChange(indicator: DeclareIndicatorApi.Indicator, opt: any, content: string) {
+  const inputKey = indicator.indicatorCode + '_' + opt.value;
+  inputTypeValues[inputKey] = content;
+  const raw = formValues[indicator.indicatorCode];
+  if (raw) {
+    const deserialized = deserializeInputTypeValue(raw);
+    formValues[indicator.indicatorCode] = serializeInputTypeValue(deserialized.value, content);
+  }
+}
 
 /** 单选变化处理 */
 export function handleInputTypeRadioChange(indicator: DeclareIndicatorApi.Indicator, val: string) {

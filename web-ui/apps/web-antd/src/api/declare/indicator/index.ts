@@ -139,6 +139,21 @@ export async function getLastPeriodValues(hospitalId: number, reportYear: number
   );
 }
 
+/** 上期指标值返回（包含显示值和原始值） */
+export interface LastPeriodValuesResult {
+  /** 经过映射后的显示值（key = indicatorCode, value = label） */
+  display: Record<string, string>;
+  /** 原始 valueStr（key = indicatorCode, value = 原始字符串，包含 inputType 的 ∵ 分隔符） */
+  raw: Record<string, string>;
+}
+
+/** 获取上期填报值（包含显示值和原始值，用于 inputType 选项解析） */
+export async function getLastPeriodValuesWithRaw(hospitalId: number, reportYear: number, reportBatch: number, businessType: number = 3) {
+  return requestClient.get<LastPeriodValuesResult>(
+    `/declare/indicator-value/last-period-values-with-raw?hospitalId=${hospitalId}&reportYear=${reportYear}&reportBatch=${reportBatch}&businessType=${businessType}`,
+  );
+}
+
 /** 指标值类型 */
 export interface IndicatorValue {
   indicatorId: number;

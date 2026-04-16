@@ -90,6 +90,16 @@ export function getInputTypeOptionValues(rawValues: string[]): string[] {
   return rawValues.map(v => deserializeInputTypeValue(v).value);
 }
 
+/** 获取 checkbox 绑定的纯值数组（从 formValues 中提取，用于 a-checkbox-group :value） */
+export function getPureCheckboxValues(indicatorCode: string): string[] {
+  const raw = formValues[indicatorCode];
+  if (!raw) return [];
+  if (Array.isArray(raw)) {
+    return raw.map(v => deserializeInputTypeValue(v).value);
+  }
+  return [deserializeInputTypeValue(raw).value];
+}
+
 /** 输入框的 formValues key（用于 v:if 判断输入框是否显示） */
 export function getInputTypeInputFieldName(code: string, optionValue: string): string {
   return `${code}_input_${optionValue}`;

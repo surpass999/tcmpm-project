@@ -384,7 +384,12 @@ function validateLogicRules(
       if (rules.length === 0) continue;
       const results = validateJointRule(rules as any, codeValueMap, { triggerTiming: 'FILL' });
       if (results.length === 0) {
-        if (indicator.id !== undefined) clearFieldError(`t:${indicator.id}`);
+        if (indicator.id !== undefined) {
+          // 不能清除必填错误
+          if (fieldErrors[`t:${indicator.id}`]?.errorType !== 'required') {
+            clearFieldError(`t:${indicator.id}`);
+          }
+        }
         continue;
       }
       const errMsg = buildLogicRuleMsg(indicator.logicRule, allIndicators, codeValueMap);
@@ -540,7 +545,12 @@ function validateLogicRuleForBlur(
         const errMsg = buildLogicRuleMsg(indicator.logicRule, allIndicators, codeValueMap);
         if (indicator.id !== undefined) setFieldError(`t:${indicator.id}`, errMsg, 'logic', false);
       } else {
-        if (indicator.id !== undefined) clearFieldError(`t:${indicator.id}`);
+        if (indicator.id !== undefined) {
+          // 不能清除必填错误
+          if (fieldErrors[`t:${indicator.id}`]?.errorType !== 'required') {
+            clearFieldError(`t:${indicator.id}`);
+          }
+        }
       }
     }
   }
@@ -612,7 +622,12 @@ function validateFilledLogicRules(
       const results = validateJointRule(rules as any, codeValueMap, { triggerTiming: 'FILL' });
 
       if (results.length === 0) {
-        if (indicator.id !== undefined) clearFieldError(`t:${indicator.id}`);
+        if (indicator.id !== undefined) {
+          // 不能清除必填错误
+          if (fieldErrors[`t:${indicator.id}`]?.errorType !== 'required') {
+            clearFieldError(`t:${indicator.id}`);
+          }
+        }
         continue;
       }
 

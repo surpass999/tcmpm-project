@@ -7,6 +7,13 @@ import type { UploadFile } from 'ant-design-vue/es/upload/interface';
 import type { DynamicField } from '../types';
 import { parseContainerConfig, generateContainerFieldKey } from './container';
 
+/** 提取纯 value（去掉 inputType 的 ∵ 分隔符及其后面的内容） */
+function extractPureValue(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  const idx = value.indexOf('∵');
+  return idx >= 0 ? value.substring(0, idx) : value;
+}
+
 /** 从 API 记录中提取指标值（按类型转换） */
 export function extractValue(record: any, valueType: number): any {
   if (!record) return undefined;
@@ -20,14 +27,16 @@ export function extractValue(record: any, valueType: number): any {
       return undefined;
     case 4: return record.valueDate ? dayjs(record.valueDate) : undefined;
     case 5: return record.valueText || undefined;
-    case 7: return record.valueStr ? record.valueStr.split(',') : undefined;
+    // 多选：需要去掉 inputType 的分隔符，只保留纯 value
+    case 7: return record.valueStr ? record.valueStr.split(',').map(v => extractPureValue(v.trim())!).filter(Boolean) : undefined;
     case 8: {
       const start = record.valueDateStart ? dayjs(record.valueDateStart) : null;
       const end = record.valueDateEnd ? dayjs(record.valueDateEnd) : null;
       return start || end ? [start, end] : undefined;
     }
     case 9: case 10: return record.valueStr || undefined;
-    case 11: return record.valueStr ? record.valueStr.split(',') : undefined;
+    // 多选下拉：同样需要去掉 inputType 的分隔符
+    case 11: return record.valueStr ? record.valueStr.split(',').map(v => extractPureValue(v.trim())!).filter(Boolean) : undefined;
     case 12: return record.valueStr ? JSON.parse(record.valueStr) : undefined;
     default: return record.valueStr || undefined;
   }
