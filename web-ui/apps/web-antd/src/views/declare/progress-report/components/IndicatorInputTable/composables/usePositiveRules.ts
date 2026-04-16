@@ -56,46 +56,28 @@ export function hasLastPeriodValue(indicatorCode: string): boolean {
 export function validateAllPositiveRules(
   indicators: DeclareIndicatorApi.Indicator[],
 ): PositiveRuleError[] {
-  log('[validateAllPositiveRules] 开始校验所有规则', { indicatorsCount: indicators.length });
-
   const errors: PositiveRuleError[] = [];
 
   // 1. 检查是否有上期值
   if (!hasAnyLastPeriodValue()) {
-    log('[validateAllPositiveRules] 无上期值，跳过校验');
     return errors;
   }
 
-  // 2. 检查 jointRules
-  log('[validateAllPositiveRules] jointRules:', jointRules.value);
-
-  // 3. 获取 FILL 时机的规则
+  // 2. 获取 FILL 时机的规则
   const fillRules = jointRules.value.filter((r) => r.triggerTiming === 'FILL');
-  log('[validateAllPositiveRules] FILL 规则数量:', fillRules.length, fillRules.map(r => ({ id: r.id, name: r.name, triggerTiming: r.triggerTiming })));
 
   for (const rule of fillRules) {
-    log('[validateAllPositiveRules] 处理规则:', { id: rule.id, name: rule.name, ruleConfig: rule.ruleConfig });
-    if (!rule.ruleConfig) {
-      log('[validateAllPositiveRules] 规则无 ruleConfig，跳过');
-      continue;
-    }
+    if (!rule.ruleConfig) continue;
 
     try {
       const config: PositiveRuleConfig = JSON.parse(rule.ruleConfig);
-      log('[validateAllPositiveRules] 解析后的 config:', config);
-      if (!config.rules?.length) {
-        log('[validateAllPositiveRules] 规则列表为空，跳过');
-        continue;
-      }
+      if (!config.rules?.length) continue;
 
       for (const item of config.rules) {
-        log('[validateAllPositiveRules] 校验规则项:', item);
         const error = validateSinglePositiveRule(item, indicators);
         if (error) {
-          log('[validateAllPositiveRules] 规则项校验失败:', error);
           errors.push(error);
         } else {
-          log('[validateAllPositiveRules] 规则项校验通过，清除错误');
           clearPositiveRuleError(item.indicatorCode, indicators);
         }
       }
@@ -104,7 +86,6 @@ export function validateAllPositiveRules(
     }
   }
 
-  log('[validateAllPositiveRules] 校验完成，错误数量:', errors.length, errors);
   return errors;
 }
 
@@ -167,21 +148,15 @@ function validateSinglePositiveRule(
 ): PositiveRuleError | null {
   const { indicatorCode, valueType } = item;
 
-  log('[validateSinglePositiveRule] 开始校验:', { indicatorCode, valueType, item });
-
   if (!hasLastPeriodValue(indicatorCode)) {
-    log('[validateSinglePositiveRule] 指标无上期值，跳过:', indicatorCode);
     return null;
   }
 
   const currentValue = getCurrentValue(indicatorCode, valueType);
   const lastValue = getLastPeriodValue(indicatorCode);
 
-  log('[validateSinglePositiveRule] 值:', { indicatorCode, currentValue, lastValue });
-
   // 如果当前值为空，跳过校验（基础校验会处理必填）
   if (currentValue === null || currentValue === undefined || currentValue === '') {
-    log('[validateSinglePositiveRule] 当前值为空，跳过:', indicatorCode);
     return null;
   }
 
@@ -203,8 +178,6 @@ function validateSinglePositiveRule(
     default:
       console.warn('[validateSinglePositiveRule] 不支持的 valueType:', valueType);
   }
-
-  log('[validateSinglePositiveRule] 校验结果:', { indicatorCode, errorMsg });
 
   if (errorMsg) {
     const indicator = indicators.find((i) => i.indicatorCode === indicatorCode);

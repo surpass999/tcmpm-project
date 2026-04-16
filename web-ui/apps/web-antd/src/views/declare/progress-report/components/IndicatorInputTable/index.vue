@@ -455,47 +455,61 @@ function syncContainerValuesToForm() {
 }
 
 function doValidateAll() {
-  console.log('[doValidateAll] ===== 开始执行校验 =====');
+  // 收集所有错误，统一转换为 ErrorItem 格式
+  const allErrors: any[] = [];
 
   // ==================== 第1级：基础验证 ====================
   // 必填、类型、最大值、最小值、精度、文本格式
-  console.log('[doValidateAll] 第1级：基础验证');
   const { messages } = validateAll(indicators.value, setFieldError, clearFieldError);
   if (messages.length > 0) {
-    console.log('[doValidateAll] 基础验证失败，阻断后续验证，错误数:', messages.length);
-    return messages;
+    // 基础验证错误需要转换为 ErrorItem 格式
+    for (const msg of messages) {
+      allErrors.push({
+        indicatorId: msg.indicatorId,
+        indicatorCode: msg.indicatorCode,
+        indicatorName: msg.indicatorName || '',
+        message: msg.message,
+        errorType: msg.errorType || 'format',
+      });
+    }
   }
-  console.log('[doValidateAll] 基础验证通过');
 
   const orderedIndicators = getIndicatorsInDisplayOrder();
 
   // ==================== 第2级：逻辑验证 ====================
   // IF条件表达式、简单比较、容器内规则
-  console.log('[doValidateAll] 第2级：逻辑验证');
   const logicErrors = validateLogicRules(orderedIndicators, setFieldError, clearFieldError);
   if (logicErrors.length > 0) {
-    console.log('[doValidateAll] 逻辑验证失败，阻断上期验证，错误数:', logicErrors.length);
-    return logicErrors;
+    // 逻辑验证错误已经是 ErrorItem 格式
+    allErrors.push(...logicErrors);
   }
-  console.log('[doValidateAll] 逻辑验证通过');
 
   // ==================== 第3级：上期值验证 ====================
   // 仅在有上期值时执行
-  console.log('[doValidateAll] 第3级：上期值验证');
-  console.log('[doValidateAll] hasAnyLastPeriodValue:', hasAnyLastPeriodValue());
-  console.log('[doValidateAll] jointRules:', jointRules.value);
   if (hasAnyLastPeriodValue()) {
     const positiveErrors = validateAllPositiveRules(orderedIndicators);
     if (positiveErrors.length > 0) {
-      console.log('[doValidateAll] 上期验证失败，错误数:', positiveErrors.length);
-      return positiveErrors.map((e) => `${e.ruleName}：${e.message}`);
+      // 转换为 ErrorItem 格式，同时写入 fieldErrors（持久化显示）
+      for (const e of positiveErrors) {
+        const indicator = indicators.value.find((i) => i.indicatorCode === e.indicatorCode);
+        // 写入 fieldErrors 以便页面上显示（使用 joint 类型，dirty=false）
+        setFieldError(e.errorKey, `${e.ruleName}：${e.message}`, 'joint', false);
+        allErrors.push({
+          indicatorId: e.indicatorId,
+          indicatorCode: e.indicatorCode,
+          indicatorName: indicator?.indicatorName || '',
+          message: `${e.ruleName}：${e.message}`,
+          errorType: 'joint' as const,
+        });
+      }
     }
-    console.log('[doValidateAll] 上期验证通过');
-  } else {
-    console.log('[doValidateAll] 无上期值，跳过上期验证');
   }
 
-  console.log('[doValidateAll] ===== 所有验证通过 =====');
+  // 返回所有错误
+  if (allErrors.length > 0) {
+    return allErrors;
+  }
+
   return [];
 }
 
