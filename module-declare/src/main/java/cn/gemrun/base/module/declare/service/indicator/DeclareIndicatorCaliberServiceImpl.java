@@ -16,6 +16,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -75,20 +76,35 @@ public class DeclareIndicatorCaliberServiceImpl implements DeclareIndicatorCalib
 
     @Override
     public PageResult<DeclareIndicatorCaliberDO> getCaliberPage(DeclareIndicatorCaliberPageReqVO pageReqVO) {
-        PageResult<DeclareIndicatorCaliberDO> pageResult = caliberMapper.selectPage(pageReqVO,
-                new LambdaQueryWrapperX<DeclareIndicatorCaliberDO>()
-                        .likeIfPresent(DeclareIndicatorCaliberDO::getDefinition, pageReqVO.getDefinition())
-                        .eqIfPresent(DeclareIndicatorCaliberDO::getIndicatorId, pageReqVO.getIndicatorId())
-                        .orderByDesc(DeclareIndicatorCaliberDO::getId));
+        LambdaQueryWrapperX<DeclareIndicatorCaliberDO> wrapper = new LambdaQueryWrapperX<DeclareIndicatorCaliberDO>()
+                .likeIfPresent(DeclareIndicatorCaliberDO::getDefinition, pageReqVO.getDefinition())
+                .eqIfPresent(DeclareIndicatorCaliberDO::getIndicatorId, pageReqVO.getIndicatorId())
+                .orderByDesc(DeclareIndicatorCaliberDO::getId);
+
+        // 如果传了 projectType，先获取该项目类型下的指标ID列表
+        if (pageReqVO.getProjectType() != null) {
+            List<DeclareIndicatorDO> indicators = indicatorMapper.selectList(
+                    new LambdaQueryWrapperX<DeclareIndicatorDO>()
+                            .eq(DeclareIndicatorDO::getProjectType, pageReqVO.getProjectType()));
+            if (indicators == null || indicators.isEmpty()) {
+                return new PageResult<>(Collections.emptyList(), 0L);
+            }
+            List<Long> indicatorIds = indicators.stream()
+                    .map(DeclareIndicatorDO::getId)
+                    .collect(Collectors.toList());
+            wrapper.in(DeclareIndicatorCaliberDO::getIndicatorId, indicatorIds);
+        }
+
+        PageResult<DeclareIndicatorCaliberDO> pageResult = caliberMapper.selectPage(pageReqVO, wrapper);
 
         // 填充指标名称
         if (pageResult.getList() != null && !pageResult.getList().isEmpty()) {
-            List<Long> indicatorIds = pageResult.getList().stream()
+            List<Long> resultIndicatorIds = pageResult.getList().stream()
                     .map(DeclareIndicatorCaliberDO::getIndicatorId)
                     .distinct()
                     .collect(Collectors.toList());
 
-            Map<Long, String> indicatorNameMap = indicatorMapper.selectBatchIds(indicatorIds).stream()
+            Map<Long, String> indicatorNameMap = indicatorMapper.selectBatchIds(resultIndicatorIds).stream()
                     .collect(Collectors.toMap(DeclareIndicatorDO::getId, DeclareIndicatorDO::getIndicatorName));
 
             pageResult.getList().forEach(caliber -> {

@@ -52,9 +52,13 @@ export function deleteReportWindow(id: number) {
 /**
  * 获取时间窗口列表
  */
-export function getReportWindowList(reportYear?: number) {
+export function getReportWindowList(reportYear?: number, status?: number) {
+  const params = new URLSearchParams();
+  if (reportYear != null) params.append('reportYear', String(reportYear));
+  if (status != null) params.append('status', String(status));
+  const query = params.toString();
   return requestClient.get<ReportWindow[]>(
-    `/declare/report-window/list${reportYear ? `?reportYear=${reportYear}` : ''}`,
+    `/declare/report-window/list${query ? `?${query}` : ''}`,
   );
 }
 

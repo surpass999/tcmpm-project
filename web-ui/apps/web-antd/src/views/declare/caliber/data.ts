@@ -1,16 +1,71 @@
 import type { VbenFormSchema } from '#/adapter/form';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 
+import { getIndicatorPage } from '#/api/declare/indicator';
+import { getProjectTypeSimpleList } from '#/api/declare/project-type';
+
 /** 列表的搜索表单 */
 export function useGridFormSchema(): VbenFormSchema[] {
   return [
     {
-      fieldName: 'indicatorId',
-      label: '指标ID',
-      component: 'InputNumber',
+      fieldName: 'projectType',
+      label: '项目类型',
+      component: 'ApiSelect',
       componentProps: {
-        placeholder: '请输入指标ID',
+        api: async () => {
+          const list = await getProjectTypeSimpleList();
+          return (list || []).map((item: any) => ({
+            label: item.title,
+            value: item.typeValue,
+          }));
+        },
+        placeholder: '请选择项目类型',
         allowClear: true,
+      },
+    },
+    {
+      fieldName: 'indicatorId',
+      label: '指标',
+      component: 'ApiSelect',
+      dependencies: {
+        triggerFields: ['projectType'],
+        async trigger(values: any, _context: any) {
+          if (!values.projectType) {
+            return;
+          }
+        },
+        componentProps(values: any) {
+          const pt = values.projectType;
+          return {
+            placeholder: pt ? '请选择或搜索指标' : '请先选择项目类型',
+            allowClear: true,
+            showSearch: true,
+            filterOption: (input: string, option: any) => {
+              const label = option.label || '';
+              return label.toLowerCase().includes(input.toLowerCase());
+            },
+            labelField: 'label',
+            valueField: 'value',
+            // 请求参数 - 初始加载所有指标
+            params: {
+              projectType: pt,
+              pageSize: 200,
+            },
+            // API 加载指标列表
+            api: async (params: any) => {
+              if (!params?.projectType) return [];
+              const res = await getIndicatorPage({
+                pageNo: 1,
+                pageSize: 200,
+                projectType: params.projectType,
+              });
+              return (res?.list || []).map((item: any) => ({
+                label: `${item.indicatorCode} - ${item.indicatorName}`,
+                value: item.id,
+              }));
+            },
+          };
+        },
       },
     },
     {

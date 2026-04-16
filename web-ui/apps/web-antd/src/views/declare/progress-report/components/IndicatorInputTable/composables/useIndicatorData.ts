@@ -113,6 +113,24 @@ function recalcIndicatorGroups() {
   indicatorGroups.value = result;
 }
 
+// ==================== 上期值加载（可独立调用） ====================
+
+export async function loadLastPeriodValues(
+  hospitalId: number,
+  reportYear: number,
+  reportBatch: number,
+) {
+  if (!hospitalId || reportYear === undefined || reportBatch === undefined) {
+    return;
+  }
+  try {
+    const lastValues = await getLastPeriodValues(hospitalId, reportYear, reportBatch);
+    lastPeriodValues.value = lastValues || {};
+  } catch (error) {
+    console.error('[loadLastPeriodValues] 加载上期值失败:', error);
+  }
+}
+
 // ==================== 数据加载 ====================
 
 async function loadIndicatorData(

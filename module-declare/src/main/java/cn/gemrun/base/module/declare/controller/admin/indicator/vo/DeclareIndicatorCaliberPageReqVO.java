@@ -14,6 +14,11 @@ import lombok.EqualsAndHashCode;
 public class DeclareIndicatorCaliberPageReqVO extends PageParam {
 
     /**
+     * 项目类型（筛选该项目类型下的指标对应的口径）
+     */
+    private Integer projectType;
+
+    /**
      * 指标ID
      */
     private Long indicatorId;

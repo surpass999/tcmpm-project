@@ -143,6 +143,8 @@ const formData = ref({
   windowStart: undefined as string | undefined,
   windowEnd: undefined as string | undefined,
   reportUserName: undefined as string | undefined,
+  /** 真正的医院 ID（用于查询上期值），与 hospitalId/deptId 区分 */
+  realHospitalId: undefined as number | undefined,
 });
 
 /** 保存状态（用于禁用按钮防重复提交） */
@@ -234,6 +236,7 @@ const [Modal, modalApi] = useVbenModal({
       formData.value = {
         id: undefined,
         hospitalId: 0,
+        realHospitalId: undefined,
         projectType: undefined,
         reportYear: undefined,
         reportBatch: undefined,
@@ -285,6 +288,10 @@ const [Modal, modalApi] = useVbenModal({
           if (hospitalInfo.value?.projectType !== undefined) {
             formData.value.projectType = hospitalInfo.value.projectType;
           }
+          // 同步真正的 hospitalId（用于查询上期值）
+          if (hospitalInfo.value?.id !== undefined) {
+            formData.value.realHospitalId = hospitalInfo.value.id;
+          }
         } catch (error) {
           console.error('加载医院详细信息失败，使用基本信息:', error);
           // API 失败时，使用基本信息
@@ -300,7 +307,7 @@ const [Modal, modalApi] = useVbenModal({
       if (data?.id) {
         // 编辑已有记录
         const result = await getProgressReport(data.id);
-        formData.value = { ...result } as typeof formData.value;
+        formData.value = { ...result, realHospitalId: result.hospitalId } as typeof formData.value;
 
         // 编辑时也需要加载医院信息
         if (!hospitalInfo.value && result.hospitalId) {
@@ -318,6 +325,7 @@ const [Modal, modalApi] = useVbenModal({
             console.error('加载医院信息失败:', error);
           }
         }
+
         // 同步 projectType 到 formData（用于加载联合验证规则）
         if (hospitalInfo.value?.projectType !== undefined) {
           formData.value.projectType = hospitalInfo.value.projectType;
@@ -731,6 +739,7 @@ watch(
           ref="indicatorTableRef"
           v-if="formData.hospitalId"
           :hospital-id="formData.hospitalId"
+          :real-hospital-id="formData.realHospitalId"
           :project-type="formData.projectType"
           :report-id="formData.id"
           :report-year="formData.reportYear"

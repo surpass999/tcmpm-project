@@ -78,20 +78,20 @@ import {
   reloadIndicatorData,
   loadJointRules,
   getIndicatorsInDisplayOrder,
+  loadLastPeriodValues,
 } from './composables/useIndicatorData';
 
 // 计算指标
 import { recalculateComputedIndicators } from './composables/useComputedIndicators';
 
+// 工具函数
+import { parseOptions } from './utils/options';
+import { getLastValueDisplayText, formatLastValueNumber } from './utils/lastValue';
+
 // 输入型选项
 import {
-  parseOptions,
   handleInputTypeRadioChange,
   handleCheckboxInputClick,
-  getInputTypeRawValue,
-  getInputTypeRawValues,
-  getInputTypeOptionValue,
-  getInputTypeOptionValues,
   isInputTypeOptionSelected,
   onInputTypeBlur,
 } from './composables/useInputTypeOptions';
@@ -137,6 +137,8 @@ import ContainerFieldRenderer from './components/container-fields/ContainerField
 const props = withDefaults(
   defineProps<{
     hospitalId: number;
+    /** 真正的医院 ID，用于查询上期值（区别于 deptId） */
+    realHospitalId?: number;
     projectType?: number;
     reportId?: number;
     reportYear?: number;
@@ -166,6 +168,31 @@ const inputTypeErrorMap = computed(() => {
   const result: Record<string, string | undefined> = {};
   for (const key of Object.keys(fieldErrors)) {
     result[key] = fieldErrors[key]?.message;
+  }
+  return result;
+});
+
+/** 容器指标的上期值字段映射：{ indicatorCode: { fieldCode: rawValue } } */
+const containerLastValuesMap = computed(() => {
+  const result: Record<string, Record<string, string>> = {};
+  for (const [indicatorCode, rawValue] of Object.entries(lastPeriodValues)) {
+    if (!rawValue) continue;
+    try {
+      // valueStr 存的是 JSON 数组：[{"rowKey":"xxx","fieldCode":"val", ...}, ...]
+      const parsed = JSON.parse(rawValue);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const firstRow = parsed[0];
+        const fieldValues: Record<string, string> = {};
+        for (const [key, val] of Object.entries(firstRow)) {
+          if (key !== 'rowKey' && val != null) {
+            fieldValues[key] = String(val);
+          }
+        }
+        result[indicatorCode] = fieldValues;
+      }
+    } catch {
+      // 非 JSON 字符串，忽略
+    }
   }
   return result;
 });
@@ -316,6 +343,19 @@ watch(() => props.projectType, async (newProjectType) => {
     emit('loadingChange', false);
   }
 }, { immediate: false });
+
+// realHospitalId 异步就位后，单独加载上期值
+// （hospitalId 在 onMounted 时还是 deptId，需等 getHospitalByDeptId 返回后才变成真正的医院 ID）
+watch(
+  () => [props.realHospitalId, props.reportYear, props.reportBatch],
+  ([newRealHospitalId, newReportYear, newReportBatch]) => {
+    if (!newRealHospitalId || newReportYear === undefined || newReportBatch === undefined) {
+      return;
+    }
+    loadLastPeriodValues(newRealHospitalId, newReportYear, newReportBatch);
+  },
+  { immediate: true },
+);
 
 watch(formValues as any, () => {
   const hasAnyValue = Object.values(formValues).some((v) => v !== undefined && v !== null && v !== '');
@@ -579,19 +619,36 @@ function addHighlight(el: Element) {
               class="indicator-input-row"
               :class="{ 'input-row--inline': indicator.valueType === 3 || indicator.valueType === 6 || indicator.valueType === 7 }"
             >
-              <!-- 数字类型 -->
-              <SafeNumberInput
+              <!-- 数字类型：输入框、上期值、错误提示各独立一行 -->
+              <div
                 v-if="indicator.valueType === 1"
-                v-model="formValues[indicator.indicatorCode]"
-                :disabled="readonly || isComputedIndicator(indicator)"
-                :placeholder="isComputedIndicator(indicator) ? '自动计算' : '请输入数字'"
-                :min="indicator.minValue ?? 0"
-                :max="indicator.maxValue"
-                :precision="getNumberPrecision(indicator)"
-                :suffix="indicator.unit || parseExtraConfig(indicator.extraConfig).suffix"
-                class="w-full number-input-auto-width"
-                @blur="(e: Event) => handleNumberBlur(indicator, e)"
-              />
+                style="display: flex; flex-direction: column; gap: 4px; align-items: flex-start;"
+              >
+                <SafeNumberInput
+                  v-model="formValues[indicator.indicatorCode]"
+                  :disabled="readonly || isComputedIndicator(indicator)"
+                  :placeholder="isComputedIndicator(indicator) ? '自动计算' : '请输入数字'"
+                  :min="indicator.minValue ?? 0"
+                  :max="indicator.maxValue"
+                  :precision="getNumberPrecision(indicator)"
+                  :suffix="indicator.unit || parseExtraConfig(indicator.extraConfig).suffix"
+                  class="number-input-auto-width"
+                  @blur="(e: Event) => handleNumberBlur(indicator, e)"
+                />
+                <div
+                  v-if="lastPeriodValues[indicator.indicatorCode]"
+                  class="inline-last-value"
+                >
+                  <span class="last-value-prefix">上期：</span>
+                  <span class="last-value-text">{{ formatLastValueNumber(lastPeriodValues[indicator.indicatorCode], getNumberPrecision(indicator)) }}</span>
+                </div>
+                <div
+                  v-if="indicator.id && getTopLevelError(indicator.id)"
+                  class="indicator-error"
+                >
+                  {{ getTopLevelError(indicator.id) }}
+                </div>
+              </div>
 
               <!-- 字符串类型 -->
               <a-input
@@ -623,7 +680,6 @@ function addHighlight(el: Element) {
                 :disabled="readonly"
                 :show-time="getDateFormat(indicator).includes('HH')"
                 :format="getDateFormat(indicator)"
-                class="w-full"
                 @change="() => onIndicatorChange(indicator)"
               />
 
@@ -640,67 +696,82 @@ function addHighlight(el: Element) {
                 @change="() => onIndicatorChange(indicator)"
               />
 
-              <!-- 单选类型 -->
-              <a-radio-group
-                v-else-if="indicator.valueType === 6"
-                :value="getInputTypeOptionValue(getInputTypeRawValue(indicator.indicatorCode))"
-                :disabled="readonly"
+              <!-- 单选/多选类型（合并条件，内联上期值到右侧） -->
+              <div
+                v-else-if="indicator.valueType === 6 || indicator.valueType === 7"
                 class="flex flex-wrap gap-x-4 gap-y-2"
-                @update:value="(val: string) => handleInputTypeRadioChange(indicator, val)"
-                @change="() => onIndicatorChange(indicator)"
+                style="align-items: flex-start;"
               >
-                <template v-for="opt in parseOptions(indicator.valueOptions)" :key="opt.value">
-                  <div class="flex items-center">
-                    <a-radio :value="opt.value" :disabled="readonly">
-                      {{ opt.label }}
-                    </a-radio>
-                    <a-input
-                      v-if="opt.inputType && isInputTypeOptionSelected(indicator.indicatorCode, formValues[indicator.indicatorCode], opt.value)"
-                      size="small"
-                      class="w-36 ml-2"
-                      placeholder="请输入"
-                      :value="inputTypeValues[indicator.indicatorCode + '_' + opt.value]"
-                      :status="isInputTypeOptionSelected(indicator.indicatorCode, formValues[indicator.indicatorCode], opt.value) ? getInputTypeError(indicator.indicatorCode, opt.value) : null"
-                      @click.stop
-                      @input="(e: any) => inputTypeValues[indicator.indicatorCode + '_' + opt.value] = e.target.value"
-                      @blur="(e: any) => onInputTypeBlur(indicator, opt, e.target.value)"
-                    />
-                    <span v-if="readonly && opt.inputType && inputTypeValues[indicator.indicatorCode + '_' + opt.value]" class="ml-1 text-gray-500">
-                      （{{ inputTypeValues[indicator.indicatorCode + '_' + opt.value] }}）
-                    </span>
-                  </div>
+                <template v-if="indicator.valueType === 6">
+                  <template v-for="opt in parseOptions(indicator.valueOptions)" :key="opt.value">
+                    <div class="flex items-center">
+                      <a-radio
+                        :value="opt.value"
+                        :disabled="readonly"
+                        @click="() => { handleInputTypeRadioChange(indicator, opt.value); onIndicatorChange(indicator); }"
+                      >
+                        {{ opt.label }}
+                      </a-radio>
+                      <a-input
+                        v-if="opt.inputType && isInputTypeOptionSelected(indicator.indicatorCode, formValues[indicator.indicatorCode], opt.value)"
+                        size="small"
+                        class="w-36 ml-2"
+                        placeholder="请输入"
+                        :value="inputTypeValues[indicator.indicatorCode + '_' + opt.value]"
+                        :status="isInputTypeOptionSelected(indicator.indicatorCode, formValues[indicator.indicatorCode], opt.value) ? getInputTypeError(indicator.indicatorCode, opt.value) : null"
+                        @click.stop
+                        @input="(e: any) => inputTypeValues[indicator.indicatorCode + '_' + opt.value] = e.target.value"
+                        @blur="(e: any) => onInputTypeBlur(indicator, opt, e.target.value)"
+                      />
+                      <span v-if="readonly && opt.inputType && inputTypeValues[indicator.indicatorCode + '_' + opt.value]" class="ml-1 text-gray-500">
+                        （{{ inputTypeValues[indicator.indicatorCode + '_' + opt.value] }}）
+                      </span>
+                    </div>
+                  </template>
                 </template>
-              </a-radio-group>
+                <template v-else>
+                  <template v-for="opt in parseOptions(indicator.valueOptions)" :key="opt.value">
+                    <div class="flex items-center">
+                      <a-checkbox :value="opt.value" :disabled="readonly" @click="(e: MouseEvent) => { handleCheckboxInputClick(indicator, opt.value, e); onIndicatorChange(indicator); }">
+                        {{ opt.label }}
+                      </a-checkbox>
+                      <a-input
+                        v-if="opt.inputType && isInputTypeOptionSelected(indicator.indicatorCode, formValues[indicator.indicatorCode], opt.value)"
+                        size="small"
+                        class="w-36 ml-2"
+                        placeholder="请输入"
+                        :value="inputTypeValues[indicator.indicatorCode + '_' + opt.value]"
+                        :status="isInputTypeOptionSelected(indicator.indicatorCode, formValues[indicator.indicatorCode], opt.value) ? getInputTypeError(indicator.indicatorCode, opt.value) : null"
+                        @click.stop
+                        @input="(e: any) => inputTypeValues[indicator.indicatorCode + '_' + opt.value] = e.target.value"
+                        @blur="(e: any) => onInputTypeBlur(indicator, opt, e.target.value)"
+                      />
+                      <span v-if="readonly && opt.inputType && inputTypeValues[indicator.indicatorCode + '_' + opt.value]" class="ml-1 text-gray-500">
+                        （{{ inputTypeValues[indicator.indicatorCode + '_' + opt.value] }}）
+                      </span>
+                    </div>
+                  </template>
+                </template>
 
-              <!-- 多选类型 -->
-              <a-checkbox-group
-                v-else-if="indicator.valueType === 7"
-                :value="getInputTypeOptionValues(getInputTypeRawValues(indicator.indicatorCode))"
-                :disabled="readonly"
-                class="flex flex-wrap gap-x-4 gap-y-2"
-              >
-                <template v-for="opt in parseOptions(indicator.valueOptions)" :key="opt.value">
-                  <div class="flex items-center">
-                    <a-checkbox :value="opt.value" :disabled="readonly" @click="(e: MouseEvent) => { handleCheckboxInputClick(indicator, opt.value, e); onIndicatorChange(indicator); }">
-                      {{ opt.label }}
-                    </a-checkbox>
-                    <a-input
-                      v-if="opt.inputType && isInputTypeOptionSelected(indicator.indicatorCode, formValues[indicator.indicatorCode], opt.value)"
-                      size="small"
-                      class="w-36 ml-2"
-                      placeholder="请输入"
-                      :value="inputTypeValues[indicator.indicatorCode + '_' + opt.value]"
-                      :status="isInputTypeOptionSelected(indicator.indicatorCode, formValues[indicator.indicatorCode], opt.value) ? getInputTypeError(indicator.indicatorCode, opt.value) : null"
-                      @click.stop
-                      @input="(e: any) => inputTypeValues[indicator.indicatorCode + '_' + opt.value] = e.target.value"
-                      @blur="(e: any) => onInputTypeBlur(indicator, opt, e.target.value)"
-                    />
-                    <span v-if="readonly && opt.inputType && inputTypeValues[indicator.indicatorCode + '_' + opt.value]" class="ml-1 text-gray-500">
-                      （{{ inputTypeValues[indicator.indicatorCode + '_' + opt.value] }}）
-                    </span>
-                  </div>
-                </template>
-              </a-checkbox-group>
+                <!-- 上期值：在选项下方、错误提示上方 -->
+                <div
+                  v-if="lastPeriodValues[indicator.indicatorCode]"
+                  class="inline-last-value"
+                  style="width: 100%; margin-top: 4px;"
+                >
+                  <span class="last-value-prefix">上期：</span>
+                  <span class="last-value-text">{{ lastPeriodValues[indicator.indicatorCode] }}</span>
+                </div>
+
+                <!-- 错误提示：在选项下方 -->
+                <div
+                  v-if="indicator.id && getTopLevelError(indicator.id)"
+                  class="indicator-error"
+                  style="width: 100%; margin-top: 4px;"
+                >
+                  {{ getTopLevelError(indicator.id) }}
+                </div>
+              </div>
 
               <!-- 单选下拉类型 -->
               <a-select
@@ -708,7 +779,6 @@ function addHighlight(el: Element) {
                 v-model="formValues[indicator.indicatorCode]"
                 :disabled="readonly"
                 :placeholder="`请选择${indicator.indicatorName}`"
-                class="w-full"
                 :show-search="getShowSearch(indicator)"
                 allow-clear
                 @change="() => onIndicatorChange(indicator)"
@@ -723,7 +793,6 @@ function addHighlight(el: Element) {
                 :disabled="readonly"
                 :placeholder="`请选择${indicator.indicatorName}`"
                 mode="multiple"
-                class="w-full"
                 :show-search="getShowSearch(indicator)"
                 allow-clear
                 @change="(vals: string[]) => handleMultiSelectChange(indicator, vals)"
@@ -738,7 +807,6 @@ function addHighlight(el: Element) {
                 :disabled="readonly"
                 :show-time="getDateFormat(indicator).includes('HH')"
                 :format="getDateFormat(indicator)"
-                class="w-full"
                 @change="() => onIndicatorChange(indicator)"
               />
 
@@ -793,6 +861,7 @@ function addHighlight(el: Element) {
                         :field="field"
                         :disabled="readonly"
                         :container-field-error="getContainerFieldError(entry, indicator.indicatorCode, field.fieldCode, 'conditional')"
+                        :container-last-values="containerLastValuesMap[indicator.indicatorCode]"
                         @blur="() => onContainerFieldChange(indicator, entry, field)"
                         @field-change="() => onContainerFieldBasicChange(indicator, entry, field)"
                       />
@@ -816,6 +885,7 @@ function addHighlight(el: Element) {
                         :field="field"
                         :disabled="readonly"
                         :container-field-error="getContainerFieldError(entry, indicator.indicatorCode, field.fieldCode, 'autoEntry')"
+                        :container-last-values="containerLastValuesMap[indicator.indicatorCode]"
                         @blur="() => onContainerFieldChange(indicator, entry, field)"
                         @field-change="() => onContainerFieldBasicChange(indicator, entry, field)"
                       />
@@ -854,6 +924,7 @@ function addHighlight(el: Element) {
                         :field="field"
                         :disabled="readonly"
                         :container-field-error="getContainerFieldError(entry, indicator.indicatorCode, field.fieldCode, 'normal')"
+                        :container-last-values="containerLastValuesMap[indicator.indicatorCode]"
                         @blur="() => onContainerFieldChange(indicator, entry, field)"
                         @field-change="() => onContainerFieldBasicChange(indicator, entry, field)"
                       />
@@ -869,12 +940,12 @@ function addHighlight(el: Element) {
                 </div>
               </div>
 
-              <!-- 未知类型 -->
+              <!-- 未知类型兜底 -->
               <span v-else class="text-gray-400 text-sm">暂不支持该类型</span>
 
-              <!-- 错误提示 -->
+              <!-- 错误提示：仅显示在未内联错误提示的类型上 -->
               <div
-                v-if="indicator.valueType !== 12 && indicator.id && getTopLevelError(indicator.id)"
+                v-if="indicator.valueType !== 12 && indicator.valueType !== 1 && indicator.valueType !== 6 && indicator.valueType !== 7 && indicator.id && getTopLevelError(indicator.id)"
                 class="indicator-error"
               >
                 {{ getTopLevelError(indicator.id) }}
@@ -882,10 +953,12 @@ function addHighlight(el: Element) {
             </div>
           </div>
 
-          <!-- 右侧：上期值 -->
-          <div v-if="lastPeriodValues[indicator.indicatorCode]" class="indicator-last-value">
+          <!-- 右侧：上期值（单选/多选/数字/下拉/日期已内联到控件旁，此处仅显示其他类型） -->
+          <div v-if="lastPeriodValues[indicator.indicatorCode] && indicator.valueType !== 6 && indicator.valueType !== 7 && indicator.valueType !== 1 && indicator.valueType !== 4 && indicator.valueType !== 8 && indicator.valueType !== 10 && indicator.valueType !== 11" class="indicator-last-value">
             <div class="last-value-label">上期值</div>
-            <div class="last-value-content">{{ lastPeriodValues[indicator.indicatorCode] }}</div>
+            <div class="last-value-content">
+              {{ getLastValueDisplayText(lastPeriodValues[indicator.indicatorCode], indicator.valueType, indicator.valueOptions) }}
+            </div>
           </div>
         </div>
       </div>
@@ -984,9 +1057,8 @@ function addHighlight(el: Element) {
 }
 
 .indicator-main--inline {
-  flex: none;
-  align-self: center;
-  width: 100%;
+  flex: 0 0 80%;
+  width: 80%;
 }
 
 .indicator-label-row {
@@ -1089,11 +1161,33 @@ function addHighlight(el: Element) {
   min-width: 0 !important;
 }
 
+/* 有上期值时，radio/checkbox 组宽度 auto，不占满一行 */
+.input-row--inline :deep(.ant-radio-group),
+.input-row--inline :deep(.ant-checkbox-group) {
+  width: auto !important;
+}
+
 .input-row--inline :deep(.ant-radio-wrapper),
 .input-row--inline :deep(.ant-checkbox-wrapper) {
   margin-inline-end: 0 !important;
   white-space: normal !important;
   word-break: break-word !important;
+}
+
+.inline-last-value {
+  font-size: 12.5px;
+  color: hsl(var(--muted-foreground));
+  white-space: nowrap;
+}
+
+.last-value-prefix {
+  font-weight: 600;
+  color: hsl(var(--muted-foreground));
+}
+
+.last-value-text {
+  color: hsl(var(--success));
+  font-weight: 500;
 }
 
 .w-full {
@@ -1118,7 +1212,6 @@ function addHighlight(el: Element) {
   border: 1px solid hsl(var(--destructive) / 0.2);
   border-radius: 6px;
   line-height: 1.4;
-  min-width: 160px;
   width: fit-content;
 }
 
@@ -1130,6 +1223,8 @@ function addHighlight(el: Element) {
   border-left: 1px solid hsl(var(--border));
   padding-left: 16px;
   gap: 4px;
+  min-width: 140px;
+  max-width: 280px;
 }
 
 .last-value-label {
@@ -1145,6 +1240,9 @@ function addHighlight(el: Element) {
   font-weight: 600;
   color: hsl(var(--success));
   line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .file-upload-wrapper {
@@ -1282,4 +1380,6 @@ function addHighlight(el: Element) {
   list-style: none !important;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif !important;
 }
+
+
 </style>

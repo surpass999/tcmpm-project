@@ -1,10 +1,14 @@
 package cn.gemrun.base.module.declare.service.indicator;
 
+import cn.gemrun.base.module.declare.dal.dataobject.indicator.DeclareIndicatorDO;
 import cn.gemrun.base.module.declare.dal.dataobject.indicator.DeclareIndicatorValueDO;
+import cn.gemrun.base.module.declare.dal.mysql.indicator.DeclareIndicatorMapper;
 import cn.gemrun.base.module.declare.dal.mysql.DeclareProgressReportMapper;
 import cn.gemrun.base.module.declare.dal.dataobject.progress.DeclareProgressReportDO;
 import cn.gemrun.base.module.declare.dal.mysql.indicator.DeclareIndicatorValueMapper;
 import cn.gemrun.base.framework.mybatis.core.query.LambdaQueryWrapperX;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,6 +34,9 @@ public class DeclareIndicatorValueServiceImpl implements DeclareIndicatorValueSe
 
     @Resource
     private DeclareIndicatorValueMapper indicatorValueMapper;
+
+    @Resource
+    private DeclareIndicatorMapper indicatorMapper;
 
     @Override
     @Transactional
@@ -173,9 +180,7 @@ public class DeclareIndicatorValueServiceImpl implements DeclareIndicatorValueSe
             case 1: // 数字
                 return value.getValueNum() != null ? value.getValueNum().toPlainString() : null;
             case 2: // 字符串
-            case 6: // 单选
             case 9: // 文件上传
-            case 10: // 单选下拉
                 return value.getValueStr();
             case 3: // 布尔
                 if (value.getValueBool() != null) {
@@ -193,12 +198,11 @@ public class DeclareIndicatorValueServiceImpl implements DeclareIndicatorValueSe
                 return value.getValueText().length() > 50
                     ? value.getValueText().substring(0, 50) + "..."
                     : value.getValueText();
-            case 7: // 多选
+            case 6: // 单选 → 映射 value → label
+                return mapSingleValueToLabel(value.getIndicatorId(), value.getValueStr());
+            case 7: // 多选 → 映射 value → label，用顿号连接
             case 11: // 多选下拉
-                if (value.getValueStr() == null) {
-                    return null;
-                }
-                return value.getValueStr().replace(",", " / ");
+                return mapMultiValueToLabel(value.getIndicatorId(), value.getValueStr());
             case 8: // 日期区间
                 if (value.getValueDateStart() == null && value.getValueDateEnd() == null) {
                     return null;
@@ -208,11 +212,80 @@ public class DeclareIndicatorValueServiceImpl implements DeclareIndicatorValueSe
                 String end = value.getValueDateEnd() != null
                     ? value.getValueDateEnd().toLocalDate().toString() : "";
                 return start + " ~ " + end;
-            case 12: // 动态容器
-                return value.getValueStr() != null ? "[动态数据]" : null;
+            case 10: // 单选下拉 → 映射 value → label
+                return mapSingleValueToLabel(value.getIndicatorId(), value.getValueStr());
+            case 12: // 动态容器 - 返回原始 JSON，前端负责 label 格式化
+                return value.getValueStr();
             default:
                 return value.getValueStr();
         }
+    }
+
+    /**
+     * 单选/单选下拉：将原始值映射为 label
+     */
+    private String mapSingleValueToLabel(Long indicatorId, String rawValue) {
+        if (rawValue == null || rawValue.trim().isEmpty()) return null;
+        return getOptionLabelById(indicatorId, rawValue, false);
+    }
+
+    /**
+     * 多选/多选下拉：将逗号分隔的原始值映射为 label，用顿号连接
+     */
+    private String mapMultiValueToLabel(Long indicatorId, String rawValue) {
+        if (rawValue == null || rawValue.trim().isEmpty()) return null;
+        return getOptionLabelById(indicatorId, rawValue, true);
+    }
+
+    /**
+     * 根据指标ID和原始值，映射为 label（或 label 列表）
+     * @param indicatorId 指标ID（唯一，不会跨医院重复）
+     * @param rawValue 原始值（单选传 "1"，多选传 "1,2,3"）
+     * @param isMulti 是否多选模式
+     * @return label（或用顿号连接的 label 列表），找不到则返回原始值
+     */
+    private String getOptionLabelById(Long indicatorId, String rawValue, boolean isMulti) {
+        if (rawValue == null || rawValue.trim().isEmpty()) {
+            return isMulti ? "" : null;
+        }
+        DeclareIndicatorDO indicator = indicatorMapper.selectById(indicatorId);
+        if (indicator == null || indicator.getValueOptions() == null || indicator.getValueOptions().trim().isEmpty()) {
+            return isMulti ? rawValue : rawValue;
+        }
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            // valueOptions 为数组格式 [{value:"1",label:"选项1"},...]
+            TypeReference<List<Map<String, Object>>> typeRef =
+                    new TypeReference<List<Map<String, Object>>>() {};
+            List<Map<String, Object>> options = mapper.readValue(indicator.getValueOptions(), typeRef);
+            if (options == null || options.isEmpty()) {
+                return isMulti ? rawValue : rawValue;
+            }
+            if (isMulti) {
+                StringBuilder sb = new StringBuilder();
+                String[] parts = rawValue.split(",");
+                for (int i = 0; i < parts.length; i++) {
+                    String trimmed = parts[i].trim();
+                    for (Map<String, Object> opt : options) {
+                        if (String.valueOf(opt.get("value")).equals(trimmed)) {
+                            sb.append(opt.get("label"));
+                            break;
+                        }
+                    }
+                    if (i < parts.length - 1) sb.append("、");
+                }
+                return sb.toString();
+            } else {
+                for (Map<String, Object> opt : options) {
+                    if (String.valueOf(opt.get("value")).equals(rawValue)) {
+                        return String.valueOf(opt.get("label"));
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[getOptionLabelById] 解析指标 options 失败: indicatorId={}", indicatorId, e);
+        }
+        return isMulti ? rawValue : rawValue;
     }
 
     @Override
@@ -394,6 +467,72 @@ public class DeclareIndicatorValueServiceImpl implements DeclareIndicatorValueSe
         }
 
         return result;
+    }
+
+    /**
+     * 将动态容器子字段的原始值转换为可读文本
+     * @param rawValue 原始值（如 "1", "2,3"）
+     * @param fieldCode 字段编码
+     * @param indicatorCode 容器指标编码
+     * @return 可读文本（如 "选项A" 或 "选项A、选项B"）
+     */
+    private String convertDynamicFieldValue(String rawValue, String fieldCode, Long indicatorId) {
+        if (rawValue == null || rawValue.trim().isEmpty()) {
+            return null;
+        }
+        DeclareIndicatorDO indicator = indicatorMapper.selectById(indicatorId);
+        if (indicator == null || indicator.getValueOptions() == null || indicator.getValueOptions().trim().isEmpty()) {
+            return rawValue;
+        }
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            TypeReference<Map<String, Object>> typeRef =
+                    new TypeReference<Map<String, Object>>() {};
+            Map<String, Object> config = mapper.readValue(indicator.getValueOptions(), typeRef);
+            if (config == null || !config.containsKey("fields")) {
+                return rawValue;
+            }
+            List<Map<String, Object>> fields = (List<Map<String, Object>>) config.get("fields");
+            for (Map<String, Object> field : fields) {
+                if (!fieldCode.equals(String.valueOf(field.get("fieldCode")))) {
+                    continue;
+                }
+                String fieldType = String.valueOf(field.get("fieldType"));
+                List<Map<String, Object>> options = (List<Map<String, Object>>) field.get("options");
+                if (options == null || options.isEmpty()) {
+                    return rawValue;
+                }
+                // radio/select 类型
+                if ("radio".equals(fieldType) || "select".equals(fieldType) || "multiSelect".equals(fieldType)) {
+                    if (rawValue.contains(",")) {
+                        // 多选
+                        StringBuilder sb = new StringBuilder();
+                        String[] parts = rawValue.split(",");
+                        for (int i = 0; i < parts.length; i++) {
+                            for (Map<String, Object> opt : options) {
+                                if (String.valueOf(opt.get("value")).equals(parts[i])) {
+                                    sb.append(opt.get("label"));
+                                    break;
+                                }
+                            }
+                            if (i < parts.length - 1) sb.append("、");
+                        }
+                        return sb.toString();
+                    } else {
+                        // 单选
+                        for (Map<String, Object> opt : options) {
+                            if (String.valueOf(opt.get("value")).equals(rawValue)) {
+                                return String.valueOf(opt.get("label"));
+                            }
+                        }
+                    }
+                }
+                return rawValue;
+            }
+        } catch (Exception e) {
+            log.warn("[convertDynamicFieldValue] 解析子字段 options 失败: indicatorId={}, fieldCode={}", indicatorId, fieldCode, e);
+        }
+        return rawValue;
     }
 
 }

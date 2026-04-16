@@ -40,8 +40,8 @@ export function useGridFormSchema(): VbenFormSchema[] {
       componentProps: {
         placeholder: '请选择状态',
         options: [
-          { label: '禁用', value: 1 },
-          { label: '启用', value: 0 },
+          { label: '启用', value: 1 },
+          { label: '禁用', value: 0 },
         ],
         allowClear: true,
       },

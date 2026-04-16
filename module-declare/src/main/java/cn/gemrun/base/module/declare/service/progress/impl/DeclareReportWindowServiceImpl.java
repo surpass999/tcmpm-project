@@ -61,10 +61,10 @@ public class DeclareReportWindowServiceImpl implements DeclareReportWindowServic
     }
 
     @Override
-    public List<ReportWindowVO> getWindowList(Integer reportYear) {
+    public List<ReportWindowVO> getWindowList(Integer reportYear, Integer status) {
         LambdaQueryWrapper<DeclareReportWindowDO> wrapper = new LambdaQueryWrapper<DeclareReportWindowDO>()
                 .eq(reportYear != null, DeclareReportWindowDO::getReportYear, reportYear)
-                .eq(DeclareReportWindowDO::getStatus, 1)
+                .eq(status != null, DeclareReportWindowDO::getStatus, status)
                 .orderByAsc(DeclareReportWindowDO::getReportBatch);
         return windowMapper.selectList(wrapper).stream()
                 .map(this::convertToVO)

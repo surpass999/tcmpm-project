@@ -50,8 +50,10 @@ public class DeclareReportWindowController {
      * 获取时间窗口列表
      */
     @GetMapping("/list")
-    public CommonResult<List<ReportWindowVO>> getWindowList(@RequestParam(value = "reportYear", required = false) Integer reportYear) {
-        return success(reportWindowService.getWindowList(reportYear));
+    public CommonResult<List<ReportWindowVO>> getWindowList(
+            @RequestParam(value = "reportYear", required = false) Integer reportYear,
+            @RequestParam(value = "status", required = false) Integer status) {
+        return success(reportWindowService.getWindowList(reportYear, status));
     }
 
     /**

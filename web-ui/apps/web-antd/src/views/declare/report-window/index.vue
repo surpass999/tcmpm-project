@@ -70,7 +70,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
     proxyConfig: {
       ajax: {
         query: async ({ page }, formValues) => {
-          const list = await getReportWindowList(formValues.reportYear);
+          const list = await getReportWindowList(formValues.reportYear, formValues.status);
           return { list, total: list.length };
         },
       },

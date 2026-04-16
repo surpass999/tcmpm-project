@@ -607,7 +607,7 @@ public class DeclareProgressReportServiceImpl implements DeclareProgressReportSe
         LocalDateTime ws = null;
         LocalDateTime we = null;
         if (report.getReportYear() != null && report.getReportBatch() != null) {
-            List<ReportWindowVO> windows = reportWindowService.getWindowList(report.getReportYear());
+            List<ReportWindowVO> windows = reportWindowService.getWindowList(report.getReportYear(), null);
             if (windows != null) {
                 for (ReportWindowVO w : windows) {
                     if (w.getReportBatch() != null && w.getReportBatch().equals(report.getReportBatch())) {

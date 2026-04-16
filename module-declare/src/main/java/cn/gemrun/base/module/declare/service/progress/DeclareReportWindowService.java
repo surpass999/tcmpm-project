@@ -25,7 +25,7 @@ public interface DeclareReportWindowService {
     /**
      * 获取时间窗口列表
      */
-    List<ReportWindowVO> getWindowList(Integer reportYear);
+    List<ReportWindowVO> getWindowList(Integer reportYear, Integer status);
 
     /**
      * 检查是否有开放的时间窗口

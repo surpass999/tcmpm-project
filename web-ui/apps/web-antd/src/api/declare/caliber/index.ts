@@ -31,6 +31,7 @@ export namespace DeclareIndicatorCaliberApi {
 
 /** 获取指标口径分页列表 */
 export async function getCaliberPage(params: PageParam & {
+  projectType?: number;
   indicatorId?: number;
   definition?: string;
 }) {

@@ -21,6 +21,7 @@ import CheckboxInput from './input-components/CheckboxInput.vue';
 import SelectInput from './input-components/SelectInput.vue';
 import MultiSelectInput from './input-components/MultiSelectInput.vue';
 import DateRangeInput from './input-components/DateRangeInput.vue';
+import { getLastValueDisplayText } from '../../utils/lastValue';
 
 interface Props {
   indicator: DeclareIndicatorApi.Indicator;
@@ -330,7 +331,7 @@ function handleBlur(e: any) {
         <!-- 动态容器（暂时保持原样，由父组件处理） -->
         <slot v-else-if="indicator.valueType === 12" name="container" />
 
-        <!-- 未知类型 -->
+        <!-- 未知类型兜底 -->
         <span v-else class="text-gray-400 text-sm">暂不支持该类型</span>
 
         <!-- 错误提示 -->
@@ -350,7 +351,7 @@ function handleBlur(e: any) {
     >
       <div class="last-value-label">上期值</div>
       <div class="last-value-content">
-        {{ lastValue }}
+        {{ getLastValueDisplayText(lastValue, indicator.valueType, indicator.valueOptions) }}
       </div>
     </div>
   </div>
@@ -402,9 +403,8 @@ function handleBlur(e: any) {
 }
 
 .indicator-main--inline {
-  flex: none;
-  align-self: center;
-  width: 100%;
+  flex: 0 0 80%;
+  width: 80%;
 }
 
 .indicator-label-row {
@@ -526,6 +526,8 @@ function handleBlur(e: any) {
   border-left: 1px solid hsl(var(--border));
   padding-left: 16px;
   gap: 4px;
+  min-width: 140px;
+  max-width: 280px;
 }
 
 .last-value-label {
@@ -541,6 +543,9 @@ function handleBlur(e: any) {
   font-weight: 600;
   color: hsl(var(--success));
   line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .text-gray-400 {

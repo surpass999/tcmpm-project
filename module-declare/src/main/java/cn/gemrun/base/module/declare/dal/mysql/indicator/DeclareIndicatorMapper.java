@@ -60,7 +60,6 @@ public interface DeclareIndicatorMapper extends BaseMapperX<DeclareIndicatorDO> 
         return selectOne(new LambdaQueryWrapperX<DeclareIndicatorDO>()
                 .eq(DeclareIndicatorDO::getIndicatorCode, indicatorCode));
     }
-
     /**
      * 根据指标代号和项目类型查询（用于校验唯一性）
      * @param indicatorCode 指标代号
