@@ -266,8 +266,18 @@ function handleNumberBlur(indicator: DeclareIndicatorApi.Indicator, _event: Even
 }
 
 function handleMultiSelectChange(indicator: any, selectedValues: string[]) {
+  // 处理互斥逻辑
+  const options = parseOptions(indicator.valueOptions);
+  const exclusiveValues = new Set(options.filter((o) => o.exclusive).map((o) => o.value));
+  let finalValues: string[];
+  if (selectedValues.some((v) => exclusiveValues.has(v))) {
+    // 如果选中了互斥项，只保留第一个互斥项
+    finalValues = [selectedValues.find((v) => exclusiveValues.has(v))!];
+  } else {
+    finalValues = selectedValues;
+  }
   // 序列化所有选中的值（添加 inputType 内容）
-  const serialized = selectedValues.map((v) => {
+  const serialized = finalValues.map((v) => {
     const inputKey = indicator.indicatorCode + '_' + v;
     const inputContent = inputTypeValues[inputKey] || '';
     return serializeInputTypeValue(v, inputContent);
@@ -905,39 +915,37 @@ function addHighlight(el: Element) {
                   class="indicator-input-row"
                   :class="{ 'input-row--inline': true }"
                 >
-                  <a-checkbox-group
-                    :value="getPureCheckboxValues(indicator.indicatorCode)"
-                    :disabled="readonly"
-                    class="flex flex-wrap gap-x-4 gap-y-2"
-                    @change="(vals: string[]) => handleMultiSelectChange(indicator, vals)"
-                  >
-                    <!-- 普通选项 -->
-                    <template v-for="opt in parseOptions(indicator.valueOptions)" :key="'normal-' + opt.value">
+                  <!-- 所有选项按原始顺序渲染 -->
+                  <template v-for="opt in parseOptions(indicator.valueOptions)" :key="'opt-' + opt.value">
+                    <a-checkbox
+                      v-if="!opt.inputType"
+                      :checked="getPureCheckboxValues(indicator.indicatorCode).includes(opt.value)"
+                      :disabled="readonly"
+                      :class="{ 'checkbox-tight': true }"
+                      @click="(e: MouseEvent) => handleCheckboxInputClick(indicator, opt.value, e)"
+                    >
+                      {{ opt.label }}
+                    </a-checkbox>
+                    <template v-else-if="opt.inputType">
                       <a-checkbox
-                        v-if="!opt.inputType"
-                        :value="opt.value"
+                        :checked="getPureCheckboxValues(indicator.indicatorCode).includes(opt.value)"
+                        :disabled="readonly"
+                        :class="{ 'checkbox-tight': true }"
+                        @click="(e: MouseEvent) => handleCheckboxInputClick(indicator, opt.value, e)"
                       >
                         {{ opt.label }}
                       </a-checkbox>
+                      <a-input
+                        v-if="getPureCheckboxValues(indicator.indicatorCode).includes(opt.value)"
+                        :value="inputTypeValues[indicator.indicatorCode + '_' + opt.value] || ''"
+                        :disabled="readonly"
+                        :placeholder="getInputTypeLastPeriodContent(lastPeriodRawValues, indicator.indicatorCode, opt.value) ? '上期：' + getInputTypeLastPeriodContent(lastPeriodRawValues, indicator.indicatorCode, opt.value) : '请输入补充内容'"
+                        style="display: inline-block; width: 140px; padding: 0px 0px 0px 4px; border-radius: 4px; vertical-align: middle;"
+                        @input="(e: any) => { inputTypeValues[indicator.indicatorCode + '_' + opt.value] = e.target.value; onInputTypeBlur(indicator, opt, e.target.value); }"
+                        @blur="() => { onIndicatorChange(indicator); }"
+                      />
                     </template>
-                    <!-- 输入型选项 -->
-                    <template v-for="opt in parseOptions(indicator.valueOptions)" :key="'input-' + opt.value">
-                      <template v-if="opt.inputType">
-                        <a-checkbox :value="opt.value">
-                          {{ opt.label }}
-                        </a-checkbox>
-                        <a-input
-                          v-if="(formValues[indicator.indicatorCode] || []).includes(opt.value)"
-                          :value="inputTypeValues[indicator.indicatorCode + '_' + opt.value] || ''"
-                          :disabled="readonly"
-                          :placeholder="getInputTypeLastPeriodContent(lastPeriodRawValues, indicator.indicatorCode, opt.value) ? '上期：' + getInputTypeLastPeriodContent(lastPeriodRawValues, indicator.indicatorCode, opt.value) : '请输入补充内容'"
-                          style="display: inline-block; width: 200px; padding: 0px 0px 0px 4px; border-radius: 4px; vertical-align: middle;"
-                          @input="(e: any) => { inputTypeValues[indicator.indicatorCode + '_' + opt.value] = e.target.value; onInputTypeBlur(indicator, opt, e.target.value); }"
-                          @blur="() => { onIndicatorChange(indicator); }"
-                        />
-                      </template>
-                    </template>
-                  </a-checkbox-group>
+                  </template>
                 </div>
                 <div
                   v-if="lastPeriodValues[indicator.indicatorCode]"
@@ -1139,6 +1147,11 @@ function addHighlight(el: Element) {
 </template>
 
 <style scoped>
+.checkbox-tight {
+  margin-inline-start: 8px;
+  margin-inline-end: 8px;
+}
+
 .indicator-form-wrapper {
   padding: 4px 0;
 }
