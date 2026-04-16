@@ -72,6 +72,7 @@ import {
   lastPeriodValues,
   lastPeriodRawValues,
   indicatorGroups,
+  jointRules,
   loadIndicatorData,
   reloadIndicatorData,
   loadJointRules,
@@ -107,6 +108,13 @@ import {
   validateLogicRules,
   validateLogicRuleForBlur,
 } from './composables/useLogicRules';
+
+// 上期对比规则
+import {
+  validateAllPositiveRules,
+  validatePositiveRuleForIndicator,
+  hasAnyLastPeriodValue,
+} from './composables/usePositiveRules';
 
 // 工具函数
 import {
@@ -262,6 +270,10 @@ function handleNumberBlur(indicator: DeclareIndicatorApi.Indicator, _event: Even
   setTimeout(() => {
     recalculateComputedIndicators(indicators.value);
     validateLogicRuleForBlur(indicator, indicators.value, setFieldError, clearFieldError, setDirty);
+    // 上期对比规则校验（仅在有上期值时）
+    if (hasAnyLastPeriodValue()) {
+      validatePositiveRuleForIndicator(indicator.indicatorCode, indicators.value);
+    }
   }, 0);
 }
 
@@ -302,6 +314,10 @@ function onIndicatorChange(indicator: DeclareIndicatorApi.Indicator) {
   validateIndicator(indicator);
   setTimeout(() => {
     validateLogicRuleForBlur(indicator, indicators.value, setFieldError, clearFieldError, setDirty);
+    // 上期对比规则校验（仅在有上期值时）
+    if (hasAnyLastPeriodValue()) {
+      validatePositiveRuleForIndicator(indicator.indicatorCode, indicators.value);
+    }
   }, 0);
 }
 
@@ -312,6 +328,10 @@ function onContainerFieldChange(indicator: DeclareIndicatorApi.Indicator, entry:
   setTimeout(() => {
     recalculateComputedIndicators(indicators.value);
     validateLogicRuleForBlur(indicator, indicators.value, setFieldError, clearFieldError, setDirty);
+    // 上期对比规则校验（仅在有上期值时）
+    if (hasAnyLastPeriodValue()) {
+      validatePositiveRuleForIndicator(indicator.indicatorCode, indicators.value);
+    }
   }, 0);
 }
 
@@ -435,10 +455,48 @@ function syncContainerValuesToForm() {
 }
 
 function doValidateAll() {
+  console.log('[doValidateAll] ===== 开始执行校验 =====');
+
+  // ==================== 第1级：基础验证 ====================
+  // 必填、类型、最大值、最小值、精度、文本格式
+  console.log('[doValidateAll] 第1级：基础验证');
   const { messages } = validateAll(indicators.value, setFieldError, clearFieldError);
+  if (messages.length > 0) {
+    console.log('[doValidateAll] 基础验证失败，阻断后续验证，错误数:', messages.length);
+    return messages;
+  }
+  console.log('[doValidateAll] 基础验证通过');
+
   const orderedIndicators = getIndicatorsInDisplayOrder();
+
+  // ==================== 第2级：逻辑验证 ====================
+  // IF条件表达式、简单比较、容器内规则
+  console.log('[doValidateAll] 第2级：逻辑验证');
   const logicErrors = validateLogicRules(orderedIndicators, setFieldError, clearFieldError);
-  return [...messages, ...logicErrors];
+  if (logicErrors.length > 0) {
+    console.log('[doValidateAll] 逻辑验证失败，阻断上期验证，错误数:', logicErrors.length);
+    return logicErrors;
+  }
+  console.log('[doValidateAll] 逻辑验证通过');
+
+  // ==================== 第3级：上期值验证 ====================
+  // 仅在有上期值时执行
+  console.log('[doValidateAll] 第3级：上期值验证');
+  console.log('[doValidateAll] hasAnyLastPeriodValue:', hasAnyLastPeriodValue());
+  console.log('[doValidateAll] jointRules:', jointRules.value);
+  if (hasAnyLastPeriodValue()) {
+    const positiveErrors = validateAllPositiveRules(orderedIndicators);
+    if (positiveErrors.length > 0) {
+      console.log('[doValidateAll] 上期验证失败，错误数:', positiveErrors.length);
+      return positiveErrors.map((e) => `${e.ruleName}：${e.message}`);
+    }
+    console.log('[doValidateAll] 上期验证通过');
+  } else {
+    console.log('[doValidateAll] 无上期值，跳过上期验证');
+  }
+
+  console.log('[doValidateAll] ===== 所有验证通过 =====');
+  return [];
 }
 
 function doValidateFilledData() {

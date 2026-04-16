@@ -6,7 +6,10 @@ import cn.gemrun.base.framework.security.core.util.SecurityFrameworkUtils;
 import cn.gemrun.base.module.declare.controller.admin.indicator.vo.DeclareIndicatorValueRespVO;
 import cn.gemrun.base.module.declare.controller.admin.indicator.vo.DeclareIndicatorValueSaveReqVO;
 import cn.gemrun.base.module.declare.controller.admin.indicator.vo.LastPeriodValuesRespVO;
+import cn.gemrun.base.module.declare.controller.admin.indicator.vo.PositiveRuleValidationErrorVO;
+import cn.gemrun.base.module.declare.controller.admin.indicator.vo.ValidatePositiveRulesReqVO;
 import cn.gemrun.base.module.declare.dal.dataobject.indicator.DeclareIndicatorValueDO;
+import cn.gemrun.base.module.declare.service.indicator.DeclareIndicatorJointRuleService;
 import cn.gemrun.base.module.declare.service.indicator.DeclareIndicatorValueService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -19,6 +22,7 @@ import javax.annotation.Resource;
 import javax.validation.Valid;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * 指标值 Controller
@@ -33,6 +37,9 @@ public class DeclareIndicatorValueController {
 
     @Resource
     private DeclareIndicatorValueService indicatorValueService;
+
+    @Resource
+    private DeclareIndicatorJointRuleService jointRuleService;
 
     @PostMapping("/save")
     @Operation(summary = "保存指标值")
@@ -118,6 +125,27 @@ public class DeclareIndicatorValueController {
             @RequestParam(value = "businessType", required = false, defaultValue = "3") Integer businessType) {
         List<DeclareIndicatorValueDO> list = indicatorValueService.getIndicatorValues(businessType, reportId);
         return CommonResult.success(BeanUtils.toBean(list, DeclareIndicatorValueRespVO.class));
+    }
+
+    @PostMapping("/validate-positive-rules")
+    @Operation(summary = "校验上期对比规则")
+    @PreAuthorize("isAuthenticated()")
+    public CommonResult<List<PositiveRuleValidationErrorVO>> validatePositiveRules(
+            @RequestBody ValidatePositiveRulesReqVO reqVO) {
+        List<DeclareIndicatorJointRuleService.PositiveRuleValidationError> errors =
+                jointRuleService.validatePositiveRules(
+                        reqVO.getCurrentValues(),
+                        reqVO.getLastPeriodValues(),
+                        reqVO.getRuleConfig()
+                );
+        List<PositiveRuleValidationErrorVO> result = errors.stream()
+                .map(e -> PositiveRuleValidationErrorVO.builder()
+                        .ruleName(e.getRuleName())
+                        .indicatorCode(e.getIndicatorCode())
+                        .message(e.getMessage())
+                        .build())
+                .collect(Collectors.toList());
+        return CommonResult.success(result);
     }
 
 }

@@ -120,3 +120,33 @@ export interface OptionItem {
   label: string;
   exclusive?: boolean;
 }
+
+// ==================== 上期对比规则类型 ====================
+
+/** 上期对比规则配置 */
+export interface PositiveRuleConfig {
+  groupName?: string;
+  priority?: number;
+  rules: PositiveRuleItem[];
+}
+
+/** 单条上期对比规则 */
+export interface PositiveRuleItem {
+  name: string;
+  indicatorCode: string;
+  valueType: number;
+  compareMode: string;
+  compareType?: string;
+  options?: Array<{ value: string; label: string }>;
+  excludeOptions?: string[];
+  minNewCount?: number;
+}
+
+/** 上期规则校验错误 */
+export interface PositiveRuleError {
+  indicatorCode: string;
+  indicatorId?: number;
+  ruleName: string;
+  message: string;
+  errorKey: string;
+}

@@ -8,6 +8,7 @@ import cn.gemrun.base.module.declare.dal.dataobject.indicator.DeclareIndicatorJo
 
 import javax.validation.Valid;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 指标上期对比规则 Service 接口
@@ -60,5 +61,36 @@ public interface DeclareIndicatorJointRuleService {
      * @return 指标DO
      */
     DeclareIndicatorDO getIndicatorByCode(String indicatorCode);
+
+    /**
+     * 校验上期对比规则
+     * @param currentValues 本期值 Map<indicatorCode, value>
+     * @param lastPeriodValues 上期值 Map<indicatorCode, value>
+     * @param ruleConfig 规则配置 JSON
+     * @return 校验错误列表
+     */
+    List<PositiveRuleValidationError> validatePositiveRules(
+            Map<String, Object> currentValues,
+            Map<String, Object> lastPeriodValues,
+            String ruleConfig);
+
+    /**
+     * 校验错误
+     */
+    class PositiveRuleValidationError {
+        private final String ruleName;
+        private final String indicatorCode;
+        private final String message;
+
+        public PositiveRuleValidationError(String ruleName, String indicatorCode, String message) {
+            this.ruleName = ruleName;
+            this.indicatorCode = indicatorCode;
+            this.message = message;
+        }
+
+        public String getRuleName() { return ruleName; }
+        public String getIndicatorCode() { return indicatorCode; }
+        public String getMessage() { return message; }
+    }
 
 }

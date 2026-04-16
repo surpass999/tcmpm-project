@@ -111,6 +111,7 @@ public class DeclareIndicatorJointRuleServiceImpl implements DeclareIndicatorJoi
      * @param ruleConfig 规则配置 JSON
      * @return 校验错误列表
      */
+    @Override
     public List<PositiveRuleValidationError> validatePositiveRules(
             Map<String, Object> currentValues,
             Map<String, Object> lastPeriodValues,
@@ -598,25 +599,6 @@ public class DeclareIndicatorJointRuleServiceImpl implements DeclareIndicatorJoi
         public void setValue(String value) { this.value = value; }
         public String getLabel() { return label; }
         public void setLabel(String label) { this.label = label; }
-    }
-
-    /**
-     * 校验错误
-     */
-    public static class PositiveRuleValidationError {
-        private final String ruleName;
-        private final String indicatorCode;
-        private final String message;
-
-        public PositiveRuleValidationError(String ruleName, String indicatorCode, String message) {
-            this.ruleName = ruleName;
-            this.indicatorCode = indicatorCode;
-            this.message = message;
-        }
-
-        public String getRuleName() { return ruleName; }
-        public String getIndicatorCode() { return indicatorCode; }
-        public String getMessage() { return message; }
     }
 
 }
