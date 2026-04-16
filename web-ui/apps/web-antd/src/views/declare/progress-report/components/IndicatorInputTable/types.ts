@@ -150,3 +150,32 @@ export interface PositiveRuleError {
   message: string;
   errorKey: string;
 }
+
+// ==================== 联动类型 ====================
+
+/** 联动操作符 */
+export type LinkageOperator = 'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte' | 'in' | 'notEmpty' | 'isEmpty';
+
+/** 联动类型 */
+export type LinkageType = 'show' | 'disabled' | 'required';
+
+/** 联动触发条件 */
+export interface LinkageTrigger {
+  indicatorCode: string;
+  operator: LinkageOperator;
+  value?: any;
+}
+
+/** 联动配置 */
+export interface IndicatorLinkageConfig {
+  enabled: boolean;
+  type: LinkageType;
+  trigger: LinkageTrigger;
+}
+
+/** 联动评估结果 */
+export interface LinkageEvaluationResult {
+  indicatorCode: string;
+  type: LinkageType;
+  enabled: boolean;
+}

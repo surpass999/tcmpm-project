@@ -14,6 +14,7 @@ import { uploadFile } from '#/api/infra/file';
 import { getAcceptTypes, getMaxFileCount } from '../utils/indicator';
 import type { DeclareIndicatorApi } from '#/api/declare/indicator';
 import { formValues } from './useFormValues';
+import { fieldErrors, setFieldError, toTopLevelKey } from './useErrorKeys';
 
 // ==================== 文件列表状态 ====================
 
@@ -62,6 +63,14 @@ async function handleFileUpload(file: File, indicator: DeclareIndicatorApi.Indic
     fileListMap[indicatorCode] = [...currentList, newFile];
     formValues[indicatorCode] = JSON.stringify(fileListMap[indicatorCode]);
     message.success('文件上传成功');
+
+    // 上传成功后强制清除错误（直接删除，不走 clearFieldError 的保护逻辑）
+    if (indicator.id !== undefined) {
+      const key = toTopLevelKey(indicator.id);
+      if (fieldErrors[key]) {
+        delete fieldErrors[key];
+      }
+    }
   } catch (error) {
     console.error('文件上传错误:', error);
     message.error('文件上传失败');
@@ -72,11 +81,16 @@ async function handleFileUpload(file: File, indicator: DeclareIndicatorApi.Indic
 
 // ==================== 文件删除 ====================
 
-function handleFileRemove(indicatorCode: string, file: UploadFile) {
+function handleFileRemove(indicatorCode: string, file: UploadFile, indicator?: DeclareIndicatorApi.Indicator) {
   const currentList = fileListMap[indicatorCode] || [];
   fileListMap[indicatorCode] = currentList.filter((f) => f.uid !== file.uid);
   formValues[indicatorCode] = JSON.stringify(fileListMap[indicatorCode]);
   message.success('文件已删除');
+
+  // 如果删除后文件列表为空，重新触发必填错误提示
+  if (fileListMap[indicatorCode].length === 0 && indicator?.id !== undefined && indicator.isRequired) {
+    setFieldError(toTopLevelKey(indicator.id), '此项为必填', 'required', true);
+  }
 }
 
 // ==================== 导出 ====================

@@ -83,6 +83,13 @@ import {
 // 计算指标
 import { recalculateComputedIndicators } from './composables/useComputedIndicators';
 
+// 联动
+import {
+  isIndicatorVisible,
+  isIndicatorDisabled,
+  isIndicatorRequired,
+} from './composables/useLinkage';
+
 // 工具函数
 import { parseOptions } from './utils/options';
 import { formatLastValueNumber, parseInputTypeLastPeriodRaw } from './utils/lastValue';
@@ -93,6 +100,8 @@ import {
   handleCheckboxInputClick,
   onInputTypeBlur,
   getInputTypeLastPeriodContent,
+  setOnMultiSelectChangeCallback,
+  setOnIndicatorChangeCallback,
 } from './composables/useInputTypeOptions';
 import { inputTypeValues, getPureCheckboxValues, serializeInputTypeValue } from './composables/useFormValues';
 
@@ -259,6 +268,14 @@ function getFormattedLastPeriodValue(indicator: DeclareIndicatorApi.Indicator): 
 
 // ==================== 事件处理 ====================
 
+/** 注册指标变化回调（在 setup 顶层同步执行，确保组件创建时就可用） */
+setOnMultiSelectChangeCallback((indicator) => {
+  onIndicatorChange(indicator);
+});
+setOnIndicatorChangeCallback((indicator) => {
+  onIndicatorChange(indicator);
+});
+
 function handleNumberBlur(indicator: DeclareIndicatorApi.Indicator, _event: Event) {
   if (indicator.id !== undefined) markTopLevelDirty(indicator.id);
   checkAndSyncLinkedAutoContainers(indicator.indicatorCode, indicators.value);
@@ -352,6 +369,7 @@ import { onMounted } from 'vue';
 onMounted(async () => {
   mounted.value = true;
   if (props.projectType === undefined) return;
+
   emit('loadingChange', true);
   try {
     clearAllErrors();
@@ -560,6 +578,10 @@ defineExpose({
   resetDirty,
   getFillProgress,
   scrollToField,
+  // 联动相关
+  isIndicatorVisible,
+  isIndicatorDisabled,
+  isIndicatorRequired,
 });
 
 /** 滚动到指定字段（容器字段或顶层指标） */
@@ -654,6 +676,7 @@ function addHighlight(el: Element) {
           :data-indicator-code="indicator.indicatorCode"
           class="indicator-row"
           :class="{ 'indicator-row--switch': indicator.valueType === 3 }"
+          v-show="isIndicatorVisible(indicator.indicatorCode)"
         >
           <!-- 左侧：指标名称 + 输入组件 -->
           <div
@@ -697,10 +720,12 @@ function addHighlight(el: Element) {
                   <span class="label-text has-caliber" :title="indicator.indicatorName">
                     {{ indicator.indicatorCode }} - {{ indicator.indicatorName }}
                     <IconifyIcon icon="lucide:help-circle" class="caliber-icon" />
+                    <span v-if="isIndicatorRequired(indicator.indicatorCode, indicator.isRequired)" class="text-red-500">*</span>
                   </span>
                 </a-popover>
                 <span v-else class="label-text" :title="indicator.indicatorName">
                   {{ indicator.indicatorCode }} - {{ indicator.indicatorName }}
+                  <span v-if="isIndicatorRequired(indicator.indicatorCode, indicator.isRequired)" class="text-red-500">*</span>
                 </span>
               </div>
               <a-tag v-if="isComputedIndicator(indicator)" color="orange" class="computed-tag">自动计算</a-tag>
@@ -718,7 +743,7 @@ function addHighlight(el: Element) {
               >
                 <SafeNumberInput
                   v-model="formValues[indicator.indicatorCode]"
-                  :disabled="readonly || isComputedIndicator(indicator)"
+                  :disabled="isIndicatorDisabled(indicator.indicatorCode, readonly) || isComputedIndicator(indicator)"
                   :placeholder="isComputedIndicator(indicator) ? '自动计算' : '请输入数字'"
                   :min="indicator.minValue ?? 0"
                   :max="indicator.maxValue"
@@ -749,7 +774,7 @@ function addHighlight(el: Element) {
               >
                 <a-input
                   v-model="formValues[indicator.indicatorCode]"
-                  :disabled="readonly"
+                  :disabled="isIndicatorDisabled(indicator.indicatorCode, readonly)"
                   :placeholder="`请输入${indicator.indicatorName}`"
                   :maxlength="getMaxLength(indicator)"
                   show-count
@@ -776,7 +801,7 @@ function addHighlight(el: Element) {
               >
                 <a-switch
                   v-model="formValues[indicator.indicatorCode]"
-                  :disabled="readonly"
+                  :disabled="isIndicatorDisabled(indicator.indicatorCode, readonly)"
                   :checked-children="getBooleanLabels(indicator).true"
                   :un-checked-children="getBooleanLabels(indicator).false"
                   class="switch-auto-width"
@@ -802,7 +827,7 @@ function addHighlight(el: Element) {
               >
                 <a-date-picker
                   v-model="formValues[indicator.indicatorCode]"
-                  :disabled="readonly"
+                  :disabled="isIndicatorDisabled(indicator.indicatorCode, readonly)"
                   :show-time="getDateFormat(indicator).includes('HH')"
                   :format="getDateFormat(indicator)"
                   @change="() => onIndicatorChange(indicator)"
@@ -827,7 +852,7 @@ function addHighlight(el: Element) {
               >
                 <a-textarea
                   v-model="formValues[indicator.indicatorCode]"
-                  :disabled="readonly"
+                  :disabled="isIndicatorDisabled(indicator.indicatorCode, readonly)"
                   :placeholder="`请输入${indicator.indicatorName}`"
                   :rows="isRichText(indicator) ? 4 : 2"
                   :maxlength="getMaxLength(indicator)"
@@ -855,7 +880,7 @@ function addHighlight(el: Element) {
               >
                 <a-select
                   v-model="formValues[indicator.indicatorCode]"
-                  :disabled="readonly"
+                  :disabled="isIndicatorDisabled(indicator.indicatorCode, readonly)"
                   :placeholder="`请选择${indicator.indicatorName}`"
                   :show-search="getShowSearch(indicator)"
                   allow-clear
@@ -883,7 +908,7 @@ function addHighlight(el: Element) {
               >
                 <a-select
                   :value="formValues[indicator.indicatorCode] || []"
-                  :disabled="readonly"
+                  :disabled="isIndicatorDisabled(indicator.indicatorCode, readonly)"
                   :placeholder="`请选择${indicator.indicatorName}`"
                   mode="multiple"
                   :show-search="getShowSearch(indicator)"
@@ -912,7 +937,7 @@ function addHighlight(el: Element) {
               >
                 <a-range-picker
                   v-model="formValues[indicator.indicatorCode]"
-                  :disabled="readonly"
+                  :disabled="isIndicatorDisabled(indicator.indicatorCode, readonly)"
                   :show-time="getDateFormat(indicator).includes('HH')"
                   :format="getDateFormat(indicator)"
                   @change="() => onIndicatorChange(indicator)"
@@ -943,7 +968,7 @@ function addHighlight(el: Element) {
                 >
                   <a-radio-group
                     :value="formValues[indicator.indicatorCode]"
-                    :disabled="readonly"
+                    :disabled="isIndicatorDisabled(indicator.indicatorCode, readonly)"
                     @change="(e: any) => { handleInputTypeRadioChange(indicator, e.target.value); onIndicatorChange(indicator); }"
                   >
                     <template v-for="opt in parseOptions(indicator.valueOptions)" :key="opt.value">
@@ -954,7 +979,7 @@ function addHighlight(el: Element) {
                       <a-input
                         v-if="opt.inputType && formValues[indicator.indicatorCode] === opt.value"
                         :value="inputTypeValues[indicator.indicatorCode + '_' + opt.value] || ''"
-                        :disabled="readonly"
+                        :disabled="isIndicatorDisabled(indicator.indicatorCode, readonly)"
                         :placeholder="getInputTypeLastPeriodContent(lastPeriodRawValues, indicator.indicatorCode, opt.value) ? '上期：' + getInputTypeLastPeriodContent(lastPeriodRawValues, indicator.indicatorCode, opt.value) : '请输入补充内容'"
                         style="display: inline-block; width: 200px; padding: 0px 0px 0px 4px; border-radius: 4px; vertical-align: middle;"
                         @input="(e: any) => { inputTypeValues[indicator.indicatorCode + '_' + opt.value] = e.target.value; onInputTypeBlur(indicator, opt, e.target.value); }"
@@ -992,7 +1017,7 @@ function addHighlight(el: Element) {
                     <a-checkbox
                       v-if="!opt.inputType"
                       :checked="getPureCheckboxValues(indicator.indicatorCode).includes(opt.value)"
-                      :disabled="readonly"
+                      :disabled="isIndicatorDisabled(indicator.indicatorCode, readonly)"
                       :class="{ 'checkbox-tight': true }"
                       @click="(e: MouseEvent) => handleCheckboxInputClick(indicator, opt.value, e)"
                     >
@@ -1001,7 +1026,7 @@ function addHighlight(el: Element) {
                     <template v-else-if="opt.inputType">
                       <a-checkbox
                         :checked="getPureCheckboxValues(indicator.indicatorCode).includes(opt.value)"
-                        :disabled="readonly"
+                        :disabled="isIndicatorDisabled(indicator.indicatorCode, readonly)"
                         :class="{ 'checkbox-tight': true }"
                         @click="(e: MouseEvent) => handleCheckboxInputClick(indicator, opt.value, e)"
                       >
@@ -1010,7 +1035,7 @@ function addHighlight(el: Element) {
                       <a-input
                         v-if="getPureCheckboxValues(indicator.indicatorCode).includes(opt.value)"
                         :value="inputTypeValues[indicator.indicatorCode + '_' + opt.value] || ''"
-                        :disabled="readonly"
+                        :disabled="isIndicatorDisabled(indicator.indicatorCode, readonly)"
                         :placeholder="getInputTypeLastPeriodContent(lastPeriodRawValues, indicator.indicatorCode, opt.value) ? '上期：' + getInputTypeLastPeriodContent(lastPeriodRawValues, indicator.indicatorCode, opt.value) : '请输入补充内容'"
                         style="display: inline-block; width: 140px; padding: 0px 0px 0px 4px; border-radius: 4px; vertical-align: middle;"
                         @input="(e: any) => { inputTypeValues[indicator.indicatorCode + '_' + opt.value] = e.target.value; onInputTypeBlur(indicator, opt, e.target.value); }"
@@ -1040,7 +1065,7 @@ function addHighlight(el: Element) {
                   <div v-for="(file, index) in getFileList(fileListMap, indicator.indicatorCode)" :key="index" class="file-item">
                     <IconifyIcon icon="lucide:file-text" class="file-icon" />
                     <span class="file-name" :title="file.name">{{ file.name }}</span>
-                    <button v-if="!readonly" type="button" class="file-delete-btn" @click="handleFileRemove(indicator.indicatorCode, file)">
+                    <button v-if="!readonly" type="button" class="file-delete-btn" @click="handleFileRemove(indicator.indicatorCode, file, indicator)">
                       <IconifyIcon icon="lucide:x" />
                     </button>
                   </div>
@@ -1098,7 +1123,7 @@ function addHighlight(el: Element) {
                         :indicator-code="indicator.indicatorCode"
                         :row-key="entry.rowKey"
                         :field="field"
-                        :disabled="readonly"
+                        :disabled="isIndicatorDisabled(indicator.indicatorCode, readonly)"
                         :entry-index="0"
                         :container-last-values="containerLastPeriodValues[indicator.indicatorCode]"
                         :container-field-error="getContainerFieldError(entry, indicator.indicatorCode, field.fieldCode, 'conditional')"
@@ -1129,7 +1154,7 @@ function addHighlight(el: Element) {
                         :indicator-code="indicator.indicatorCode"
                         :row-key="entry.rowKey"
                         :field="field"
-                        :disabled="readonly"
+                        :disabled="isIndicatorDisabled(indicator.indicatorCode, readonly)"
                         :entry-index="entryIdx"
                         :container-last-values="containerLastPeriodValues[indicator.indicatorCode]"
                         :container-field-error="getContainerFieldError(entry, indicator.indicatorCode, field.fieldCode, 'autoEntry')"
@@ -1175,7 +1200,7 @@ function addHighlight(el: Element) {
                         :indicator-code="indicator.indicatorCode"
                         :row-key="entry.rowKey"
                         :field="field"
-                        :disabled="readonly"
+                        :disabled="isIndicatorDisabled(indicator.indicatorCode, readonly)"
                         :entry-index="entryIdx"
                         :container-last-values="containerLastPeriodValues[indicator.indicatorCode]"
                         :container-field-error="getContainerFieldError(entry, indicator.indicatorCode, field.fieldCode, 'normal')"

@@ -26,6 +26,19 @@ import {
   setDirty,
 } from './useErrorKeys';
 import { getIndicatorsInDisplayOrder } from './useIndicatorData';
+import { evaluateLinkage } from '../utils/linkageEvaluator';
+
+// ==================== 辅助函数 ====================
+
+/**
+ * 评估单个指标的联动状态（内联实现，避免循环依赖）
+ */
+function evaluateIndicatorLinkage(
+  indicator: DeclareIndicatorApi.Indicator,
+  formValues: Record<string, any>,
+) {
+  return evaluateLinkage(indicator, formValues);
+}
 
 // ==================== 核心校验逻辑 ====================
 
@@ -191,9 +204,24 @@ function isComputedIndicator(indicator: DeclareIndicatorApi.Indicator): boolean 
 export function validateIndicator(indicator: DeclareIndicatorApi.Indicator): FieldError[] {
   const errors: FieldError[] = [];
   const key = toTopLevelKey(indicator.id!);
+
+  // 检查指标是否可见，不可见则不校验
+  // 内联联动逻辑，避免循环依赖
+  const linkageState = evaluateIndicatorLinkage(indicator, formValues);
+  if (linkageState?.type === 'show' && !linkageState.enabled) {
+    clearFieldError(key);
+    return [];
+  }
+
   const value = (indicator as any)._formValue;
   const isEmptyVal = isEmpty(value);
-  const isRequiredAndNotComputed = indicator.isRequired && !isComputedIndicator(indicator);
+
+  // 使用联动必填判断
+  let required = indicator.isRequired;
+  if (linkageState?.type === 'required') {
+    required = linkageState.enabled;
+  }
+  const isRequiredAndNotComputed = required && !isComputedIndicator(indicator);
   if (isRequiredAndNotComputed && isEmptyVal) {
     const err = { message: '此项为必填', errorType: 'required' as const, dirty: true };
     fieldErrors[key] = err;
@@ -240,36 +268,32 @@ export function validateIndicator(indicator: DeclareIndicatorApi.Indicator): Fie
     // 单选/多选类型：输入型选项必填校验
     if (indicator.valueType === 6 || indicator.valueType === 7) {
       const raw = formValues[indicator.indicatorCode];
-      console.log('[validateIndicator] type6/7 raw:', JSON.stringify(raw));
       const options = parseOptions(indicator.valueOptions);
-      console.log('[validateIndicator] options:', options.map(o => ({ value: o.value, inputType: o.inputType })));
       for (const opt of options) {
         if (opt.inputType) {
           const isSelected = (() => {
             if (indicator.valueType === 7) {
               const arr = Array.isArray(raw) ? raw : (raw ? [raw] : []);
-              console.log('[validateIndicator] type7 arr:', JSON.stringify(arr), 'opt.value:', opt.value);
               return arr.some((v: string) => deserializeInputTypeValue(v).value === opt.value);
             } else {
               const des = raw ? deserializeInputTypeValue(raw) : null;
-              console.log('[validateIndicator] type6 des:', JSON.stringify(des), 'opt.value:', opt.value);
               return des?.value === opt.value;
             }
           })();
-          console.log('[validateIndicator] isSelected:', isSelected);
+          
           if (isSelected) {
             const inputKey = indicator.indicatorCode + '_' + opt.value;
             const content = inputTypeValues[inputKey] || '';
-            console.log('[validateIndicator] inputKey:', inputKey, 'content:', JSON.stringify(content));
+            
             if (!content.trim()) {
-              console.log('[validateIndicator] 必填错误');
+              
               const err = { message: `请填写"${opt.label}"的补充内容`, errorType: 'required' as const, dirty: true };
               fieldErrors[key] = err;
               errors.push(err);
             } else {
               const trimmed = content.trim();
               if (/^\d+$/.test(trimmed)) {
-                console.log('[validateIndicator] 格式错误-纯数字');
+                
                 const err = { message: `"${opt.label}"的补充内容：输入内容不能是纯数字`, errorType: 'format' as const, dirty: true };
                 fieldErrors[key] = err;
                 errors.push(err);

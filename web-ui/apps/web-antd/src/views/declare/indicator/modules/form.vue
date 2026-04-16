@@ -136,6 +136,84 @@ const allIndicatorsForLink = ref<any[]>([]);
 // 扩展配置对象
 const extraConfigData = reactive<Record<string, any>>({});
 
+// ==================== 联动配置 ====================
+
+// 联动类型选项
+const linkageTypeOptions = [
+  { value: 'show', label: '显示/隐藏' },
+  { value: 'disabled', label: '可用/禁用' },
+  { value: 'required', label: '必填/非必填' },
+];
+
+// 联动操作符选项
+const linkageOperatorOptions = [
+  { value: 'eq', label: '等于' },
+  { value: 'neq', label: '不等于' },
+  { value: 'gt', label: '大于' },
+  { value: 'gte', label: '大于等于' },
+  { value: 'lt', label: '小于' },
+  { value: 'lte', label: '小于等于' },
+  { value: 'in', label: '包含' },
+  { value: 'notEmpty', label: '有值' },
+  { value: 'isEmpty', label: '无值' },
+];
+
+// 联动配置响应式数据
+const linkageEnabled = ref(false);
+const linkageType = ref<'show' | 'disabled' | 'required'>('show');
+const linkageTriggerCode = ref<string>('');
+const linkageOperator = ref<string>('eq');
+const linkageValue = ref<string>('');
+
+// 可选的触发指标列表（排除自身，用于联动配置）
+const availableLinkageTriggerIndicators = computed(() => {
+  return allIndicatorsForLink.value
+    .filter((i: any) => {
+      // 排除自身
+      if (i.indicatorCode === formData.value?.indicatorCode) return false;
+      return true;
+    })
+    .map((i: any) => ({
+      label: `${i.indicatorName} (${i.indicatorCode})`,
+      value: i.indicatorCode,
+    }));
+});
+
+// 获取触发指标的选项值（用于联动值下拉）
+const getTriggerIndicatorOptions = computed(() => {
+  const indicator = allIndicatorsForLink.value.find(
+    (i: any) => i.indicatorCode === linkageTriggerCode.value,
+  );
+  if (!indicator) return [];
+  // 如果有预定义选项，返回选项值
+  if (indicator.valueOptions) {
+    try {
+      const options = JSON.parse(indicator.valueOptions);
+      if (Array.isArray(options)) {
+        return options.map((opt: any) => ({
+          label: opt.label,
+          value: opt.value,
+        }));
+      }
+    } catch { /* ignore */ }
+  }
+  return [];
+});
+
+// 是否显示联动值输入（不是 notEmpty 和 isEmpty 时显示）
+const showLinkageValue = computed(() => {
+  return !['notEmpty', 'isEmpty'].includes(linkageOperator.value);
+});
+
+// 重置联动配置
+const resetLinkageConfig = () => {
+  linkageEnabled.value = false;
+  linkageType.value = 'show';
+  linkageTriggerCode.value = '';
+  linkageOperator.value = 'eq';
+  linkageValue.value = '';
+};
+
 // 分组扁平时钟数据（treeDataSimpleMode 更可靠，避免嵌套结构更新时的渲染问题）
 const flattenGroupTreeData = ref<{ id: number; pId: number; label: string; value: number }[]>([]);
 
@@ -251,6 +329,20 @@ const convertExtraConfigToJson = () => {
       config[item.key] = extraConfigData[item.key];
     }
   });
+
+  // 处理联动配置
+  if (linkageEnabled.value && linkageTriggerCode.value) {
+    config.linkage = {
+      enabled: true,
+      type: linkageType.value,
+      trigger: {
+        indicatorCode: linkageTriggerCode.value,
+        operator: linkageOperator.value,
+        value: linkageValue.value || undefined,
+      },
+    };
+  }
+
   formData.value.extraConfig = Object.keys(config).length > 0 ? JSON.stringify(config) : '';
 };
 
@@ -260,10 +352,25 @@ const parseJsonToExtraConfig = (jsonStr: string) => {
   Object.keys(extraConfigData).forEach((key) => {
     delete extraConfigData[key];
   });
+  // 重置联动配置
+  resetLinkageConfig();
   if (!jsonStr) return;
   try {
     const parsed = JSON.parse(jsonStr);
-    Object.assign(extraConfigData, parsed);
+    // 先复制除 linkage 外的其他配置
+    Object.keys(parsed).forEach((key) => {
+      if (key !== 'linkage') {
+        extraConfigData[key] = parsed[key];
+      }
+    });
+    // 解析联动配置
+    if (parsed.linkage?.enabled) {
+      linkageEnabled.value = true;
+      linkageType.value = parsed.linkage.type || 'show';
+      linkageTriggerCode.value = parsed.linkage.trigger?.indicatorCode || '';
+      linkageOperator.value = parsed.linkage.trigger?.operator || 'eq';
+      linkageValue.value = parsed.linkage.trigger?.value || '';
+    }
   } catch {
     // 解析失败，忽略
   }
@@ -686,6 +793,8 @@ const [Modal, modalApi] = useVbenModal({
       containerMode.value = 'normal';
       autoEntryLink.value = '';
       formData.value.extraConfig = '';
+      // 重置联动配置
+      resetLinkageConfig();
       // 新建模式下先加载全部分组树和指标列表
       await loadGroupTreeData();
       await loadAllIndicatorsForLink();
@@ -952,7 +1061,7 @@ watch(
               <a-input
                 v-model:value="field.fieldCode"
                 placeholder="字段编码"
-                class="w-34"
+                class="w-20"
               />
               <a-input
                 v-model:value="field.fieldLabel"
@@ -962,7 +1071,7 @@ watch(
               <a-select
                 v-model:value="field.fieldType"
                 placeholder="字段类型"
-                class="w-14"
+                class="w-48"
               >
                 <a-select-option
                   v-for="opt in fieldTypeOptions"
@@ -1190,6 +1299,129 @@ watch(
           <a-radio :value="true">是</a-radio>
           <a-radio :value="false">否</a-radio>
         </a-radio-group>
+      </a-form-item>
+      <!-- 联动配置 -->
+      <a-form-item label="联动配置">
+        <div class="w-full">
+          <div class="flex items-center gap-4 mb-3">
+            <a-switch v-model:checked="linkageEnabled" />
+            <span class="text-gray-600">启用联动</span>
+          </div>
+          <a-alert
+            v-if="!formData.id"
+            message="提示"
+            description="联动配置需要在保存指标后方可使用，编辑时可选择触发指标"
+            type="info"
+            show-icon
+            class="mb-3"
+          />
+          <div v-if="linkageEnabled" class="space-y-3 pl-2 border-l-2 border-blue-200">
+            <!-- 联动类型 -->
+            <div class="flex items-center gap-2">
+              <span class="text-gray-500 text-sm w-20 flex-shrink-0">联动类型</span>
+              <a-select
+                v-model:value="linkageType"
+                placeholder="请选择联动类型"
+                class="w-40"
+              >
+                <a-select-option
+                  v-for="opt in linkageTypeOptions"
+                  :key="opt.value"
+                  :value="opt.value"
+                >
+                  {{ opt.label }}
+                </a-select-option>
+              </a-select>
+              <span class="text-gray-400 text-xs">
+                <template v-if="linkageType === 'show'">控制指标是否显示</template>
+                <template v-else-if="linkageType === 'disabled'">控制指标是否可编辑</template>
+                <template v-else>控制指标是否为必填</template>
+              </span>
+            </div>
+            <!-- 触发指标 -->
+            <div class="flex items-center gap-2">
+              <span class="text-gray-500 text-sm w-20 flex-shrink-0">当指标</span>
+              <a-select
+                v-model:value="linkageTriggerCode"
+                placeholder="请选择触发指标"
+                class="flex-1"
+                :disabled="!formData.id"
+              >
+                <a-select-option
+                  v-for="opt in availableLinkageTriggerIndicators"
+                  :key="opt.value"
+                  :value="opt.value"
+                >
+                  {{ opt.label }}
+                </a-select-option>
+              </a-select>
+            </div>
+            <!-- 操作符 -->
+            <div class="flex items-center gap-2">
+              <span class="text-gray-500 text-sm w-20 flex-shrink-0">满足条件</span>
+              <a-select
+                v-model:value="linkageOperator"
+                placeholder="请选择条件"
+                class="w-32"
+              >
+                <a-select-option
+                 style="width: auto !important;"
+                  class="w-50"
+                  v-for="opt in linkageOperatorOptions"
+                  :key="opt.value"
+                  :value="opt.value"
+                >
+                  {{ opt.label }}
+                </a-select-option>
+              </a-select>
+              <a-input 
+                
+                v-if="showLinkageValue"
+                v-model:value="linkageValue"
+                placeholder="输入比较值"
+                class="flex-1"
+              />
+              <a-select
+                v-if="showLinkageValue && getTriggerIndicatorOptions.length > 0"
+                v-model:value="linkageValue"
+                placeholder="选择值"
+                class="flex-1"
+              >
+                <a-select-option
+                  v-for="opt in getTriggerIndicatorOptions"
+                  :key="opt.value"
+                  :value="opt.value"
+                >
+                  {{ opt.label }}
+                </a-select-option>
+              </a-select>
+            </div>
+            <!-- 配置说明 -->
+            <div class="text-gray-400 text-xs mt-2">
+              <template v-if="linkageTriggerCode && linkageType === 'show'">
+                → 当「{{ linkageTriggerCode }}」
+                {{ linkageOperator === 'eq' ? '=' : linkageOperator === 'neq' ? '≠' : linkageOperator === 'gt' ? '>' : linkageOperator === 'gte' ? '≥' : linkageOperator === 'lt' ? '<' : linkageOperator === 'lte' ? '≤' : linkageOperator === 'in' ? '包含' : linkageOperator === 'notEmpty' ? '有值' : '无值' }}
+                {{ showLinkageValue ? linkageValue || '...' : '' }}
+                时，此指标才会显示
+              </template>
+              <template v-else-if="linkageTriggerCode && linkageType === 'disabled'">
+                → 当「{{ linkageTriggerCode }}」
+                {{ linkageOperator === 'eq' ? '=' : linkageOperator === 'neq' ? '≠' : linkageOperator === 'gt' ? '>' : linkageOperator === 'gte' ? '≥' : linkageOperator === 'lt' ? '<' : linkageOperator === 'lte' ? '≤' : linkageOperator === 'in' ? '包含' : linkageOperator === 'notEmpty' ? '有值' : '无值' }}
+                {{ showLinkageValue ? linkageValue || '...' : '' }}
+                时，此指标将被禁用
+              </template>
+              <template v-else-if="linkageTriggerCode && linkageType === 'required'">
+                → 当「{{ linkageTriggerCode }}」
+                {{ linkageOperator === 'eq' ? '=' : linkageOperator === 'neq' ? '≠' : linkageOperator === 'gt' ? '>' : linkageOperator === 'gte' ? '≥' : linkageOperator === 'lt' ? '<' : linkageOperator === 'lte' ? '≤' : linkageOperator === 'in' ? '包含' : linkageOperator === 'notEmpty' ? '有值' : '无值' }}
+                {{ showLinkageValue ? linkageValue || '...' : '' }}
+                时，此指标变为必填
+              </template>
+              <template v-else>
+                → 请选择触发指标和条件来配置联动规则
+              </template>
+            </div>
+          </div>
+        </div>
       </a-form-item>
       <a-form-item v-if="showMinMaxValue" label="最小值" name="minValue">
         <a-input-number

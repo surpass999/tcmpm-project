@@ -23,7 +23,23 @@ import {
   validateInputContent,
   getInputTypeInputFieldName,
   isInputTypeOptionSelected,
+  isOptionSelectedWithLastPeriod,
 } from './useFormValues';
+import { lastPeriodRawValues } from './useIndicatorData';
+
+/** 多选变化后的回调（由 index.vue 设置） */
+let onMultiSelectChangeCallback: ((indicator: DeclareIndicatorApi.Indicator) => void) | null = null;
+
+/** click 事件直接触发的回调（确保 click 事件直接调用验证） */
+let onIndicatorChangeCallback: ((indicator: DeclareIndicatorApi.Indicator) => void) | null = null;
+
+export function setOnMultiSelectChangeCallback(cb: (indicator: DeclareIndicatorApi.Indicator) => void) {
+  onMultiSelectChangeCallback = cb;
+}
+
+export function setOnIndicatorChangeCallback(cb: (indicator: DeclareIndicatorApi.Indicator) => void) {
+  onIndicatorChangeCallback = cb;
+}
 
 // ==================== 获取上期输入内容 ====================
 
@@ -91,7 +107,6 @@ export function handleInputTypeRadioChange(indicator: DeclareIndicatorApi.Indica
 
 /** 处理多选输入型 checkbox 点击（用于互斥逻辑） */
 export function handleCheckboxInputClick(indicator: DeclareIndicatorApi.Indicator, clickedValue: string, _event: MouseEvent) {
-  console.log('[DEBUG handleCheckboxInputClick] indicatorId:', indicator.id, 'clickedValue:', clickedValue, 'formValue before:', formValues[indicator.indicatorCode]);
   const options = parseOptions(indicator.valueOptions);
   const exclusiveValues = new Set(options.filter((o) => o.exclusive).map((o) => o.value));
   const currentRaw = formValues[indicator.indicatorCode];
@@ -101,7 +116,13 @@ export function handleCheckboxInputClick(indicator: DeclareIndicatorApi.Indicato
       : [deserializeInputTypeValue(currentRaw).value]
     : [];
 
-  const wasSelected = currentValues.includes(clickedValue);
+  // 考虑上期值来判断是否已选中，避免只依赖 formValues 导致的误判
+  const wasSelected = isOptionSelectedWithLastPeriod(
+    indicator.indicatorCode,
+    clickedValue,
+    currentRaw,
+    lastPeriodRawValues.value[indicator.indicatorCode],
+  );
   const isExclusive = exclusiveValues.has(clickedValue);
 
   let result: string[];
@@ -121,7 +142,11 @@ export function handleCheckboxInputClick(indicator: DeclareIndicatorApi.Indicato
   }
 
   handleInputTypeCheckboxChange(indicator, result);
-  console.log('[DEBUG handleCheckboxInputClick] formValue after:', formValues[indicator.indicatorCode]);
+
+  // click 事件直接触发指标变化回调（包含所有三层验证：基础验证、逻辑验证、上期值验证）
+  if (onIndicatorChangeCallback) {
+    onIndicatorChangeCallback(indicator);
+  }
 }
 
 /** 多选变化处理 */
@@ -151,6 +176,11 @@ export function handleInputTypeCheckboxChange(indicator: DeclareIndicatorApi.Ind
       delete formValues[inputFieldName];
     }
   });
+
+  // 触发回调以执行校验
+  if (onMultiSelectChangeCallback) {
+    onMultiSelectChangeCallback(indicator);
+  }
 }
 
 // ==================== 输入框失焦 ====================
@@ -164,9 +194,22 @@ export function onInputTypeBlur(indicator: DeclareIndicatorApi.Indicator, opt: a
   // 同步更新 formValues 主字段和子字段
   const raw = formValues[indicator.indicatorCode];
   if (raw) {
-    const deserialized = deserializeInputTypeValue(raw);
-    const serialized = serializeInputTypeValue(deserialized.value, content);
-    formValues[indicator.indicatorCode] = serialized;
+    if (Array.isArray(raw)) {
+      // 多选类型：更新对应选项的输入内容
+      const newRaw = raw.map((item) => {
+        const deserialized = deserializeInputTypeValue(item);
+        if (deserialized.value === opt.value) {
+          return serializeInputTypeValue(opt.value, content);
+        }
+        return item;
+      });
+      formValues[indicator.indicatorCode] = newRaw;
+    } else {
+      // 单选类型
+      const deserialized = deserializeInputTypeValue(raw);
+      const serialized = serializeInputTypeValue(deserialized.value, content);
+      formValues[indicator.indicatorCode] = serialized;
+    }
   }
   formValues[inputFieldName] = content;
 

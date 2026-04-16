@@ -15,19 +15,11 @@
 
 import type { DeclareIndicatorApi } from '#/api/declare/indicator';
 import type { PositiveRuleConfig, PositiveRuleItem, PositiveRuleError } from '../types';
-import { jointRules, lastPeriodValues } from './useIndicatorData';
+import { jointRules, lastPeriodRawValues } from './useIndicatorData';
 import { formValues } from './useFormValues';
 import { containerValues } from './useContainerValues';
 import { setFieldError, clearFieldError } from './useErrorKeys';
 import { deserializeInputTypeValue } from './useFormValues';
-
-// 调试日志开关
-const DEBUG = true;
-function log(...args: any[]) {
-  if (DEBUG) {
-    console.log('[PositiveRules]', ...args);
-  }
-}
 
 // ==================== 核心校验函数 ====================
 
@@ -35,17 +27,15 @@ function log(...args: any[]) {
  * 检查是否有上期值（决定是否加载校验逻辑）
  */
 export function hasAnyLastPeriodValue(): boolean {
-  const vals = lastPeriodValues.value;
-  const has = vals && Object.keys(vals).length > 0;
-  log('[hasAnyLastPeriodValue]', { vals, has });
-  return has;
+  const vals = lastPeriodRawValues.value;
+  return vals && Object.keys(vals).length > 0;
 }
 
 /**
  * 检查特定指标是否有上期值
  */
 export function hasLastPeriodValue(indicatorCode: string): boolean {
-  const val = lastPeriodValues.value[indicatorCode];
+  const val = lastPeriodRawValues.value[indicatorCode];
   return val !== undefined && val !== null && val !== '';
 }
 
@@ -97,37 +87,28 @@ export function validatePositiveRuleForIndicator(
   changedIndicatorCode: string,
   indicators: DeclareIndicatorApi.Indicator[],
 ): PositiveRuleError | null {
-  log('[validatePositiveRuleForIndicator] 开始校验指标:', changedIndicatorCode);
 
   if (!hasAnyLastPeriodValue()) {
-    log('[validatePositiveRuleForIndicator] 无上期值，跳过');
     return null;
   }
 
-  log('[validatePositiveRuleForIndicator] jointRules:', jointRules.value);
-
   const fillRules = jointRules.value.filter((r) => r.triggerTiming === 'FILL');
-  log('[validatePositiveRuleForIndicator] FILL 规则:', fillRules.map(r => ({ id: r.id, name: r.name })));
 
   for (const rule of fillRules) {
     if (!rule.ruleConfig) continue;
 
     try {
       const config: PositiveRuleConfig = JSON.parse(rule.ruleConfig);
-      log('[validatePositiveRuleForIndicator] 规则配置:', config);
       if (!config.rules?.length) continue;
 
       for (const item of config.rules) {
-        log('[validatePositiveRuleForIndicator] 检查规则项:', { itemIndicatorCode: item.indicatorCode, changedIndicatorCode, match: item.indicatorCode === changedIndicatorCode });
         if (item.indicatorCode !== changedIndicatorCode) continue;
 
         const error = validateSinglePositiveRule(item, indicators);
         if (error) {
-          log('[validatePositiveRuleForIndicator] 校验失败:', error);
           setPositiveRuleError(error);
           return error;
         } else {
-          log('[validatePositiveRuleForIndicator] 校验通过');
           clearPositiveRuleError(item.indicatorCode, indicators);
         }
       }
@@ -154,6 +135,7 @@ function validateSinglePositiveRule(
 
   const currentValue = getCurrentValue(indicatorCode, valueType);
   const lastValue = getLastPeriodValue(indicatorCode);
+
 
   // 如果当前值为空，跳过校验（基础校验会处理必填）
   if (currentValue === null || currentValue === undefined || currentValue === '') {
@@ -243,14 +225,14 @@ function validateRadioRule(
 
   const levelMap = new Map<string, number>();
   options.forEach((opt, idx) => {
-    levelMap.set(opt.value, idx + 1);
+    // 统一使用字符串作为 key，避免类型不匹配问题
+    levelMap.set(String(opt.value), idx + 1);
   });
-
   const currentPureValue = extractPureValue(currentValue);
   const lastPureValue = extractPureValue(lastValue);
 
-  const currentLevel = levelMap.get(currentPureValue);
-  const lastLevel = levelMap.get(lastPureValue);
+  const currentLevel = levelMap.get(String(currentPureValue));
+  const lastLevel = levelMap.get(String(lastPureValue));
 
   if (currentLevel === undefined || lastLevel === undefined) {
     return null;
@@ -260,14 +242,14 @@ function validateRadioRule(
 
   if (compareMode === 'positive') {
     if (currentLevel < lastLevel) {
-      const currentLabel = options.find((o) => o.value === currentPureValue)?.label || currentPureValue;
-      const lastLabel = options.find((o) => o.value === lastPureValue)?.label || lastPureValue;
+      const currentLabel = options.find((o) => String(o.value) === String(currentPureValue))?.label || currentPureValue;
+      const lastLabel = options.find((o) => String(o.value) === String(lastPureValue))?.label || lastPureValue;
       return `选项「${currentLabel}」不能优于上期「${lastLabel}」（等级从 ${lastLevel} 降至 ${currentLevel}）`;
     }
   } else {
     if (currentLevel > lastLevel) {
-      const currentLabel = options.find((o) => o.value === currentPureValue)?.label || currentPureValue;
-      const lastLabel = options.find((o) => o.value === lastPureValue)?.label || lastPureValue;
+      const currentLabel = options.find((o) => String(o.value) === String(currentPureValue))?.label || currentPureValue;
+      const lastLabel = options.find((o) => String(o.value) === String(lastPureValue))?.label || lastPureValue;
       return `选项「${currentLabel}」不能差于上期「${lastLabel}」（等级从 ${lastLevel} 升至 ${currentLevel}）`;
     }
   }
@@ -285,6 +267,7 @@ function validateMultiSelectRule(
 ): string | null {
   const options = item.options || [];
   const excludeSet = new Set(item.excludeOptions || []);
+
 
   // 解析当前值
   let currentSet: Set<string>;
@@ -305,8 +288,8 @@ function validateMultiSelectRule(
   }
 
   // 排除指定选项
-  const filteredCurrent = new Set([...currentSet].filter((v) => !excludeSet.has(v)));
-  const filteredLast = new Set([...lastSet].filter((v) => !excludeSet.has(v)));
+  const filteredCurrent = new Set([...currentSet].filter((v) => !excludeSet.has(String(v))));
+  const filteredLast = new Set([...lastSet].filter((v) => !excludeSet.has(String(v))));
 
   const compareType = item.compareType;
 
@@ -314,7 +297,7 @@ function validateMultiSelectRule(
     const removed = [...filteredLast].filter((v) => !filteredCurrent.has(v));
     if (removed.length > 0) {
       const removedLabels = removed.map((v) => {
-        const opt = options.find((o) => o.value === v);
+        const opt = options.find((o) => String(o.value) === String(v));
         return opt?.label || v;
       });
       return `上期选中的选项 [${removedLabels.join('、')}] 已取消选择，必须继续保持选中`;
@@ -388,7 +371,7 @@ function getCurrentValue(indicatorCode: string, valueType: number): any {
  * 获取指标的上期值
  */
 function getLastPeriodValue(indicatorCode: string): string {
-  return lastPeriodValues.value[indicatorCode] || '';
+  return lastPeriodRawValues.value[indicatorCode] || '';
 }
 
 /**
@@ -412,7 +395,7 @@ function extractPureValue(value: any): string {
  */
 function getOptionLevel(options: PositiveRuleItem['options'], value: string): number | null {
   if (!options) return null;
-  const index = options.findIndex((o) => o.value === value);
+  const index = options.findIndex((o) => String(o.value) === String(value));
   return index >= 0 ? index + 1 : null;
 }
 
