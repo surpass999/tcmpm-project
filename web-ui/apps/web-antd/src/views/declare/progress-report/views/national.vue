@@ -801,7 +801,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
             {
               label: '数据对比',
               icon: 'lucide:git-compare',
-              auth: ['declare/progress-report/compare-data'],
+              auth: ['declare:progress-report:compare-data'],
               disabled: compareDisabled,
               tooltip: compareTooltip,
               onClick: handleOpenCompare,
@@ -809,7 +809,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
             {
               label: '导出Excel',
               icon: 'lucide:download',
-              auth: ['declare/progress-report/export-national'],
+              auth: ['declare:progress-report:export-national'],
               onClick: handleOpenExport,
             },
           ]"
