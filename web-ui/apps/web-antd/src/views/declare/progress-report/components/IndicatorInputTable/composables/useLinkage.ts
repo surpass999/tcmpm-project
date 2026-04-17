@@ -12,10 +12,8 @@
  */
 
 import { ref, watch, computed } from 'vue';
-import type { DeclareIndicatorApi } from '#/api/declare/indicator';
 import {
   evaluateAllLinkages,
-  evaluateLinkage,
   parseLinkageConfig,
 } from '../utils/linkageEvaluator';
 import type { LinkageEvaluationResult } from '../types';
@@ -73,9 +71,7 @@ const hasAnyLinkage = computed(() => {
  * 当指标被隐藏时调用，避免脏数据提交
  */
 function clearIndicatorValue(indicatorCode: string) {
-  // 清除主值
   if (formValues[indicatorCode] !== undefined) {
-    console.log('[DEBUG useLinkage clearIndicatorValue]', { indicatorCode, oldValue: formValues[indicatorCode] });
     formValues[indicatorCode] = undefined;
   }
 }
@@ -89,20 +85,25 @@ function recalculateLinkage() {
   if (indicators.value.length === 0) return;
   if (isRecalculating) return; // 防止重入
   isRecalculating = true;
-  console.log('[DEBUG useLinkage recalculateLinkage] START');
-  // 打印当前 formValues 中所有联动指标的值
-  const linkedCodes = ['702', '70201'];
-  for (const code of linkedCodes) {
-    console.log('[DEBUG useLinkage recalculateLinkage] before eval formValues', { code, value: formValues[code] });
-  }
   const results = evaluateAllLinkages(indicators.value, formValues);
-  // 打印所有联动结果
-  for (const [code, result] of results) {
-    console.log('[DEBUG useLinkage recalculateLinkage] linkage result', { code, type: result.type, enabled: result.enabled });
+
+  // 只有结果真正变化时才更新，避免触发不必要的 re-render
+  if (!mapEquals(linkageResults.value, results)) {
+    linkageResults.value = results;
   }
-  linkageResults.value = results;
-  console.log('[DEBUG useLinkage recalculateLinkage] END');
   isRecalculating = false;
+}
+
+/** 比较两个 Map 是否相等（用于判断联动结果是否真正变化） */
+function mapEquals(a: Map<string, LinkageEvaluationResult>, b: Map<string, LinkageEvaluationResult>): boolean {
+  if (a === b) return true;
+  if (a.size !== b.size) return false;
+  for (const [key, valA] of a) {
+    const valB = b.get(key);
+    if (valB === undefined) return false;
+    if (valA.type !== valB.type || valA.enabled !== valB.enabled) return false;
+  }
+  return true;
 }
 
 /**
@@ -121,28 +122,12 @@ function getIndicatorLinkageState(
  * 优先级：
  * 1. 有 show 类型联动 → 按联动结果
  * 2. 无联动 → 默认显示
- *
- * 副作用：隐藏时自动清除值
  */
 function isIndicatorVisible(indicatorCode: string): boolean {
   const state = getIndicatorLinkageState(indicatorCode);
-  // 调试特定指标
-  if (indicatorCode === '702' || indicatorCode === '70201') {
-    console.log('[DEBUG isIndicatorVisible RENDER]', { indicatorCode, state, linkageResultsSize: linkageResults.value.size, formValues702: formValues['702'] });
-  }
-
   if (state?.type === 'show') {
-    const visible = state.enabled;
-    console.log('[DEBUG isIndicatorVisible]', { indicatorCode, visible, type: state.type, enabled: state.enabled });
-
-    // 如果即将变为隐藏，清除值
-    if (!visible && formValues[indicatorCode] !== undefined) {
-      clearIndicatorValue(indicatorCode);
-    }
-
-    return visible;
+    return state.enabled;
   }
-
   return true;
 }
 
@@ -188,17 +173,16 @@ function isIndicatorRequired(
 watch(
   () => indicators.value.length,
   (newLen, oldLen) => {
-    if (newLen > 0 && (oldLen === 0 || oldLen === undefined)) {
+    console.log('[DEBUG watch indicators.length] fired', { newLen, oldLen, initialized });
+    if (newLen > 0 && !initialized) {
       // 首次加载指标（formValues 已在 loadIndicatorData 中通过 await savedValues 填充完毕）
       initialized = true;
       recalculateLinkage();
-      // 验证 linkageResults 是否正确
-      console.log('[DEBUG useLinkage watch] after recalculateLinkage linkageResults.get(702):', linkageResults.value.get('702'));
     }
   },
 );
 
-// 监听被监听的指标值变化（精准监听 + 防抖）
+  // 监听被监听的指标值变化（精准监听 + 防抖）
 watch(
   () => {
     // 只返回被监听的指标的值

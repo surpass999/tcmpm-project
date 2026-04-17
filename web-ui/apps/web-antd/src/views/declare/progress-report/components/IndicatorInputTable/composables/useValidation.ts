@@ -205,19 +205,8 @@ export function validateIndicator(indicator: DeclareIndicatorApi.Indicator): Fie
   const errors: FieldError[] = [];
   const key = toTopLevelKey(indicator.id!);
 
-  console.log('[DEBUG validateIndicator] START', {
-    indicatorCode: indicator.indicatorCode,
-    indicatorId: indicator.id,
-    isRequired: indicator.isRequired,
-  });
-
   // 检查指标是否可见，不可见则不校验，强制清除所有旧错误（包括必填）
   const linkageState = evaluateIndicatorLinkage(indicator, formValues);
-  console.log('[DEBUG validateIndicator] linkageState', {
-    indicatorCode: indicator.indicatorCode,
-    type: linkageState?.type,
-    enabled: linkageState?.enabled,
-  });
   if (linkageState?.type === 'show' && !linkageState.enabled) {
     clearFieldError(key, true);
     return [];
@@ -225,11 +214,6 @@ export function validateIndicator(indicator: DeclareIndicatorApi.Indicator): Fie
 
   // 直接从 formValues 取值，不依赖 _formValue（_formValue 可能因 v-model 时序问题还未同步）
   const value = formValues[indicator.indicatorCode];
-  console.log('[DEBUG validateIndicator] formValues value', {
-    indicatorCode: indicator.indicatorCode,
-    value,
-    valueType: typeof value,
-  });
   const isEmptyVal = isEmpty(value);
 
   // 使用联动必填判断
@@ -237,13 +221,6 @@ export function validateIndicator(indicator: DeclareIndicatorApi.Indicator): Fie
   if (linkageState?.type === 'required') {
     required = linkageState.enabled;
   }
-  console.log('[DEBUG validateIndicator] required check', {
-    indicatorCode: indicator.indicatorCode,
-    baseRequired: indicator.isRequired,
-    finalRequired: required,
-    isEmpty: isEmptyVal,
-    computed: isComputedIndicator(indicator),
-  });
   const isRequiredAndNotComputed = required && !isComputedIndicator(indicator);
   if (isRequiredAndNotComputed && isEmptyVal) {
     // 【核心修复】对于 show 类型的联动指标，如果值是空的，跳过必填错误设置。
@@ -251,13 +228,11 @@ export function validateIndicator(indicator: DeclareIndicatorApi.Indicator): Fie
     // 导致空值被误判为必填缺失。这种情况下清除旧错误即可，等用户真正填值时 @change/onBlur 会重新验证。
     if (linkageState?.type === 'show') {
       clearFieldError(key, true);
-      console.log('[DEBUG validateIndicator] show-linkage empty skip required error (v-model timing fix)', { indicatorCode: indicator.indicatorCode });
       return [];
     }
     const err = { message: '此项为必填', errorType: 'required' as const, dirty: true };
     fieldErrors[key] = err;
     errors.push(err);
-    console.log('[DEBUG validateIndicator] SET required error', { indicatorCode: indicator.indicatorCode, value });
     return errors;
   }
 

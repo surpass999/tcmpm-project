@@ -116,14 +116,6 @@ export function evaluateLinkage(
 
   // 获取触发字段的值
   const triggerValue = formValues[linkage.trigger.indicatorCode];
-  console.log('[DEBUG evaluateLinkage]', {
-    indicatorCode: indicator.indicatorCode,
-    linkageType: linkage.type,
-    triggerIndicator: linkage.trigger.indicatorCode,
-    triggerValue,
-    triggerOperator: linkage.trigger.operator,
-    triggerConfigValue: linkage.trigger.value,
-  });
 
   // 评估条件
   const conditionMet = evaluateCondition(
@@ -131,13 +123,6 @@ export function evaluateLinkage(
     triggerValue,
     linkage.trigger.value,
   );
-
-  console.log('[DEBUG evaluateLinkage] result', {
-    indicatorCode: indicator.indicatorCode,
-    conditionMet,
-    finalType: linkage.type,
-    finalEnabled: conditionMet,
-  });
 
   return {
     indicatorCode: indicator.indicatorCode,

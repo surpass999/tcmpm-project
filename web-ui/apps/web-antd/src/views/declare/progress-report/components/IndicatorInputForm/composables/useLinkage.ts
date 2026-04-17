@@ -14,16 +14,10 @@ let initialized = false;
 let isRecalculating = false;
 
 function clearIndicatorValue(indicatorCode: string) {
-  // // #region agent debug log
-  // fetch('http://127.0.0.1:7550/ingest/3f60b161-8a14-4e30-8c88-b76dc9cc5103',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'952378'},body:JSON.stringify({sessionId:'952378',location:'useLinkage.ts:clearIndicatorValue',message:'联动清除值',data:{indicatorCode,currentValue:formValues[indicatorCode]},timestamp:Date.now()})}).catch(()=>{});
-  // // #endregion
   if (formValues[indicatorCode] !== undefined) formValues[indicatorCode] = undefined;
 }
 
 function recalculateLinkage() {
-  // // #region agent debug log
-  // fetch('http://127.0.0.1:7550/ingest/3f60b161-8a14-4e30-8c88-b76dc9cc5103',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'952378'},body:JSON.stringify({sessionId:'952378',location:'useLinkage.ts:recalculateLinkage',message:'开始重新计算联动',data:{indicatorsCount:indicators.value.length},timestamp:Date.now()})}).catch(()=>{});
-  // // #endregion
   if (indicators.value.length === 0) return;
   if (isRecalculating) return;
   isRecalculating = true;

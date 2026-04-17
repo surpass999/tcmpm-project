@@ -174,19 +174,11 @@ async function loadIndicatorData(
   // 加载已有值（必须在设置 indicators.value 之前完成，避免联动 watch 在值加载前触发并清空值）
   if (reportId) {
     const savedValues = await getProgressReportIndicatorValues(reportId);
-    console.log('[DEBUG loadIndicatorData] reportId:', reportId, '| savedValues count:', savedValues.length, '| has 702:', savedValues.some((r: any) => r.indicatorCode === '702'), '| has 701:', savedValues.some((r: any) => r.indicatorCode === '701'));
-    console.log('[DEBUG loadIndicatorData] formValues["702"] BEFORE loop:', formValues['702']);
     for (const record of savedValues) {
       const ind = indicatorData.find((i) => i.id === record.indicatorId);
       const vt = record.valueType ?? ind?.valueType ?? 1;
       const value = extractValue(record, vt);
-      if (record.indicatorCode === '702' || record.indicatorCode === '70201') {
-        console.log('[DEBUG loadIndicatorData] setting formValues', { code: record.indicatorCode, value, vt, recordValueStr: record.valueStr });
-      }
       formValues[record.indicatorCode!] = value;
-      if (record.indicatorCode === '702') {
-        console.log('[DEBUG loadIndicatorData] formValues["702"] AFTER setting:', formValues['702']);
-      }
 
       // 文件类型
       if (vt === 9 && value && record.indicatorCode) {

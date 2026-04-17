@@ -184,6 +184,50 @@ export function handleInputTypeCheckboxChange(indicator: DeclareIndicatorApi.Ind
   }
 }
 
+// ==================== 保存时序列化（从 inputTypeValues 读取输入内容）====================
+
+/**
+ * 将多选/多选下拉的 formValues 数组序列化为带输入内容的字符串
+ * 用于 getAllIndicatorValues 提交时，避免 inputTypeValues 中的内容丢失
+ */
+export function serializeInputTypeArrayForSave(indicatorCode: string, rawValues: string[]): string {
+  return rawValues
+    .map((v) => {
+      const { value } = deserializeInputTypeValue(v);
+      const inputContent = inputTypeValues[indicatorCode + '_' + value] || '';
+      return serializeInputTypeValue(value, inputContent);
+    })
+    .join(',');
+}
+
+// ==================== 输入框内容同步（不触发校验）====================
+
+/**
+ * 将输入框内容同步到 formValues（不包含校验逻辑，供 @input 时实时调用）
+ * 用于：页面加载后直接保存场景，避免用户未失焦导致值丢失
+ */
+export function syncInputTypeContent(indicator: DeclareIndicatorApi.Indicator, opt: any, content: string) {
+  const inputFieldName = getInputTypeInputFieldName(indicator.indicatorCode, opt.value);
+  const raw = formValues[indicator.indicatorCode];
+  if (raw) {
+    if (Array.isArray(raw)) {
+      const newRaw = raw.map((item) => {
+        const deserialized = deserializeInputTypeValue(item);
+        if (deserialized.value === opt.value) {
+          return serializeInputTypeValue(opt.value, content);
+        }
+        return item;
+      });
+      formValues[indicator.indicatorCode] = newRaw;
+    } else {
+      const deserialized = deserializeInputTypeValue(raw);
+      const serialized = serializeInputTypeValue(deserialized.value, content);
+      formValues[indicator.indicatorCode] = serialized;
+    }
+  }
+  formValues[inputFieldName] = content;
+}
+
 // ==================== 输入框失焦 ====================
 
 /** 输入框失焦时的校验 */
@@ -191,7 +235,6 @@ export function onInputTypeBlur(indicator: DeclareIndicatorApi.Indicator, opt: a
   const inputKey = indicator.indicatorCode + '_' + opt.value;
   const content = (value !== undefined ? value : inputTypeValues[inputKey]) || '';
   const inputFieldName = getInputTypeInputFieldName(indicator.indicatorCode, opt.value);
-  console.log('[onInputTypeBlur] inputKey:', inputKey, 'content:', content, 'inputFieldName:', inputFieldName, 'indicator.id:', indicator.id);
 
   // 同步更新 formValues 主字段和子字段
   const raw = formValues[indicator.indicatorCode];

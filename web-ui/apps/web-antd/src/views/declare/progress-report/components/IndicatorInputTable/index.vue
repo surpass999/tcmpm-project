@@ -104,6 +104,8 @@ import {
   getInputTypeLastPeriodContent,
   setOnMultiSelectChangeCallback,
   setOnIndicatorChangeCallback,
+  syncInputTypeContent,
+  serializeInputTypeArrayForSave,
 } from './composables/useInputTypeOptions';
 import { inputTypeValues, getPureCheckboxValues, serializeInputTypeValue } from './composables/useFormValues';
 
@@ -180,11 +182,6 @@ const mounted = ref(false);
 const rootRef = ref<HTMLElement>();
 
 /** 当前聚焦的输入型选项信息（用于 blur 时恢复值） */
-const lastFocusedInputTypeInfo = ref<{
-  indicatorCode: string;
-  optValue: string;
-  value: string;
-} | null>(null);
 
 // ==================== 辅助函数 ====================
 
@@ -287,18 +284,13 @@ setOnIndicatorChangeCallback((indicator) => {
 
 function handleNumberBlur(indicator: DeclareIndicatorApi.Indicator, _event: Event) {
   const currentValue = formValues[indicator.indicatorCode];
-  console.log('[DEBUG handleNumberBlur] indicatorCode:', indicator.indicatorCode, '| currentValue:', currentValue, '| _formValue:', (indicator as any)._formValue);
-
   if (indicator.id !== undefined) markTopLevelDirty(indicator.id);
   checkAndSyncLinkedAutoContainers(indicator.indicatorCode, indicators.value);
   if (indicator.id !== undefined) {
     const key = toTopLevelKey(indicator.id);
-    console.log('[DEBUG handleNumberBlur] before clearFieldError, existing error:', JSON.stringify(fieldErrors[key]));
     clearFieldError(key, true);
-    console.log('[DEBUG handleNumberBlur] after clearFieldError, fieldErrors[key]:', JSON.stringify(fieldErrors[key]));
   }
   nextTick(() => {
-    console.log('[DEBUG handleNumberBlur nextTick] formValues[indicator.indicatorCode]:', formValues[indicator.indicatorCode]);
     validateIndicator(indicator);
     recalculateComputedIndicators(indicators.value);
     validateLogicRuleForBlur(indicator, indicators.value, setFieldError, clearFieldError, setDirty);
@@ -334,18 +326,10 @@ function onIndicatorChange(indicator: DeclareIndicatorApi.Indicator, rawValue?: 
   if (rawValue !== undefined) {
     formValues[indicator.indicatorCode] = rawValue;
   }
-  console.log('[DEBUG onIndicatorChange] START', {
-    indicatorCode: indicator.indicatorCode,
-    indicatorId: indicator.id,
-    valueType: indicator.valueType,
-    formValueNow: formValues[indicator.indicatorCode],
-  });
   if (indicator.id !== undefined) {
     markTopLevelDirty(indicator.id);
     const key = toTopLevelKey(indicator.id);
-    console.log('[DEBUG onIndicatorChange] before clearFieldError', { key, existingError: JSON.stringify(fieldErrors[key]) });
     clearFieldError(key, true);
-    console.log('[DEBUG onIndicatorChange] after clearFieldError', { key, remainingError: JSON.stringify(fieldErrors[key]) });
   }
   if (indicator.valueType === 12) {
     const entries = containerValues[indicator.indicatorCode] || [];
@@ -353,9 +337,7 @@ function onIndicatorChange(indicator: DeclareIndicatorApi.Indicator, rawValue?: 
   }
   checkAndSyncLinkedAutoContainers(indicator.indicatorCode, indicators.value);
   // nextTick 确保 v-model 的值已同步到 formValues（ant-design @change 在值更新前触发）
-  console.log('[DEBUG onIndicatorChange] before nextTick formValues[indicator.indicatorCode]:', formValues[indicator.indicatorCode]);
   nextTick(() => {
-    console.log('[DEBUG onIndicatorChange] nextTick formValues[indicator.indicatorCode]:', formValues[indicator.indicatorCode]);
     validateIndicator(indicator);
     validateLogicRuleForBlur(indicator, indicators.value, setFieldError, clearFieldError, setDirty);
     if (hasAnyLastPeriodValue()) {
@@ -365,12 +347,9 @@ function onIndicatorChange(indicator: DeclareIndicatorApi.Indicator, rawValue?: 
 }
 
 /** 输入型选项失焦：恢复值并触发父级指标校验 */
-function handleInputTypeBlur(indicator: DeclareIndicatorApi.Indicator, _opt: any, _value: string, _event: any) {
-  const focused = lastFocusedInputTypeInfo.value;
-  const actualValue = focused?.indicatorCode === indicator.indicatorCode && focused?.optValue === _opt.value
-    ? focused.value : '';
-  onInputTypeBlur(indicator, _opt, actualValue);
-  lastFocusedInputTypeInfo.value = null;
+function handleInputTypeBlur(indicator: DeclareIndicatorApi.Indicator, opt: any, _value: string) {
+  const inputKey = indicator.indicatorCode + '_' + opt.value;
+  onInputTypeBlur(indicator, opt, inputTypeValues[inputKey] || '');
   onIndicatorChange(indicator);
 }
 
@@ -456,6 +435,11 @@ watch(formValues as any, () => {
   emit('update');
 }, { deep: true });
 
+// 调试：专门监听 formValues['702'] 的变化
+// watch(() => formValues['702'], (newVal, oldVal) => {
+//   console.log('[DEBUG watch formValues["702"]] changed', { oldVal, newVal });
+// }, { immediate: false });
+
 // ==================== 暴露 API ====================
 
 function getContainerValuesResult(): Record<string, string> {
@@ -483,14 +467,7 @@ function getAllIndicatorValues(): Array<{
     const code = ind.indicatorCode;
     const vt = ind.valueType;
     const rawValue = formValues[code];
-    console.log('[DEBUG getAllIndicatorValues]', {
-      indicatorCode: code,
-      valueType: vt,
-      rawValue,
-      rawValueType: typeof rawValue,
-    });
     if (rawValue === undefined || rawValue === '') {
-      console.log('[DEBUG getAllIndicatorValues] SKIP (undefined or empty)', { code });
       continue;
     }
     const item: any = { indicatorId: ind.id!, indicatorCode: code, valueType: vt };
@@ -500,7 +477,7 @@ function getAllIndicatorValues(): Array<{
     else if (vt === 3) item.valueBool = !!rawValue;
     else if (vt === 4) item.valueDate = dayjs.isDayjs(rawValue) ? rawValue.format('YYYY-MM-DD HH:mm:ss') : String(rawValue);
     else if (vt === 5) item.valueText = String(rawValue);
-    else if (vt === 7 || vt === 11) item.valueStr = Array.isArray(rawValue) ? rawValue.join(',') : String(rawValue);
+    else if (vt === 7 || vt === 11) item.valueStr = Array.isArray(rawValue) ? serializeInputTypeArrayForSave(code, rawValue) : String(rawValue);
     else if (vt === 8 && Array.isArray(rawValue)) {
       item.valueDateStart = dayjs.isDayjs(rawValue[0]) ? rawValue[0].format('YYYY-MM-DD HH:mm:ss') : String(rawValue[0] || '');
       item.valueDateEnd = dayjs.isDayjs(rawValue[1]) ? rawValue[1].format('YYYY-MM-DD HH:mm:ss') : String(rawValue[1] || '');
@@ -647,11 +624,9 @@ function scrollToField(containerFieldKey?: string, indicatorCode?: string) {
 /** 对单个元素执行滚动和高亮 */
 function scrollToEl(el: Element) {
   const rect = el.getBoundingClientRect();
-  console.log('[scrollToEl] 元素:', el.tagName, el.className, 'rect:', rect);
   if (!rect || rect.width === 0 || rect.height === 0) {
     const indicatorRow = (el as HTMLElement).closest?.('[data-indicator-code]') as HTMLElement | null;
     if (indicatorRow) {
-      console.log('[scrollToEl] 尺寸为0，回退到 indicator-row');
       indicatorRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
       addHighlight(indicatorRow);
     }
@@ -669,7 +644,6 @@ function scrollToEl(el: Element) {
     }
     cur = cur.parentElement;
   }
-  console.log('[scrollToEl] 滚动容器:', scrollContainer?.tagName, scrollContainer?.className, 'scrollTop:', scrollContainer?.scrollTop, 'clientHeight:', scrollContainer?.clientHeight, 'scrollHeight:', scrollContainer?.scrollHeight, 'overflow:', getComputedStyle(scrollContainer!).overflowY);
   if (!scrollContainer) {
     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     addHighlight(el);
@@ -682,7 +656,6 @@ function scrollToEl(el: Element) {
   const relativeTop = scrollContainer.scrollTop + (targetRect.top - containerRect.top);
   // 不做居中，防止对顶部元素计算出负值被 clamp 为 0
   const newScrollTop = Math.max(0, relativeTop - 20);
-  console.log('[scrollToEl] 计算: relativeTop=', relativeTop, 'newScrollTop=', newScrollTop);
   scrollContainer.scrollTo({ top: newScrollTop, behavior: 'smooth' });
   addHighlight(el);
 }
@@ -816,23 +789,15 @@ function addHighlight(el: Element) {
                 v-else-if="indicator.valueType === 2"
                 style="display: flex; flex-direction: column; gap: 4px; align-items: flex-start;"
               >
-                <!-- DEBUG -->
-                <div v-if="indicator.indicatorCode === '702'" style="color:red;font-size:12px;background:#fff0f0;padding:2px 4px;border:1px solid red;">
-                  DEBUG formValues['702'] = {{ JSON.stringify(formValues['702']) }} | indicatorCode={{ indicator.indicatorCode }} | id={{ indicator.id }}
-                </div>
                 <a-input
-                  v-model="formValues[indicator.indicatorCode]"
-                  :key="'inp_' + indicator.indicatorCode + '_' + (formValues[indicator.indicatorCode] || '')"
+                  :value="formValues[indicator.indicatorCode]"
                   :disabled="isIndicatorDisabled(indicator.indicatorCode, readonly)"
                   :placeholder="`请输入${indicator.indicatorName}`"
                   :maxlength="getMaxLength(indicator)"
                   show-count
                   class="w-full"
-                  @change="(e: any) => { const v = e.target.value; formValues[indicator.indicatorCode] = v; onIndicatorChange(indicator, v); }"
-                >
-                  <!-- 测试用：直接读取 formValues 显示在 input 内部 -->
-                  <template #suffix v-if="indicator.indicatorCode === '702'">{{ formValues['702'] }}</template>
-                </a-input>
+                  @update:value="(v: string) => { formValues[indicator.indicatorCode] = v; onIndicatorChange(indicator, v); }"
+                />
                 <div
                   v-if="lastPeriodValues[indicator.indicatorCode]"
                   class="inline-last-value"
@@ -1034,9 +999,8 @@ function addHighlight(el: Element) {
                         :disabled="isIndicatorDisabled(indicator.indicatorCode, readonly)"
                         :placeholder="getInputTypeLastPeriodContent(lastPeriodRawValues, indicator.indicatorCode, opt.value) ? '上期：' + getInputTypeLastPeriodContent(lastPeriodRawValues, indicator.indicatorCode, opt.value) : '请输入补充内容'"
                         style="display: inline-block; width: 200px; padding: 0px 0px 0px 4px; border-radius: 4px; vertical-align: middle;"
-                        @input="(e: any) => { lastFocusedInputTypeInfo.value = { indicatorCode: indicator.indicatorCode, optValue: opt.value, value: e.target.value }; inputTypeValues[indicator.indicatorCode + '_' + opt.value] = e.target.value; }"
-                        @blur.stop="(e: any) => { handleInputTypeBlur(indicator, opt, e.target.value, e); }"
-                        @focus="() => { lastFocusedInputTypeInfo.value = { indicatorCode: indicator.indicatorCode, optValue: opt.value, value: inputTypeValues[indicator.indicatorCode + '_' + opt.value] || '' }; }"
+                        @input="(e: any) => { const v = e.target.value; inputTypeValues[indicator.indicatorCode + '_' + opt.value] = v; syncInputTypeContent(indicator, opt, v); }"
+                        @blur.stop="(e: any) => { handleInputTypeBlur(indicator, opt, e.target.value); }"
                       />
                     </template>
                   </a-radio-group>
@@ -1091,8 +1055,8 @@ function addHighlight(el: Element) {
                         :disabled="isIndicatorDisabled(indicator.indicatorCode, readonly)"
                         :placeholder="getInputTypeLastPeriodContent(lastPeriodRawValues, indicator.indicatorCode, opt.value) ? '上期：' + getInputTypeLastPeriodContent(lastPeriodRawValues, indicator.indicatorCode, opt.value) : '请输入补充内容'"
                         style="display: inline-block; width: 140px; padding: 0px 0px 0px 4px; border-radius: 4px; vertical-align: middle;"
-                        @input="(e: any) => { inputTypeValues[indicator.indicatorCode + '_' + opt.value] = e.target.value; onInputTypeBlur(indicator, opt, e.target.value); }"
-                        @blur.stop="(e: any) => { handleInputTypeBlur(indicator, opt, e.target.value, e); }"
+                        @input="(e: any) => { const v = e.target.value; inputTypeValues[indicator.indicatorCode + '_' + opt.value] = v; syncInputTypeContent(indicator, opt, v); }"
+                        @blur.stop="(e: any) => { handleInputTypeBlur(indicator, opt, e.target.value); }"
                       />
                     </template>
                   </template>
