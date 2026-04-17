@@ -1370,10 +1370,11 @@ watch(
                 v-model:value="linkageOperator"
                 placeholder="请选择条件"
                 class="w-32"
+                style="width: 150px !important;"
               >
                 <a-select-option
-                 style="width: auto !important;"
-                  class="w-50"
+                 
+                  class="w-20 !important"
                   v-for="opt in linkageOperatorOptions"
                   :key="opt.value"
                   :value="opt.value"
@@ -1392,7 +1393,7 @@ watch(
                 v-if="showLinkageValue && getTriggerIndicatorOptions.length > 0"
                 v-model:value="linkageValue"
                 placeholder="选择值"
-                class="flex-1"
+                class="flex-1 w-30 !important"
               >
                 <a-select-option
                   v-for="opt in getTriggerIndicatorOptions"
