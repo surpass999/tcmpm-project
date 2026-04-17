@@ -3,7 +3,7 @@
  * IndicatorInputForm 主入口组件
  * 使用标准 VbenForm 组件渲染指标填报表单
  */
-import { ref, reactive, watch, onMounted, nextTick, computed } from 'vue';
+import { ref, reactive, watch, onMounted, nextTick, computed, h } from 'vue';
 import { message } from 'ant-design-vue';
 import dayjs from 'dayjs';
 
@@ -28,7 +28,6 @@ import {
 import {
   indicators, lastPeriodValues, lastPeriodRawValues,
   loadIndicatorData, loadJointRules,
-  getIndicatorsInDisplayOrder,
   loadLastPeriodValues,
   indicatorGroups,
 } from './composables/useIndicatorData';
@@ -218,6 +217,12 @@ function buildSpecHelp(indicator: DeclareIndicatorApi.Indicator): string {
   return parts.join('\n');
 }
 
+function buildLastPeriodHtml(indicatorCode: string): string {
+  const val = lastPeriodValues.value[indicatorCode];
+  if (!val) return '';
+  return `上期：${val}`;
+}
+
 function parseLastPeriodRaw(indicatorCode: string): Record<string, string> {
   const raw = lastPeriodRawValues.value[indicatorCode];
   if (!raw) return {};
@@ -322,6 +327,14 @@ function buildSchemaForIndicator(indicator: DeclareIndicatorApi.Indicator): Vben
 
   const label = `${indicator.indicatorCode} - ${indicator.indicatorName}`;
   const help = hasIndicatorSpec(indicator) ? buildSpecHelp(indicator) : undefined;
+  const description = buildLastPeriodHtml(code);
+
+  const isComputed = isComputedIndicator(indicator);
+  const suffix = isComputed
+    ? h('span', {
+        style: 'font-size:11px;padding:1px 6px;background:#fff7e6;color:#fa8c16;border:1px solid #ffd591;border-radius:4px;font-weight:500;white-space:nowrap;',
+      }, '自动计算') as any
+    : undefined;
 
   return {
     component: component as any,
@@ -331,12 +344,30 @@ function buildSchemaForIndicator(indicator: DeclareIndicatorApi.Indicator): Vben
     rules,
     dependencies: deps,
     help,
+    description: description || undefined,
+    suffix,
     defaultValue: formValues[code],
   };
 }
 
 const formSchema = computed<VbenFormSchema[]>(() => {
-  return getIndicatorsInDisplayOrder().map((ind) => buildSchemaForIndicator(ind));
+  const schemas: VbenFormSchema[] = [];
+  for (const group of indicatorGroups.value) {
+    const groupLabel = `${group.groupPrefix ? group.groupPrefix + ' ' : ''}${group.groupName}`;
+    schemas.push({
+      component: 'Divider',
+      fieldName: `__group_${group.groupId}`,
+      label: '',
+      description: groupLabel,
+      defaultValue: undefined,
+    } as any);
+    for (const ind of group.indicators) {
+      if (isIndicatorVisible(ind.indicatorCode)) {
+        schemas.push(buildSchemaForIndicator(ind));
+      }
+    }
+  }
+  return schemas;
 });
 
 // ==================== 事件处理 ====================
@@ -495,6 +526,48 @@ defineExpose({
 <style scoped>
 .indicator-form-wrapper {
   padding: 4px 0;
+}
+
+/* 分组标题 Divider 美化 */
+.indicator-form-wrapper :deep(.vben-divider) {
+  font-size: 15px;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+  border-color: hsl(var(--primary));
+  margin: 24px 0 16px;
+}
+
+/* 分组标题 description 文字 */
+.indicator-form-wrapper :deep(.vben-divider ~ div [class*="description"]),
+.indicator-form-wrapper :deep([class*="divider"] + div [class*="description"]) {
+  display: none;
+}
+
+/* label 文字样式 */
+.indicator-form-wrapper :deep(.form-label) {
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  color: hsl(var(--foreground)) !important;
+}
+
+/* 强制 description（上期值）换行到下一行 */
+.indicator-form-wrapper :deep(.flex-auto > div:first-child) {
+  flex-direction: column !important;
+  align-items: stretch !important;
+  gap: 4px;
+}
+
+/* description 样式 - 上期值绿色 */
+.indicator-form-wrapper :deep(.flex-auto .ml-1) {
+  margin-left: 0 !important;
+  font-size: 14px;
+  font-weight: 500;
+  color: hsl(var(--success)) !important;
+}
+
+/* 自动计算标签 */
+.indicator-form-wrapper :deep(.flex-auto .ml-1 + span) {
+  margin-left: 0 !important;
 }
 .indicator-form-loading {
   text-align: center;

@@ -21,7 +21,7 @@ import {
 } from '#/api/declare/progress-report';
 import { getHospital, getHospitalByDeptId } from '#/api/declare/hospital';
 
-import IndicatorInputForm from '../components/IndicatorInputForm/index.vue';
+import IndicatorInputTable from '../components/IndicatorInputTable/index.vue';
 import ValidationSummaryModal from '../components/ValidationSummaryModal.vue';
 
 const emit = defineEmits(['success']);
@@ -39,7 +39,7 @@ const isLoadingIndicators = ref(false);
 const fillProgress = ref({ total: 0, filled: 0, percentage: 0 });
 
 /** 指标表格组件引用 */
-const indicatorTableRef = ref<InstanceType<typeof IndicatorInputForm> | null>(
+const indicatorTableRef = ref<InstanceType<typeof IndicatorInputTable> | null>(
   null,
 );
 
@@ -737,7 +737,7 @@ watch(
 
       <!-- 指标表格（仅在 hospitalId 确定后渲染） -->
       <div class="indicator-area">
-        <IndicatorInputForm
+        <IndicatorInputTable
           ref="indicatorTableRef"
           v-if="formData.hospitalId"
           :hospital-id="formData.hospitalId"
