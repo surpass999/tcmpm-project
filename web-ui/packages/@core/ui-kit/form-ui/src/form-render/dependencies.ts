@@ -10,7 +10,7 @@ import { isBoolean, isFunction } from '@vben-core/shared/utils';
 
 import { useFormValues } from 'vee-validate';
 
-import { injectRenderFormProps } from './context';
+import { injectFormApi } from './context';
 import { injectComponentRefMap } from '../use-form-context';
 
 export default function useDependencies(
@@ -18,10 +18,7 @@ export default function useDependencies(
 ) {
   const values = useFormValues();
 
-  const formRenderProps = injectRenderFormProps();
-
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-  const formApi = formRenderProps.form!;
+  const formApi = injectFormApi();
 
   const componentRefMap = injectComponentRefMap();
 

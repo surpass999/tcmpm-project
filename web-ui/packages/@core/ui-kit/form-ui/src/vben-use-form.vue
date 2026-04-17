@@ -23,6 +23,7 @@ import {
   provideFormProps,
   useFormInitial,
 } from './use-form-context';
+import { provideFormApi } from './form-render/context';
 // 通过 extends 会导致热更新卡死，所以重复写了一遍
 interface Props extends VbenFormProps {
   formApi?: ExtendedFormApi;
@@ -40,6 +41,7 @@ const { delegatedSlots, form } = useFormInitial(forward);
 
 provideFormProps([forward, form]);
 provideComponentRefMap(componentRefMap);
+provideFormApi(props.formApi!);
 
 props.formApi?.mount?.(form, componentRefMap);
 

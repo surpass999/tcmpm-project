@@ -65,6 +65,14 @@ export type MaybeComponentProps = { [K in MaybeComponentPropKey]?: any };
 
 export type FormActions = FormContext<GenericObject>;
 
+/**
+ * FormItemDependencies 中回调函数的第二个参数类型
+ */
+export interface FormItemDependenciesActions {
+  formApi: FormApi;
+  componentRefMap: Map<string, unknown>;
+}
+
 export type CustomRenderType = (() => Component | string) | string;
 
 export type FormSchemaRuleType =
@@ -78,17 +86,17 @@ export type FormSchemaRuleType =
 
 type FormItemDependenciesCondition<T = boolean | PromiseLike<boolean>> = (
   value: Partial<Record<string, any>>,
-  actions: FormActions,
+  actions: FormItemDependenciesActions,
 ) => T;
 
 type FormItemDependenciesConditionWithRules = (
   value: Partial<Record<string, any>>,
-  actions: FormActions,
+  actions: FormItemDependenciesActions,
 ) => FormSchemaRuleType | PromiseLike<FormSchemaRuleType>;
 
 type FormItemDependenciesConditionWithProps = (
   value: Partial<Record<string, any>>,
-  actions: FormActions,
+  actions: FormItemDependenciesActions,
 ) => MaybeComponentProps | PromiseLike<MaybeComponentProps>;
 
 export interface FormItemDependencies {
