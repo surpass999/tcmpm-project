@@ -749,6 +749,7 @@ public class DeclareProgressReportServiceImpl implements DeclareProgressReportSe
                     .valueType(indicator.getValueType())
                     .valueOptions(indicator.getValueOptions())
                     .groupId(indicator.getGroupId())
+                    .extraConfig(indicator.getExtraConfig())
                     .build();
 
             // 通过 groupId 查找二级分组，再找一级分组名称和排序号

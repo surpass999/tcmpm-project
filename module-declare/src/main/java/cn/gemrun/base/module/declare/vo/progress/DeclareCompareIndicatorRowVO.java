@@ -90,4 +90,9 @@ public class DeclareCompareIndicatorRowVO {
      * 差异类型: up/down/different/equal/none
      */
     private String diffType;
+
+    /**
+     * 扩展配置（包含联动规则等）
+     */
+    private String extraConfig;
 }

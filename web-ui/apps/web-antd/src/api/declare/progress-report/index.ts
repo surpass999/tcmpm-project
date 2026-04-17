@@ -305,6 +305,8 @@ export interface CompareIndicatorRow {
   valueA: any;
   valueB: any;
   diffType: 'up' | 'down' | 'different' | 'equal' | 'none';
+  /** 扩展配置（包含联动规则等） */
+  extraConfig?: string;
 }
 
 /**

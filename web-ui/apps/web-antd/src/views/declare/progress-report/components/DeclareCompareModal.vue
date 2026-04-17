@@ -86,17 +86,19 @@
             </template>
             <!-- 申报A值 -->
             <template v-else-if="column.key === 'valueA'">
-              <pre v-if="record.valueType === 12" :class="['whitespace-pre-wrap text-left', getDiffClass(record, 'A')]">{{ formatValue(record.valueA, record) }}</pre>
-              <span v-else :class="getDiffClass(record, 'A')">{{ formatValue(record.valueA, record) }}</span>
+              <pre v-if="record.valueType === 12" :class="['whitespace-pre-wrap text-left', getDiffClass(record, 'A')]">{{ formatValue(record.valueA, record, 'A') }}</pre>
+              <span v-else :class="getDiffClass(record, 'A')">{{ formatValue(record.valueA, record, 'A') }}</span>
             </template>
             <!-- 申报B值 -->
             <template v-else-if="column.key === 'valueB'">
-              <pre v-if="record.valueType === 12" :class="['whitespace-pre-wrap text-left', getDiffClass(record, 'B')]">{{ formatValue(record.valueB, record) }}</pre>
-              <span v-else :class="getDiffClass(record, 'B')">{{ formatValue(record.valueB, record) }}</span>
+              <pre v-if="record.valueType === 12" :class="['whitespace-pre-wrap text-left', getDiffClass(record, 'B')]">{{ formatValue(record.valueB, record, 'B') }}</pre>
+              <span v-else :class="getDiffClass(record, 'B')">{{ formatValue(record.valueB, record, 'B') }}</span>
             </template>
             <!-- 对比结果 -->
             <template v-else-if="column.key === 'diff'">
-              <span v-if="record.diffType === 'up'" class="text-green-600 font-bold">↑ 上升</span>
+              <!-- 如果任一方被隐藏，显示 "-" 表示无法比较 -->
+              <span v-if="!isSideVisible(record, 'A') || !isSideVisible(record, 'B')" class="text-gray-300">- 无法比较</span>
+              <span v-else-if="record.diffType === 'up'" class="text-green-600 font-bold">↑ 上升</span>
               <span v-else-if="record.diffType === 'down'" class="text-red-500 font-bold">↓ 下降</span>
               <span v-else-if="record.diffType === 'different'" class="text-red-500 font-bold">≠ 不一致</span>
               <span v-else-if="record.diffType === 'equal'" class="text-gray-400">= 相同</span>
@@ -117,6 +119,11 @@ import { DICT_TYPE } from '@vben/constants';
 import { getDictOptions } from '@vben/hooks';
 import { getCompareData, type CompareDataResponse, type CompareIndicatorRow } from '#/api/declare/progress-report';
 import { IconifyIcon } from '@vben/icons';
+import {
+  evaluateLinkageVisibility,
+  isIndicatorVisibleByLinkage,
+} from './IndicatorInputTable/utils/linkageVisibility';
+import type { LinkageEvaluationResult } from './IndicatorInputTable/types';
 
 const visible = ref(false);
 const loading = ref(false);
@@ -124,6 +131,18 @@ const data = reactive<CompareDataResponse>({ reportA: null as any, reportB: null
 
 // 指标对比表格分页：按一级分组整组翻页，避免分组标题和内容被切断
 const indicatorPage = reactive({ current: 1, pageSize: 20 });
+
+// 分页配置
+const indicatorPagination = computed(() => ({
+  current: indicatorPage.current,
+  pageSize: indicatorPage.pageSize,
+  total: indicatorPageGroups.value.length,
+  onChange: (page: number, size: number) => onIndicatorPageChange(page, size),
+}));
+
+// 联动可见性 Map（分别记录 A 和 B 的联动状态）
+const reportALinkageMap = ref<Map<string, LinkageEvaluationResult>>(new Map());
+const reportBLinkageMap = ref<Map<string, LinkageEvaluationResult>>(new Map());
 
 /** 通过字典获取填报状态中文名称 */
 function getReportStatusName(status: string | number | null | undefined): string {
@@ -140,11 +159,40 @@ async function open(reportIdA: number, reportIdB: number) {
   data.indicators = [];
   data.reportA = null as any;
   data.reportB = null as any;
+  reportALinkageMap.value = new Map();
+  reportBLinkageMap.value = new Map();
   try {
     const res = await getCompareData(reportIdA, reportIdB);
     data.reportA = res.reportA;
     data.reportB = res.reportB;
     data.indicators = res.indicators || [];
+
+    // 评估联动可见性
+    if (data.indicators.length) {
+      // 收集 A 的触发值
+      const triggerValuesA: Record<string, any> = {};
+      for (const ind of data.indicators) {
+        if (ind.valueA !== null && ind.valueA !== undefined) {
+          triggerValuesA[ind.indicatorCode] = ind.valueA;
+        }
+      }
+      reportALinkageMap.value = evaluateLinkageVisibility(
+        data.indicators.map(i => ({ indicatorCode: i.indicatorCode, extraConfig: i.extraConfig })),
+        triggerValuesA,
+      );
+
+      // 收集 B 的触发值
+      const triggerValuesB: Record<string, any> = {};
+      for (const ind of data.indicators) {
+        if (ind.valueB !== null && ind.valueB !== undefined) {
+          triggerValuesB[ind.indicatorCode] = ind.valueB;
+        }
+      }
+      reportBLinkageMap.value = evaluateLinkageVisibility(
+        data.indicators.map(i => ({ indicatorCode: i.indicatorCode, extraConfig: i.extraConfig })),
+        triggerValuesB,
+      );
+    }
   } catch (e: any) {
     message.error(e?.message || '加载对比数据失败');
     visible.value = false;
@@ -270,9 +318,23 @@ function onIndicatorPageChange(page: number, size: number) {
   indicatorPage.pageSize = size;
 }
 
+/** 判断指定侧的指标是否可见（用于 diff 列的判断） */
+function isSideVisible(row: any, side: 'A' | 'B'): boolean {
+  const linkageMap = side === 'A' ? reportALinkageMap.value : reportBLinkageMap.value;
+  return isIndicatorVisibleByLinkage(row.indicatorCode, linkageMap);
+}
+
 // 值格式化
-function formatValue(val: any, row: any) {
+function formatValue(val: any, row: any, side?: 'A' | 'B') {
   if (row._isGroup) return '';
+
+  // 检查联动可见性：隐藏的指标显示空值
+  if (side) {
+    const linkageMap = side === 'A' ? reportALinkageMap.value : reportBLinkageMap.value;
+    const isVisible = isIndicatorVisibleByLinkage(row.indicatorCode, linkageMap);
+    if (!isVisible) return '-';
+  }
+
   if (val === null || val === undefined) return '-';
   switch (row.valueType) {
     case 1: {

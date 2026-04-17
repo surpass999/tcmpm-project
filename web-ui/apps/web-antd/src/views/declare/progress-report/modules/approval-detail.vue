@@ -28,6 +28,11 @@ import { getAvailableActions } from '#/api/bpm/action';
 
 import ActionButton from '#/components/bpm/ActionButton.vue';
 import ReturnModal from '#/components/bpm/ReturnModal.vue';
+import {
+  evaluateLinkageVisibility,
+  isIndicatorVisibleByLinkage,
+} from '../components/IndicatorInputTable/utils/linkageVisibility';
+import type { LinkageEvaluationResult } from '../components/IndicatorInputTable/types';
 
 const userStore = useUserStore();
 
@@ -144,6 +149,14 @@ const taskInfo = ref<{ taskId?: string; processInstanceId?: string; reasonRequir
 
 // 退回弹窗 ref
 const returnModalRef = ref<InstanceType<typeof ReturnModal> | null>(null);
+
+// 联动可见性 Map
+const linkageVisibilityMap = ref<Map<string, LinkageEvaluationResult>>(new Map());
+
+/** 判断指标是否应该显示（基于联动状态） */
+function isIndicatorVisible(indicatorCode: string): boolean {
+  return isIndicatorVisibleByLinkage(indicatorCode, linkageVisibilityMap.value);
+}
 
 // 流程节点
 const processNodes = computed(() => processInfo.value?.activityNodes || []);
@@ -368,6 +381,18 @@ async function loadAllData() {
       }
     }
     indicatorValuesMap.value = valuesMap;
+
+    // 4.1 评估联动可见性
+    // 收集触发指标的值
+    const triggerValues: Record<string, any> = {};
+    for (const [indicatorId, value] of Object.entries(valuesMap)) {
+      const ind = indicatorById.get(Number(indicatorId));
+      if (ind && value !== undefined && value !== null) {
+        triggerValues[ind.indicatorCode] = value;
+      }
+    }
+    // 评估联动可见性
+    linkageVisibilityMap.value = evaluateLinkageVisibility(indicators, triggerValues);
 
     // 以下 BPM 相关数据仅在有 reportId 时加载
     if (!payload.value?.reportId) {
@@ -772,10 +797,10 @@ defineExpose({
                 {{ group.groupName }} ({{ group.indicators.length + group.children.reduce((sum, c) => sum + c.indicators.length, 0) }}个指标)
               </h3>
             </div>
-            <div v-if="group.indicators.length" class="detail-card-content">
+            <div v-if="group.indicators.filter(i => isIndicatorVisible(i.indicatorCode)).length || group.children.some(c => c.indicators.some(i => isIndicatorVisible(i.indicatorCode))))" class="detail-card-content">
               <div class="info-grid">
                 <div
-                  v-for="indicator in group.indicators"
+                  v-for="indicator in group.indicators.filter(i => isIndicatorVisible(i.indicatorCode))"
                   :key="getIndicatorId(indicator.id)"
                   class="info-item"
                   :class="{ 'col-span-2':  indicator.valueType === 12 }"
@@ -907,13 +932,13 @@ defineExpose({
             <div class="detail-card-header">
               <h3 class="detail-card-title">
                 <i class="fas fa-cube mr-2" />
-                　└ {{ group.groupName }} ({{ group.indicators.length }}个指标)
+                　└ {{ group.groupName }} ({{ group.indicators.filter(i => isIndicatorVisible(i.indicatorCode)).length }}个指标)
               </h3>
             </div>
-            <div class="detail-card-content">
+            <div v-if="group.indicators.filter(i => isIndicatorVisible(i.indicatorCode)).length" class="detail-card-content">
               <div class="info-grid">
                 <div
-                  v-for="indicator in group.indicators"
+                  v-for="indicator in group.indicators.filter(i => isIndicatorVisible(i.indicatorCode))"
                   :key="getIndicatorId(indicator.id)"
                   class="info-item"
                   :class="{ 'col-span-2': indicator.valueType === 5 || indicator.valueType === 12 }"
