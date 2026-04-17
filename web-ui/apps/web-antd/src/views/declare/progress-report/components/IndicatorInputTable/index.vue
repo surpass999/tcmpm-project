@@ -300,6 +300,17 @@ function handleNumberBlur(indicator: DeclareIndicatorApi.Indicator, _event: Even
   });
 }
 
+function handleTextBlur(indicator: DeclareIndicatorApi.Indicator, _event: Event) {
+  if (indicator.id !== undefined) markTopLevelDirty(indicator.id);
+  if (indicator.id !== undefined) {
+    const key = toTopLevelKey(indicator.id);
+    clearFieldError(key, true);
+  }
+  nextTick(() => {
+    validateIndicator(indicator);
+  });
+}
+
 function handleMultiSelectChange(indicator: any, selectedValues: string[]) {
   // 处理互斥逻辑
   const options = parseOptions(indicator.valueOptions);
@@ -796,6 +807,7 @@ function addHighlight(el: Element) {
                   :maxlength="getMaxLength(indicator)"
                   show-count
                   class="w-full"
+                  @blur="(e: Event) => handleTextBlur(indicator, e)"
                   @update:value="(v: string) => { formValues[indicator.indicatorCode] = v; onIndicatorChange(indicator, v); }"
                 />
                 <div

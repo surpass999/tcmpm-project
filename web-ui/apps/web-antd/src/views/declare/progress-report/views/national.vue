@@ -588,7 +588,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
     keepSource: true,
     proxyConfig: {
       ajax: {
-        query: async () => {
+        query: async (_params: any, form: any) => {
           // 高级搜索模式：刷新时重放 nationalSearch 请求
           if (isAdvancedSearchMode.value) {
             if (lastSearchParams.value) {
@@ -627,13 +627,20 @@ const [Grid, gridApi] = useVbenVxeGrid({
 
           const allList = await getNationalReportList();
           let list: DeclareProgressReport[] = [];
-          if (activeKey.value === 'reported') {
-            list = (allList || []).filter((r) => r.nationalReportStatus === 2);
-          } else if (activeKey.value === 'unreported') {
-            list = (allList || []).filter((r) => r.nationalReportStatus === 1);
+
+          // 普通搜索：根据表单年度筛选 + tab 筛选
+          if (form?.reportYear) {
+            list = (allList || []).filter((r) => r.reportYear === form.reportYear);
           } else {
             list = allList || [];
           }
+
+          if (activeKey.value === 'reported') {
+            list = list.filter((r) => r.nationalReportStatus === 2);
+          } else if (activeKey.value === 'unreported') {
+            list = list.filter((r) => r.nationalReportStatus === 1);
+          }
+
           if (list.length) {
             await loadRowBpmActions(list);
           }

@@ -121,6 +121,24 @@ export function isContainerFieldShortcut(code: string): boolean {
   return /^\d+_\d+$/.test(code);
 }
 
+/**
+ * 判断目标值是否在数组中
+ * - 用于多选题的条件判断
+ * - 如果是数组：检查数组中是否存在目标值
+ * - 如果是普通值：直接比较是否相等
+ * - 空数组视为"未填"，返回 false（跳过验证）
+ */
+function inArray(value: any, target: any): boolean {
+  if (Array.isArray(value)) {
+    // 空数组：视为"未填"，跳过验证
+    if (value.length === 0) return false;
+    const targetStr = String(target);
+    return value.some((item) => String(item) === targetStr);
+  }
+  // 普通值：直接比较（走原有逻辑，不应调用此函数）
+  return value == target;
+}
+
 // ==================== 验证实现 ====================
 
 /**
@@ -218,10 +236,24 @@ function validateRule(
             conditionMet = !isNaN(condNum) && condNum <= (condition.value ?? 0);
             break;
           case '==':
-            conditionMet = !isNaN(condNum) && condNum === (condition.value ?? 0);
+            if (Array.isArray(condValue)) {
+              // 数组值：使用 inArray 查询
+              conditionMet = inArray(condValue, condition.value);
+            } else {
+              // 普通值：使用原有逻辑
+              const condNum = Number(condValue);
+              conditionMet = !isNaN(condNum) && condNum === (condition.value ?? 0);
+            }
             break;
           case '!=':
-            conditionMet = !isNaN(condNum) && condNum !== (condition.value ?? 0);
+            if (Array.isArray(condValue)) {
+              // 数组值：数组中不包含该值
+              conditionMet = !inArray(condValue, condition.value);
+            } else {
+              // 普通值：使用原有逻辑
+              const condNum = Number(condValue);
+              conditionMet = !isNaN(condNum) && condNum !== (condition.value ?? 0);
+            }
             break;
         }
 
@@ -234,14 +266,30 @@ function validateRule(
       // 获取当前指标的值（保持 undefined/NaN 不被吞掉，交给 compareValues 判断）
       let currentValue: any;
       if (action.formula && action.formula.length > 0) {
-        currentValue = calculateFormula(action.formula, values, idToCode);
+        const formulaResult = calculateFormula(action.formula, values, idToCode);
+        // 如果公式结果包含数组值（多选题），取第一个元素
+        if (Array.isArray(formulaResult)) {
+          currentValue = formulaResult.length > 0 ? formulaResult[0] : undefined;
+        } else {
+          currentValue = formulaResult;
+        }
       } else if (action.indicatorCode !== undefined) {
         const v = values[action.indicatorCode];
-        currentValue = v === undefined || v === null ? undefined : Number(v);
+        // 数组值（多选题）取第一个元素
+        if (Array.isArray(v)) {
+          currentValue = v.length > 0 ? v[0] : undefined;
+        } else {
+          currentValue = v === undefined || v === null ? undefined : Number(v);
+        }
       } else if (action.indicatorId !== undefined) {
         const code = idToCode ? idToCode.get(action.indicatorId) : undefined;
         const v = code !== undefined ? values[code] : values[action.indicatorId];
-        currentValue = v === undefined || v === null ? undefined : Number(v);
+        // 数组值（多选题）取第一个元素
+        if (Array.isArray(v)) {
+          currentValue = v.length > 0 ? v[0] : undefined;
+        } else {
+          currentValue = v === undefined || v === null ? undefined : Number(v);
+        }
       } else {
         currentValue = undefined;
       }
@@ -251,14 +299,30 @@ function validateRule(
       if (action.compareType === 'fixed') {
         compareValue = Number(action.compareValue);
       } else if (action.compareFormula && action.compareFormula.length > 0) {
-        compareValue = calculateFormula(action.compareFormula, values, idToCode);
+        const compareFormulaResult = calculateFormula(action.compareFormula, values, idToCode);
+        // 如果公式结果包含数组值（多选题），取第一个元素
+        if (Array.isArray(compareFormulaResult)) {
+          compareValue = compareFormulaResult.length > 0 ? compareFormulaResult[0] : undefined;
+        } else {
+          compareValue = compareFormulaResult;
+        }
       } else if (action.compareIndicatorCode !== undefined) {
         const v = values[action.compareIndicatorCode];
-        compareValue = v === undefined || v === null ? undefined : Number(v);
+        // 数组值（多选题）取第一个元素
+        if (Array.isArray(v)) {
+          compareValue = v.length > 0 ? v[0] : undefined;
+        } else {
+          compareValue = v === undefined || v === null ? undefined : Number(v);
+        }
       } else if (action.compareIndicatorId !== undefined) {
         const code = idToCode ? idToCode.get(action.compareIndicatorId) : undefined;
         const v = code !== undefined ? values[code] : values[action.compareIndicatorId];
-        compareValue = v === undefined || v === null ? undefined : Number(v);
+        // 数组值（多选题）取第一个元素
+        if (Array.isArray(v)) {
+          compareValue = v.length > 0 ? v[0] : undefined;
+        } else {
+          compareValue = v === undefined || v === null ? undefined : Number(v);
+        }
       } else {
         compareValue = undefined;
       }
@@ -388,8 +452,16 @@ export function calculateFormula(
  * - 两边都空：返回 true（不阻断，等待填）
  * - 左有右空：>=  >  <  <= 返回 false（填了左就不许右为空）
  * - 左空右有：返回 true（右没填不阻断左）
+ * - 支持数组值：多选题取第一个元素进行比较
  */
-function compareValues(current: number, operator: string, target: number): boolean {
+function compareValues(current: any, operator: string, target: any): boolean {
+  // 处理数组值：取第一个元素进行比较
+  if (Array.isArray(current)) {
+    current = current.length > 0 ? current[0] : undefined;
+  }
+  if (Array.isArray(target)) {
+    target = target.length > 0 ? target[0] : undefined;
+  }
   // 左操作数有具体值、右操作数缺失：>= > < <= 必须同时有值才让过
   if (
     current !== undefined && current !== null && !isNaN(current) &&

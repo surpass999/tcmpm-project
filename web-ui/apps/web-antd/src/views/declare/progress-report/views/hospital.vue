@@ -528,15 +528,19 @@ const [Grid, gridApi] = useVbenVxeGrid({
     keepSource: true,
     proxyConfig: {
       ajax: {
-        query: async ({ page, form }) => {
+        query: async (_params: any, form: any) => {
+          console.log('[hospital] query form:', JSON.stringify(form));
           const params = {
             ...form,
             hospitalId: hospitalId.value,
+            reportYear: form.reportYear ? Number(form.reportYear) : undefined,
           };
+          console.log('[hospital] query params:', JSON.stringify(params));
           const list = await getHospitalReportList(
             params.hospitalId,
             params.reportYear,
           );
+          console.log('[hospital] query result count:', list?.length);
           if (list.length) {
             await loadRowBpmActions(list);
           }

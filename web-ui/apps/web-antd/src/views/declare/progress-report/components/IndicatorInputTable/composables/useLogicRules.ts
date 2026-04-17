@@ -16,6 +16,7 @@ import { containerValues, isEntryBasedContainer, getContainerEntryCount } from '
 import { parseDynamicFields, generateContainerFieldKey, getContainerType } from '../utils/container';
 import { fieldErrors } from './useErrorKeys';
 import { evaluateLinkage } from '../utils/linkageEvaluator';
+import { isIndicatorVisible } from './useLinkage';
 
 /** 判断是否为自动计算指标 */
 function isComputedIndicator(indicator: DeclareIndicatorApi.Indicator): boolean {
@@ -114,8 +115,17 @@ function buildLogicRuleMsg(
     if (val !== undefined && val !== null && val !== '') {
       if (field.fieldType === 'radio' || field.fieldType === 'checkbox') {
         const options = field.options || [];
-        const option = options.find((o) => o.value === String(val) || o.value === val);
-        valueText = option ? option.label : String(val);
+        // 处理数组值（多选题）
+        if (Array.isArray(val)) {
+          const labels = val.map((v) => {
+            const option = options.find((o) => String(o.value) === String(v) || o.value === v);
+            return option ? option.label : String(v);
+          });
+          valueText = labels.join(', ');
+        } else {
+          const option = options.find((o) => String(o.value) === String(val) || o.value === val);
+          valueText = option ? option.label : String(val);
+        }
       } else {
         valueText = String(val);
       }
@@ -149,6 +159,64 @@ function buildLogicRuleMsg(
       // 顶层指标：用 codeMap 查指标名称，始终附加代码前缀（如 603 → 603 - 完成交易活动的数据产品数）
       const name = codeMap.get(fieldCode);
       fieldLabel = name ? `${fieldCode} - ${name}` : fieldCode;
+
+      // 调试日志
+      console.log('[getFieldAndThresholdText] 顶层指标检查:', {
+        fieldCode,
+        threshold,
+        codeMapHasFieldCode: codeMap.has(fieldCode),
+        allIndicatorsCount: allIndicators.length,
+      });
+
+      // 顶层指标如果是多选题/单选/下拉，也需要将阈值转换为 label
+      const indicator = allIndicators.find((ind) => ind.indicatorCode === fieldCode);
+      // console.log('[getFieldAndThresholdText] 找到的指标:', indicator?.indicatorCode, 'valueOptions:', indicator?.valueOptions?.slice(0, 300));
+      
+      if (indicator) {
+        // 尝试解析 valueOptions：可能是直接 options 数组，也可能是包装在 fields 中
+        let options: Array<{ value: any; label: string }> = [];
+        
+        // 先检查是否为直接的 options 数组格式
+        try {
+          const parsed = JSON.parse(indicator.valueOptions);
+          if (Array.isArray(parsed) && parsed.length > 0 && parsed[0]?.value !== undefined && parsed[0]?.label !== undefined) {
+            // 直接是 options 数组
+            options = parsed;
+            // console.log('[getFieldAndThresholdText] 直接 options 数组格式, options 数量:', options.length);
+          }
+        } catch {
+          // 不是直接的 JSON 数组，尝试解析为 fields 格式
+        }
+        
+        // 如果不是直接数组，尝试从 fields 中获取 options
+        if (options.length === 0) {
+          const fields = parseDynamicFields(indicator.valueOptions);
+          // console.log('[getFieldAndThresholdText] 从 fields 解析, fields:', fields.map(f => ({ code: f.fieldCode, type: f.fieldType, optionsCount: f.options?.length })));
+          
+          // 对于顶层指标，fields 可能只有一个字段包含 options
+          if (fields.length === 1 && fields[0]?.options) {
+            options = fields[0].options;
+          } else {
+            // 也可能第一个字段本身就是 options（虽然字段结构但没有 fieldCode）
+            for (const field of fields) {
+              if (field.options && field.options.length > 0) {
+                options = field.options;
+                break;
+              }
+            }
+          }
+        }
+        
+        console.log('[getFieldAndThresholdText] 最终 options:', options.map(o => ({ v: o.value, l: o.label })));
+        
+        // 查找匹配的 option
+        const option = options.find((o) => o.value === threshold || o.value === String(threshold) || String(o.value) === String(threshold));
+        console.log('[getFieldAndThresholdText] 查找结果:', { threshold, option });
+        
+        if (option) {
+          thresholdText = `"${option.label}"`;
+        }
+      }
     }
 
     return { fieldLabel, thresholdText };
@@ -170,7 +238,30 @@ function buildLogicRuleMsg(
 
     const name = codeMap.get(code) || code;
     const val = codeValueMap[code];
-    const valText = val !== undefined && val !== null && val !== '' ? String(val) : '未填';
+    let valText = '未填';
+    if (val !== undefined && val !== null && val !== '') {
+      // 检查是否为 select/radio/checkbox 类型
+      const indicator = allIndicators.find((ind) => ind.indicatorCode === code);
+      if (indicator) {
+        const fields = parseDynamicFields(indicator.valueOptions);
+        if (fields.length === 1 && fields[0] && ['select', 'radio', 'checkbox'].includes(fields[0].fieldType)) {
+          const options = fields[0].options || [];
+          if (Array.isArray(val)) {
+            valText = val.map((v) => {
+              const opt = options.find((o) => String(o.value) === String(v) || o.value === v);
+              return opt ? opt.label : String(v);
+            }).join(', ');
+          } else {
+            const opt = options.find((o) => String(o.value) === String(val) || o.value === val);
+            valText = opt ? opt.label : String(val);
+          }
+        } else {
+          valText = String(val);
+        }
+      } else {
+        valText = String(val);
+      }
+    }
     return `${name}(${valText})`;
   };
 
@@ -301,6 +392,12 @@ function validateLogicRules(
   for (const indicator of allIndicators) {
     if (!indicator.logicRule?.trim()) continue;
 
+    // 检查联动状态：隐藏的指标不验证
+    if (!isIndicatorVisible(indicator.indicatorCode)) {
+      console.log('[validateLogicRules] 跳过隐藏指标:', indicator.indicatorCode);
+      continue;
+    }
+
     const containerType = getContainerType(indicator.valueOptions);
 
     if (isEntryBasedContainer(indicator) || containerType === 'conditional') {
@@ -413,6 +510,14 @@ function validateLogicRuleForBlur(
 ) {
   const changedCode = changedIndicator.indicatorCode;
 
+  console.log('[LogicRuleBlur] ====== 开始 ======');
+  console.log('[LogicRuleBlur] changedIndicator:', changedCode, 'valueType:', changedIndicator.valueType, 'isRequired:', changedIndicator.isRequired);
+  console.log('[LogicRuleBlur] allIndicators 中的指标:');
+  for (const ind of allIndicators) {
+    console.log('  ', ind.indicatorCode, 'valueType:', ind.valueType, 'logicRule:', ind.logicRule?.slice(0, 50));
+  }
+  console.log('[LogicRuleBlur] ====== 开始 ======');
+
   // console.log('[LogicRuleBlur] called, changedCode:', changedCode, 'valueType:', changedIndicator.valueType);
 
   // ========== 基础验证检查（仅对非容器指标生效） ==========
@@ -435,6 +540,14 @@ function validateLogicRuleForBlur(
 
   for (const indicator of allIndicators) {
     if (!indicator.logicRule?.trim()) continue;
+
+    // 检查联动状态：隐藏的指标不验证
+    const visible = isIndicatorVisible(indicator.indicatorCode);
+    console.log('[LogicRuleBlur] 检查指标:', indicator.indicatorCode, 'visible:', visible, 'logicRule:', indicator.logicRule?.slice(0, 100));
+    if (!visible) {
+      console.log('[LogicRuleBlur] 跳过隐藏指标:', indicator.indicatorCode);
+      continue;
+    }
 
     const involvedCodes = new Set<string>();
     for (const m of indicator.logicRule.matchAll(/\[([^\]]+)\]/g)) {
@@ -557,6 +670,12 @@ function validateFilledLogicRules(
 
   for (const indicator of indicatorsToValidate) {
     if (!indicator.logicRule?.trim()) continue;
+
+    // 检查联动状态：隐藏的指标不验证
+    if (!isIndicatorVisible(indicator.indicatorCode)) {
+      console.log('[validateFilledLogicRules] 跳过隐藏指标:', indicator.indicatorCode);
+      continue;
+    }
 
     if (isEntryBasedContainer(indicator)) {
       const entryCount = getContainerEntryCount(indicator.indicatorCode);

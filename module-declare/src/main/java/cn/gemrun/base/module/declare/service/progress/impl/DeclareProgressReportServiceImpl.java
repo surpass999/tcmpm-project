@@ -349,8 +349,7 @@ public class DeclareProgressReportServiceImpl implements DeclareProgressReportSe
         // 此处注释所有 hospitalId 与 deptId 相关的查询条件 因为框架会自动根据 deptId 过滤
         // Long deptId = hospitalId; // 参数名保持兼容，实际语义为 deptId
         LambdaQueryWrapperX<DeclareProgressReportDO> wrapper = new LambdaQueryWrapperX<DeclareProgressReportDO>()
-                // .eq(deptId != null, DeclareProgressReportDO::getDeptId, deptId)
-                // .eq(reportYear != null, DeclareProgressReportDO::getReportYear, reportYear)
+                .eq(reportYear != null, DeclareProgressReportDO::getReportYear, reportYear)
                 .orderByDesc(DeclareProgressReportDO::getId);
         List<DeclareProgressReportDO> reports = progressReportMapper.selectList(wrapper);
         if (reports.isEmpty()) return Collections.emptyList();

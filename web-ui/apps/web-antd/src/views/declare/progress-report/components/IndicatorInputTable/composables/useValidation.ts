@@ -207,6 +207,7 @@ export function validateIndicator(indicator: DeclareIndicatorApi.Indicator): Fie
 
   // 检查指标是否可见，不可见则不校验，强制清除所有旧错误（包括必填）
   const linkageState = evaluateIndicatorLinkage(indicator, formValues);
+  // console.log('[validateIndicator]', indicator.indicatorCode, 'linkageState:', linkageState, 'isRequired:', indicator.isRequired, 'value:', formValues[indicator.indicatorCode]);
   if (linkageState?.type === 'show' && !linkageState.enabled) {
     clearFieldError(key, true);
     return [];
@@ -223,13 +224,7 @@ export function validateIndicator(indicator: DeclareIndicatorApi.Indicator): Fie
   }
   const isRequiredAndNotComputed = required && !isComputedIndicator(indicator);
   if (isRequiredAndNotComputed && isEmptyVal) {
-    // 【核心修复】对于 show 类型的联动指标，如果值是空的，跳过必填错误设置。
-    // 原因：v-model 时序问题（@change 时值还未同步）和 debounce 窗口内联动状态未更新，
-    // 导致空值被误判为必填缺失。这种情况下清除旧错误即可，等用户真正填值时 @change/onBlur 会重新验证。
-    if (linkageState?.type === 'show') {
-      clearFieldError(key, true);
-      return [];
-    }
+    // show 类型的联动指标，同样需要必填验证（enabled: true 表示联动条件满足，指标应该显示）
     const err = { message: '此项为必填', errorType: 'required' as const, dirty: true };
     fieldErrors[key] = err;
     errors.push(err);
