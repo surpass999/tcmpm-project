@@ -158,6 +158,26 @@ function isIndicatorVisible(indicatorCode: string): boolean {
   return isIndicatorVisibleByLinkage(indicatorCode, linkageVisibilityMap.value);
 }
 
+/** 获取分组中可见的指标列表 */
+function getVisibleIndicators(group: IndicatorGroup) {
+  return group.indicators.filter((i) => isIndicatorVisible(i.indicatorCode));
+}
+
+/** 判断分组是否有可见的指标（包括子分组） */
+function hasVisibleIndicators(group: IndicatorGroup): boolean {
+  if (getVisibleIndicators(group).length > 0) return true;
+  return group.children.some((c) => getVisibleIndicators(c).length > 0);
+}
+
+/** 获取分组中所有可见指标的总数（包括子分组） */
+function getTotalVisibleIndicatorCount(group: IndicatorGroup): number {
+  let count = getVisibleIndicators(group).length;
+  for (const child of group.children) {
+    count += getVisibleIndicators(child).length;
+  }
+  return count;
+}
+
 // 流程节点
 const processNodes = computed(() => processInfo.value?.activityNodes || []);
 
@@ -794,13 +814,13 @@ defineExpose({
             <div class="detail-card-header">
               <h3 class="detail-card-title">
                 <i class="fas fa-layer-group mr-2" />
-                {{ group.groupName }} ({{ group.indicators.length + group.children.reduce((sum, c) => sum + c.indicators.length, 0) }}个指标)
+                {{ group.groupName }} ({{ getTotalVisibleIndicatorCount(group) }}个指标)
               </h3>
             </div>
-            <div v-if="group.indicators.filter(i => isIndicatorVisible(i.indicatorCode)).length || group.children.some(c => c.indicators.some(i => isIndicatorVisible(i.indicatorCode))))" class="detail-card-content">
+            <div v-if="hasVisibleIndicators(group)" class="detail-card-content">
               <div class="info-grid">
                 <div
-                  v-for="indicator in group.indicators.filter(i => isIndicatorVisible(i.indicatorCode))"
+                  v-for="indicator in getVisibleIndicators(group)"
                   :key="getIndicatorId(indicator.id)"
                   class="info-item"
                   :class="{ 'col-span-2':  indicator.valueType === 12 }"
@@ -928,17 +948,17 @@ defineExpose({
             </div>
           </div>
           <!-- 二级分组卡片（必须与一级互斥：一级也有 indicators，不能用 v-if="indicators.length"） -->
-          <div v-else-if="group.groupLevel === 2 && group.indicators.length" class="detail-card group-level-2">
+          <div v-else-if="group.groupLevel === 2 && getVisibleIndicators(group).length" class="detail-card group-level-2">
             <div class="detail-card-header">
               <h3 class="detail-card-title">
                 <i class="fas fa-cube mr-2" />
-                　└ {{ group.groupName }} ({{ group.indicators.filter(i => isIndicatorVisible(i.indicatorCode)).length }}个指标)
+                　└ {{ group.groupName }} ({{ getVisibleIndicators(group).length }}个指标)
               </h3>
             </div>
-            <div v-if="group.indicators.filter(i => isIndicatorVisible(i.indicatorCode)).length" class="detail-card-content">
+            <div v-if="getVisibleIndicators(group).length" class="detail-card-content">
               <div class="info-grid">
                 <div
-                  v-for="indicator in group.indicators.filter(i => isIndicatorVisible(i.indicatorCode))"
+                  v-for="indicator in getVisibleIndicators(group)"
                   :key="getIndicatorId(indicator.id)"
                   class="info-item"
                   :class="{ 'col-span-2': indicator.valueType === 5 || indicator.valueType === 12 }"
