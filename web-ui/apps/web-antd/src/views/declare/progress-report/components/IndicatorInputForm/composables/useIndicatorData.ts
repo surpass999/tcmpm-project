@@ -17,8 +17,10 @@ import { fileListMap } from './useFileUpload';
 import { containerValues, initializeAutoEntryContainers, initializeNormalContainers } from './useContainerValues';
 import { restoreInputTypeValues } from './useInputTypeOptions';
 import { clearAllErrors } from './useErrorKeys';
+import { linkageResults } from './useLinkageState';
+import { evaluateAllLinkages } from '../utils/linkageEvaluator';
 import { extractValue, parseStoredFileList, migrateContainerEntryToFullKey, migrateRowKeyToNewFormat, convertContainerEntryDates, extractContainerValueFromRecord } from '../utils/extractors';
-import { getContainerType, getAutoEntryLink, parseDynamicFields, generateContainerRowKey, generateConditionalRowKey } from '../utils/container';
+import { getContainerType, generateContainerRowKey, generateConditionalRowKey } from '../utils/container';
 
 export const groupInfoMap = ref<Record<number, GroupInfo>>({});
 export const indicators = ref<DeclareIndicatorApi.Indicator[]>([]);
@@ -124,7 +126,7 @@ async function loadIndicatorData(
     const savedValues = await getProgressReportIndicatorValues(reportId);
     for (const record of savedValues) {
       const ind = indicatorData.find((i) => i.id === record.indicatorId);
-      const vt = record.valueType ?? ind?.valueType ?? 1;
+      const vt = ind?.valueType ?? record.valueType ?? 1;
       const value = extractValue(record, vt);
       // 对于容器类型(vt=12)，formValues 需要存 JSON 字符串
       if (vt === 12 && value !== undefined && value !== null) {
@@ -163,13 +165,14 @@ async function loadIndicatorData(
         }
       }
 
-      restoreInputTypeValues(vt, record.valueStr, record.indicatorCode!);
+      restoreInputTypeValues(vt, record.valueStr, record.indicatorCode!, ind?.valueOptions);
     }
   }
 
   indicators.value = indicatorData;
   initializeAutoEntryContainers(indicatorData);
   initializeNormalContainers(indicatorData);
+  linkageResults.value = evaluateAllLinkages(indicators.value, formValues);
 
   if (hospitalId && reportYear !== undefined && reportBatch !== undefined) {
     const result = await getLastPeriodValuesWithRaw(hospitalId, reportYear, reportBatch);

@@ -94,11 +94,8 @@ const formConfig = reactive({
 const [Form, formApi] = useVbenForm(formConfig);
 
 onMounted(async () => {
-  console.log('[IndicatorInputForm] onMounted 开始');
   await initSetupVbenForm();
-  console.log('[IndicatorInputForm] initSetupVbenForm 完成');
   await doLoadData();
-  console.log('[IndicatorInputForm] doLoadData 完成');
 });
 
 async function doLoadData() {
@@ -117,47 +114,23 @@ async function doLoadData() {
     );
     await loadJointRules(props.projectType);
 
-    console.log('[doLoadData] loadIndicatorData 完成, formValues 样本:', JSON.stringify(Object.entries(formValues).slice(0, 3)));
-    console.log('[doLoadData] formSchema 长度:', formSchema.value.length, ', 前3个字段:', formSchema.value.slice(0, 3).map(s => ({ field: s.fieldName, dv: s.defaultValue })));
-
-    // 关键修复：将 schema 更新到 formConfig，触发 useVbenForm 响应式更新
     formConfig.schema = formSchema.value;
-    console.log('[doLoadData] formConfig.schema 已更新，长度:', formConfig.schema.length);
 
-    // 先让表单显示出来，等 vee-validate Field 全部挂载后，再注入数据
     initialized.value = true;
 
-    // 等 Form 渲染并完成 vee-validate mount
     await nextTick();
     await new Promise<void>((resolve) => {
       const check = async () => {
         if (formApi.isMounted) {
-          // 验证 formApi.form 是否存在
-          const rawFormApi = formApi as any;
-          console.log('[doLoadData] formApi 验证:', {
-            hasForm: !!formApi.form,
-            hasValues: formApi.form?.values !== undefined,
-            formValuesKeys: formApi.form?.values ? Object.keys(formApi.form.values).slice(0, 5) : 'N/A',
-            isMounted: formApi.isMounted,
-          });
-          
-          console.log('[doLoadData] form 已 mount，开始 setValues, formValues101:', formValues['101']);
-          
-          // 直接使用 vee-validate 的 form.setValues
           if (formApi.form?.setValues) {
-            console.log('[doLoadData] 使用 form.setValues (vee-validate 原生方法)');
             await formApi.form.setValues(formValues);
           } else {
-            console.log('[doLoadData] 使用 formApi.setValues');
             await formApi.setValues(formValues, false);
           }
-          
-          // vee-validate 的 setValues 是同步更新 valueProxy，但 Vue 的 reactive flush 可能需要多个 tick
+
           await nextTick();
           await nextTick();
           await nextTick();
-          const verify = await formApi.getValues();
-          console.log('[doLoadData] setValues 验证, form101:', verify['101'], 'totalFields:', Object.keys(verify).length);
           resolve();
         } else {
           setTimeout(check, 20);
@@ -219,7 +192,8 @@ function buildDependencies(indicator: DeclareIndicatorApi.Indicator): any {
   const { type, trigger } = linkage;
   const triggerFields = [trigger.indicatorCode];
   if (type === 'show') {
-    return { triggerFields, if(values: any) { return evaluateCondition(trigger.operator, values[trigger.indicatorCode], trigger.value); } };
+    const fn = (values: any) => evaluateCondition(trigger.operator, values[trigger.indicatorCode], trigger.value);
+    return { triggerFields, if: fn };
   }
   if (type === 'disabled') {
     return { triggerFields, disabled(values: any) { return !evaluateCondition(trigger.operator, values[trigger.indicatorCode], trigger.value); } };

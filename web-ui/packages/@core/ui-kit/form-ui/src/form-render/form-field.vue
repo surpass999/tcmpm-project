@@ -213,10 +213,6 @@ function fieldBindEvent(slotProps: Record<string, any>) {
     modelPropName ||
     (isString(component) ? componentBindEventMap.value?.[component] : null);
 
-  if (fieldName === '101') {
-    console.log('[fieldBindEvent] 101 componentField keys:', Object.keys(slotProps.componentField || {}), 'modelValue:', (slotProps.componentField || {}).modelValue, 'values:', JSON.stringify(formApi?.values));
-  }
-
   let value = modelValue;
   // antd design 的一些组件会传递一个 event 对象
   if (modelValue && isObject(modelValue) && bindEventField) {
@@ -287,15 +283,7 @@ onUnmounted(() => {
   }
 });
 
-onMounted(() => {
-  nextTick(() => {
-    if (fieldName === '101') {
-      const rawForm = formApi as any;
-      const fromInject = formApi;
-      console.log('[form-field.vue:onMounted] 101 formApi:', fromInject, 'values:', fromInject?.values);
-    }
-  });
-});
+onMounted(() => {});
 </script>
 
 <template>

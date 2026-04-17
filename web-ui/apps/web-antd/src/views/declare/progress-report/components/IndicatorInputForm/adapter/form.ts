@@ -26,7 +26,6 @@ async function initSetupVbenForm() {
       baseModelPropName: 'value', // 默认所有组件使用 value/update:value
       modelPropNameMap: {
         // antd 组件使用 modelValue/update:modelValue
-        Input: 'modelValue',
         Select: 'modelValue',
         Textarea: 'modelValue',
         DatePicker: 'modelValue',
@@ -39,8 +38,8 @@ async function initSetupVbenForm() {
         CheckboxGroup: 'modelValue',
         AutoComplete: 'modelValue',
         InputNumber: 'modelValue',
-        Switch: 'modelValue',
         Rate: 'modelValue',
+        Switch: 'modelValue',
         Slider: 'modelValue',
         Upload: 'modelValue',
         // Checkbox/Radio 使用 checked 而非 value

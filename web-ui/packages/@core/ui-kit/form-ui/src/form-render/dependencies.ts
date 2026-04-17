@@ -74,7 +74,9 @@ export default function useDependencies(
       const formValues = values.value;
 
       if (isFunction(whenIf)) {
-        isIf.value = !!(await whenIf(formValues, { formApi, componentRefMap }));
+        const result = !!(await whenIf(formValues, { formApi, componentRefMap }));
+        // console.log('[dependencies.ts] whenIf result', { field: dependencies?.triggerFields?.[0], result, formValues: Object.fromEntries(Object.entries(formValues).slice(0, 10)) });
+        isIf.value = result;
         // 不渲染
         if (!isIf.value) return;
       } else if (isBoolean(whenIf)) {

@@ -180,14 +180,35 @@ function isOptionSelectedWithLastPeriod(
   return false;
 }
 
-export function restoreInputTypeValues(vt: number, valueStr: string | undefined, indicatorCode: string) {
+export function restoreInputTypeValues(vt: number, valueStr: string | undefined, indicatorCode: string, valueOptions?: string) {
   if ((vt === 6 || vt === 7) && valueStr) {
     const rawValues = vt === 7 ? valueStr.split(',') : [valueStr];
+    const options = valueOptions ? parseOptions(valueOptions) : [];
+
     for (const v of rawValues) {
       const deserialized = deserializeInputTypeValue(v);
       if (deserialized.input) {
+        // 标准格式：选项值∴输入内容
         inputTypeValues[indicatorCode + '_' + deserialized.value] = deserialized.input;
         formValues[indicatorCode + '_input_' + deserialized.value] = deserialized.input;
+      } else if (options.length > 0) {
+        // 旧数据格式：只有选项值或只有输入内容
+        // 尝试匹配选项值
+        const matchedOption = options.find((opt) => opt.value === v);
+        if (matchedOption) {
+          // 值本身就是选项值（如 '1001'），输入内容为空
+          // 不需要额外处理，formValues 中已存储选项值
+        } else if (v && v.length > 0) {
+          // 只有输入内容（如 'Qwen'），没有选项值
+          // 查找第一个输入型选项作为默认值
+          const inputTypeOpt = options.find((opt) => opt.inputType);
+          if (inputTypeOpt) {
+            inputTypeValues[indicatorCode + '_' + inputTypeOpt.value] = v;
+            formValues[indicatorCode + '_input_' + inputTypeOpt.value] = v;
+            // 同时更新主值为标准格式
+            formValues[indicatorCode] = inputTypeOpt.value + INPUT_VALUE_SEPARATOR + v;
+          }
+        }
       }
     }
   }

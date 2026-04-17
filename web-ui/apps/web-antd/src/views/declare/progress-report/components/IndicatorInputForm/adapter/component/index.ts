@@ -203,10 +203,7 @@ async function initComponentAdapter() {
     VbenSwitch,
   };
 
-  console.log('[initComponentAdapter] 注册的组件 keys:', Object.keys(components));
   globalShareState.setComponents(components);
-  console.log('[initComponentAdapter] globalShareState.setComponents() 已调用');
-  console.log('[initComponentAdapter] 验证 globalShareState.getComponents():', Object.keys(globalShareState.getComponents() || {}));
 
   globalShareState.defineMessage({
     copyPreferencesSuccess: (title: string, content?: string) => {
