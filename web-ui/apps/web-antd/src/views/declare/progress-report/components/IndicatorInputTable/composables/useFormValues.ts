@@ -7,12 +7,21 @@
  * - 输入型选项值（inputTypeValues）
  */
 
-import { reactive, ref } from 'vue';
+import { reactive, ref, watch } from 'vue';
 
 // ==================== 表单值状态 ====================
 
 /** 指标表单值（key: indicatorCode → value） */
 export const formValues = reactive<Record<string, any>>({});
+
+// DEBUG: 监听 702 字段的值变化
+watch(
+  () => formValues['702'],
+  (newVal, oldVal) => {
+    console.log('[DEBUG formValues["702"] WATCH]', { newVal, oldVal, typeofNew: typeof newVal });
+  },
+  { immediate: false },
+);
 
 /** 脏标记 */
 export const isDirty = ref(false);

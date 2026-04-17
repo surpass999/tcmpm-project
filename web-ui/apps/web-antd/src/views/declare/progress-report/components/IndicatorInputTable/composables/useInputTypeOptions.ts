@@ -90,9 +90,11 @@ export function handleInputTypeRadioChange(indicator: DeclareIndicatorApi.Indica
   const options = parseOptions(indicator.valueOptions);
   options.forEach((opt) => {
     const inputFieldName = getInputTypeInputFieldName(indicator.indicatorCode, opt.value);
+    const inputKey = indicator.indicatorCode + '_' + opt.value;
     if (opt.value === val) {
-      const inputKey = indicator.indicatorCode + '_' + val;
       const inputContent = inputTypeValues[inputKey] || '';
+      // 同步 inputTypeValues（供 validateIndicator 读取）
+      inputTypeValues[inputKey] = inputContent;
       const serialized = serializeInputTypeValue(val, inputContent);
       formValues[indicator.indicatorCode] = serialized;
       formValues[inputFieldName] = inputContent;
@@ -100,7 +102,6 @@ export function handleInputTypeRadioChange(indicator: DeclareIndicatorApi.Indica
       delete formValues[inputFieldName];
     }
   });
-  // 清除该指标的逻辑规则错误（在 index.vue 中通过事件处理）
 }
 
 // ==================== 多选变化处理 ====================
@@ -187,14 +188,13 @@ export function handleInputTypeCheckboxChange(indicator: DeclareIndicatorApi.Ind
 
 /** 输入框失焦时的校验 */
 export function onInputTypeBlur(indicator: DeclareIndicatorApi.Indicator, opt: any, value?: string) {
-  console.log('[onInputTypeBlur] called, indicatorCode:', indicator.indicatorCode, 'opt.value:', opt.value, 'value:', value);
   const inputKey = indicator.indicatorCode + '_' + opt.value;
   const content = (value !== undefined ? value : inputTypeValues[inputKey]) || '';
-  console.log('[onInputTypeBlur] inputKey:', inputKey, 'content:', content);
+  const inputFieldName = getInputTypeInputFieldName(indicator.indicatorCode, opt.value);
+  console.log('[onInputTypeBlur] inputKey:', inputKey, 'content:', content, 'inputFieldName:', inputFieldName, 'indicator.id:', indicator.id);
 
   // 同步更新 formValues 主字段和子字段
   const raw = formValues[indicator.indicatorCode];
-  console.log('[onInputTypeBlur] raw before:', JSON.stringify(raw));
 
   if (raw) {
     if (Array.isArray(raw)) {
@@ -214,22 +214,17 @@ export function onInputTypeBlur(indicator: DeclareIndicatorApi.Indicator, opt: a
       formValues[indicator.indicatorCode] = serialized;
     }
   }
-  const inputFieldName = getInputTypeInputFieldName(indicator.indicatorCode, opt.value);
   formValues[inputFieldName] = content;
-  console.log('[onInputTypeBlur] raw after:', JSON.stringify(formValues[indicator.indicatorCode]));
 
   // 只有选项被选中时才校验：必填 + 格式
   const isSelected = isInputTypeOptionSelected(indicator.indicatorCode, raw, opt.value);
-  console.log('[onInputTypeBlur] isSelected:', isSelected);
 
   if (!isSelected) {
-    console.log('[onInputTypeBlur] not selected, clearing errors');
     clearFieldError(toTopLevelKey(indicator.id!));
     return;
   }
 
   if (!content.trim()) {
-    console.log('[onInputTypeBlur] content is empty, setting error');
     setFieldError(toTopLevelKey(indicator.id!), `请填写"${opt.label}"的补充内容`, 'required', true);
   } else {
     const formatErr = validateInputContent(content);

@@ -9,7 +9,7 @@ import type {
   FormShape,
 } from '../types';
 
-import { computed } from 'vue';
+import { computed, watch } from 'vue';
 
 import { Form } from '@vben-core/shadcn-ui';
 import {
@@ -52,6 +52,18 @@ const wrapperClass = computed(() => {
 });
 
 provideFormRenderProps(props);
+
+watch(
+  () => props.schema?.map((s) => ({ fieldName: s.fieldName, dv: (s as any).defaultValue })),
+  (newSchema) => {
+    if (newSchema?.length) {
+      console.log('[form.vue] schema 变更, 前3个:', newSchema.slice(0, 3));
+      console.log('[form.vue] props.form:', props.form, 'props.form.values:', props.form?.values);
+    }
+  },
+  { immediate: true },
+);
+
 
 const { isCalculated, keepFormItemIndex, wrapperRef } = useExpandable(props);
 

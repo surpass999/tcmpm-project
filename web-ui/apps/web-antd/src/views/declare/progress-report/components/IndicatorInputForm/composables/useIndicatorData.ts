@@ -1,16 +1,8 @@
 /**
  * useIndicatorData - 指标数据加载
- *
- * 负责：
- * - 指标列表状态（indicators）
- * - 分组信息状态（groupInfoMap）
- * - 上期值状态（lastPeriodValues）
- * - 联合规则状态（jointRules）
- * - 数据加载逻辑
  */
 
 import { ref } from 'vue';
-import dayjs from 'dayjs';
 import type { DeclareIndicatorApi } from '#/api/declare/indicator';
 import {
   getIndicatorsByBusinessType,
@@ -18,10 +10,7 @@ import {
   getProgressReportIndicatorValues,
 } from '#/api/declare/indicator';
 import { getIndicatorGroupTreeByProjectType } from '#/api/declare/indicator-group';
-import {
-  getEnabledJointRules,
-  type DeclareIndicatorJointRuleApi,
-} from '#/api/declare/jointRule';
+import { getEnabledJointRules, type DeclareIndicatorJointRuleApi } from '#/api/declare/jointRule';
 import type { GroupInfo, IndicatorGroup } from '../types';
 import { formValues } from './useFormValues';
 import { fileListMap } from './useFileUpload';
@@ -31,28 +20,13 @@ import { clearAllErrors } from './useErrorKeys';
 import { extractValue, parseStoredFileList, migrateContainerEntryToFullKey, migrateRowKeyToNewFormat, convertContainerEntryDates, extractContainerValueFromRecord } from '../utils/extractors';
 import { getContainerType, getAutoEntryLink, parseDynamicFields, generateContainerRowKey, generateConditionalRowKey } from '../utils/container';
 
-// ==================== 状态 ====================
-
-/** 分组信息 Map */
 export const groupInfoMap = ref<Record<number, GroupInfo>>({});
-
-/** 指标列表 */
 export const indicators = ref<DeclareIndicatorApi.Indicator[]>([]);
-
-/** 上期值（显示 label） */
 export const lastPeriodValues = ref<Record<string, string>>({});
-
-/** 上期原始值（用于解析 inputType 输入内容）：{ indicatorCode: valueStr } */
 export const lastPeriodRawValues = ref<Record<string, string>>({});
-
-/** 联合规则 */
 export const jointRules = ref<DeclareIndicatorJointRuleApi.JointRule[]>([]);
-
-// ==================== 指标分组计算属性 ====================
-
 export const indicatorGroups = ref<IndicatorGroup[]>([]);
 
-/** 重新计算分组 */
 function recalcIndicatorGroups() {
   const levelOneMap = new Map<number, IndicatorGroup>();
   const levelTwoMap = new Map<number, IndicatorGroup>();
@@ -60,13 +34,8 @@ function recalcIndicatorGroups() {
   for (const [gid, info] of Object.entries(groupInfoMap.value)) {
     if (info.parentId === 0) {
       levelOneMap.set(Number(gid), {
-        groupId: Number(gid),
-        groupName: info.groupName,
-        groupPrefix: info.groupPrefix,
-        parentId: 0,
-        groupLevel: 1,
-        indicators: [],
-        children: [],
+        groupId: Number(gid), groupName: info.groupName, groupPrefix: info.groupPrefix,
+        parentId: 0, groupLevel: 1, indicators: [], children: [],
       });
     }
   }
@@ -74,13 +43,8 @@ function recalcIndicatorGroups() {
   for (const [gid, info] of Object.entries(groupInfoMap.value)) {
     if (info.parentId !== 0) {
       const lvl2: IndicatorGroup = {
-        groupId: Number(gid),
-        groupName: info.groupName,
-        groupPrefix: info.groupPrefix,
-        parentId: info.parentId,
-        groupLevel: 2,
-        indicators: [],
-        children: [],
+        groupId: Number(gid), groupName: info.groupName, groupPrefix: info.groupPrefix,
+        parentId: info.parentId, groupLevel: 2, indicators: [], children: [],
       };
       levelTwoMap.set(Number(gid), lvl2);
       const parent = levelOneMap.get(info.parentId);
@@ -92,11 +56,8 @@ function recalcIndicatorGroups() {
     const gid = ind.groupId || 0;
     const info = groupInfoMap.value[gid];
     if (!info) continue;
-    if (info.parentId === 0) {
-      levelOneMap.get(gid)?.indicators.push(ind);
-    } else {
-      levelTwoMap.get(gid)?.indicators.push(ind);
-    }
+    if (info.parentId === 0) levelOneMap.get(gid)?.indicators.push(ind);
+    else levelTwoMap.get(gid)?.indicators.push(ind);
   }
 
   const sortInds = (g: IndicatorGroup) => {
@@ -116,16 +77,8 @@ function recalcIndicatorGroups() {
   indicatorGroups.value = result;
 }
 
-// ==================== 上期值加载（可独立调用） ====================
-
-export async function loadLastPeriodValues(
-  hospitalId: number,
-  reportYear: number,
-  reportBatch: number,
-) {
-  if (!hospitalId || reportYear === undefined || reportBatch === undefined) {
-    return;
-  }
+export async function loadLastPeriodValues(hospitalId: number, reportYear: number, reportBatch: number) {
+  if (!hospitalId || reportYear === undefined || reportBatch === undefined) return;
   try {
     const result = await getLastPeriodValuesWithRaw(hospitalId, reportYear, reportBatch);
     lastPeriodValues.value = result.display || {};
@@ -135,8 +88,6 @@ export async function loadLastPeriodValues(
   }
 }
 
-// ==================== 数据加载 ====================
-
 async function loadIndicatorData(
   projectType: number,
   reportId?: number,
@@ -144,7 +95,6 @@ async function loadIndicatorData(
   reportYear?: number,
   reportBatch?: number,
 ) {
-  // 加载分组
   const groupTree = await getIndicatorGroupTreeByProjectType(projectType);
   groupInfoMap.value = {};
   groupTree.forEach((item) => {
@@ -168,32 +118,25 @@ async function loadIndicatorData(
     }
   });
 
-  // 加载指标
   const indicatorData = await getIndicatorsByBusinessType('process', projectType);
 
-  // 加载已有值（必须在设置 indicators.value 之前完成，避免联动 watch 在值加载前触发并清空值）
   if (reportId) {
     const savedValues = await getProgressReportIndicatorValues(reportId);
-    console.log('[DEBUG loadIndicatorData] reportId:', reportId, '| savedValues count:', savedValues.length, '| has 702:', savedValues.some((r: any) => r.indicatorCode === '702'), '| has 701:', savedValues.some((r: any) => r.indicatorCode === '701'));
-    console.log('[DEBUG loadIndicatorData] formValues["702"] BEFORE loop:', formValues['702']);
     for (const record of savedValues) {
       const ind = indicatorData.find((i) => i.id === record.indicatorId);
       const vt = record.valueType ?? ind?.valueType ?? 1;
       const value = extractValue(record, vt);
-      if (record.indicatorCode === '702' || record.indicatorCode === '70201') {
-        console.log('[DEBUG loadIndicatorData] setting formValues', { code: record.indicatorCode, value, vt, recordValueStr: record.valueStr });
-      }
-      formValues[record.indicatorCode!] = value;
-      if (record.indicatorCode === '702') {
-        console.log('[DEBUG loadIndicatorData] formValues["702"] AFTER setting:', formValues['702']);
+      // 对于容器类型(vt=12)，formValues 需要存 JSON 字符串
+      if (vt === 12 && value !== undefined && value !== null) {
+        formValues[record.indicatorCode!] = JSON.stringify(value);
+      } else {
+        formValues[record.indicatorCode!] = value;
       }
 
-      // 文件类型
       if (vt === 9 && value && record.indicatorCode) {
         fileListMap[record.indicatorCode] = parseStoredFileList(value);
       }
 
-      // 容器类型
       if (vt === 12 && record.indicatorCode) {
         const containerType = ind ? getContainerType(ind.valueOptions) : 'normal';
         const raw = extractContainerValueFromRecord(record);
@@ -220,27 +163,20 @@ async function loadIndicatorData(
         }
       }
 
-      // 输入型选项
       restoreInputTypeValues(vt, record.valueStr, record.indicatorCode!);
     }
   }
 
-  // 【核心修复】必须在数据库值加载完毕后才设置 indicators.value
-  // 这样联动 watch 触发时 formValues 已填充，recalculateLinkage 不会误清联动指标的值
   indicators.value = indicatorData;
-
-  // 初始化容器
   initializeAutoEntryContainers(indicatorData);
   initializeNormalContainers(indicatorData);
 
-  // 加载上期值（包含 display label 和 raw valueStr）
   if (hospitalId && reportYear !== undefined && reportBatch !== undefined) {
     const result = await getLastPeriodValuesWithRaw(hospitalId, reportYear, reportBatch);
     lastPeriodValues.value = result.display || {};
     lastPeriodRawValues.value = result.raw || {};
   }
 
-  // 重新计算分组
   recalcIndicatorGroups();
 }
 
@@ -268,16 +204,9 @@ async function loadJointRules(projectType: number) {
   }
 }
 
-// ==================== 导出 ====================
-
-/** 按页面显示顺序返回所有指标（先一级组，再二级组，同组内按 sort 排序） */
 function getIndicatorsInDisplayOrder(): DeclareIndicatorApi.Indicator[] {
   const result: DeclareIndicatorApi.Indicator[] = [];
-  // indicatorGroups 里一级组后紧跟其二级子组（recalcIndicatorGroups 里的 result.push(...lvl1.children)）
-  // 因此只需要遍历 + 收集本组指标，children 作为独立项会自然被遍历到
-  for (const g of indicatorGroups.value) {
-    result.push(...g.indicators);
-  }
+  for (const g of indicatorGroups.value) result.push(...g.indicators);
   return result;
 }
 

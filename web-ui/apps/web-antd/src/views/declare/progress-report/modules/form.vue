@@ -21,7 +21,7 @@ import {
 } from '#/api/declare/progress-report';
 import { getHospital, getHospitalByDeptId } from '#/api/declare/hospital';
 
-import IndicatorInputTable from '../components/IndicatorInputTable/index.vue';
+import IndicatorInputForm from '../components/IndicatorInputForm/index.vue';
 import ValidationSummaryModal from '../components/ValidationSummaryModal.vue';
 
 const emit = defineEmits(['success']);
@@ -39,7 +39,7 @@ const isLoadingIndicators = ref(false);
 const fillProgress = ref({ total: 0, filled: 0, percentage: 0 });
 
 /** 指标表格组件引用 */
-const indicatorTableRef = ref<InstanceType<typeof IndicatorInputTable> | null>(
+const indicatorTableRef = ref<InstanceType<typeof IndicatorInputForm> | null>(
   null,
 );
 
@@ -278,7 +278,7 @@ const [Modal, modalApi] = useVbenModal({
           medicalLicenseNo: (data as any).medicalLicenseNo,
           projectType: data.projectType,
           projectTypeName: data.projectTypeName,
-          projectTypeTitle: data.projectTypeTitle,
+          projectTypeTitle: (data as any).projectTypeTitle,
         };
 
         // 加载医院详细信息（data.hospitalId 实际是 deptId）
@@ -317,7 +317,7 @@ const [Modal, modalApi] = useVbenModal({
             medicalLicenseNo: (result as any).medicalLicenseNo,
             projectType: result.projectType,
             projectTypeName: result.projectTypeName,
-            projectTypeTitle: result.projectTypeTitle,
+            projectTypeTitle: (result as any).projectTypeTitle,
           };
           try {
             hospitalInfo.value = await getHospital(result.hospitalId);
@@ -378,6 +378,7 @@ async function handleSaveDraft() {
 
     // 4. 获取所有指标值
     const rawValues = indicatorTableRef.value?.getAllIndicatorValues?.() || [];
+    console.log('[DEBUG handleSaveDraft] rawValues 702:', JSON.stringify(rawValues.find((r: any) => r.indicatorCode === '702')));
     const values = rawValues.map((item: any) => {
       const base: any = {
         indicatorId: item.indicatorId,
@@ -392,6 +393,7 @@ async function handleSaveDraft() {
       }
       return base;
     });
+    console.log('[DEBUG handleSaveDraft] values 702:', JSON.stringify(values.find((v: any) => v.indicatorCode === '702')));
 
     // 5. 调用一体化保存接口，状态为 DRAFT
     const id = await saveProgressReport({
@@ -441,8 +443,9 @@ async function handleSave() {
     indicatorTableRef.value?.syncAllAutoEntryContainers?.();
 
     // 3. 【验证必填指标】必须全部通过才能继续
-    const firstErrors = indicatorTableRef.value?.validateAll?.();
-    if (firstErrors && firstErrors.length > 0) {
+    const firstResult = indicatorTableRef.value?.validateAll?.() as any;
+    const firstErrors: any[] = firstResult?.messages ?? (Array.isArray(firstResult) ? firstResult : []);
+    if (firstErrors.length > 0) {
       summaryModalRef.value?.show(firstErrors);
       return;
     }
@@ -451,8 +454,9 @@ async function handleSave() {
     indicatorTableRef.value?.recalculateComputedIndicators?.();
 
     // 5. 再次校验（确保计算后的值也通过验证）
-    const secondErrors = indicatorTableRef.value?.validateAll?.();
-    if (secondErrors && secondErrors.length > 0) {
+    const secondResult = indicatorTableRef.value?.validateAll?.() as any;
+    const secondErrors: any[] = secondResult?.messages ?? (Array.isArray(secondResult) ? secondResult : []);
+    if (secondErrors.length > 0) {
       summaryModalRef.value?.show(secondErrors);
       return;
     }
@@ -491,6 +495,7 @@ async function handleSave() {
 
     // 6. 获取所有指标值
     const rawValues = indicatorTableRef.value?.getAllIndicatorValues?.() || [];
+    console.log('[DEBUG handleSave] rawValues 702:', JSON.stringify(rawValues.find((r: any) => r.indicatorCode === '702')));
     const values = rawValues.map((item: any) => {
       const base: any = {
         indicatorId: item.indicatorId,
@@ -505,6 +510,7 @@ async function handleSave() {
       }
       return base;
     });
+    console.log('[DEBUG handleSave] values 702:', JSON.stringify(values.find((v: any) => v.indicatorCode === '702')));
 
     // 7. 调用一体化保存接口，状态为 SAVED，传入填报人姓名
     const id = await saveProgressReport({
@@ -537,13 +543,11 @@ async function handleSubmit() {
   try {
     // 1. 【验证必填指标】必须全部通过才能提交
     if (indicatorTableRef.value) {
-      const indicators = indicatorTableRef.value.getAllIndicators?.();
-      if (indicators) {
-        const errors = indicatorTableRef.value.validateAll(indicators);
-        if (errors.length > 0) {
-          summaryModalRef.value?.show(errors);
-          return;
-        }
+      const firstResult = indicatorTableRef.value.validateAll?.() as any;
+      const errors: any[] = firstResult?.messages ?? (Array.isArray(firstResult) ? firstResult : []);
+      if (errors.length > 0) {
+        summaryModalRef.value?.show(errors);
+        return;
       }
     }
 
@@ -552,13 +556,11 @@ async function handleSubmit() {
 
     // 3. 再次校验（确保计算后的值也通过验证）
     if (indicatorTableRef.value) {
-      const indicators = indicatorTableRef.value.getAllIndicators?.();
-      if (indicators) {
-        const errors = indicatorTableRef.value.validateAll(indicators);
-        if (errors.length > 0) {
-          summaryModalRef.value?.show(errors);
-          return;
-        }
+      const secondResult = indicatorTableRef.value.validateAll?.() as any;
+      const errors: any[] = secondResult?.messages ?? (Array.isArray(secondResult) ? secondResult : []);
+      if (errors.length > 0) {
+        summaryModalRef.value?.show(errors);
+        return;
       }
     }
 
@@ -735,7 +737,7 @@ watch(
 
       <!-- 指标表格（仅在 hospitalId 确定后渲染） -->
       <div class="indicator-area">
-        <IndicatorInputTable
+        <IndicatorInputForm
           ref="indicatorTableRef"
           v-if="formData.hospitalId"
           :hospital-id="formData.hospitalId"

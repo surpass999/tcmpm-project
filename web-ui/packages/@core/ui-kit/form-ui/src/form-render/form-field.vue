@@ -3,7 +3,7 @@ import type { ZodType } from 'zod';
 
 import type { FormSchema, MaybeComponentProps } from '../types';
 
-import { computed, nextTick, onUnmounted, useTemplateRef, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, useTemplateRef, watch } from 'vue';
 
 import { CircleAlert } from '@vben-core/icons';
 import {
@@ -213,6 +213,10 @@ function fieldBindEvent(slotProps: Record<string, any>) {
     modelPropName ||
     (isString(component) ? componentBindEventMap.value?.[component] : null);
 
+  if (fieldName === '101') {
+    console.log('[fieldBindEvent] 101 componentField keys:', Object.keys(slotProps.componentField || {}), 'modelValue:', (slotProps.componentField || {}).modelValue, 'values:', JSON.stringify(formApi?.values));
+  }
+
   let value = modelValue;
   // antd design 的一些组件会传递一个 event 对象
   if (modelValue && isObject(modelValue) && bindEventField) {
@@ -224,7 +228,7 @@ function fieldBindEvent(slotProps: Record<string, any>) {
   if (bindEventField) {
     return {
       [`onUpdate:${bindEventField}`]: handler,
-      [bindEventField]: value === undefined ? emptyStateValue : value,
+      ...(value !== undefined ? { [bindEventField]: value } : {}),
       onChange: disabledOnChangeListener
         ? undefined
         : (e: Record<string, any>) => {
@@ -281,6 +285,16 @@ onUnmounted(() => {
   if (componentRefMap?.has(fieldName)) {
     componentRefMap.delete(fieldName);
   }
+});
+
+onMounted(() => {
+  nextTick(() => {
+    if (fieldName === '101') {
+      const rawForm = formApi as any;
+      const fromInject = formApi;
+      console.log('[form-field.vue:onMounted] 101 formApi:', fromInject, 'values:', fromInject?.values);
+    }
+  });
 });
 </script>
 

@@ -202,37 +202,62 @@ function isComputedIndicator(indicator: DeclareIndicatorApi.Indicator): boolean 
  * 顶层指标校验（必填 + 格式 + 范围）
  */
 export function validateIndicator(indicator: DeclareIndicatorApi.Indicator): FieldError[] {
-  console.log('[validateIndicator] called, indicatorCode:', indicator.indicatorCode, 'valueType:', indicator.valueType, 'isRequired:', indicator.isRequired);
   const errors: FieldError[] = [];
   const key = toTopLevelKey(indicator.id!);
-  console.log('[validateIndicator] key:', key);
 
-  // 检查指标是否可见，不可见则不校验
-  // 内联联动逻辑，避免循环依赖
+  console.log('[DEBUG validateIndicator] START', {
+    indicatorCode: indicator.indicatorCode,
+    indicatorId: indicator.id,
+    isRequired: indicator.isRequired,
+  });
+
+  // 检查指标是否可见，不可见则不校验，强制清除所有旧错误（包括必填）
   const linkageState = evaluateIndicatorLinkage(indicator, formValues);
-  console.log('[validateIndicator] linkageState:', JSON.stringify(linkageState));
+  console.log('[DEBUG validateIndicator] linkageState', {
+    indicatorCode: indicator.indicatorCode,
+    type: linkageState?.type,
+    enabled: linkageState?.enabled,
+  });
   if (linkageState?.type === 'show' && !linkageState.enabled) {
-    console.log('[validateIndicator] indicator hidden by linkage, clearing and returning');
-    clearFieldError(key);
+    clearFieldError(key, true);
     return [];
   }
 
-  const value = (indicator as any)._formValue;
+  // 直接从 formValues 取值，不依赖 _formValue（_formValue 可能因 v-model 时序问题还未同步）
+  const value = formValues[indicator.indicatorCode];
+  console.log('[DEBUG validateIndicator] formValues value', {
+    indicatorCode: indicator.indicatorCode,
+    value,
+    valueType: typeof value,
+  });
   const isEmptyVal = isEmpty(value);
-  console.log('[validateIndicator] value:', JSON.stringify(value), 'isEmpty:', isEmptyVal);
 
   // 使用联动必填判断
   let required = indicator.isRequired;
   if (linkageState?.type === 'required') {
     required = linkageState.enabled;
   }
+  console.log('[DEBUG validateIndicator] required check', {
+    indicatorCode: indicator.indicatorCode,
+    baseRequired: indicator.isRequired,
+    finalRequired: required,
+    isEmpty: isEmptyVal,
+    computed: isComputedIndicator(indicator),
+  });
   const isRequiredAndNotComputed = required && !isComputedIndicator(indicator);
-  console.log('[validateIndicator] required:', required, 'isRequiredAndNotComputed:', isRequiredAndNotComputed);
   if (isRequiredAndNotComputed && isEmptyVal) {
+    // 【核心修复】对于 show 类型的联动指标，如果值是空的，跳过必填错误设置。
+    // 原因：v-model 时序问题（@change 时值还未同步）和 debounce 窗口内联动状态未更新，
+    // 导致空值被误判为必填缺失。这种情况下清除旧错误即可，等用户真正填值时 @change/onBlur 会重新验证。
+    if (linkageState?.type === 'show') {
+      clearFieldError(key, true);
+      console.log('[DEBUG validateIndicator] show-linkage empty skip required error (v-model timing fix)', { indicatorCode: indicator.indicatorCode });
+      return [];
+    }
     const err = { message: '此项为必填', errorType: 'required' as const, dirty: true };
     fieldErrors[key] = err;
     errors.push(err);
-    console.log('[validateIndicator] EMPTY REQUIRED error set, errors:', JSON.stringify(errors));
+    console.log('[DEBUG validateIndicator] SET required error', { indicatorCode: indicator.indicatorCode, value });
     return errors;
   }
 
