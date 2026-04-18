@@ -2,7 +2,7 @@
 import type { NotificationItem } from '@vben/layouts';
 
 
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 
 import { useAccess } from '@vben/access';
 import { AuthenticationLoginExpiredModal, useVbenModal } from '@vben/common-ui';
@@ -16,7 +16,6 @@ import {
 import {
   BasicLayout,
   Help,
-  IdleTimeout,
   LockScreen,
   Notification,
   TenantDropdown,
@@ -45,6 +44,53 @@ const idleSessionStore = useIdleSessionStore();
 const { hasAccessByCodes } = useAccess();
 const { destroyWatermark, updateWatermark } = useWatermark();
 const { closeOtherTabs, refreshTab } = useTabs();
+
+// 注册空闲超时登出回调
+idleSessionStore.setLogoutCallback(async () => {
+  await authStore.logout(false);
+});
+idleSessionStore.setAutoSaveDraftCallback(async () => {
+  // 暂未实现
+});
+
+// ========== IdleTimeout 内联逻辑 ==========
+const ACTIVITY_EVENTS = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'];
+const CHECK_INTERVAL = 10 * 1000;
+let idleIntervalId: ReturnType<typeof setInterval> | null = null;
+
+function handleIdleActivity() {
+  if (!preferences.idleTimeout?.enable) return;
+  idleSessionStore.resetActiveTime();
+}
+
+function checkIdleTimeout() {
+  if (!preferences.idleTimeout?.enable) return;
+  const elapsed = Date.now() - idleSessionStore.lastActiveTime;
+  if (elapsed >= preferences.idleTimeout.timeout) {
+    doIdleLogout();
+  }
+}
+
+async function doIdleLogout() {
+  if (idleIntervalId) {
+    clearInterval(idleIntervalId);
+    idleIntervalId = null;
+  }
+  if (idleSessionStore.onLogout) {
+    await idleSessionStore.onLogout();
+  }
+}
+
+function startIdleTimeout() {
+  if (!preferences.idleTimeout?.enable) return;
+  ACTIVITY_EVENTS.forEach((e) => document.addEventListener(e, handleIdleActivity, { passive: true }));
+  idleIntervalId = setInterval(checkIdleTimeout, CHECK_INTERVAL);
+}
+
+function stopIdleTimeout() {
+  ACTIVITY_EVENTS.forEach((e) => document.removeEventListener(e, handleIdleActivity));
+  if (idleIntervalId) clearInterval(idleIntervalId);
+}
 
 const notifications = ref<NotificationItem[]>([]);
 const unreadCount = ref(0);
@@ -132,10 +178,7 @@ function handleNotificationOpen(open: boolean) {
 
 // ========== 初始化 ==========
 onMounted(() => {
-  // 注入空闲超时登出回调
-  idleSessionStore.setLogoutCallback(() => authStore.logout());
-
-  // 首次加载未读数量
+  startIdleTimeout();
   handleNotificationGetUnreadCount();
   // 轮询刷新未读数量
   setInterval(
@@ -146,6 +189,10 @@ onMounted(() => {
     },
     1000 * 60 * 2,
   );
+});
+
+onUnmounted(() => {
+  stopIdleTimeout();
 });
 
 watch(
@@ -172,7 +219,6 @@ watch(
 
 <template>
   <BasicLayout @clear-preferences-and-logout="handleLogout">
-    <IdleTimeout />
     <template #user-dropdown>
       <UserDropdown
         :avatar

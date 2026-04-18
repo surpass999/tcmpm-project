@@ -56,7 +56,7 @@ const defaultPreferences: Preferences = {
   },
   idleTimeout: {
     enable: true,
-    timeout: 60 * 60 * 1000, // 1 hour
+    timeout: 10 * 1000, // 1 minute
     autoSaveDraft: true,
   },
   header: {

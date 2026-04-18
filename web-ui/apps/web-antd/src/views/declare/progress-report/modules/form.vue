@@ -29,6 +29,55 @@ const emit = defineEmits(['success']);
 /** 空闲会话 Store */
 const idleSessionStore = useIdleSessionStore();
 
+/** localStorage 兜底草稿的 key */
+const DRAFT_STORAGE_KEY = 'declare_progress_report_draft';
+
+/** 草稿存储结构 */
+interface LocalDraft {
+  values: Array<{
+    indicatorId: number;
+    indicatorCode: string;
+    valueType: number;
+    value: any;
+    valueDateStart?: string;
+    valueDateEnd?: string;
+  }>;
+  inputTypeValues: Record<string, string>;
+  containerValues: Record<string, any[]>;
+  savedAt: number;
+}
+
+/** 加载 localStorage 草稿 */
+function loadLocalDraft(): LocalDraft | null {
+  try {
+    const raw = localStorage.getItem(DRAFT_STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as LocalDraft;
+  } catch {
+    return null;
+  }
+}
+
+/** 保存草稿到 localStorage */
+function saveLocalDraft(values: LocalDraft['values'], inputTypeValues: Record<string, string>, containerValues: Record<string, any[]>) {
+  try {
+    const draft: LocalDraft = {
+      values,
+      inputTypeValues,
+      containerValues,
+      savedAt: Date.now(),
+    };
+    localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
+  } catch {
+    // localStorage 满了或不可用，静默忽略
+  }
+}
+
+/** 清除 localStorage 草稿 */
+function clearLocalDraft() {
+  localStorage.removeItem(DRAFT_STORAGE_KEY);
+}
+
 /** 加载状态 */
 const isLoading = ref(false);
 
@@ -233,6 +282,7 @@ const [Modal, modalApi] = useVbenModal({
 
     if (!isOpen) {
       idleSessionStore.syncFormData(null);
+      clearLocalDraft();
       formData.value = {
         id: undefined,
         hospitalId: 0,
@@ -257,8 +307,44 @@ const [Modal, modalApi] = useVbenModal({
     }
 
     // 注入超时保存回调
+    // - 有 id：尝试存数据库（静默）
+    // - 无 id（新建）：保存到 localStorage（兜底）
     idleSessionStore.setAutoSaveDraftCallback(async () => {
-      await handleSaveDraft();
+      modalApi.lock();
+      try {
+        indicatorTableRef.value?.syncContainerValuesToForm?.();
+        indicatorTableRef.value?.syncAllAutoEntryContainers?.();
+        indicatorTableRef.value?.recalculateComputedIndicators?.();
+
+        const rawValues = indicatorTableRef.value?.getAllIndicatorValues?.() || [];
+        const values = rawValues.map((item: any) => ({
+          indicatorId: item.indicatorId,
+          indicatorCode: item.indicatorCode,
+          valueType: item.valueType,
+          value: item.valueType === 8 ? undefined : extractValue(item),
+          ...(item.valueType === 8 ? { valueDateStart: item.valueDateStart, valueDateEnd: item.valueDateEnd } : {}),
+        }));
+
+        if (formData.value.id) {
+          // 有 id：存数据库
+          const errors = indicatorTableRef.value?.validateFilledData?.() || [];
+          if (errors.length > 0) return;
+          await saveProgressReport({
+            id: formData.value.id,
+            reportYear: formData.value.reportYear,
+            reportBatch: formData.value.reportBatch,
+            reportStatus: 'DRAFT',
+            values,
+          });
+        } else {
+          // 新建：无 id，保存到 localStorage
+          saveLocalDraft(values, {}, {});
+        }
+      } catch {
+        // 静默忽略
+      } finally {
+        modalApi.unlock();
+      }
     });
 
     isLoading.value = true;
@@ -351,6 +437,19 @@ const [Modal, modalApi] = useVbenModal({
       message.error('加载数据失败');
     } finally {
       isLoading.value = false;
+      // 指标表格加载完成后，尝试恢复 localStorage 草稿（新建记录场景）
+      nextTick(async () => {
+        if (!formData.value.id) {
+          const draft = loadLocalDraft();
+          if (draft && draft.values.length > 0) {
+            // 等待 IndicatorInputTable 完全挂载
+            await nextTick();
+            indicatorTableRef.value?.setValues?.(draft.values);
+            message.success(`已恢复本地草稿（保存于 ${dayjs(draft.savedAt).format('HH:mm')}）`);
+            clearLocalDraft();
+          }
+        }
+      });
     }
   },
 });
@@ -406,6 +505,7 @@ async function handleSaveDraft() {
     formData.value.id = id;
     formData.value.reportStatus = 'DRAFT';
     isFormDirty.value = false;
+    clearLocalDraft(); // 成功后清除本地草稿
     message.success('保存草稿成功');
     await modalApi.close();
     emit('success');
@@ -524,6 +624,7 @@ async function handleSave() {
     formData.value.id = id;
     formData.value.reportStatus = 'SAVED';
     isFormDirty.value = false;
+    clearLocalDraft(); // 成功后清除本地草稿
     message.success('保存成功');
     await modalApi.close();
     emit('success');

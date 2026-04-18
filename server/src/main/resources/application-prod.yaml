@@ -56,17 +56,24 @@ spring:
         remove-abandoned-timeout: 180 # 借用超过 180 秒未归还则强制回收
       primary: master
       datasource:
+        # master:
+        #   url: jdbc:dm://127.0.0.1:5236/tcmpm_db?zeroDateTimeBehavior=convertToNull&useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai
+        #   username: tcmpm_db
+        #   password: Zhzy@2026
+        #   driver-class-name: dm.jdbc.driver.DmDriver
+        # slave: # 模拟从库，可根据自己需要修改
+        #   lazy: true # 开启懒加载，保证启动速度
+        #   url: jdbc:dm://127.0.0.1:5236/tcmpm_db?zeroDateTimeBehavior=convertToNull&useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai
+        #   username: tcmpm_db
+        #   password: Zhzy@2026
+        #   driver-class-name: dm.jdbc.driver.DmDriver
         master:
-          url: jdbc:dm://127.0.0.1:5236/tcmpm_db?zeroDateTimeBehavior=convertToNull&useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai
-          username: tcmpm_db
-          password: Zhzy@2026
+          name: TCMPM_DB
+          url: jdbc:dm://10.0.6.4:5236?schema=TCMPM_DB
+          username: SYSDBA
+          password: Sysdba@123
           driver-class-name: dm.jdbc.driver.DmDriver
-        slave: # 模拟从库，可根据自己需要修改
-          lazy: true # 开启懒加载，保证启动速度
-          url: jdbc:dm://127.0.0.1:5236/tcmpm_db?zeroDateTimeBehavior=convertToNull&useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai
-          username: tcmpm_db
-          password: Zhzy@2026
-          driver-class-name: dm.jdbc.driver.DmDriver
+          type: com.alibaba.druid.pool.DruidDataSource
 
   # Redis 配置。生产环境建议开启密码
   redis:

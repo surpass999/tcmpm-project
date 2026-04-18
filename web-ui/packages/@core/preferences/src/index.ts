@@ -4,7 +4,7 @@ import { preferencesManager } from './preferences';
 
 // 偏好设置（带有层级关系）
 const preferences: Preferences =
-  preferencesManager.getPreferences.apply(preferencesManager);
+  preferencesManager.getPreferences.apply(preferencesManager, []);
 
 // 更新偏好设置
 const updatePreferences =

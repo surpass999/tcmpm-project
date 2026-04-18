@@ -40,8 +40,8 @@ async function handleTimeout() {
   if (isFormOpened.value && idleSessionStore.onAutoSaveDraft) {
     try {
       await idleSessionStore.onAutoSaveDraft();
-    } catch (e) {
-      console.warn('[IdleTimeout] 超时保存草稿失败', e);
+    } catch {
+      // 静默忽略保存失败
     }
   }
 

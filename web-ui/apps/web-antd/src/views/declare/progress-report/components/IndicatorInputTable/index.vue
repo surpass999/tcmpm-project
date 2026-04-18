@@ -54,6 +54,10 @@ import {
   isDirty,
   markDirty,
   resetDirty,
+  inputTypeValues,
+  getPureCheckboxValues,
+  deserializeInputTypeValue,
+  serializeInputTypeValue,
 } from './composables/useFormValues';
 
 // 容器值
@@ -107,7 +111,6 @@ import {
   syncInputTypeContent,
   serializeInputTypeArrayForSave,
 } from './composables/useInputTypeOptions';
-import { inputTypeValues, getPureCheckboxValues, serializeInputTypeValue } from './composables/useFormValues';
 
 // 文件上传
 import {
@@ -498,6 +501,65 @@ function getAllIndicatorValues(): Array<{
   return result;
 }
 
+function setValues(values: Array<{
+  indicatorId: number;
+  indicatorCode: string;
+  valueType: number;
+  value: any;
+  valueDateStart?: string;
+  valueDateEnd?: string;
+}>) {
+  for (const item of values) {
+    const { indicatorCode, valueType, value, valueDateStart, valueDateEnd } = item;
+
+    if (valueType === 8) {
+      // 日期区间：拆分为两个字段
+      formValues[indicatorCode] = [valueDateStart, valueDateEnd].filter(Boolean);
+      formValues[indicatorCode + '_dateStart'] = valueDateStart ?? null;
+      formValues[indicatorCode + '_dateEnd'] = valueDateEnd ?? null;
+      continue;
+    }
+
+    if (valueType === 12) {
+      // 容器类型：解析 JSON 数组
+      try {
+        const entries = JSON.parse(value || '[]');
+        containerValues[indicatorCode] = entries;
+      } catch {
+        containerValues[indicatorCode] = [];
+      }
+      continue;
+    }
+
+    if (valueType === 6 || valueType === 7) {
+      // 输入型选项：解析序列化字符串
+      const rawValue = value;
+      formValues[indicatorCode] = rawValue ?? undefined;
+      // 清除旧输入内容
+      for (const key of Object.keys(inputTypeValues)) {
+        if (key.startsWith(indicatorCode + '_')) {
+          delete inputTypeValues[key];
+        }
+      }
+      // 恢复输入内容
+      if (rawValue) {
+        const parts = valueType === 7 ? rawValue.split(',') : [rawValue];
+        for (const part of parts) {
+          const deserialized = deserializeInputTypeValue(part);
+          const inputKey = indicatorCode + '_' + deserialized.value;
+          // 从序列化字符串中提取输入内容
+          inputTypeValues[inputKey] = deserialized.input ?? '';
+          formValues[indicatorCode + '_input_' + deserialized.value] = inputTypeValues[inputKey];
+        }
+      }
+      continue;
+    }
+
+    // 普通类型：直接赋值
+    formValues[indicatorCode] = value ?? undefined;
+  }
+}
+
 function syncContainerValuesToForm() {
   for (const ind of indicators.value) {
     if (ind.valueType === 12) formValues[ind.indicatorCode] = JSON.stringify(containerValues[ind.indicatorCode] || []);
@@ -610,6 +672,7 @@ defineExpose({
   resetDirty,
   getFillProgress,
   scrollToField,
+  setValues,
   // 联动相关
   isIndicatorVisible,
   isIndicatorDisabled,
