@@ -72,9 +72,14 @@ function checkIdleTimeout() {
 }
 
 async function doIdleLogout() {
+  console.log('[doIdleLogout] isFormOpened=', idleSessionStore.isFormOpened, 'hasCallback=', !!idleSessionStore.onAutoSaveDraft);
   if (idleIntervalId) {
     clearInterval(idleIntervalId);
     idleIntervalId = null;
+  }
+  if (idleSessionStore.isFormOpened && idleSessionStore.onAutoSaveDraft) {
+    console.log('[doIdleLogout] 保存草稿');
+    await idleSessionStore.onAutoSaveDraft();
   }
   if (idleSessionStore.onLogout) {
     await idleSessionStore.onLogout();

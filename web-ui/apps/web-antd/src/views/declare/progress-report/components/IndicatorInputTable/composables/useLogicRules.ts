@@ -394,7 +394,7 @@ function validateLogicRules(
 
     // 检查联动状态：隐藏的指标不验证
     if (!isIndicatorVisible(indicator.indicatorCode)) {
-      console.log('[validateLogicRules] 跳过隐藏指标:', indicator.indicatorCode);
+      // console.log('[validateLogicRules] 跳过隐藏指标:', indicator.indicatorCode);
       continue;
     }
 
@@ -510,13 +510,13 @@ function validateLogicRuleForBlur(
 ) {
   const changedCode = changedIndicator.indicatorCode;
 
-  console.log('[LogicRuleBlur] ====== 开始 ======');
-  console.log('[LogicRuleBlur] changedIndicator:', changedCode, 'valueType:', changedIndicator.valueType, 'isRequired:', changedIndicator.isRequired);
-  console.log('[LogicRuleBlur] allIndicators 中的指标:');
-  for (const ind of allIndicators) {
-    console.log('  ', ind.indicatorCode, 'valueType:', ind.valueType, 'logicRule:', ind.logicRule?.slice(0, 50));
-  }
-  console.log('[LogicRuleBlur] ====== 开始 ======');
+  // console.log('[LogicRuleBlur] ====== 开始 ======');
+  // console.log('[LogicRuleBlur] changedIndicator:', changedCode, 'valueType:', changedIndicator.valueType, 'isRequired:', changedIndicator.isRequired);
+  // console.log('[LogicRuleBlur] allIndicators 中的指标:');
+  // for (const ind of allIndicators) {
+    // console.log('  ', ind.indicatorCode, 'valueType:', ind.valueType, 'logicRule:', ind.logicRule?.slice(0, 50));
+  // }
+  // console.log('[LogicRuleBlur] ====== 开始 ======');
 
   // console.log('[LogicRuleBlur] called, changedCode:', changedCode, 'valueType:', changedIndicator.valueType);
 
@@ -543,9 +543,9 @@ function validateLogicRuleForBlur(
 
     // 检查联动状态：隐藏的指标不验证
     const visible = isIndicatorVisible(indicator.indicatorCode);
-    console.log('[LogicRuleBlur] 检查指标:', indicator.indicatorCode, 'visible:', visible, 'logicRule:', indicator.logicRule?.slice(0, 100));
+    // console.log('[LogicRuleBlur] 检查指标:', indicator.indicatorCode, 'visible:', visible, 'logicRule:', indicator.logicRule?.slice(0, 100));
     if (!visible) {
-      console.log('[LogicRuleBlur] 跳过隐藏指标:', indicator.indicatorCode);
+      // console.log('[LogicRuleBlur] 跳过隐藏指标:', indicator.indicatorCode);
       continue;
     }
 

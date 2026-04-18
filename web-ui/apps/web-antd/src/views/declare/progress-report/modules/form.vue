@@ -51,9 +51,15 @@ interface LocalDraft {
 function loadLocalDraft(): LocalDraft | null {
   try {
     const raw = localStorage.getItem(DRAFT_STORAGE_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw) as LocalDraft;
+    if (!raw) {
+      console.log('[loadLocalDraft] localStorage 无草稿');
+      return null;
+    }
+    const draft = JSON.parse(raw) as LocalDraft;
+    console.log('[loadLocalDraft] 找到草稿', { valuesCount: draft.values.length, savedAt: dayjs(draft.savedAt).format('HH:mm:ss') });
+    return draft;
   } catch {
+    console.log('[loadLocalDraft] 解析失败');
     return null;
   }
 }
@@ -279,10 +285,13 @@ const [Modal, modalApi] = useVbenModal({
   async onOpenChange(isOpen: boolean) {
     // 立即设置表单打开状态（不等待后续异步操作）
     idleSessionStore.setFormOpened(isOpen);
+    // 打开表单时重置空闲计时器，避免用户填写表单时因超时被踢出
+    if (isOpen) {
+      idleSessionStore.resetActiveTime();
+    }
 
     if (!isOpen) {
       idleSessionStore.syncFormData(null);
-      clearLocalDraft();
       formData.value = {
         id: undefined,
         hospitalId: 0,
@@ -310,6 +319,7 @@ const [Modal, modalApi] = useVbenModal({
     // - 有 id：尝试存数据库（静默）
     // - 无 id（新建）：保存到 localStorage（兜底）
     idleSessionStore.setAutoSaveDraftCallback(async () => {
+      console.log('[autoSaveDraft callback] 被调用');
       modalApi.lock();
       try {
         indicatorTableRef.value?.syncContainerValuesToForm?.();
@@ -338,6 +348,7 @@ const [Modal, modalApi] = useVbenModal({
           });
         } else {
           // 新建：无 id，保存到 localStorage
+          console.log('[autoSaveDraft] 保存草稿到 localStorage', { valuesCount: values.length });
           saveLocalDraft(values, {}, {});
         }
       } catch {
