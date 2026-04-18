@@ -146,19 +146,20 @@ public class DeclareIndicatorValueServiceImpl implements DeclareIndicatorValueSe
         if (businessType == null) {
             businessType = 3; // 进度填报默认 businessType
         }
-        // 计算上期：同一年度，上一批次；第1期则回退到上年第4期
-        int lastBatch = reportBatch - 1;
-        int lastYear = reportYear;
-        if (lastBatch < 1) {
-            lastBatch = 4;
-            lastYear = reportYear - 1;
-        }
 
-        // 查询上期填报记录（跨年回退：reportYear -> lastYear）
-        DeclareProgressReportDO lastReport = progressReportMapper.selectByHospitalAndPeriod(hospitalId, lastYear, lastBatch);
-        if (lastReport == null) {
+        // 查询该医院最近一条已提交（非草稿/非仅保存）的填报记录
+        List<DeclareProgressReportDO> candidates = progressReportMapper.selectList(
+            new LambdaQueryWrapperX<DeclareProgressReportDO>()
+                .eq(DeclareProgressReportDO::getHospitalId, hospitalId)
+                .ne(DeclareProgressReportDO::getReportStatus, "DRAFT")
+                .ne(DeclareProgressReportDO::getReportStatus, "SAVED")
+                .orderByDesc(DeclareProgressReportDO::getCreateTime)
+                .last("LIMIT 1"));
+
+        if (candidates == null || candidates.isEmpty()) {
             return new HashMap<>();
         }
+        DeclareProgressReportDO lastReport = candidates.get(0);
 
         // 根据传入的 businessType 查询（移除硬编码的 1，改为参数化）
         List<DeclareIndicatorValueDO> values = indicatorValueMapper.selectByBusiness(businessType, lastReport.getId());
@@ -177,19 +178,23 @@ public class DeclareIndicatorValueServiceImpl implements DeclareIndicatorValueSe
         if (businessType == null) {
             businessType = 3;
         }
-        int lastBatch = reportBatch - 1;
-        int lastYear = reportYear;
-        if (lastBatch < 1) {
-            lastBatch = 4;
-            lastYear = reportYear - 1;
-        }
-        DeclareProgressReportDO lastReport = progressReportMapper.selectByHospitalAndPeriod(hospitalId, lastYear, lastBatch);
-        if (lastReport == null) {
+
+        // 查询该医院最近一条已提交（非草稿/非仅保存）的填报记录
+        List<DeclareProgressReportDO> candidates = progressReportMapper.selectList(
+            new LambdaQueryWrapperX<DeclareProgressReportDO>()
+                .eq(DeclareProgressReportDO::getHospitalId, hospitalId)
+                .ne(DeclareProgressReportDO::getReportStatus, "DRAFT")
+                .ne(DeclareProgressReportDO::getReportStatus, "SAVED")
+                .orderByDesc(DeclareProgressReportDO::getCreateTime)
+                .last("LIMIT 1"));
+
+        if (candidates == null || candidates.isEmpty()) {
             Map<String, Map<String, String>> result = new HashMap<>();
             result.put("display", new HashMap<>());
             result.put("raw", new HashMap<>());
             return result;
         }
+        DeclareProgressReportDO lastReport = candidates.get(0);
         List<DeclareIndicatorValueDO> values = indicatorValueMapper.selectByBusiness(businessType, lastReport.getId());
         Map<String, String> displayResult = new HashMap<>();
         Map<String, String> rawResult = new HashMap<>();

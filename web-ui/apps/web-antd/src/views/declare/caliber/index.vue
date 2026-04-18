@@ -10,6 +10,8 @@ import { $t } from '#/locales';
 import {
   deleteCaliber,
   getCaliberPage,
+  updateCaliber,
+  updateCaliberStatus,
 } from '#/api/declare/caliber';
 
 import { useGridColumns, useGridFormSchema } from './data';
@@ -44,6 +46,22 @@ async function handleDelete(row: DeclareIndicatorCaliberApi.Caliber) {
   try {
     await deleteCaliber(row.id!);
     message.success($t('ui.actionMessage.deleteSuccess', [row.id]));
+    handleRefresh();
+  } finally {
+    hideLoading();
+  }
+}
+
+/** 切换口径状态 */
+async function handleToggleStatus(row: DeclareIndicatorCaliberApi.Caliber) {
+  const newStatus = row.status === 1 ? 0 : 1;
+  const hideLoading = message.loading({
+    content: $t('ui.actionMessage.saving', []),
+    duration: 0,
+  });
+  try {
+    await updateCaliberStatus(row.id!, newStatus);
+    message.success($t('ui.actionMessage.operationSuccess'));
     handleRefresh();
   } finally {
     hideLoading();
@@ -113,6 +131,12 @@ const [Grid, gridApi] = useVbenVxeGrid({
               onClick: handleEdit.bind(null, row),
             },
             {
+              label: row.status === 1 ? '禁用' : '启用',
+              type: 'link',
+              auth: ['declare:caliber:update'],
+              onClick: handleToggleStatus.bind(null, row),
+            },
+            {
               label: $t('common.delete'),
               type: 'link',
               danger: true,
@@ -125,6 +149,11 @@ const [Grid, gridApi] = useVbenVxeGrid({
             },
           ]"
         />
+      </template>
+      <template #status="{ row }">
+        <a-tag :color="row.status === 1 ? 'green' : 'red'">
+          {{ row.status === 1 ? '启用' : '禁用' }}
+        </a-tag>
       </template>
     </Grid>
   </Page>

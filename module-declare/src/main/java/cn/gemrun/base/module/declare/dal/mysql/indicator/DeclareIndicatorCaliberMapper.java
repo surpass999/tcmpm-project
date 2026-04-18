@@ -25,4 +25,13 @@ public interface DeclareIndicatorCaliberMapper extends BaseMapperX<DeclareIndica
                 .eq(DeclareIndicatorCaliberDO::getIndicatorId, indicatorId));
     }
 
+    /**
+     * 根据指标ID获取启用的口径
+     */
+    default DeclareIndicatorCaliberDO selectByIndicatorIdSingleEnabled(Long indicatorId) {
+        return selectOne(new LambdaQueryWrapperX<DeclareIndicatorCaliberDO>()
+                .eq(DeclareIndicatorCaliberDO::getIndicatorId, indicatorId)
+                .eq(DeclareIndicatorCaliberDO::getStatus, 1));
+    }
+
 }

@@ -27,6 +27,7 @@
     "deleteBatchConfirm": "Are you sure to delete selected items?",
     "deleting": "Deleting {0} ...",
     "deletingBatch": "Deleting selected ...",
+    "saving": "Saving ...",
     "deleteSuccess": "{0} deleted successfully",
     "deleteFailed": "{0} deleted failed",
     "operationSuccess": "Operation succeeded",

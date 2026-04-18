@@ -13,6 +13,7 @@ export namespace DeclareIndicatorCaliberApi {
     dataSource: string;
     fillRequire: string;
     calculationExample: string;
+    status?: number;
     createTime?: string;
   }
 
@@ -26,6 +27,7 @@ export namespace DeclareIndicatorCaliberApi {
     dataSource: string;
     fillRequire: string;
     calculationExample: string;
+    status?: number;
   }
 }
 
@@ -68,6 +70,11 @@ export async function updateCaliber(data: DeclareIndicatorCaliberApi.CaliberSave
 /** 删除指标口径 */
 export async function deleteCaliber(id: number) {
   return requestClient.delete(`/declare/indicator-caliber/delete?id=${id}`);
+}
+
+/** 更新指标口径状态 */
+export async function updateCaliberStatus(id: number, status: number) {
+  return requestClient.put(`/declare/indicator-caliber/update-status?id=${id}&status=${status}`);
 }
 
 /** 获取指标口径列表 */

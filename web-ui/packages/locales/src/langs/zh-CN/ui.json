@@ -27,6 +27,7 @@
     "deleteBatchConfirm": "确定删除所选项吗？",
     "deleting": "正在删除 {0} ...",
     "deletingBatch": "正在删除所选项 ...",
+    "saving": "正在保存 ...",
     "deleteSuccess": "{0} 删除成功",
     "deleteFailed": "{0} 删除失败",
     "operationSuccess": "操作成功",

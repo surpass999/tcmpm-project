@@ -79,4 +79,11 @@ public class DeclareIndicatorCaliberController {
         return CommonResult.success(BeanUtils.toBean(list, DeclareIndicatorCaliberRespVO.class));
     }
 
+    @PutMapping("/update-status")
+    @Operation(summary = "更新指标口径状态")
+    public CommonResult<Boolean> updateCaliberStatus(@RequestParam("id") Long id, @RequestParam("status") Integer status) {
+        caliberService.updateCaliberStatus(id, status);
+        return CommonResult.success(true);
+    }
+
 }

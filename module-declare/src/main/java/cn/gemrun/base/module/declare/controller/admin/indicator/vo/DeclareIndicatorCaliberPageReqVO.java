@@ -28,4 +28,9 @@ public class DeclareIndicatorCaliberPageReqVO extends PageParam {
      */
     private String definition;
 
+    /**
+     * 状态：0=禁用，1=启用
+     */
+    private Integer status;
+
 }

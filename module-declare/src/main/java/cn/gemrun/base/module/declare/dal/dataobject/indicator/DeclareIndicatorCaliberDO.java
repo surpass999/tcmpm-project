@@ -55,6 +55,11 @@ public class DeclareIndicatorCaliberDO extends BaseDO {
     private String calculationExample;
 
     /**
+     * 状态：0=禁用，1=启用
+     */
+    private Integer status;
+
+    /**
      * 指标名称（冗余字段，不存储数据库）
      */
     @TableField(exist = false)

@@ -244,13 +244,13 @@ function validateRadioRule(
     if (currentLevel < lastLevel) {
       const currentLabel = options.find((o) => String(o.value) === String(currentPureValue))?.label || currentPureValue;
       const lastLabel = options.find((o) => String(o.value) === String(lastPureValue))?.label || lastPureValue;
-      return `选项「${currentLabel}」不能优于上期「${lastLabel}」（等级从 ${lastLevel} 降至 ${currentLevel}）`;
+      return `选项「${currentLabel}」不能优于上期「${lastLabel}」（等级从 ${lastLevel} -> ${currentLevel}）`;
     }
   } else {
     if (currentLevel > lastLevel) {
       const currentLabel = options.find((o) => String(o.value) === String(currentPureValue))?.label || currentPureValue;
       const lastLabel = options.find((o) => String(o.value) === String(lastPureValue))?.label || lastPureValue;
-      return `选项「${currentLabel}」不能差于上期「${lastLabel}」（等级从 ${lastLevel} 升至 ${currentLevel}）`;
+      return `选项「${currentLabel}」不能差于上期「${lastLabel}」（等级从 ${lastLevel} -> ${currentLevel}）`;
     }
   }
 

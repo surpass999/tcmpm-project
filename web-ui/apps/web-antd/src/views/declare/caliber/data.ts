@@ -77,6 +77,19 @@ export function useGridFormSchema(): VbenFormSchema[] {
         allowClear: true,
       },
     },
+    {
+      fieldName: 'status',
+      label: '状态',
+      component: 'Select',
+      componentProps: {
+        placeholder: '请选择状态',
+        allowClear: true,
+        options: [
+          { label: '启用', value: 1 },
+          { label: '禁用', value: 0 },
+        ],
+      },
+    },
   ];
 }
 
@@ -118,6 +131,12 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       field: 'calculationExample',
       title: '计算公式',
       minWidth: 150,
+    },
+    {
+      field: 'status',
+      title: '状态',
+      minWidth: 80,
+      slots: { default: 'status' },
     },
     {
       field: 'createTime',
@@ -187,6 +206,18 @@ export function useModalFormSchema(): VbenFormSchema[] {
       componentProps: {
         placeholder: '请输入计算公式',
         rows: 2,
+      },
+    },
+    {
+      fieldName: 'status',
+      label: '状态',
+      component: 'Select',
+      componentProps: {
+        placeholder: '请选择状态',
+        options: [
+          { label: '启用', value: 1 },
+          { label: '禁用', value: 0 },
+        ],
       },
     },
   ];

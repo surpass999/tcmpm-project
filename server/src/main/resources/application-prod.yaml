@@ -1,6 +1,11 @@
 server:
   port: 48080
 
+# ====================================== 注意事项 ======================================
+# 1. 文件上传路径：需在【系统管理 → 文件配置】后台页面配置，不在此文件中配置
+# 2. 达梦数据库：master/slave 的 IP 如果不在同机器，需改为实际达梦服务器 IP
+# ==================================================================================
+
 --- #################### 数据库相关配置 ####################
 
 spring:
@@ -31,14 +36,14 @@ spring:
             multi-statement-allow: true
     dynamic: # 多数据源配置
       druid: # Druid 【连接池】相关的全局配置
-        initial-size: 2 # 初始连接数
-        min-idle: 2 # 最小连接池数量（2核机器保守配置）
-        max-active: 5 # 最大连接池数量（2核2G建议5-8）
+        initial-size: 5 # 初始连接数
+        min-idle: 10 # 最小连接池数量（16核机器）
+        max-active: 40 # 最大连接池数量（16核机器）
         max-wait: 60000  # 配置获取连接等待超时的时间，单位：毫秒（1 分钟）
         time-between-eviction-runs-millis: 30000 # 配置间隔多久才进行一次检测，检测需要关闭的空闲连接，单位：毫秒（30 秒）
         min-evictable-idle-time-millis: 300000 # 配置一个连接在池中最小生存的时间，单位：毫秒（5 分钟）
         max-evictable-idle-time-millis: 600000 # 配置一个连接在池中最大生存的时间，单位：毫秒（10 分钟）
-        validation-query: SELECT 1 FROM DUAL # 配置检测连接是否有效
+        validation-query: SELECT 1 FROM DUAL # 达梦也支持 SELECT 1 FROM DUAL
         validation-query-timeout: 3 # 检测连接超时时间，单位：秒
         test-while-idle: true # 空闲时检测
         test-on-borrow: true # 借出时检测
@@ -52,27 +57,30 @@ spring:
       primary: master
       datasource:
         master:
-          url: jdbc:mysql://127.0.0.1:3306/tcmpm_db?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&rewriteBatchedStatements=true # MySQL Connector/J 8.X 连接的示例
+          url: jdbc:dm://127.0.0.1:5236/tcmpm_db?zeroDateTimeBehavior=convertToNull&useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai
           username: tcmpm_db
-          password: 5adfGwcx3spA7dbG
-        slave: # 模拟从库，可根据自己需要修改 # 模拟从库，可根据自己需要修改
+          password: Zhzy@2026
+          driver-class-name: dm.jdbc.driver.DmDriver
+        slave: # 模拟从库，可根据自己需要修改
           lazy: true # 开启懒加载，保证启动速度
-          url: jdbc:mysql://127.0.0.1:3306/tcmpm_db?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&rewriteBatchedStatements=true # MySQL Connector/J 8.X 连接的示例
+          url: jdbc:dm://127.0.0.1:5236/tcmpm_db?zeroDateTimeBehavior=convertToNull&useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai
           username: tcmpm_db
-          password: 5adfGwcx3spA7dbG
+          password: Zhzy@2026
+          driver-class-name: dm.jdbc.driver.DmDriver
 
   # Redis 配置。生产环境建议开启密码
   redis:
-    host: 127.0.0.1 # Redis 地址
-    port: 6379 # 端口
-    database: 1 # 数据库索引
-#    password: 123456 # 密码，生产环境建议开启
+    host: 10.0.6.5
+    port: 6379
+    password: Zhzy@2026
+    database: 1
+    timeout: 10s
     redisson:
-      threads: 1          # 核心业务线程，2核机器用1个
-      netty-threads: 1    # Netty IO线程，2核机器用1个，避免线程爆炸
+      threads: 8
+      netty-threads: 16
       single-server-config:
-        connection-minimum-idle-size: 3  # 最小空闲连接数（2核2G机器用3）
-        connection-pool-size: 6          # 连接池最大连接数（2核2G机器用6）
+        connection-minimum-idle-size: 10  # 最小空闲连接数
+        connection-pool-size: 50          # 连接池最大连接数（16核机器）
         retry-attempts: 2  # 最多重试2次，禁止无限重试
         retry-interval: 3000  # 重试间隔3秒，避免疯狂打日志
 

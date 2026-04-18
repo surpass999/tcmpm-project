@@ -25,6 +25,7 @@ const formData = ref<{
   dataSource?: string;
   fillRequire?: string;
   calculationExample?: string;
+  status?: number;
 }>({});
 
 const selectedIndicatorId = ref<number>();
@@ -199,6 +200,7 @@ const [Modal, modalApi] = useVbenModal({
           dataSource: '',
           fillRequire: '',
           calculationExample: '',
+          status: 1,
         };
         selectedIndicatorId.value = undefined;
         await initLoadIndicatorOptions();
@@ -285,6 +287,16 @@ const [Modal, modalApi] = useVbenModal({
       </a-form-item>
       <a-form-item label="计算公式">
         <a-textarea v-model:value="formData.calculationExample" :rows="2" placeholder="请输入计算公式" />
+      </a-form-item>
+      <!-- 状态 -->
+      <a-form-item label="状态">
+        <a-select
+          v-model:value="formData.status"
+          placeholder="请选择状态"
+        >
+          <a-select-option :value="1">启用</a-select-option>
+          <a-select-option :value="0">禁用</a-select-option>
+        </a-select>
       </a-form-item>
     </a-form>
   </Modal>

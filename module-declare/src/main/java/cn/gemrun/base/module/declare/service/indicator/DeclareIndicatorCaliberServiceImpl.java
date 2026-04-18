@@ -71,7 +71,8 @@ public class DeclareIndicatorCaliberServiceImpl implements DeclareIndicatorCalib
 
     @Override
     public List<DeclareIndicatorCaliberDO> getCaliberList() {
-        return caliberMapper.selectList();
+        return caliberMapper.selectList(new LambdaQueryWrapperX<DeclareIndicatorCaliberDO>()
+                .eq(DeclareIndicatorCaliberDO::getStatus, 1));
     }
 
     @Override
@@ -79,6 +80,7 @@ public class DeclareIndicatorCaliberServiceImpl implements DeclareIndicatorCalib
         LambdaQueryWrapperX<DeclareIndicatorCaliberDO> wrapper = new LambdaQueryWrapperX<DeclareIndicatorCaliberDO>()
                 .likeIfPresent(DeclareIndicatorCaliberDO::getDefinition, pageReqVO.getDefinition())
                 .eqIfPresent(DeclareIndicatorCaliberDO::getIndicatorId, pageReqVO.getIndicatorId())
+                .eqIfPresent(DeclareIndicatorCaliberDO::getStatus, pageReqVO.getStatus())
                 .orderByDesc(DeclareIndicatorCaliberDO::getId);
 
         // 如果传了 projectType，先获取该项目类型下的指标ID列表
@@ -117,7 +119,16 @@ public class DeclareIndicatorCaliberServiceImpl implements DeclareIndicatorCalib
 
     @Override
     public DeclareIndicatorCaliberDO getCaliberByIndicatorId(Long indicatorId) {
-        return caliberMapper.selectByIndicatorIdSingle(indicatorId);
+        return caliberMapper.selectByIndicatorIdSingleEnabled(indicatorId);
+    }
+
+    @Override
+    public void updateCaliberStatus(Long id, Integer status) {
+        ValidateCaliberExists(id);
+        DeclareIndicatorCaliberDO updateObj = new DeclareIndicatorCaliberDO();
+        updateObj.setId(id);
+        updateObj.setStatus(status);
+        caliberMapper.updateById(updateObj);
     }
 
     private void ValidateCaliberExists(Long id) {

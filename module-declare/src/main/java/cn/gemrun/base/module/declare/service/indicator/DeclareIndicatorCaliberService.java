@@ -50,4 +50,9 @@ public interface DeclareIndicatorCaliberService {
      */
     DeclareIndicatorCaliberDO getCaliberByIndicatorId(Long indicatorId);
 
+    /**
+     * 更新口径状态
+     */
+    void updateCaliberStatus(Long id, Integer status);
+
 }
