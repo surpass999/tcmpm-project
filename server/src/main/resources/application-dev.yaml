@@ -62,9 +62,9 @@ spring:
         #   password: TbD82zdpTrRM3hnX
         master:
           name: TCMPM_DB
-          url: jdbc:dm://127.0.0.1:5236?SCHEMA=TCMPM_DB
+          url: jdbc:dm://127.0.0.1:5236?schema=TCMPM_DB
           username: SYSDBA
-          password: Dameng123
+          password: Sysdba@123
           driver-class-name: dm.jdbc.driver.DmDriver
           type: com.alibaba.druid.pool.DruidDataSource
 

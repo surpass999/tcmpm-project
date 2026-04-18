@@ -37,6 +37,7 @@
     "@vben/types": "workspace:*",
     "@vben/utils": "workspace:*",
     "@vueuse/core": "catalog:",
+    "pinia": "catalog:",
     "vue": "catalog:",
     "vue-router": "catalog:"
   }

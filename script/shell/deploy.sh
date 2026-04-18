@@ -3,7 +3,7 @@ set -e
 
 DATE=$(date +%Y%m%d%H%M)
 # 基础路径
-BASE_PATH=/work/projects/base-server
+BASE_PATH=/opt/tcmpm/backend
 # 编译后 jar 的地址。部署时，Jenkins 会上传 jar 包到该目录下
 SOURCE_PATH=$BASE_PATH/build
 # 服务名称。同时约定部署服务的 jar 包名字也为它。
@@ -12,6 +12,14 @@ SERVER_NAME=base-server
 PROFILES_ACTIVE=development
 # 健康检查 URL
 HEALTH_CHECK_URL=http://127.0.0.1:48080/actuator/health/
+
+
+# 自动创建必要目录（修复：目录不存在报错）
+mkdir -p $BASE_PATH
+mkdir -p $BASE_PATH/backup
+mkdir -p $BASE_PATH/heapError
+mkdir -p $SOURCE_PATH
+
 
 # heapError 存放路径
 HEAP_ERROR_PATH=$BASE_PATH/heapError
