@@ -123,6 +123,8 @@ import {
 import {
   validateLogicRules,
   validateLogicRuleForBlur,
+  validateSingleContainerLogicRule,
+  clearContainerLogicRuleErrors,
 } from './composables/useLogicRules';
 
 // 上期对比规则
@@ -296,14 +298,16 @@ function handleNumberBlur(indicator: DeclareIndicatorApi.Indicator, _event: Even
     }
   }
   nextTick(() => {
-    // === STEP 1: 必填+格式 ===
-    validateIndicator(indicator);
+    // ==================== 第1级：基础验证 ====================
+    const basicErrs = validateIndicator(indicator);
     recalculateComputedIndicators(indicators.value);
+    if (basicErrs.length > 0) return; // ← fail-fast
 
-    // === STEP 2: 逻辑校验 ===
-    validateLogicRuleForBlur(indicator, indicators.value, setFieldError, clearFieldError, setDirty);
+    // ==================== 第2级：逻辑验证 ====================
+    const logicResult = validateLogicRuleForBlur(indicator, indicators.value, setFieldError, clearFieldError, setDirty);
+    if (logicResult === 'early-return') return;
 
-    // === STEP 3: 上期值校验 ===
+    // ==================== 第3级：上期值验证 ====================
     if (hasAnyLastPeriodValue()) {
       validatePositiveRuleForIndicator(indicator.indicatorCode, indicators.value);
     }
@@ -359,8 +363,15 @@ function onIndicatorChange(indicator: DeclareIndicatorApi.Indicator, rawValue?: 
   checkAndSyncLinkedAutoContainers(indicator.indicatorCode, indicators.value);
   // nextTick 确保 v-model 的值已同步到 formValues（ant-design @change 在值更新前触发）
   nextTick(() => {
-    validateIndicator(indicator);
-    validateLogicRuleForBlur(indicator, indicators.value, setFieldError, clearFieldError, setDirty);
+    // ==================== 第1级：基础验证 ====================
+    const basicErrs = validateIndicator(indicator);
+    if (basicErrs.length > 0) return; // ← fail-fast：有错直接阻断
+
+    // ==================== 第2级：逻辑验证 ====================
+    const logicResult = validateLogicRuleForBlur(indicator, indicators.value, setFieldError, clearFieldError, setDirty);
+    if (logicResult === 'early-return') return;
+
+    // ==================== 第3级：上期值验证 ====================
     if (hasAnyLastPeriodValue()) {
       validatePositiveRuleForIndicator(indicator.indicatorCode, indicators.value);
     }
@@ -377,13 +388,28 @@ function handleInputTypeBlur(indicator: DeclareIndicatorApi.Indicator, opt: any,
 function onContainerFieldChange(indicator: DeclareIndicatorApi.Indicator, entry: any, field: DynamicField) {
   const containerType = getContainerType(indicator.valueOptions);
   markContainerFieldDirty(indicator.indicatorCode, entry.rowKey, field.fieldCode, containerType);
-  validateContainerFieldOnBlur(entry, indicator, field, containerValues[indicator.indicatorCode] || []);
+
+  // ==================== 第1级：基础验证 ====================
+  const step1Err = validateContainerFieldOnBlur(entry, indicator, field, containerValues[indicator.indicatorCode] || []);
+  if (step1Err) return; // ← fail-fast：基础验证有错直接阻断
+
   nextTick(() => {
     recalculateComputedIndicators(indicators.value);
-    validateLogicRuleForBlur(indicator, indicators.value, setFieldError, clearFieldError, setDirty);
-    if (hasAnyLastPeriodValue()) {
-      validatePositiveRuleForIndicator(indicator.indicatorCode, indicators.value);
+
+    // ==================== 第2级：容器内逻辑验证 ====================
+    // 从 entry.rowKey 解析出行号和 entryKey
+    const entryNum = parseInt(entry.rowKey.replace(indicator.indicatorCode, ''), 10);
+    const entryKey = entry.rowKey;
+    const step2 = validateSingleContainerLogicRule(indicator, entryNum, entryKey, indicators.value);
+    if (step2) {
+      setFieldError(step2.fieldKey, step2.errMsg, 'logic', false);
+      return;
     }
+    // 逻辑验证通过 → 清除该行逻辑错误
+    clearContainerLogicRuleErrors(indicator, clearFieldError);
+
+    // ==================== 第3级：上期值验证（容器当前返回 null） ====================
+    // if (hasAnyLastPeriodValue()) { validatePositiveRuleForIndicator(indicator.indicatorCode, indicators.value); }
   });
 }
 
@@ -1225,7 +1251,7 @@ function addHighlight(el: Element) {
                         :disabled="isIndicatorDisabled(indicator.indicatorCode, readonly)"
                         :entry-index="0"
                         :container-last-values="containerLastPeriodValues[indicator.indicatorCode]"
-                        :container-field-error="getContainerFieldError(entry, indicator.indicatorCode, field.fieldCode, 'conditional')"
+                        :container-field-error="getContainerFieldError(entry, indicator.indicatorCode, field.fieldCode)"
                         @blur="() => onContainerFieldChange(indicator, entry, field)"
                         @field-change="() => onContainerFieldBasicChange(indicator, entry, field)"
                       />
@@ -1256,7 +1282,7 @@ function addHighlight(el: Element) {
                         :disabled="isIndicatorDisabled(indicator.indicatorCode, readonly)"
                         :entry-index="entryIdx"
                         :container-last-values="containerLastPeriodValues[indicator.indicatorCode]"
-                        :container-field-error="getContainerFieldError(entry, indicator.indicatorCode, field.fieldCode, 'autoEntry')"
+                        :container-field-error="getContainerFieldError(entry, indicator.indicatorCode, field.fieldCode)"
                         @blur="() => onContainerFieldChange(indicator, entry, field)"
                         @field-change="() => onContainerFieldBasicChange(indicator, entry, field)"
                       />
@@ -1302,7 +1328,7 @@ function addHighlight(el: Element) {
                         :disabled="isIndicatorDisabled(indicator.indicatorCode, readonly)"
                         :entry-index="entryIdx"
                         :container-last-values="containerLastPeriodValues[indicator.indicatorCode]"
-                        :container-field-error="getContainerFieldError(entry, indicator.indicatorCode, field.fieldCode, 'normal')"
+                        :container-field-error="getContainerFieldError(entry, indicator.indicatorCode, field.fieldCode)"
                         @blur="() => onContainerFieldChange(indicator, entry, field)"
                         @field-change="() => onContainerFieldBasicChange(indicator, entry, field)"
                       />

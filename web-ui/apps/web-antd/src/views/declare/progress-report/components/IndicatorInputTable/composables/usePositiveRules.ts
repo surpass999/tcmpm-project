@@ -15,11 +15,10 @@
 
 import type { DeclareIndicatorApi } from '#/api/declare/indicator';
 import type { PositiveRuleConfig, PositiveRuleItem, PositiveRuleError } from '../types';
-import { jointRules, lastPeriodValues } from './useIndicatorData';
+import { jointRules, lastPeriodValues, lastPeriodRawValues } from './useIndicatorData';
 import { formValues } from './useFormValues';
 import { containerValues } from './useContainerValues';
-import { setFieldError, clearFieldError, clearFieldErrorIfType } from './useErrorKeys';
-import { deserializeInputTypeValue } from './useFormValues';
+import { setFieldError, clearFieldErrorIfType } from './useErrorKeys';
 
 // ==================== 核心校验函数 ====================
 
@@ -135,7 +134,7 @@ function validateSinglePositiveRule(
 
   const currentValue = getCurrentValue(indicatorCode, valueType);
   const lastValue = getLastPeriodValue(indicatorCode);
-
+  const lastRawValue = getLastPeriodRawValue(indicatorCode);
 
   // 如果当前值为空，跳过校验（基础校验会处理必填）
   if (currentValue === null || currentValue === undefined || currentValue === '') {
@@ -152,7 +151,7 @@ function validateSinglePositiveRule(
       errorMsg = validateRadioRule(item, currentValue, lastValue);
       break;
     case 7: // 多选
-      errorMsg = validateMultiSelectRule(item, currentValue, lastValue);
+      errorMsg = validateMultiSelectRule(item, currentValue, lastRawValue);
       break;
     case 12: // 容器
       errorMsg = validateContainerRule(item, currentValue, lastValue);
@@ -214,6 +213,12 @@ function validateNumberRule(
  * 等级 = 选项在配置中的位置（从1开始）
  * compareMode: positive → currentLevel >= lastLevel（只能升级）
  *             negative → currentLevel <= lastLevel（只能降级）
+ *
+ * 注意：
+ * - currentValue 可能是 value（如 "02"）或 label（从下拉选中的显示值）
+ * - lastPeriodValues[indicatorCode] 存的是 display label（如 "选项B"）
+ *   因为后端 getDisplayValue 已将 value 映射为 label
+ * - 因此需要先用 lastValue（label）查找对应 option，再获取 level
  */
 function validateRadioRule(
   item: PositiveRuleItem,
@@ -225,14 +230,30 @@ function validateRadioRule(
 
   const levelMap = new Map<string, number>();
   options.forEach((opt, idx) => {
-    // 统一使用字符串作为 key，避免类型不匹配问题
     levelMap.set(String(opt.value), idx + 1);
   });
   const currentPureValue = extractPureValue(currentValue);
-  const lastPureValue = extractPureValue(lastValue);
 
-  const currentLevel = levelMap.get(String(currentPureValue));
-  const lastLevel = levelMap.get(String(lastPureValue));
+  // currentValue 可能是 value 也可能是 label
+  // 优先用 value 查 levelMap，找不到再用 label 查找
+  let currentLevel = levelMap.get(String(currentPureValue));
+  if (currentLevel === undefined) {
+    const currentOpt = options.find((o) => o.label === currentPureValue || String(o.value) === currentPureValue);
+    if (currentOpt) currentLevel = levelMap.get(String(currentOpt.value));
+  }
+
+  // lastPeriodValues 存的是 display label（如 "选项B"），需要先找到对应 option 的 value
+  let lastLevel: number | undefined;
+  const lastPureValue = extractPureValue(lastValue);
+  // 优先用 label 查找（lastValue 通常是 label）
+  let lastOpt = options.find((o) => o.label === lastPureValue);
+  if (!lastOpt) {
+    // fallback：尝试用 value 查找
+    lastOpt = options.find((o) => String(o.value) === lastPureValue);
+  }
+  if (lastOpt) {
+    lastLevel = levelMap.get(String(lastOpt.value));
+  }
 
   if (currentLevel === undefined || lastLevel === undefined) {
     return null;
@@ -242,14 +263,14 @@ function validateRadioRule(
 
   if (compareMode === 'positive') {
     if (currentLevel < lastLevel) {
-      const currentLabel = options.find((o) => String(o.value) === String(currentPureValue))?.label || currentPureValue;
-      const lastLabel = options.find((o) => String(o.value) === String(lastPureValue))?.label || lastPureValue;
+      const currentLabel = options.find((o) => String(o.value) === String(extractPureValue(currentValue)))?.label || String(extractPureValue(currentValue));
+      const lastLabel = lastOpt?.label || lastPureValue;
       return `选项「${currentLabel}」不能优于上期「${lastLabel}」（等级从 ${lastLevel} -> ${currentLevel}）`;
     }
   } else {
     if (currentLevel > lastLevel) {
-      const currentLabel = options.find((o) => String(o.value) === String(currentPureValue))?.label || currentPureValue;
-      const lastLabel = options.find((o) => String(o.value) === String(lastPureValue))?.label || lastPureValue;
+      const currentLabel = options.find((o) => String(o.value) === String(extractPureValue(currentValue)))?.label || String(extractPureValue(currentValue));
+      const lastLabel = lastOpt?.label || lastPureValue;
       return `选项「${currentLabel}」不能差于上期「${lastLabel}」（等级从 ${lastLevel} -> ${currentLevel}）`;
     }
   }
@@ -259,17 +280,17 @@ function validateRadioRule(
 
 /**
  * 校验多选类型规则
+ * lastRawValue = lastPeriodRawValues[indicatorCode]，格式为 "1,2,3" 或 "1∵内容,2∵内容"
  */
 function validateMultiSelectRule(
   item: PositiveRuleItem,
   currentValue: any,
-  lastValue: string,
+  lastRawValue: string,
 ): string | null {
   const options = item.options || [];
   const excludeSet = new Set(item.excludeOptions || []);
 
-
-  // 解析当前值
+  // 解析当前值（已序列化为数组 ["1∵内容1", "2∵内容2"]）
   let currentSet: Set<string>;
   if (Array.isArray(currentValue)) {
     currentSet = new Set(currentValue.map((v) => extractPureValue(v)));
@@ -279,12 +300,12 @@ function validateMultiSelectRule(
     currentSet = new Set([extractPureValue(String(currentValue))]);
   }
 
-  // 解析上期值
+  // 解析上期原始值（"1,2,3" 或 "1∵内容,2∵内容"，用英文逗号分隔）
   let lastSet: Set<string>;
-  if (typeof lastValue === 'string') {
-    lastSet = new Set(lastValue.split(',').map((v) => extractPureValue(v.trim())));
+  if (typeof lastRawValue === 'string' && lastRawValue) {
+    lastSet = new Set(lastRawValue.split(',').map((v) => extractPureValue(v.trim())));
   } else {
-    lastSet = new Set([extractPureValue(String(lastValue))]);
+    lastSet = new Set();
   }
 
   // 排除指定选项
@@ -372,6 +393,14 @@ function getCurrentValue(indicatorCode: string, valueType: number): any {
  */
 function getLastPeriodValue(indicatorCode: string): string {
   return lastPeriodValues.value[indicatorCode] || '';
+}
+
+/**
+ * 获取指标的上期原始值（包含 inputType 内容，用于多选对比）
+ * rawValue 格式："1,2,3" 或 "1∵输入内容1,2∵输入内容2,3"
+ */
+function getLastPeriodRawValue(indicatorCode: string): string {
+  return lastPeriodRawValues.value[indicatorCode] || '';
 }
 
 /**

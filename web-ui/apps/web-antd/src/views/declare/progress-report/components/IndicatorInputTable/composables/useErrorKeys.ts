@@ -20,14 +20,11 @@ export function toTopLevelKey(indicatorId: number): string {
   return `t:${indicatorId}`;
 }
 
-/** 生成容器字段错误 key */
-export function toContainerKey(indicatorCode: string, rowKey: string, fieldCode: string): string {
-  return `c:${indicatorCode}:${rowKey}:${fieldCode}`;
-}
-
-/** 生成输入型选项错误 key */
-export function toInputTypeKey(indicatorCode: string, optionValue: string): string {
-  return `i:${indicatorCode}:${optionValue}`;
+/** 动态容器的字段错误 key：${rowKey}${fieldCode}（如 7020101field001）
+ * rowKey 本身由 generateContainerRowKey 生成，已包含 indicatorCode 前缀
+ * 条件容器的 rowKey = indicatorCode（如 "603"），同样适用此格式 */
+export function toContainerKey(rowKey: string, fieldCode: string): string {
+  return `${rowKey}${fieldCode}`;
 }
 
 // ==================== 错误操作函数 ====================

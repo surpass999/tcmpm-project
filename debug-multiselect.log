@@ -1,0 +1,13 @@
+# Debug log for multi-select positive rule validation
+# Steps to reproduce:
+# 1. Open the progress report page with multi-select indicator
+# 2. Error appears (e.g., "上期选中的选项 [基础数据库、医疗资源数据库] 已取消选择,必须继续保持选中中")
+# 3. Check the required options
+# 4. Error should disappear but doesn't
+#
+# Look for these debug logs in browser console:
+# - [DEBUG handleCheckboxInputClick] BEFORE toggle
+# - [DEBUG handleCheckboxInputClick] AFTER toggle
+# - [DEBUG onIndicatorChange nextTick] basicErrs
+# - [DEBUG validateSinglePositiveRule] currentValue, lastValue
+# - [DEBUG validateMultiSelectRule] currentSet, lastSet

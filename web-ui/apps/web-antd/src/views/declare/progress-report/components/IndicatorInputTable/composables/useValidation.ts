@@ -11,7 +11,7 @@
 
 import type { DeclareIndicatorApi } from '#/api/declare/indicator';
 import { isEmpty, checkRange, checkPrecision, checkSelectCount, checkRequired } from '../utils/validators';
-import { parseDynamicFields, generateContainerFieldKey, isFieldVisible, getContainerType } from '../utils/container';
+import { parseDynamicFields, generateContainerFieldKey, isFieldVisible } from '../utils/container';
 import { parseExtraConfig } from '../utils/indicator';
 import { parseOptions } from '../utils/options';
 import type { DynamicField, ValidationError, FieldError } from '../types';
@@ -21,6 +21,7 @@ import { INPUT_VALUE_SEPARATOR, deserializeInputTypeValue } from './useFormValue
 import {
   fieldErrors,
   toTopLevelKey,
+  toContainerKey,
   getFieldError,
   clearFieldError,
   setDirty,
@@ -157,7 +158,6 @@ export function validateContainer(
 ): ValidationError[] {
   const errors: ValidationError[] = [];
   const fields = parseDynamicFields(indicator.valueOptions);
-  const containerType = getContainerType(indicator.valueOptions);
 
   for (const entry of entries) {
     for (const field of fields) {
@@ -165,10 +165,8 @@ export function validateContainer(
       // 使用 generateContainerFieldKey 读取 entry 中的值（与存储 key 一致）
       const storageKey = generateContainerFieldKey(indicator.indicatorCode, entry.rowKey, field.fieldCode);
       const fieldValue = entry[storageKey];
-      // 根据容器类型决定错误 key
-      const fullKey = containerType === 'conditional'
-        ? field.fieldCode
-        : storageKey;
+      // 统一用 entry.rowKey 生成错误 key（条件容器时 rowKey = indicatorCode，格式一致）
+      const fullKey = toContainerKey(entry.rowKey, field.fieldCode);
       const err = validateSingleContainerField(field, fieldValue, indicator, entry, entries);
 
       if (err) {
@@ -664,12 +662,9 @@ export function validateContainerFieldOnBlur(
   field: DynamicField,
   allEntries: any[]
 ): string | null {
-  const containerType = getContainerType(indicator.valueOptions);
   const storageKey = generateContainerFieldKey(indicator.indicatorCode, entry.rowKey, field.fieldCode);
   const fieldValue = entry[storageKey];
-  const fullKey = containerType === 'conditional'
-    ? field.fieldCode
-    : storageKey;
+  const fullKey = toContainerKey(entry.rowKey, field.fieldCode);
 
   const err = validateSingleContainerField(field, fieldValue, indicator, entry, allEntries);
 
@@ -699,18 +694,11 @@ export function getContainerFieldError(
   entryOrCode: any | string,
   _indicatorCode: string,
   fieldCode: string,
-  containerType: 'normal' | 'autoEntry' | 'conditional' = 'normal'
 ): string | undefined {
   const rowKey = typeof entryOrCode === 'string' ? entryOrCode : entryOrCode?.rowKey;
   if (!rowKey) return undefined;
 
-  let key: string;
-  if (containerType === 'conditional') {
-    key = fieldCode;
-  } else {
-    key = `${rowKey}${fieldCode}`;
-  }
-
+  const key = toContainerKey(rowKey, fieldCode);
   return getFieldError(key);
 }
 
@@ -724,9 +712,9 @@ export function clearContainerFieldError(
   _indicatorCode: string,
   rowKey: string,
   fieldCode: string,
-  containerType: 'normal' | 'autoEntry' | 'conditional' = 'normal'
+  _containerType: 'normal' | 'autoEntry' | 'conditional' = 'normal'
 ): void {
-  const key = containerType === 'conditional' ? fieldCode : `${rowKey}${fieldCode}`;
+  const key = toContainerKey(rowKey, fieldCode);
   clearFieldError(key);
 }
 
@@ -735,9 +723,9 @@ export function markContainerFieldDirty(
   _indicatorCode: string,
   rowKey: string,
   fieldCode: string,
-  containerType: 'normal' | 'autoEntry' | 'conditional' = 'normal'
+  _containerType: 'normal' | 'autoEntry' | 'conditional' = 'normal'
 ): void {
-  const key = containerType === 'conditional' ? fieldCode : `${rowKey}${fieldCode}`;
+  const key = toContainerKey(rowKey, fieldCode);
   setDirty(key);
 }
 

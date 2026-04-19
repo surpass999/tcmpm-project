@@ -23,9 +23,7 @@ import {
   validateInputContent,
   getInputTypeInputFieldName,
   isInputTypeOptionSelected,
-  isOptionSelectedWithLastPeriod,
 } from './useFormValues';
-import { lastPeriodRawValues } from './useIndicatorData';
 
 /** 多选变化后的回调（由 index.vue 设置） */
 let onMultiSelectChangeCallback: ((indicator: DeclareIndicatorApi.Indicator) => void) | null = null;
@@ -117,13 +115,9 @@ export function handleCheckboxInputClick(indicator: DeclareIndicatorApi.Indicato
       : [deserializeInputTypeValue(currentRaw).value]
     : [];
 
-  // 考虑上期值来判断是否已选中，避免只依赖 formValues 导致的误判
-  const wasSelected = isOptionSelectedWithLastPeriod(
-    indicator.indicatorCode,
-    clickedValue,
-    currentRaw,
-    lastPeriodRawValues.value[indicator.indicatorCode],
-  );
+  // 判断当前是否已选中：只看 currentValues，不看 lastPeriodRaw
+  // lastPeriodRaw 只用于上期对比校验，不影响 checkbox toggle 逻辑
+  const wasSelected = currentValues.includes(clickedValue);
   const isExclusive = exclusiveValues.has(clickedValue);
 
   let result: string[];
@@ -167,6 +161,7 @@ export function handleInputTypeCheckboxChange(indicator: DeclareIndicatorApi.Ind
     const inputContent = inputTypeValues[inputKey] || '';
     return serializeInputTypeValue(v, inputContent);
   });
+
   formValues[indicator.indicatorCode] = serialized;
 
   options.forEach((opt) => {

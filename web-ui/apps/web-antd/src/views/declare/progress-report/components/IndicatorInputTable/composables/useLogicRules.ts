@@ -14,7 +14,10 @@ import type { ValidationError, FieldError } from '../types';
 import { formValues } from './useFormValues';
 import { containerValues, isEntryBasedContainer, getContainerEntryCount } from './useContainerValues';
 import { parseDynamicFields, generateContainerFieldKey, getContainerType } from '../utils/container';
-import { fieldErrors } from './useErrorKeys';
+import {
+  fieldErrors,
+  toContainerKey,
+} from './useErrorKeys';
 import { evaluateLinkage } from '../utils/linkageEvaluator';
 import { isIndicatorVisible } from './useLinkage';
 
@@ -338,16 +341,19 @@ function clearContainerLogicRuleErrors(indicator: DeclareIndicatorApi.Indicator,
 
   if (containerType === 'conditional') {
     const fields = parseDynamicFields(indicator.valueOptions);
+    const entries2 = containerValues[indicator.indicatorCode] || [];
+    const entryRowKey = entries2[0]?.rowKey ?? indicator.indicatorCode;
     for (const field of fields) {
-      if (shouldClear(field.fieldCode)) {
-        clearFieldError(field.fieldCode);
+      const fieldKey = toContainerKey(entryRowKey, field.fieldCode);
+      if (shouldClear(fieldKey)) {
+        clearFieldError(fieldKey);
       }
     }
   } else {
     for (const entry of entries) {
       const fields = parseDynamicFields(indicator.valueOptions);
       for (const field of fields) {
-        const fieldKey = `${entry.rowKey}${field.fieldCode}`;
+        const fieldKey = toContainerKey(entry.rowKey, field.fieldCode);
         if (shouldClear(fieldKey)) {
           clearFieldError(fieldKey);
         }
@@ -687,9 +693,9 @@ function validateFilledLogicRules(
             fieldCode = findFirstFilledFieldCode(indicator, entryNum) || '';
           }
 
-          const containerFieldKey = fieldCode ? `${entryKey}${fieldCode}` : entryKey;
-          // 格式必须与 toContainerKey 一致：c:indicatorCode:rowKey:fieldCode（带冒号）
-          const fullKey = `c:${indicator.indicatorCode}:${containerFieldKey}`;
+          const containerFieldKey = fieldCode ? toContainerKey(entryKey, fieldCode) : entryKey;
+          // key 格式与 validateContainerFieldOnBlur / getContainerFieldError 保持一致（无前缀）
+          const fullKey = containerFieldKey;
           const errMsgWithKey = `「${containerFieldKey}」：${errMsg}`;
           setFieldError(fullKey, errMsgWithKey, 'logic', false);
 
@@ -746,6 +752,55 @@ function validateFilledLogicRules(
   return errors;
 }
 
+/**
+ * 单行容器逻辑校验（用于容器字段 blur 时的即时校验）
+ * 容器内逻辑验证：只针对当前 entry 行，不做跨行验证
+ * @returns 错误信息，无错返回 null
+ */
+function validateSingleContainerLogicRule(
+  indicator: DeclareIndicatorApi.Indicator,
+  entryNum: number,
+  entryKey: string,
+  allIndicators: DeclareIndicatorApi.Indicator[],
+): { fieldKey: string; errMsg: string } | null {
+  const containerType = getContainerType(indicator.valueOptions);
+  const rules = parseLogicRule(indicator.logicRule, containerType === 'conditional' ? 1 : entryNum);
+  if (rules.length === 0) return null;
+
+  const entryValueMap = containerType === 'conditional'
+    ? buildEntryValueMapForConditional(indicator)
+    : buildEntryValueMap(indicator, entryNum);
+
+  const results = validateJointRule(rules as any, entryValueMap, { triggerTiming: 'FILL' });
+  if (results.length === 0) return null;
+
+  const errMsg = buildLogicRuleMsg(
+    indicator.logicRule,
+    allIndicators,
+    entryValueMap,
+    containerType === 'conditional' ? 1 : entryNum,
+    indicator,
+  );
+
+  const involvedCodes = results[0]?.involvedIndicatorCodes || [];
+  let fieldCode = '';
+
+  for (const code of involvedCodes) {
+    if (code.startsWith(indicator.indicatorCode)) {
+      fieldCode = code.slice(-2);
+      break;
+    }
+  }
+
+  if (!fieldCode) {
+    const firstFilled = findFirstFilledFieldCode(indicator, entryNum);
+    if (firstFilled) fieldCode = firstFilled;
+  }
+
+  const fieldKey = containerType === 'conditional' ? fieldCode : toContainerKey(entryKey, fieldCode);
+  return { fieldKey, errMsg };
+}
+
 // ==================== 导出 ====================
 
 export {
@@ -754,6 +809,7 @@ export {
   buildLogicRuleMsg,
   findFirstFilledFieldCode,
   clearContainerLogicRuleErrors,
+  validateSingleContainerLogicRule,
   validateLogicRules,
   validateLogicRuleForBlur,
   validateFilledLogicRules,
