@@ -66,7 +66,17 @@ public class DeclareIndicatorCaliberServiceImpl implements DeclareIndicatorCalib
 
     @Override
     public DeclareIndicatorCaliberDO getCaliber(Long id) {
-        return caliberMapper.selectById(id);
+        DeclareIndicatorCaliberDO caliber = caliberMapper.selectById(id);
+        if (caliber == null) {
+            return null;
+        }
+        // 填充指标代号和名称
+        DeclareIndicatorDO indicator = indicatorMapper.selectById(caliber.getIndicatorId());
+        if (indicator != null) {
+            caliber.setIndicatorCode(indicator.getIndicatorCode());
+            caliber.setIndicatorName(indicator.getIndicatorName());
+        }
+        return caliber;
     }
 
     @Override
@@ -107,7 +117,8 @@ public class DeclareIndicatorCaliberServiceImpl implements DeclareIndicatorCalib
                     .collect(Collectors.toList());
 
             Map<Long, String> indicatorNameMap = indicatorMapper.selectBatchIds(resultIndicatorIds).stream()
-                    .collect(Collectors.toMap(DeclareIndicatorDO::getId, DeclareIndicatorDO::getIndicatorName));
+                    .collect(Collectors.toMap(DeclareIndicatorDO::getId,
+                            d -> d.getIndicatorCode() + " - " + d.getIndicatorName()));
 
             pageResult.getList().forEach(caliber -> {
                 caliber.setIndicatorName(indicatorNameMap.get(caliber.getIndicatorId()));

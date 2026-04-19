@@ -65,4 +65,10 @@ public class DeclareIndicatorCaliberDO extends BaseDO {
     @TableField(exist = false)
     private String indicatorName;
 
+    /**
+     * 指标代号（冗余字段，不存储数据库）
+     */
+    @TableField(exist = false)
+    private String indicatorCode;
+
 }

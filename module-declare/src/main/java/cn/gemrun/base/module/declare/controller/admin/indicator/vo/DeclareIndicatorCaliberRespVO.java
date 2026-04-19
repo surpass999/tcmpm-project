@@ -26,6 +26,11 @@ public class DeclareIndicatorCaliberRespVO {
     private String indicatorName;
 
     /**
+     * 指标代号（冗余字段）
+     */
+    private String indicatorCode;
+
+    /**
      * 指标解释
      */
     private String definition;

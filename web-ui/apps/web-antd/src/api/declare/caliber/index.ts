@@ -8,6 +8,7 @@ export namespace DeclareIndicatorCaliberApi {
     id?: number;
     indicatorId: number;
     indicatorName?: string;
+    indicatorCode?: string;
     definition: string;
     statisticScope: string;
     dataSource: string;

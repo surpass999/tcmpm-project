@@ -76,9 +76,9 @@ function updateSelectOptions() {
     .filter(item => item.id)
     .map((item) => ({
       value: item.id!,
-    label: `${item.indicatorCode} - ${item.indicatorName}`,
-    raw: item,
-  }));
+      label: `${item.indicatorCode} - ${item.indicatorName}`,
+      raw: item,
+    }));
 }
 
 // 远程搜索指标
@@ -226,8 +226,16 @@ const [Modal, modalApi] = useVbenModal({
           formData.value = await getCaliber(data.id!);
           selectedIndicatorId.value = formData.value?.indicatorId;
           selectedProjectType.value = formData.value?.projectType;
-          // 编辑模式：先获取已选中指标的详情，确保它显示在列表中
-          await initLoadIndicatorOptions(formData.value.indicatorId, formData.value.projectType);
+          // 编辑模式：用 getCaliber 返回的指标信息构建下拉选项
+          if (formData.value) {
+            const indicatorInfo = {
+              id: formData.value.indicatorId,
+              indicatorCode: (formData.value as any).indicatorCode,
+              indicatorName: formData.value.indicatorName,
+            };
+            indicatorOptions.value = [indicatorInfo];
+            updateSelectOptions();
+          }
         } finally {
           modalApi.unlock();
         }
