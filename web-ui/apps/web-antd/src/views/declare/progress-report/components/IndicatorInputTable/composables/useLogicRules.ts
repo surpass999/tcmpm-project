@@ -160,18 +160,8 @@ function buildLogicRuleMsg(
       const name = codeMap.get(fieldCode);
       fieldLabel = name ? `${fieldCode} - ${name}` : fieldCode;
 
-      // 调试日志
-      console.log('[getFieldAndThresholdText] 顶层指标检查:', {
-        fieldCode,
-        threshold,
-        codeMapHasFieldCode: codeMap.has(fieldCode),
-        allIndicatorsCount: allIndicators.length,
-      });
-
       // 顶层指标如果是多选题/单选/下拉，也需要将阈值转换为 label
       const indicator = allIndicators.find((ind) => ind.indicatorCode === fieldCode);
-      // console.log('[getFieldAndThresholdText] 找到的指标:', indicator?.indicatorCode, 'valueOptions:', indicator?.valueOptions?.slice(0, 300));
-      
       if (indicator) {
         // 尝试解析 valueOptions：可能是直接 options 数组，也可能是包装在 fields 中
         let options: Array<{ value: any; label: string }> = [];
@@ -180,20 +170,14 @@ function buildLogicRuleMsg(
         try {
           const parsed = JSON.parse(indicator.valueOptions);
           if (Array.isArray(parsed) && parsed.length > 0 && parsed[0]?.value !== undefined && parsed[0]?.label !== undefined) {
-            // 直接是 options 数组
             options = parsed;
-            // console.log('[getFieldAndThresholdText] 直接 options 数组格式, options 数量:', options.length);
           }
         } catch {
           // 不是直接的 JSON 数组，尝试解析为 fields 格式
         }
         
-        // 如果不是直接数组，尝试从 fields 中获取 options
         if (options.length === 0) {
           const fields = parseDynamicFields(indicator.valueOptions);
-          // console.log('[getFieldAndThresholdText] 从 fields 解析, fields:', fields.map(f => ({ code: f.fieldCode, type: f.fieldType, optionsCount: f.options?.length })));
-          
-          // 对于顶层指标，fields 可能只有一个字段包含 options
           if (fields.length === 1 && fields[0]?.options) {
             options = fields[0].options;
           } else {
@@ -207,11 +191,8 @@ function buildLogicRuleMsg(
           }
         }
         
-        console.log('[getFieldAndThresholdText] 最终 options:', options.map(o => ({ v: o.value, l: o.label })));
-        
         // 查找匹配的 option
         const option = options.find((o) => o.value === threshold || o.value === String(threshold) || String(o.value) === String(threshold));
-        console.log('[getFieldAndThresholdText] 查找结果:', { threshold, option });
         
         if (option) {
           thresholdText = `"${option.label}"`;
@@ -394,7 +375,6 @@ function validateLogicRules(
 
     // 检查联动状态：隐藏的指标不验证
     if (!isIndicatorVisible(indicator.indicatorCode)) {
-      // console.log('[validateLogicRules] 跳过隐藏指标:', indicator.indicatorCode);
       continue;
     }
 
@@ -500,6 +480,7 @@ function validateLogicRules(
 /**
  * 失焦时校验（只校验涉及当前指标的规则）
  * 基础验证权重更高：如果基础验证（必填）没通过，则跳过逻辑验证
+ * @returns 'early-return' | 'proceeded'
  */
 function validateLogicRuleForBlur(
   changedIndicator: DeclareIndicatorApi.Indicator,
@@ -507,18 +488,8 @@ function validateLogicRuleForBlur(
   setFieldError: (key: string, message: string, type: FieldError['errorType'], dirty?: boolean) => void,
   clearFieldError: (key: string) => void,
   setDirty: (key: string) => void,
-) {
+): 'early-return' | 'proceeded' {
   const changedCode = changedIndicator.indicatorCode;
-
-  // console.log('[LogicRuleBlur] ====== 开始 ======');
-  // console.log('[LogicRuleBlur] changedIndicator:', changedCode, 'valueType:', changedIndicator.valueType, 'isRequired:', changedIndicator.isRequired);
-  // console.log('[LogicRuleBlur] allIndicators 中的指标:');
-  // for (const ind of allIndicators) {
-    // console.log('  ', ind.indicatorCode, 'valueType:', ind.valueType, 'logicRule:', ind.logicRule?.slice(0, 50));
-  // }
-  // console.log('[LogicRuleBlur] ====== 开始 ======');
-
-  // console.log('[LogicRuleBlur] called, changedCode:', changedCode, 'valueType:', changedIndicator.valueType);
 
   // ========== 基础验证检查（仅对非容器指标生效） ==========
   // 容器指标的值在 containerValues 中，不在 formValues 中，跳过此检查
@@ -529,11 +500,11 @@ function validateLogicRuleForBlur(
       (typeof value === 'string' && value.trim() === '') ||
       (Array.isArray(value) && value.length === 0);
     if (isEmpty) {
-      // 基础验证未通过，跳过逻辑验证
-      return;
+      return 'early-return'; // ← 被修改字段本身为空时，跳过逻辑验证（让必填来处理）
     }
   }
   // ========== 基础验证检查结束 ==========
+
 
   const codeValueMap: Record<string, any> = {};
   for (const ind of allIndicators) codeValueMap[ind.indicatorCode] = formValues[ind.indicatorCode];
@@ -641,20 +612,31 @@ function validateLogicRuleForBlur(
       const rules = parseLogicRule(indicator.logicRule, 1);
       if (rules.length === 0) continue;
 
+      // 检查被引用字段是否都有值——只有全部有值才能判断"通过"
+      const involvedCodes: string[] = [];
+      for (const m of indicator.logicRule.matchAll(/\[([^\]]+)\]/g)) {
+        involvedCodes.push(m[1]!.trim());
+      }
+      const allRefFieldsFilled = involvedCodes.every((code) => {
+        const val = formValues[code];
+        return val !== undefined && val !== null && val !== '';
+      });
+
       const results = validateJointRule(rules as any, codeValueMap, { triggerTiming: 'FILL' });
       if (results.length > 0) {
         const errMsg = buildLogicRuleMsg(indicator.logicRule, allIndicators, codeValueMap);
         if (indicator.id !== undefined) setFieldError(`t:${indicator.id}`, errMsg, 'logic', false);
-      } else {
-        if (indicator.id !== undefined) {
-          // 不能清除必填错误
-          if (fieldErrors[`t:${indicator.id}`]?.errorType !== 'required') {
-            clearFieldError(`t:${indicator.id}`);
-          }
+      } else if (allRefFieldsFilled) {
+        // 被引用字段全都有值，验证真正通过 → 清除逻辑错误
+        if (indicator.id !== undefined && fieldErrors[`t:${indicator.id}`]?.errorType !== 'required') {
+          clearFieldError(`t:${indicator.id}`);
         }
+      } else {
+        // 被引用字段中有空值，数据不完整 → 保留（不设置也不清除）
       }
     }
   }
+  return 'proceeded';
 }
 
 /**
@@ -673,7 +655,6 @@ function validateFilledLogicRules(
 
     // 检查联动状态：隐藏的指标不验证
     if (!isIndicatorVisible(indicator.indicatorCode)) {
-      console.log('[validateFilledLogicRules] 跳过隐藏指标:', indicator.indicatorCode);
       continue;
     }
 
@@ -726,28 +707,39 @@ function validateFilledLogicRules(
       const rules = parseLogicRule(indicator.logicRule, 1);
       if (rules.length === 0) continue;
 
-      const results = validateJointRule(rules as any, codeValueMap, { triggerTiming: 'FILL' });
+      const involvedCodes: string[] = [];
+      for (const m of indicator.logicRule.matchAll(/\[([^\]]+)\]/g)) {
+        involvedCodes.push(m[1]!.trim());
+      }
+      const allRefFieldsFilled = involvedCodes.every((code) => {
+        const val = formValues[code];
+        return val !== undefined && val !== null && val !== '';
+      });
 
-      if (results.length === 0) {
-        if (indicator.id !== undefined) {
-          // 不能清除必填错误
-          if (fieldErrors[`t:${indicator.id}`]?.errorType !== 'required') {
-            clearFieldError(`t:${indicator.id}`);
-          }
-        }
+      if (!allRefFieldsFilled) {
+        // 数据不完整，跳过
         continue;
       }
 
-      const errMsg = buildLogicRuleMsg(indicator.logicRule, indicatorsToValidate, codeValueMap);
-      errors.push({
-        indicatorId: indicator.id,
-        indicatorCode: indicator.indicatorCode,
-        message: errMsg,
-        containerFieldKey: undefined,
-        errorType: 'logic',
-        indicatorName: indicator.indicatorName,
-      });
-      if (indicator.id !== undefined) setFieldError(`t:${indicator.id}`, errMsg, 'logic', false);
+      const results = validateJointRule(rules as any, codeValueMap, { triggerTiming: 'FILL' });
+
+      if (results.length > 0) {
+        const errMsg = buildLogicRuleMsg(indicator.logicRule, indicatorsToValidate, codeValueMap);
+        errors.push({
+          indicatorId: indicator.id,
+          indicatorCode: indicator.indicatorCode,
+          message: errMsg,
+          containerFieldKey: undefined,
+          errorType: 'logic',
+          indicatorName: indicator.indicatorName,
+        });
+        if (indicator.id !== undefined) setFieldError(`t:${indicator.id}`, errMsg, 'logic', false);
+      } else {
+        // 验证通过
+        if (indicator.id !== undefined && fieldErrors[`t:${indicator.id}`]?.errorType !== 'required') {
+          clearFieldError(`t:${indicator.id}`);
+        }
+      }
     }
   }
 

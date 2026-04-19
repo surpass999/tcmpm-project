@@ -15,10 +15,10 @@
 
 import type { DeclareIndicatorApi } from '#/api/declare/indicator';
 import type { PositiveRuleConfig, PositiveRuleItem, PositiveRuleError } from '../types';
-import { jointRules, lastPeriodRawValues } from './useIndicatorData';
+import { jointRules, lastPeriodValues } from './useIndicatorData';
 import { formValues } from './useFormValues';
 import { containerValues } from './useContainerValues';
-import { setFieldError, clearFieldError } from './useErrorKeys';
+import { setFieldError, clearFieldError, clearFieldErrorIfType } from './useErrorKeys';
 import { deserializeInputTypeValue } from './useFormValues';
 
 // ==================== 核心校验函数 ====================
@@ -27,7 +27,7 @@ import { deserializeInputTypeValue } from './useFormValues';
  * 检查是否有上期值（决定是否加载校验逻辑）
  */
 export function hasAnyLastPeriodValue(): boolean {
-  const vals = lastPeriodRawValues.value;
+  const vals = lastPeriodValues.value;
   return vals && Object.keys(vals).length > 0;
 }
 
@@ -35,7 +35,7 @@ export function hasAnyLastPeriodValue(): boolean {
  * 检查特定指标是否有上期值
  */
 export function hasLastPeriodValue(indicatorCode: string): boolean {
-  const val = lastPeriodRawValues.value[indicatorCode];
+  const val = lastPeriodValues.value[indicatorCode];
   return val !== undefined && val !== null && val !== '';
 }
 
@@ -368,10 +368,10 @@ function getCurrentValue(indicatorCode: string, valueType: number): any {
 }
 
 /**
- * 获取指标的上期值
+ * 获取指标的上期值（用于数值对比）
  */
 function getLastPeriodValue(indicatorCode: string): string {
-  return lastPeriodRawValues.value[indicatorCode] || '';
+  return lastPeriodValues.value[indicatorCode] || '';
 }
 
 /**
@@ -412,6 +412,6 @@ function setPositiveRuleError(error: PositiveRuleError): void {
 function clearPositiveRuleError(indicatorCode: string, indicators: DeclareIndicatorApi.Indicator[]): void {
   const indicator = indicators.find((i) => i.indicatorCode === indicatorCode);
   if (indicator?.id) {
-    clearFieldError(`t:${indicator.id}`);
+    clearFieldErrorIfType(`t:${indicator.id}`, 'joint');
   }
 }

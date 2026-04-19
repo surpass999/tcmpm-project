@@ -104,7 +104,6 @@ function handleInput(event: Event) {
 function handleBlur(event: FocusEvent) {
   const trimmed = displayValue.value.trim();
   let emitValue: number | string | null = null;
-  console.log('[DEBUG SafeNumberInput handleBlur]', { trimmed, currentDisplayValue: displayValue.value });
 
   // 空输入 → emit null
   if (trimmed === '') {
@@ -128,7 +127,6 @@ function handleBlur(event: FocusEvent) {
       emitValue = numVal;
     }
   }
-  console.log('[DEBUG SafeNumberInput handleBlur] emit update:modelValue', { emitValue, emitValueType: typeof emitValue });
   emit('update:modelValue', emitValue);
 
   // 保留原始输入用于显示

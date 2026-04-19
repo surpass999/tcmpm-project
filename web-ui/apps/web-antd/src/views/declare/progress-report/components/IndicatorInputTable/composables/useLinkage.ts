@@ -173,7 +173,6 @@ function isIndicatorRequired(
 watch(
   () => indicators.value.length,
   (newLen, oldLen) => {
-    console.log('[DEBUG watch indicators.length] fired', { newLen, oldLen, initialized });
     if (newLen > 0 && !initialized) {
       // 首次加载指标（formValues 已在 loadIndicatorData 中通过 await savedValues 填充完毕）
       initialized = true;

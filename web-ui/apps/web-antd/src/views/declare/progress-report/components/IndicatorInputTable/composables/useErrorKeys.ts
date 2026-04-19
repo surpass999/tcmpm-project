@@ -51,6 +51,13 @@ export function clearFieldError(key: string, force = false): void {
   }
 }
 
+/** 仅清除指定类型的错误，不碰其他类型的错误 */
+export function clearFieldErrorIfType(key: string, targetType: FieldError['errorType']): void {
+  if (fieldErrors[key]?.errorType === targetType) {
+    delete fieldErrors[key];
+  }
+}
+
 /** 设置脏标记 */
 export function setDirty(key: string): void {
   if (fieldErrors[key]) {

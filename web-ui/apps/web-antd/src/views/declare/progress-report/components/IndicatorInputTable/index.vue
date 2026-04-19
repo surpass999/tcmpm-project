@@ -286,17 +286,24 @@ setOnIndicatorChangeCallback((indicator) => {
 });
 
 function handleNumberBlur(indicator: DeclareIndicatorApi.Indicator, _event: Event) {
-  const currentValue = formValues[indicator.indicatorCode];
   if (indicator.id !== undefined) markTopLevelDirty(indicator.id);
   checkAndSyncLinkedAutoContainers(indicator.indicatorCode, indicators.value);
   if (indicator.id !== undefined) {
+    // 只清除格式/范围/联动/逻辑错误，保留必填错误（必填错误只能通过填写内容清除）
     const key = toTopLevelKey(indicator.id);
-    clearFieldError(key, true);
+    if (fieldErrors[key]?.errorType !== 'required') {
+      clearFieldError(key, true);
+    }
   }
   nextTick(() => {
+    // === STEP 1: 必填+格式 ===
     validateIndicator(indicator);
     recalculateComputedIndicators(indicators.value);
+
+    // === STEP 2: 逻辑校验 ===
     validateLogicRuleForBlur(indicator, indicators.value, setFieldError, clearFieldError, setDirty);
+
+    // === STEP 3: 上期值校验 ===
     if (hasAnyLastPeriodValue()) {
       validatePositiveRuleForIndicator(indicator.indicatorCode, indicators.value);
     }
