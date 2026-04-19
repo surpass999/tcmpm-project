@@ -45,6 +45,13 @@ const { hasAccessByCodes } = useAccess();
 const { destroyWatermark, updateWatermark } = useWatermark();
 const { closeOtherTabs, refreshTab } = useTabs();
 
+// ========== 移动端检测 ==========
+const isMobileDevice = computed(() => {
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|mobile|CriOS/i.test(
+    navigator.userAgent,
+  );
+});
+
 // 注册空闲超时登出回调
 idleSessionStore.setLogoutCallback(async () => {
   await authStore.logout(false);
@@ -223,7 +230,18 @@ watch(
 </script>
 
 <template>
-  <BasicLayout @clear-preferences-and-logout="handleLogout">
+  <!-- 移动端提示遮罩 -->
+  <div v-if="isMobileDevice" class="mobile-blocker">
+    <div class="mobile-blocker__content">
+      <div class="mobile-blocker__icon">💻</div>
+      <h2 class="mobile-blocker__title">请使用电脑端访问</h2>
+      <p class="mobile-blocker__desc">
+        系统暂不支持移动端操作，请在电脑端打开继续使用
+      </p>
+    </div>
+  </div>
+
+  <BasicLayout v-else @clear-preferences-and-logout="handleLogout">
     <template #user-dropdown>
       <UserDropdown
         :avatar
@@ -259,3 +277,38 @@ watch(
   </BasicLayout>
   <HelpModal />
 </template>
+
+<style lang="scss" scoped>
+.mobile-blocker {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f0f2f5;
+
+  &__content {
+    text-align: center;
+    padding: 40px;
+  }
+
+  &__icon {
+    font-size: 64px;
+    margin-bottom: 16px;
+  }
+
+  &__title {
+    margin: 0 0 12px;
+    font-size: 20px;
+    font-weight: 600;
+    color: #1f1f1f;
+  }
+
+  &__desc {
+    margin: 0;
+    font-size: 14px;
+    color: #666;
+  }
+}
+</style>
