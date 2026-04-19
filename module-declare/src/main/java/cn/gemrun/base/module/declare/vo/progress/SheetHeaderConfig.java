@@ -146,6 +146,9 @@ public class SheetHeaderConfig implements Serializable {
         /** 指标组内排序 */
         private Integer sort;
 
+        /** 指标的 extraConfig JSON（用于导出时评估联动） */
+        private String extraConfig;
+
         /** 是否为动态容器指标 */
         public boolean isDynamicContainer() {
             return valueType != null && valueType == 12;
@@ -190,6 +193,12 @@ public class SheetHeaderConfig implements Serializable {
 
         /** 字段单位 (number类型可能有) */
         private String unit;
+
+        /** 容器类型：conditional / normal / autoEntry（供导出时按类型分支处理 key） */
+        private String mode;
+
+        /** 数字字段精度（null 表示未定义，导出时按整数/浮点数默认处理） */
+        private Integer precision;
 
         /** 该字段在Excel中的列标题 */
         public String getColumnTitle(String indicatorCode) {

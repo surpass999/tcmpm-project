@@ -15,6 +15,7 @@ export namespace DeclareIndicatorCaliberApi {
     calculationExample: string;
     status?: number;
     createTime?: string;
+    projectType?: number;
   }
 
   /** 指标口径保存请求 */
@@ -28,6 +29,7 @@ export namespace DeclareIndicatorCaliberApi {
     fillRequire: string;
     calculationExample: string;
     status?: number;
+    projectType?: number;
   }
 }
 

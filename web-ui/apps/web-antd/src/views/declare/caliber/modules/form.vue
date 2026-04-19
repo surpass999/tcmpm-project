@@ -13,6 +13,7 @@ import {
   updateCaliber,
 } from '#/api/declare/caliber';
 import { getIndicatorPage } from '#/api/declare/indicator';
+import { getProjectTypeSimpleList } from '#/api/declare/project-type';
 import { $t } from '#/locales';
 
 const emit = defineEmits(['success']);
@@ -26,6 +27,7 @@ const formData = ref<{
   fillRequire?: string;
   calculationExample?: string;
   status?: number;
+  projectType?: number;
 }>({});
 
 const selectedIndicatorId = ref<number>();
@@ -36,6 +38,34 @@ const hasMore = ref(true);
 const searchKeyword = ref('');
 let searchTimer: ReturnType<typeof setTimeout> | null = null;
 let scrollTimer: ReturnType<typeof setTimeout> | null = null;
+
+// 项目类型
+const selectedProjectType = ref<number>();
+const projectTypeOptions = ref<{ value: number; label: string }[]>([]);
+
+// 项目类型变化时，重置指标选择并加载
+function handleProjectTypeChange(value: number) {
+  selectedProjectType.value = value;
+  selectedIndicatorId.value = undefined;
+  indicatorOptions.value = [];
+  currentPage.value = 1;
+  hasMore.value = true;
+  searchKeyword.value = '';
+  loadIndicatorOptions();
+}
+
+// 加载项目类型选项
+async function loadProjectTypeOptions() {
+  try {
+    const list = await getProjectTypeSimpleList();
+    projectTypeOptions.value = (list || []).map((item: any) => ({
+      value: item.typeValue,
+      label: item.title,
+    }));
+  } catch (e) {
+    console.error('加载项目类型失败', e);
+  }
+}
 
 // 使用 ref 存储 options
 const selectOptions = ref<{ value: number; label: string; raw: DeclareIndicatorApi.Indicator }[]>([]);
@@ -53,6 +83,7 @@ function updateSelectOptions() {
 
 // 远程搜索指标
 async function handleIndicatorSearch(keyword: string) {
+  if (!selectedProjectType.value) return;
   if (searchTimer) clearTimeout(searchTimer);
   searchTimer = setTimeout(() => {
     currentPage.value = 1;
@@ -63,30 +94,34 @@ async function handleIndicatorSearch(keyword: string) {
 
 // 加载指标选项
 async function loadIndicatorOptions(keyword = '') {
+  if (!selectedProjectType.value) return;
   if (keyword && currentPage.value > 1) {
     return;
   }
-  if (indicatorLoading.value || (!keyword && !hasMore.value)) return;
+  if (indicatorLoading.value || (!keyword && !hasMore.value)) {
+    return;
+  }
 
-    indicatorLoading.value = true;
-    try {
-      const params: any = {
+  indicatorLoading.value = true;
+  try {
+    const params: any = {
       pageNo: currentPage.value,
-        pageSize: 20,
-      };
-      if (keyword) {
-        params.indicatorName = keyword;
-        params.indicatorCode = keyword;
-      }
-      const res = await getIndicatorPage(params);
-      indicatorOptions.value = res?.list || [];
-    updateSelectOptions();
-      hasMore.value = indicatorOptions.value.length >= 20;
-    } catch (e) {
-      console.error('搜索指标失败', e);
-    } finally {
-      indicatorLoading.value = false;
+      pageSize: 20,
+      projectType: selectedProjectType.value,
+    };
+    if (keyword) {
+      params.indicatorName = keyword;
+      params.indicatorCode = keyword;
     }
+    const res = await getIndicatorPage(params);
+    indicatorOptions.value = res?.list || [];
+    updateSelectOptions();
+    hasMore.value = indicatorOptions.value.length >= 20;
+  } catch (e) {
+    console.error('搜索指标失败', e);
+  } finally {
+    indicatorLoading.value = false;
+  }
 }
 
 // 加载更多指标
@@ -99,6 +134,7 @@ async function loadMoreIndicatorOptions() {
     const params: any = {
       pageNo: currentPage.value,
       pageSize: 20,
+      projectType: selectedProjectType.value,
     };
     if (searchKeyword.value) {
       params.indicatorName = searchKeyword.value;
@@ -134,15 +170,17 @@ function handleIndicatorChange(value: number) {
 }
 
 // 初始加载指标列表
-async function initLoadIndicatorOptions(extraIndicatorId?: number) {
+async function initLoadIndicatorOptions(extraIndicatorId?: number, projectType?: number) {
+  if (!selectedProjectType.value && !projectType) return;
   indicatorLoading.value = true;
   searchKeyword.value = '';
   currentPage.value = 1;
   hasMore.value = true;
   try {
-    const res = await getIndicatorPage({ pageNo: 1, pageSize: 20 });
+    const effectiveProjectType = selectedProjectType.value || projectType;
+    const res = await getIndicatorPage({ pageNo: 1, pageSize: 20, projectType: effectiveProjectType });
     let list = res?.list || [];
-    
+
     // 如果有额外需要显示的指标，且不在列表中，则添加到列表最前面
     if (extraIndicatorId && !list.find(item => item.id === extraIndicatorId)) {
       // 尝试获取该指标的详情
@@ -156,7 +194,7 @@ async function initLoadIndicatorOptions(extraIndicatorId?: number) {
         console.error('获取指标详情失败', e);
       }
     }
-    
+
     indicatorOptions.value = list;
     updateSelectOptions();
     hasMore.value = indicatorOptions.value.length >= 20;
@@ -176,18 +214,20 @@ const getTitle = computed(() => {
 const [Modal, modalApi] = useVbenModal({
   async onOpenChange(isOpen: boolean) {
     if (isOpen) {
+      await loadProjectTypeOptions();
       const data = modalApi.getData<DeclareIndicatorCaliberApi.Caliber>();
-      
+
       // 判断是否有有效数据
       const hasData = data && Object.keys(data).length > 0 && data.id;
-      
+
       if (hasData) {
         modalApi.lock();
         try {
           formData.value = await getCaliber(data.id!);
           selectedIndicatorId.value = formData.value?.indicatorId;
+          selectedProjectType.value = formData.value?.projectType;
           // 编辑模式：先获取已选中指标的详情，确保它显示在列表中
-          await initLoadIndicatorOptions(formData.value.indicatorId);
+          await initLoadIndicatorOptions(formData.value.indicatorId, formData.value.projectType);
         } finally {
           modalApi.unlock();
         }
@@ -203,10 +243,12 @@ const [Modal, modalApi] = useVbenModal({
           status: 1,
         };
         selectedIndicatorId.value = undefined;
-        await initLoadIndicatorOptions();
+        selectedProjectType.value = undefined;
+        indicatorOptions.value = [];
       }
     } else {
       formData.value = {};
+      selectedProjectType.value = undefined;
     }
   },
   async onConfirm() {
@@ -225,6 +267,7 @@ const [Modal, modalApi] = useVbenModal({
     const data = {
       ...formData.value,
       indicatorId,
+      projectType: selectedProjectType.value,
     } as DeclareIndicatorCaliberApi.Caliber;
 
     modalApi.lock();
@@ -254,11 +297,25 @@ const [Modal, modalApi] = useVbenModal({
       :label-col="{ span: 6 }" 
       :wrapper-col="{ span: 16 }"
     >
+      <!-- 项目类型 -->
+      <a-form-item label="项目类型" required>
+        <a-select
+          v-model:value="selectedProjectType"
+          placeholder="请选择项目类型"
+          :options="projectTypeOptions"
+          allow-clear
+          dropdown-match-select-width
+          class="w-full"
+          @change="handleProjectTypeChange"
+        />
+      </a-form-item>
+
       <!-- 指标选择 -->
       <a-form-item label="选择指标" required>
         <a-select
           :value="selectedIndicatorId"
-          placeholder="请输入关键词搜索指标"
+          :disabled="!selectedProjectType"
+          :placeholder="selectedProjectType ? '请输入关键词搜索指标' : '请先选择项目类型'"
           :loading="indicatorLoading && indicatorOptions.length > 0"
           show-search
           allow-clear

@@ -119,7 +119,15 @@ public class DeclareIndicatorCaliberServiceImpl implements DeclareIndicatorCalib
 
     @Override
     public DeclareIndicatorCaliberDO getCaliberByIndicatorId(Long indicatorId) {
-        return caliberMapper.selectByIndicatorIdSingleEnabled(indicatorId);
+        List<DeclareIndicatorCaliberDO> list = caliberMapper.selectByIndicatorId(indicatorId);
+        if (list == null || list.isEmpty()) {
+            return null;
+        }
+        // 优先返回启用状态的，否则取第一条（兜底脏数据情况）
+        return list.stream()
+                .filter(c -> c.getStatus() != null && c.getStatus() == 1)
+                .findFirst()
+                .orElse(list.get(0));
     }
 
     @Override

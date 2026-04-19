@@ -27,6 +27,9 @@ import org.springframework.stereotype.Service;
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -188,15 +191,19 @@ public class DeclareNationalExportServiceImpl implements DeclareNationalExportSe
         Map<Long, Map<String, DeclareIndicatorValueDO>> valueMap = indicatorValueService.getValueMapByReports(
                 reportIds, 3);
 
-        // 4. 构建表头配置
+        // 4. 构建指标 Map（indicatorCode → DeclareIndicatorDO，供联动评估用）
+        Map<String, DeclareIndicatorDO> indicatorMap = indicators.stream()
+                .collect(Collectors.toMap(DeclareIndicatorDO::getIndicatorCode, i -> i, (a, b) -> a));
+
+        // 5. 构建表头配置
         SheetHeaderConfig headerConfig = buildHeaderConfig(indicators, allGroups);
 
-        // 5. 构建数据行
+        // 6. 构建数据行（传入 indicatorMap 用于联动评估）
         List<ExportSheetData.ExportRowData> rowDataList = new ArrayList<>();
         int seqNo = 1;
         for (DeclareProgressReportVO report : reports) {
             Map<String, DeclareIndicatorValueDO> reportValues = valueMap.getOrDefault(report.getId(), Collections.emptyMap());
-            ExportSheetData.ExportRowData rowData = buildRowData(report, reportValues, headerConfig, seqNo++);
+            ExportSheetData.ExportRowData rowData = buildRowData(report, reportValues, headerConfig, seqNo++, indicatorMap);
             rowDataList.add(rowData);
         }
 
@@ -301,6 +308,7 @@ public class DeclareNationalExportServiceImpl implements DeclareNationalExportSe
                     .unit(indicator.getUnit())
                     .valueType(indicator.getValueType())
                     .valueOptions(indicator.getValueOptions())
+                    .extraConfig(indicator.getExtraConfig())
                     .groupId(indicator.getGroupId())
                     .sort(indicator.getSort());
 
@@ -335,8 +343,8 @@ public class DeclareNationalExportServiceImpl implements DeclareNationalExportSe
      *
      * valueOptions JSON 结构：
      * {
-     *   "mode": "conditional" | "autoEntry" | "manual",
-     *   "fields": [ {fieldCode, fieldLabel, fieldType, options[], suffix, ...}, ... ],
+     *   "mode": "conditional" | "normal" | "autoEntry",
+     *   "fields": [ {fieldCode, fieldLabel, fieldType, options[], precision, suffix, ...}, ... ],
      *   "link": "501"
      * }
      */
@@ -352,6 +360,9 @@ public class DeclareNationalExportServiceImpl implements DeclareNationalExportSe
                 return Collections.emptyList();
             }
 
+            // 容器层 mode（供 extractDynamicFieldValue 按类型分支处理 key）
+            String containerMode = container.getString("mode");
+
             // 第二步：解析每个字段定义
             List<SheetHeaderConfig.DynamicFieldConfig> result = new ArrayList<>();
             for (int i = 0; i < fieldArray.size(); i++) {
@@ -359,7 +370,10 @@ public class DeclareNationalExportServiceImpl implements DeclareNationalExportSe
                 String fieldCode = fieldObj.getString("fieldCode");
                 String fieldLabel = fieldObj.getString("fieldLabel");
                 String fieldType = fieldObj.getString("fieldType");
-                String suffix = fieldObj.getString("suffix"); // number 类型可能有后缀单位
+                String suffix = fieldObj.getString("suffix");
+                // 数字字段精度（可能为 null）
+                Integer fieldPrecision = fieldObj.containsKey("precision")
+                        ? fieldObj.getInteger("precision") : null;
 
                 // 字段的选项列表 (radio/checkbox/select/multiSelect)
                 JSONArray optsArray = fieldObj.getJSONArray("options");
@@ -378,6 +392,8 @@ public class DeclareNationalExportServiceImpl implements DeclareNationalExportSe
                         .fieldType(fieldType)
                         .fieldOptions(fieldOptionsJson)
                         .unit(suffix)
+                        .mode(containerMode)
+                        .precision(fieldPrecision)
                         .build());
             }
             return result;
@@ -388,13 +404,14 @@ public class DeclareNationalExportServiceImpl implements DeclareNationalExportSe
     }
 
     /**
-     * 构建单行数据
+     * 构建单行数据（含联动可见性评估）
      */
     private ExportSheetData.ExportRowData buildRowData(
             DeclareProgressReportVO report,
             Map<String, DeclareIndicatorValueDO> reportValues,
             SheetHeaderConfig headerConfig,
-            int seqNo) {
+            int seqNo,
+            Map<String, DeclareIndicatorDO> indicatorMap) {
 
         ExportSheetData.ExportRowData.ExportRowDataBuilder builder = ExportSheetData.ExportRowData.builder()
                 .sequenceNo(seqNo)
@@ -416,17 +433,30 @@ public class DeclareNationalExportServiceImpl implements DeclareNationalExportSe
                 DeclareIndicatorValueDO valueDO = reportValues.get(col.getIndicatorCode());
 
                 if (col.isDynamicContainer()) {
-                    // 动态容器: 解析JSON数组，每个子字段提取一个值（含选项映射）
+                    // 动态容器: 解析JSON数组，每个子字段提取一个值（按容器类型分支处理）
                     String jsonStr = valueDO != null ? valueDO.getValueStr() : null;
                     for (SheetHeaderConfig.DynamicFieldConfig field : col.getDynamicFields()) {
-                        String fieldValue = extractDynamicFieldValue(jsonStr, field.getFieldCode(), field.getFieldType(), field.getFieldOptions());
+                        String fieldValue = extractDynamicFieldValue(
+                                jsonStr, field.getFieldCode(), field.getFieldType(),
+                                field.getFieldOptions(), field.getMode(),
+                                col.getIndicatorCode(), field.getPrecision());
                         String columnKey = col.getIndicatorCode() + "." + field.getFieldCode();
                         indicatorValues.put(columnKey, fieldValue);
                     }
                 } else {
-                    // 普通指标: 直接格式化值（含选项映射）
-                    String displayValue = formatIndicatorValue(valueDO, col.getValueType(), col.getValueOptions());
-                    indicatorValues.put(col.getIndicatorCode(), displayValue);
+                    // === 普通指标：评估联动可见性 ===
+                    boolean isVisible = isIndicatorVisibleByLinkage(
+                            col.getIndicatorCode(),
+                            col.getExtraConfig(),
+                            reportValues,
+                            indicatorMap);
+
+                    if (!isVisible) {
+                        indicatorValues.put(col.getIndicatorCode(), "");
+                    } else {
+                        String displayValue = formatIndicatorValue(valueDO, col.getValueType(), col.getValueOptions());
+                        indicatorValues.put(col.getIndicatorCode(), displayValue);
+                    }
                 }
             }
         }
@@ -435,10 +465,118 @@ public class DeclareNationalExportServiceImpl implements DeclareNationalExportSe
         return builder.build();
     }
 
+    // ==================== 联动评估方法 ====================
+
     /**
-     * 提取动态容器中指定字段的值 (多条记录用换行连接)
+     * 评估普通指标的联动可见性（type=show）
      */
-    private String extractDynamicFieldValue(String jsonArray, String fieldCode, String fieldType, String fieldOptions) {
+    private boolean isIndicatorVisibleByLinkage(
+            String indicatorCode,
+            String extraConfigJson,
+            Map<String, DeclareIndicatorValueDO> rowValues,
+            Map<String, DeclareIndicatorDO> indicatorMap) {
+        if (extraConfigJson == null || extraConfigJson.isEmpty()) {
+            return true;
+        }
+        try {
+            JSONObject config = JSON.parseObject(extraConfigJson);
+            JSONObject linkage = config.getJSONObject("linkage");
+            if (linkage == null || !linkage.getBooleanValue("enabled")) {
+                return true;
+            }
+            String type = linkage.getString("type");
+            if (!"show".equals(type)) {
+                return true;
+            }
+            JSONObject trigger = linkage.getJSONObject("trigger");
+            if (trigger == null) return true;
+            String triggerCode = trigger.getString("indicatorCode");
+            String operator = trigger.getString("operator");
+            if (triggerCode == null || operator == null) return true;
+
+            DeclareIndicatorValueDO triggerValueDO = rowValues.get(triggerCode);
+            DeclareIndicatorDO triggerIndicator = indicatorMap.get(triggerCode);
+            Object actualValue = extractIndicatorRawValue(triggerValueDO, triggerIndicator);
+
+            Object expectedValue = trigger.get("value");
+            return evaluateLinkageCondition(operator, actualValue, expectedValue);
+        } catch (Exception e) {
+            log.warn("评估联动条件失败: indicatorCode={}, error={}", indicatorCode, e.getMessage());
+            return true;
+        }
+    }
+
+    /**
+     * 从 DeclareIndicatorValueDO 中提取原始值（按 valueType 分类）
+     */
+    private Object extractIndicatorRawValue(DeclareIndicatorValueDO valueDO, DeclareIndicatorDO indicator) {
+        if (valueDO == null) return null;
+        if (indicator == null) return valueDO.getValueStr();
+        switch (indicator.getValueType() != null ? indicator.getValueType() : 0) {
+            case 1:  return valueDO.getValueNum();
+            case 3:  return valueDO.getValueBool();
+            case 4:  return valueDO.getValueDate();
+            case 5:  return valueDO.getValueText();
+            case 6:  return valueDO.getValueStr();
+            case 7:  return valueDO.getValueStr();
+            case 8:  return valueDO.getValueDateStart();
+            case 10: return valueDO.getValueStr();
+            case 11: return valueDO.getValueStr();
+            default: return valueDO.getValueStr();
+        }
+    }
+
+    /**
+     * 联动条件评估（支持 9 种操作符）
+     */
+    private boolean evaluateLinkageCondition(String operator, Object actual, Object expected) {
+        if (actual == null) {
+            return "isEmpty".equals(operator);
+        }
+        switch (operator) {
+            case "eq":       return Objects.equals(String.valueOf(actual), String.valueOf(expected));
+            case "neq":      return !Objects.equals(String.valueOf(actual), String.valueOf(expected));
+            case "gt":       return tryCompare(actual, expected) > 0;
+            case "gte":      return tryCompare(actual, expected) >= 0;
+            case "lt":       return tryCompare(actual, expected) < 0;
+            case "lte":      return tryCompare(actual, expected) <= 0;
+            case "in":       return expected instanceof List && ((List<?>) expected).contains(actual);
+            case "notEmpty": return !isValueEmpty(actual);
+            case "isEmpty":  return isValueEmpty(actual);
+            default:         return true;
+        }
+    }
+
+    private int tryCompare(Object a, Object b) {
+        try {
+            return Double.compare(
+                    Double.parseDouble(a.toString()),
+                    Double.parseDouble(b.toString()));
+        } catch (NumberFormatException e) {
+            return String.valueOf(a).compareTo(String.valueOf(b));
+        }
+    }
+
+    private boolean isValueEmpty(Object value) {
+        if (value == null) return true;
+        if (value instanceof String) return ((String) value).trim().isEmpty();
+        if (value instanceof List) return ((List<?>) value).isEmpty();
+        return false;
+    }
+
+    /**
+     * 提取动态容器中指定字段的值（多条目换行连接）
+     *
+     * @param jsonArray        容器 JSON 数组字符串
+     * @param fieldCode        子字段编码
+     * @param fieldType        子字段类型
+     * @param fieldOptions     子字段选项 JSON
+     * @param containerMode    容器类型：conditional / normal / autoEntry
+     * @param indicatorCode    指标编码（用于条件容器的 key 拼接）
+     * @param precision        数字字段精度（可能为 null）
+     */
+    private String extractDynamicFieldValue(String jsonArray, String fieldCode, String fieldType,
+            String fieldOptions, String containerMode, String indicatorCode, Integer precision) {
         if (jsonArray == null || jsonArray.isEmpty()) {
             return "";
         }
@@ -447,19 +585,34 @@ public class DeclareNationalExportServiceImpl implements DeclareNationalExportSe
             if (entries == null || entries.isEmpty()) {
                 return "";
             }
-            int maxEntries = MAX_CONTAINER_ENTRIES;
             List<String> values = new ArrayList<>();
             int count = 0;
             for (Object entryObj : entries) {
-                if (count >= maxEntries) {
+                if (count >= MAX_CONTAINER_ENTRIES) {
                     values.add("...");
                     break;
                 }
                 JSONObject entry = (JSONObject) entryObj;
-                Object val = entry.get(fieldCode);
+
+                // === 按容器类型选择 key 提取策略 ===
+                Object val = null;
+
+                if ("conditional".equals(containerMode)) {
+                    // 条件容器：key = indicatorCode + fieldCode（无 rowKey）
+                    val = entry.get(indicatorCode + fieldCode);
+                } else {
+                    // 普通/自动条目容器：key = rowKey + fieldCode，兜底 fieldCode
+                    Object rowKey = entry.get("rowKey");
+                    if (rowKey != null) {
+                        val = entry.get(rowKey.toString() + fieldCode);
+                    }
+                    if (val == null) {
+                        val = entry.get(fieldCode);
+                    }
+                }
+
                 if (val != null) {
-                    // 对选项类字段进行值→标签映射
-                    String formatted = formatContainerFieldValue(val, fieldType, fieldOptions);
+                    String formatted = formatContainerFieldValue(val, fieldType, fieldOptions, precision);
                     values.add(formatted);
                 }
                 count++;
@@ -472,24 +625,64 @@ public class DeclareNationalExportServiceImpl implements DeclareNationalExportSe
     }
 
     /**
-     * 格式化动态容器字段值（含选项映射）
+     * 格式化动态容器字段值（含精度、选项映射、日期/布尔格式化）
      */
-    private String formatContainerFieldValue(Object val, String fieldType, String fieldOptions) {
+    private String formatContainerFieldValue(Object val, String fieldType, String fieldOptions, Integer precision) {
         if (val == null) {
             return "";
         }
-        // 选项类字段需要做值→标签映射
+        // 选项类字段：值→标签映射
         if ("radio".equals(fieldType) || "select".equals(fieldType)) {
             return mapOptionValueToLabel(val.toString(), fieldOptions);
         }
         if ("checkbox".equals(fieldType) || "multiSelect".equals(fieldType)) {
             return mapMultiOptionValuesToLabels(val.toString(), fieldOptions);
         }
-        // 其他类型直接返回字符串
-        if (val instanceof Number) {
-            return ((Number) val).toString();
+        // 布尔字段
+        if ("boolean".equals(fieldType)) {
+            if (val instanceof Boolean) {
+                return (Boolean) val ? "是" : "否";
+            }
+            String s = val.toString().toLowerCase();
+            return "true".equals(s) || "1".equals(s) ? "是" : "否";
         }
+        // 日期字段
+        if ("date".equals(fieldType)) {
+            return formatDateStr(val.toString());
+        }
+        // 日期区间字段
+        if ("dateRange".equals(fieldType)) {
+            if (val instanceof List) {
+                List<?> range = (List<?>) val;
+                String start = (range.size() > 0 && range.get(0) != null) ? formatDateStr(range.get(0).toString()) : "-";
+                String end = (range.size() > 1 && range.get(1) != null) ? formatDateStr(range.get(1).toString()) : "-";
+                return start + " ~ " + end;
+            }
+            return "-";
+        }
+        // 数字字段：按 precision 格式化
+        if ("number".equals(fieldType) && val instanceof Number) {
+            BigDecimal bd = new BigDecimal(val.toString());
+            if (precision != null && precision >= 0) {
+                return bd.setScale(precision, RoundingMode.HALF_UP).toPlainString();
+            } else {
+                // 无 precision：整数显示原值，浮点数默认 2 位
+                return bd.stripTrailingZeros().scale() <= 0
+                        ? bd.toPlainString()
+                        : bd.setScale(2, RoundingMode.HALF_UP).toPlainString();
+            }
+        }
+        // 文本/多行文本：直接返回
         return val.toString();
+    }
+
+    /** 将 ISO 日期字符串格式化为 yyyy-MM-dd */
+    private String formatDateStr(String raw) {
+        try {
+            return LocalDateTime.parse(raw).format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+        } catch (Exception e) {
+            return raw;
+        }
     }
 
     /**
@@ -533,35 +726,73 @@ public class DeclareNationalExportServiceImpl implements DeclareNationalExportSe
     }
 
     /**
-     * 单选/单选下拉: 将选项值映射为标签
-     * @param value 选项值（如 "1"）
-     * @param valueOptions JSON数组 [{value, label}, ...]
+     * 单选/单选下拉: 将选项值映射为标签，同时保留 inputType 输入内容
+     * 输入型选项格式: "value∵输入内容" 或 "value"（普通选项）
      */
     private String mapOptionValueToLabel(String value, String valueOptions) {
-        if (value == null || value.isEmpty() || valueOptions == null || valueOptions.isEmpty()) {
-            return value != null ? value : "";
+        if (value == null || value.isEmpty()) {
+            return "";
         }
-        Map<String, String> optionMap = parseOptionMap(valueOptions);
-        return optionMap.getOrDefault(value, value);
+
+        // 1. 分离输入内容（∵ 分隔符）
+        String inputContent = null;
+        int sepIdx = value.indexOf("∵");
+        String pureValue = value;
+        if (sepIdx >= 0) {
+            pureValue = value.substring(0, sepIdx);
+            inputContent = value.substring(sepIdx + 1);
+        }
+
+        // 2. 值→标签映射
+        String label = pureValue;
+        if (valueOptions != null && !valueOptions.isEmpty()) {
+            Map<String, String> optionMap = parseOptionMap(valueOptions);
+            label = optionMap.getOrDefault(pureValue, pureValue);
+        }
+
+        // 3. 拼接输入内容
+        if (inputContent != null && !inputContent.trim().isEmpty()) {
+            return label + "（" + inputContent + "）";
+        }
+        return label;
     }
 
     /**
      * 多选/多选下拉: 将逗号分隔的多个选项值映射为标签，用 "、" 连接
-     * @param values 逗号分隔的选项值（如 "1,3"）
-     * @param valueOptions JSON数组 [{value, label}, ...]
+     * 同时处理每个选项中的 inputType 输入内容
      */
     private String mapMultiOptionValuesToLabels(String values, String valueOptions) {
-        if (values == null || values.isEmpty() || valueOptions == null || valueOptions.isEmpty()) {
-            return values != null ? values : "";
+        if (values == null || values.isEmpty()) {
+            return "";
         }
-        Map<String, String> optionMap = parseOptionMap(valueOptions);
+
+        Map<String, String> optionMap = null;
+        if (valueOptions != null && !valueOptions.isEmpty()) {
+            optionMap = parseOptionMap(valueOptions);
+        }
+
         String[] parts = values.split(",");
         List<String> labels = new ArrayList<>();
         for (String part : parts) {
             String trimmed = part.trim();
-            if (!trimmed.isEmpty()) {
-                labels.add(optionMap.getOrDefault(trimmed, trimmed));
+            if (trimmed.isEmpty()) continue;
+
+            int sepIdx = trimmed.indexOf("∵");
+            String pureValue = trimmed;
+            String inputContent = null;
+            if (sepIdx >= 0) {
+                pureValue = trimmed.substring(0, sepIdx);
+                inputContent = trimmed.substring(sepIdx + 1);
             }
+
+            String label = optionMap != null
+                    ? optionMap.getOrDefault(pureValue, pureValue)
+                    : pureValue;
+
+            if (inputContent != null && !inputContent.trim().isEmpty()) {
+                label = label + "（" + inputContent + "）";
+            }
+            labels.add(label);
         }
         return String.join("、", labels);
     }
