@@ -14,6 +14,13 @@ export function useGridFormSchema(): VbenFormSchema[] {
       componentProps: {
         placeholder: '请选择项目类型',
         allowClear: true,
+        api: async () => {
+          const list = await getProjectTypeSimpleList();
+          return (list || []).map((item: any) => ({
+            label: item.title,
+            value: item.typeValue,
+          }));
+        },
       },
     },
     {
@@ -34,14 +41,14 @@ export function useGridFormSchema(): VbenFormSchema[] {
             },
             labelField: 'label',
             valueField: 'value',
-            // apiParams 会触发 ApiSelect 重新请求
-            apiParams: pt ? { projectType: pt } : {},
+            // params 会触发 ApiSelect 重新请求
+            params: pt ? { projectType: pt } : {},
             // API 加载指标列表
-            api: async (params: any) => {
+            api: async (p: any) => {
               const res = await getIndicatorPage({
                 pageNo: 1,
                 pageSize: 200,
-                projectType: params.projectType,
+                projectType: p.projectType,
               });
               return (res?.list || []).map((item: any) => ({
                 label: `${item.indicatorCode} - ${item.indicatorName}`,

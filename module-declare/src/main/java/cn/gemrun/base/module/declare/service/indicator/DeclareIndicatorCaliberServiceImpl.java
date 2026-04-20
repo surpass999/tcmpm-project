@@ -110,26 +110,28 @@ public class DeclareIndicatorCaliberServiceImpl implements DeclareIndicatorCalib
         LambdaQueryWrapperX<DeclareIndicatorCaliberDO> wrapper = new LambdaQueryWrapperX<DeclareIndicatorCaliberDO>()
                 .likeIfPresent(DeclareIndicatorCaliberDO::getDefinition, pageReqVO.getDefinition())
                 .eqIfPresent(DeclareIndicatorCaliberDO::getIndicatorId, pageReqVO.getIndicatorId())
-                .eqIfPresent(DeclareIndicatorCaliberDO::getStatus, pageReqVO.getStatus())
-                .orderByDesc(DeclareIndicatorCaliberDO::getId);
+                .eqIfPresent(DeclareIndicatorCaliberDO::getStatus, pageReqVO.getStatus());
 
-        // 如果传了 projectType，先获取该项目类型下的指标ID列表
+        // 如果传了 projectType，先获取该项目类型下的指标ID列表（按指标 sort 排序）
+        List<Long> sortedIndicatorIds = null;
         if (pageReqVO.getProjectType() != null) {
             List<DeclareIndicatorDO> indicators = indicatorMapper.selectList(
                     new LambdaQueryWrapperX<DeclareIndicatorDO>()
-                            .eq(DeclareIndicatorDO::getProjectType, pageReqVO.getProjectType()));
+                            .eq(DeclareIndicatorDO::getProjectType, pageReqVO.getProjectType())
+                            .orderByAsc(DeclareIndicatorDO::getSort)
+                            .orderByAsc(DeclareIndicatorDO::getId));
             if (indicators == null || indicators.isEmpty()) {
                 return new PageResult<>(Collections.emptyList(), 0L);
             }
-            List<Long> indicatorIds = indicators.stream()
+            sortedIndicatorIds = indicators.stream()
                     .map(DeclareIndicatorDO::getId)
                     .collect(Collectors.toList());
-            wrapper.in(DeclareIndicatorCaliberDO::getIndicatorId, indicatorIds);
+            wrapper.in(DeclareIndicatorCaliberDO::getIndicatorId, sortedIndicatorIds);
         }
 
         PageResult<DeclareIndicatorCaliberDO> pageResult = caliberMapper.selectPage(pageReqVO, wrapper);
 
-        // 填充指标名称
+        // 填充指标信息并按指标 sort 排序
         if (pageResult.getList() != null && !pageResult.getList().isEmpty()) {
             List<Long> resultIndicatorIds = pageResult.getList().stream()
                     .map(DeclareIndicatorCaliberDO::getIndicatorId)
@@ -146,6 +148,20 @@ public class DeclareIndicatorCaliberServiceImpl implements DeclareIndicatorCalib
                     caliber.setIndicatorCode(ind.getIndicatorCode());
                     caliber.setProjectType(ind.getProjectType());
                 }
+            });
+
+            // 按指标的 sort 字段排序（从小到大）
+            pageResult.getList().sort((a, b) -> {
+                DeclareIndicatorDO indA = indicatorMap.get(a.getIndicatorId());
+                DeclareIndicatorDO indB = indicatorMap.get(b.getIndicatorId());
+                int sortA = indA != null && indA.getSort() != null ? indA.getSort() : Integer.MAX_VALUE;
+                int sortB = indB != null && indB.getSort() != null ? indB.getSort() : Integer.MAX_VALUE;
+                if (sortA != sortB) return Integer.compare(sortA, sortB);
+                // sort 相同时按 id 排
+                return Long.compare(
+                        indA != null ? indA.getId() : a.getIndicatorId() != null ? a.getIndicatorId() : 0L,
+                        indB != null ? indB.getId() : b.getIndicatorId() != null ? b.getIndicatorId() : 0L
+                );
             });
         }
 
