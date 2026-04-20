@@ -75,14 +75,34 @@ public class DeclareIndicatorCaliberServiceImpl implements DeclareIndicatorCalib
         if (indicator != null) {
             caliber.setIndicatorCode(indicator.getIndicatorCode());
             caliber.setIndicatorName(indicator.getIndicatorName());
+            caliber.setProjectType(indicator.getProjectType());
         }
         return caliber;
     }
 
     @Override
     public List<DeclareIndicatorCaliberDO> getCaliberList() {
-        return caliberMapper.selectList(new LambdaQueryWrapperX<DeclareIndicatorCaliberDO>()
+        List<DeclareIndicatorCaliberDO> list = caliberMapper.selectList(new LambdaQueryWrapperX<DeclareIndicatorCaliberDO>()
                 .eq(DeclareIndicatorCaliberDO::getStatus, 1));
+        if (list == null || list.isEmpty()) {
+            return list;
+        }
+        // 批量填充指标信息
+        List<Long> indicatorIds = list.stream()
+                .map(DeclareIndicatorCaliberDO::getIndicatorId)
+                .distinct()
+                .collect(Collectors.toList());
+        Map<Long, DeclareIndicatorDO> indicatorMap = indicatorMapper.selectBatchIds(indicatorIds).stream()
+                .collect(Collectors.toMap(DeclareIndicatorDO::getId, d -> d));
+        list.forEach(caliber -> {
+            DeclareIndicatorDO ind = indicatorMap.get(caliber.getIndicatorId());
+            if (ind != null) {
+                caliber.setIndicatorCode(ind.getIndicatorCode());
+                caliber.setIndicatorName(ind.getIndicatorName());
+                caliber.setProjectType(ind.getProjectType());
+            }
+        });
+        return list;
     }
 
     @Override
@@ -116,12 +136,16 @@ public class DeclareIndicatorCaliberServiceImpl implements DeclareIndicatorCalib
                     .distinct()
                     .collect(Collectors.toList());
 
-            Map<Long, String> indicatorNameMap = indicatorMapper.selectBatchIds(resultIndicatorIds).stream()
-                    .collect(Collectors.toMap(DeclareIndicatorDO::getId,
-                            d -> d.getIndicatorCode() + " - " + d.getIndicatorName()));
+            Map<Long, DeclareIndicatorDO> indicatorMap = indicatorMapper.selectBatchIds(resultIndicatorIds).stream()
+                    .collect(Collectors.toMap(DeclareIndicatorDO::getId, d -> d));
 
             pageResult.getList().forEach(caliber -> {
-                caliber.setIndicatorName(indicatorNameMap.get(caliber.getIndicatorId()));
+                DeclareIndicatorDO ind = indicatorMap.get(caliber.getIndicatorId());
+                if (ind != null) {
+                    caliber.setIndicatorName(ind.getIndicatorCode() + " - " + ind.getIndicatorName());
+                    caliber.setIndicatorCode(ind.getIndicatorCode());
+                    caliber.setProjectType(ind.getProjectType());
+                }
             });
         }
 
@@ -134,11 +158,18 @@ public class DeclareIndicatorCaliberServiceImpl implements DeclareIndicatorCalib
         if (list == null || list.isEmpty()) {
             return null;
         }
-        // 优先返回启用状态的，否则取第一条（兜底脏数据情况）
-        return list.stream()
+        DeclareIndicatorCaliberDO caliber = list.stream()
                 .filter(c -> c.getStatus() != null && c.getStatus() == 1)
                 .findFirst()
                 .orElse(list.get(0));
+        // 填充指标信息
+        DeclareIndicatorDO indicator = indicatorMapper.selectById(caliber.getIndicatorId());
+        if (indicator != null) {
+            caliber.setIndicatorCode(indicator.getIndicatorCode());
+            caliber.setIndicatorName(indicator.getIndicatorName());
+            caliber.setProjectType(indicator.getProjectType());
+        }
+        return caliber;
     }
 
     @Override

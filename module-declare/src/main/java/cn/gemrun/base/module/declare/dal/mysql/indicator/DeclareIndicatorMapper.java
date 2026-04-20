@@ -36,7 +36,7 @@ public interface DeclareIndicatorMapper extends BaseMapperX<DeclareIndicatorDO> 
                 .eqIfPresent(DeclareIndicatorDO::getGroupId, reqVO.getGroupId())
                 .orderByAsc(DeclareIndicatorDO::getSort)
                 .orderByAsc(DeclareIndicatorDO::getProjectType)
-                .orderByDesc(DeclareIndicatorDO::getId);
+                .orderByAsc(DeclareIndicatorDO::getId);
         
         return selectPage(reqVO, wrapper);
     }

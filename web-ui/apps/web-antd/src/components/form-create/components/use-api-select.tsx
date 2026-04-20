@@ -1,6 +1,6 @@
 import type { ApiSelectProps } from '#/components/form-create/typing';
 
-import { defineComponent, onMounted, ref, useAttrs } from 'vue';
+import { defineComponent, onMounted, ref, useAttrs, watch } from 'vue';
 
 import { isEmpty } from '@vben/utils';
 
@@ -59,6 +59,11 @@ export function useApiSelect(option: ApiSelectProps) {
         type: Boolean,
         default: false,
       },
+      // 请求参数（对象形式，会自动拼接到 URL 或请求体）
+      apiParams: {
+        type: Object,
+        default: () => ({}),
+      },
       // 是否远程搜索
       remote: {
         type: Boolean,
@@ -90,18 +95,37 @@ export function useApiSelect(option: ApiSelectProps) {
         switch (props.method) {
           case 'GET': {
             let url: string = props.url;
-            if (props.remote && queryParam.value !== undefined) {
-              url = url.includes('?')
-                ? `${url}&${props.remoteField}=${queryParam.value}`
-                : `${url}?${props.remoteField}=${queryParam.value}`;
+            const query: Record<string, any> = {};
+            // 合并 apiParams 到 URL 参数
+            if (props.apiParams) {
+              Object.entries(props.apiParams).forEach(([k, v]) => {
+                if (v !== undefined && v !== null && v !== '') {
+                  query[k] = v;
+                }
+              });
             }
+            if (props.remote && queryParam.value !== undefined) {
+              query[props.remoteField] = queryParam.value;
+            }
+            const queryStr = Object.entries(query)
+              .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+              .join('&');
+            url = url.includes('?') ? `${url}&${queryStr}` : `${url}?${queryStr}`;
             parseOptions(await requestClient.get(url));
             break;
           }
           case 'POST': {
-            const data: any = JSON.parse(props.data);
+            const data: any = { ...JSON.parse(props.data) };
             if (props.remote) {
               data[props.remoteField] = queryParam.value;
+            }
+            // 合并 apiParams 到请求体
+            if (props.apiParams) {
+              Object.entries(props.apiParams).forEach(([k, v]) => {
+                if (v !== undefined && v !== null && v !== '') {
+                  data[k] = v;
+                }
+              });
             }
             parseOptions(await requestClient.post(props.url, data));
             break;
@@ -200,6 +224,17 @@ export function useApiSelect(option: ApiSelectProps) {
       onMounted(async () => {
         await getOptions();
       });
+
+      // 监听 apiParams 变化，重新加载数据
+      watch(
+        () => props.apiParams,
+        async () => {
+          // 重置搜索状态
+          queryParam.value = undefined;
+          await getOptions();
+        },
+        { deep: true },
+      );
 
       const buildSelect = () => {
         const {

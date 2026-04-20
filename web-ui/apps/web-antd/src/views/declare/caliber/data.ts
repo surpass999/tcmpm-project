@@ -12,13 +12,6 @@ export function useGridFormSchema(): VbenFormSchema[] {
       label: '项目类型',
       component: 'ApiSelect',
       componentProps: {
-        api: async () => {
-          const list = await getProjectTypeSimpleList();
-          return (list || []).map((item: any) => ({
-            label: item.title,
-            value: item.typeValue,
-          }));
-        },
         placeholder: '请选择项目类型',
         allowClear: true,
       },
@@ -29,11 +22,6 @@ export function useGridFormSchema(): VbenFormSchema[] {
       component: 'ApiSelect',
       dependencies: {
         triggerFields: ['projectType'],
-        async trigger(values: any, _context: any) {
-          if (!values.projectType) {
-            return;
-          }
-        },
         componentProps(values: any) {
           const pt = values.projectType;
           return {
@@ -46,14 +34,10 @@ export function useGridFormSchema(): VbenFormSchema[] {
             },
             labelField: 'label',
             valueField: 'value',
-            // 请求参数 - 初始加载所有指标
-            params: {
-              projectType: pt,
-              pageSize: 200,
-            },
+            // apiParams 会触发 ApiSelect 重新请求
+            apiParams: pt ? { projectType: pt } : {},
             // API 加载指标列表
             api: async (params: any) => {
-              if (!params?.projectType) return [];
               const res = await getIndicatorPage({
                 pageNo: 1,
                 pageSize: 200,

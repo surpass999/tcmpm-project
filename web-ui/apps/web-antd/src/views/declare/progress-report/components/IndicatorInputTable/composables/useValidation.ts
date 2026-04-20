@@ -87,7 +87,7 @@ export function validateSingleContainerField(
           dirty: true,
         };
       }
-      const precErr = checkPrecision(numVal, field.precision);
+      const precErr = checkPrecision(numVal, field.precision, String(fieldValue).trim());
       if (precErr) {
         return {
           message: `「${storageKey} - ${field.fieldLabel}」：${precErr}`,
@@ -246,7 +246,7 @@ export function validateIndicator(indicator: DeclareIndicatorApi.Indicator): Fie
           errors.push(err);
         }
         const cfg = parseExtraConfig(indicator.extraConfig);
-        const precErr = checkPrecision(numVal, cfg.precision);
+        const precErr = checkPrecision(numVal, cfg.precision, String(value).trim());
         if (precErr) {
           const err = { message: precErr, errorType: 'format' as const, dirty: true };
           fieldErrors[key] = err;
@@ -328,7 +328,7 @@ function validateType1_Number(indicator: DeclareIndicatorApi.Indicator): Validat
     const rangeErr = checkRange(numVal, minValue ?? null, maxValue ?? null);
     if (rangeErr) errors.push({ indicatorId: id, indicatorCode: code, message: `${indicator.indicatorName}：${rangeErr}`, errorType: 'range', dirty: true });
     const cfg = parseExtraConfig(indicator.extraConfig);
-    const precErr = checkPrecision(numVal, cfg.precision);
+    const precErr = checkPrecision(numVal, cfg.precision, String(value).trim());
     if (precErr) errors.push({ indicatorId: id, indicatorCode: code, message: `${indicator.indicatorName}：${precErr}`, errorType: 'format', dirty: true });
   }
   return errors;
@@ -508,7 +508,7 @@ function validateFilledIndicator(
         const rangeErr = checkRange(numVal, indicator.minValue ?? null, indicator.maxValue ?? null);
         if (rangeErr) errors.push({ indicatorId: id, indicatorCode: code, message: `${indicator.indicatorName}：${rangeErr}`, errorType: 'range', dirty: true });
         const cfg = parseExtraConfig(indicator.extraConfig);
-        const precErr = checkPrecision(numVal, cfg.precision);
+        const precErr = checkPrecision(numVal, cfg.precision, String(value).trim());
         if (precErr) errors.push({ indicatorId: id, indicatorCode: code, message: `${indicator.indicatorName}：${precErr}`, errorType: 'format', dirty: true });
       }
       break;
@@ -552,7 +552,7 @@ function validateFilledContainer(
         } else {
           const rangeErr = checkRange(numVal, field.minValue ?? undefined, field.maxValue ?? undefined);
           if (rangeErr) errors.push({ indicatorId: id, indicatorCode: code, message: `「${fullKey}」：${rangeErr}`, containerFieldKey: fullKey, errorType: 'range', dirty: true });
-          const precErr = checkPrecision(numVal, field.precision);
+          const precErr = checkPrecision(numVal, field.precision, String(fieldValue).trim());
           if (precErr) errors.push({ indicatorId: id, indicatorCode: code, message: `「${fullKey}」：${precErr}`, containerFieldKey: fullKey, errorType: 'format', dirty: true });
         }
       } else if (field.fieldType === 'text' || field.fieldType === 'textarea') {

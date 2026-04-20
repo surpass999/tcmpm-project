@@ -122,6 +122,15 @@ function handleBlur(event: FocusEvent) {
       // 超出最小值 → emit 原始值，标记错误但不修改输入
       emitValue = trimmed;
       hasError.value = true;
+    } else if (
+      props.precision !== undefined &&
+      props.precision !== null &&
+      props.precision === 0 &&
+      /\.\d/.test(trimmed)
+    ) {
+      // 精度为0时：禁止任何小数点（JS 的 Number("22.0") 会变成 22，无法区分 "22" 和 "22.0"）
+      emitValue = trimmed;
+      hasError.value = true;
     } else {
       // 有效值 → emit 数字
       emitValue = numVal;

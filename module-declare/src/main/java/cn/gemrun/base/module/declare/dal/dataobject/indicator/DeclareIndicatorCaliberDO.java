@@ -71,4 +71,10 @@ public class DeclareIndicatorCaliberDO extends BaseDO {
     @TableField(exist = false)
     private String indicatorCode;
 
+    /**
+     * 项目类型（冗余字段，不存储数据库，从关联指标获取）
+     */
+    @TableField(exist = false)
+    private Integer projectType;
+
 }

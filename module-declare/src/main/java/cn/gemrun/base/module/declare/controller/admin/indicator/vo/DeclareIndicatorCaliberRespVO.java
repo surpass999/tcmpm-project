@@ -31,6 +31,11 @@ public class DeclareIndicatorCaliberRespVO {
     private String indicatorCode;
 
     /**
+     * 项目类型（冗余字段，从关联指标获取）
+     */
+    private Integer projectType;
+
+    /**
      * 指标解释
      */
     private String definition;

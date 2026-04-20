@@ -44,10 +44,23 @@ export function checkRange(value: number, min: number | null | undefined, max: n
   return null;
 }
 
-/** 校验小数精度 */
-export function checkPrecision(value: number, precision: number | undefined): string | null {
+/** 校验小数精度
+ * @param value 原始值（数字或字符串），用于判断是否有小数点
+ * @param precision 允许的小数位数
+ * @param rawValue 可选，原始字符串，用于精度=0时精确判断是否输入了小数点
+ */
+export function checkPrecision(value: number | string, precision: number | undefined, rawValue?: string): string | null {
   if (precision === undefined) return null;
-  if (value !== Number(value.toFixed(precision))) return `小数位数不能超过 ${precision} 位`;
+  if (precision === 0) {
+    // 精度0：禁止任何小数点（必须用 rawValue 判断，因为 Number("22.0") === 22 会丢失小数点信息）
+    if (rawValue !== undefined) {
+      if (/\.\d/.test(rawValue)) return `小数位数不能超过 ${precision} 位`;
+    } else if (!Number.isInteger(Number(value))) {
+      return `小数位数不能超过 ${precision} 位`;
+    }
+    return null;
+  }
+  if (Number(value) !== Number(Number(value).toFixed(precision))) return `小数位数不能超过 ${precision} 位`;
   return null;
 }
 
