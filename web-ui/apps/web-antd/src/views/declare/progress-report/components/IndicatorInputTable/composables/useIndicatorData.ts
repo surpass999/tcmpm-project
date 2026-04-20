@@ -144,6 +144,9 @@ async function loadIndicatorData(
   reportYear?: number,
   reportBatch?: number,
 ) {
+  // 清空文件列表（模块级单例，换报告/项目类型时需重置）
+  Object.keys(fileListMap).forEach((key) => delete fileListMap[key]);
+
   // 加载分组
   const groupTree = await getIndicatorGroupTreeByProjectType(projectType);
   groupInfoMap.value = {};
@@ -246,6 +249,7 @@ async function reloadIndicatorData(
   groupInfoMap.value = {};
   Object.keys(formValues).forEach((key) => delete formValues[key]);
   Object.keys(containerValues).forEach((key) => delete containerValues[key]);
+  // fileListMap 在 loadIndicatorData 入口统一清空，此处不需重复清理
   await loadIndicatorData(projectType, reportId, hospitalId, reportYear, reportBatch);
 }
 
