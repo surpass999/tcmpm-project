@@ -11,7 +11,7 @@ import { getDictOptions } from '@vben/hooks';
 import { message, Tabs, TabPane } from 'ant-design-vue';
 import { useUserStore } from '@vben/stores';
 
-import { getHospitalReportList, getNationalReportList, nationalSearch } from '#/api/declare/progress-report';
+import { getHospitalReportList, getNationalReportList, nationalSearch, deleteProgressReport } from '#/api/declare/progress-report';
 import { getAvailableActionsBatch, submitBpmAction } from '#/api/bpm/action';
 import { batchActionTask } from '#/api/bpm/task';
 import { IconifyIcon } from '@vben/icons';
@@ -460,6 +460,14 @@ function getRowActions(row: DeclareProgressReport) {
   }
 
   buttons.push({
+    label: '删除',
+    type: 'link' as const,
+    danger: true,
+    auth: ['declare:progress-report:delete'],
+    onClick: () => handleDelete(row),
+  });
+
+  buttons.push({
     label: '查看详情',
     type: 'link' as const,
     icon: 'lucide:history',
@@ -467,6 +475,17 @@ function getRowActions(row: DeclareProgressReport) {
   });
 
   return buttons;
+}
+
+async function handleDelete(row: DeclareProgressReport) {
+  const hideLoading = message.loading({ content: '删除中...', duration: 0 });
+  try {
+    await deleteProgressReport(row.id);
+    message.success('删除成功');
+    handleRefresh();
+  } finally {
+    hideLoading();
+  }
 }
 
 async function loadRowBpmActions(rows: DeclareProgressReport[]) {

@@ -132,7 +132,7 @@ const shouldRequired = computed(() => {
   return !isOptional;
 });
 
-const fieldRules = computed(() => {
+  const fieldRules = computed(() => {
   if (!visible.value) {
     return null;
   }
@@ -149,7 +149,8 @@ const fieldRules = computed(() => {
   const isOptional = !shouldRequired.value;
   if (!isOptional) {
     const unwrappedRules = (rules as any)?.unwrap?.();
-    if (unwrappedRules) {
+    // 保留 ZodDefault 包装层，否则自定义 message 会丢失
+    if (unwrappedRules && unwrappedRules !== rules) {
       rules = unwrappedRules;
     }
   }
