@@ -412,7 +412,7 @@ function onContainerFieldChange(indicator: DeclareIndicatorApi.Indicator, entry:
     if (indicator.logicRule) {
       const ccRule = parseCC(indicator.logicRule);
       if (ccRule) {
-        const ccErrors = validateContainerConstraint(ccRule, entry, entryKey);
+        const ccErrors = validateContainerConstraint(ccRule, entry, entryKey, containerType);
         if (ccErrors.length > 0) {
           setFieldError(ccErrors[0]!.fieldKey, ccErrors[0]!.errMsg, 'logic', false);
           return;

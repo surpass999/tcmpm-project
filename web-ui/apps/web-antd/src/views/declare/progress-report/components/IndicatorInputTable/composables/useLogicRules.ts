@@ -55,8 +55,8 @@ function buildEntryValueMap(
 
 /**
  * 构建条件容器的值映射
- * 条件容器字段值存储在 entry[fieldCode] 中，如 entry["01"]
- * logicRule 格式：[01] > 0（直接使用字段 code）
+ * 条件容器字段值存储在 entry[rowKey+fieldCode] 中，如 entry["60303"]
+ * logicRule 格式：[603_03] > 0（容器+字段简写，展开为 rowKey+fieldCode）
  */
 function buildEntryValueMapForConditional(
   indicator: DeclareIndicatorApi.Indicator
@@ -69,8 +69,8 @@ function buildEntryValueMapForConditional(
   const fields = parseDynamicFields(indicator.valueOptions);
 
   for (const field of fields) {
-    // 条件容器：字段 key = fieldCode（如 01）
-    map[field.fieldCode] = entry[field.fieldCode];
+    const fullKey = `${entry.rowKey}${field.fieldCode}`;
+    map[fullKey] = entry[fullKey];
   }
 
   return map;
@@ -829,9 +829,11 @@ function validateContainerConstraint(
   rule: { fieldCodes: string[]; triggerOp: string; triggerVal: string; forbidOp: string; forbidVal: string },
   entry: any,
   entryKey: string,
+  containerType?: string,
 ): { fieldKey: string; errMsg: string }[] {
   const { fieldCodes, triggerOp, triggerVal, forbidOp, forbidVal } = rule;
   const errors: { fieldKey: string; errMsg: string }[] = [];
+  const isConditional = containerType === 'conditional';
 
   /** 判断单个字段值是否满足触发条件 */
   const matchesTrigger = (val: any): boolean => {
@@ -877,8 +879,9 @@ function validateContainerConstraint(
     const key = `${entryKey}${code}`;
     if (violatesForbid(entry[key])) {
       const triggerCode = fieldCodes[triggerIdx]!;
+      const fieldKey = isConditional ? code : key;
       errors.push({
-        fieldKey: key,
+        fieldKey,
         errMsg: `「${triggerCode}」选择了「${triggerVal}」，「${code}」不能选择「${forbidVal}」`,
       });
     }
