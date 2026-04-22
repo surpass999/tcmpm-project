@@ -234,6 +234,10 @@ async function handleSubmitAudit() {
         message.warning('审核人姓名长度应在2-20个字符之间');
         return false;
       }
+      if (trimmed === (reportDetail.value?.reportUserName || '').trim()) {
+        message.warning('审核人不能与填报人相同');
+        return false;
+      }
       const hideLoading = message.loading({ content: '提交中...', duration: 0 });
       try {
         await submitProgressReport(payload.value!.reportId, auditUserName);

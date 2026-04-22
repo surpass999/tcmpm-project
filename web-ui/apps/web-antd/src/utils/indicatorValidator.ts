@@ -526,6 +526,47 @@ function compareValues(current: any, operator: string, target: any): boolean {
   return result;
 }
 
+// CC 规则解析结果（不走 joint rule 引擎）
+export interface CCRule {
+  type: 'CC';
+  fieldCodes: string[];
+  triggerOp: string;
+  triggerVal: string;
+  forbidOp: string;
+  forbidVal: string;
+}
+
+// CC 支持的运算符白名单
+const CC_TRIGGER_OPS = new Set(['FIRST_EQ', 'LAST_EQ', 'FIRST_GT', 'FIRST_GTE', 'FIRST_LT', 'FIRST_LTE', 'FIRST_IN', 'LAST_IN']);
+const CC_FORBID_OPS = new Set(['REST_EQ', 'REST_NE']);
+
+/**
+ * 解析 CC 公式
+ * 格式: CC([01,02,03], FIRST_EQ(2), REST_NE(1))
+ */
+export function parseCC(logicRule: string): CCRule | null {
+  const rule = logicRule.trim();
+  const match = rule.match(/^CC\s*\(\s*\[([^\]]+)\]\s*,\s*(\w+)\s*\(\s*([^\)]+)\s*\)\s*,\s*(\w+)\s*\(\s*([^\)]+)\s*\)\s*\)\s*$/);
+  if (!match) return null;
+
+  const fieldCodes = match[1]!.split(',').map((s) => s.trim()).filter(Boolean);
+  const triggerOp = match[2]!.toUpperCase();
+  const triggerVal = match[3]!.trim();
+  const forbidOp = match[4]!.toUpperCase();
+  const forbidVal = match[5]!.trim();
+
+  if (!CC_TRIGGER_OPS.has(triggerOp)) {
+    console.warn(`[indicatorValidator] CC: unsupported trigger op "${triggerOp}"`);
+    return null;
+  }
+  if (!CC_FORBID_OPS.has(forbidOp)) {
+    console.warn(`[indicatorValidator] CC: unsupported forbid op "${forbidOp}"`);
+    return null;
+  }
+
+  return { type: 'CC', fieldCodes, triggerOp, triggerVal, forbidOp, forbidVal };
+}
+
 /**
  * 验证单条规则（导出供外部直接调用）
  */
@@ -766,6 +807,13 @@ function parseFormulaSide(side: string, entryNumber: number = 1): FormulaItem[] 
   }
 
   return fallbackItems;
+}
+
+export function buildLogicRuleMsgForSingleRule(
+  rule: { ruleName: string },
+): string {
+  if (rule.ruleName) return rule.ruleName;
+  return '校验失败';
 }
 
 export default {

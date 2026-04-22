@@ -99,6 +99,7 @@ import {
 // 工具函数
 import { parseOptions } from './utils/options';
 import { formatLastValueNumber, parseInputTypeLastPeriodRaw } from './utils/lastValue';
+import { parseCC } from '#/utils/indicatorValidator';
 
 // 输入型选项
 import {
@@ -125,6 +126,7 @@ import {
   validateLogicRuleForBlur,
   validateSingleContainerLogicRule,
   clearContainerLogicRuleErrors,
+  validateContainerConstraint,
 } from './composables/useLogicRules';
 
 // 上期对比规则
@@ -405,6 +407,19 @@ function onContainerFieldChange(indicator: DeclareIndicatorApi.Indicator, entry:
       setFieldError(step2.fieldKey, step2.errMsg, 'logic', false);
       return;
     }
+
+    // ==================== 第2.5级：CC 容器级联互斥约束校验 ====================
+    if (indicator.logicRule) {
+      const ccRule = parseCC(indicator.logicRule);
+      if (ccRule) {
+        const ccErrors = validateContainerConstraint(ccRule, entry, entryKey);
+        if (ccErrors.length > 0) {
+          setFieldError(ccErrors[0]!.fieldKey, ccErrors[0]!.errMsg, 'logic', false);
+          return;
+        }
+      }
+    }
+
     // 逻辑验证通过 → 清除该行逻辑错误
     clearContainerLogicRuleErrors(indicator, clearFieldError);
 

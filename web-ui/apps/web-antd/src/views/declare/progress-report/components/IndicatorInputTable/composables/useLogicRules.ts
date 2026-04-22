@@ -8,7 +8,7 @@
  */
 
 import type { DeclareIndicatorApi } from '#/api/declare/indicator';
-import { validate as validateJointRule, parseLogicRule, parseContainerFieldShortcut, isContainerFieldShortcut } from '#/utils/indicatorValidator';
+import { validate as validateJointRule, parseLogicRule, parseContainerFieldShortcut, isContainerFieldShortcut, buildLogicRuleMsgForSingleRule } from '#/utils/indicatorValidator';
 import { isEmpty } from '../utils/validators';
 import type { ValidationError, FieldError } from '../types';
 import { formValues } from './useFormValues';
@@ -411,13 +411,13 @@ function validateLogicRules(
 
         if (results.length === 0) continue;
 
-        const errMsg = buildLogicRuleMsg(indicator.logicRule, allIndicators, entryValueMap,
-          containerType === 'conditional' ? 1 : entryNum, indicator);
+        // 只处理第一个失败的 IF，修复后再处理下一个
+        const firstFailed = results[0]!;
 
-        // 提取 fieldCode
+        // 根据 firstFailed 的 involvedIndicatorCodes 确定是哪个字段报错
         let fieldCode = '';
-        if (results[0]?.involvedIndicatorCodes?.length) {
-          const involvedCode = results[0].involvedIndicatorCodes.find((c) =>
+        if (firstFailed.involvedIndicatorCodes?.length) {
+          const involvedCode = firstFailed.involvedIndicatorCodes.find((c) =>
             c.startsWith(indicator.indicatorCode)
           );
           if (involvedCode) {
@@ -450,6 +450,7 @@ function validateLogicRules(
           : `${entryKey}${finalFieldCode}`;
         // =============================================
 
+        const errMsg = buildLogicRuleMsgForSingleRule(firstFailed);
         const errMsgWithKey = `「${fullKey}」：${errMsg}`;
         setFieldError(fullKey, errMsgWithKey, 'logic', false);
 
@@ -461,6 +462,8 @@ function validateLogicRules(
           indicatorName: indicator.indicatorName,
           containerFieldKey: fullKey,
         });
+
+        break; // 只报第一个，修复后再报下一个
       }
     } else {
       const rules = parseLogicRule(indicator.logicRule, 1);
@@ -475,7 +478,9 @@ function validateLogicRules(
         }
         continue;
       }
-      const errMsg = buildLogicRuleMsg(indicator.logicRule, allIndicators, codeValueMap);
+      // 只处理第一个失败的 IF，修复后再处理下一个
+      const firstFailed = results[0]!;
+      const errMsg = buildLogicRuleMsgForSingleRule(firstFailed);
       if (indicator.id !== undefined) setFieldError(`t:${indicator.id}`, errMsg, 'logic', false);
       errors.push({ indicatorId: indicator.id, indicatorCode: indicator.indicatorCode, message: errMsg, errorType: 'logic', indicatorName: indicator.indicatorName });
     }
@@ -676,12 +681,14 @@ function validateFilledLogicRules(
         const results = validateJointRule(rules as any, entryValueMap, { triggerTiming: 'FILL' });
 
         if (results.length > 0) {
-          const errMsg = buildLogicRuleMsg(indicator.logicRule, indicatorsToValidate, entryValueMap, entryNum, indicator);
+          // 只处理第一个失败的 IF，修复后再处理下一个
+          const firstFailed = results[0]!;
+          const errMsg = buildLogicRuleMsgForSingleRule(firstFailed);
           const entryKey = `${indicator.indicatorCode}${String(entryNum).padStart(2, '0')}`;
 
           let fieldCode = '';
-          if (results[0]?.involvedIndicatorCodes?.length) {
-            const involvedCode = results[0].involvedIndicatorCodes.find((c) =>
+          if (firstFailed.involvedIndicatorCodes?.length) {
+            const involvedCode = firstFailed.involvedIndicatorCodes.find((c) =>
               c.startsWith(indicator.indicatorCode)
             );
             if (involvedCode) {
@@ -694,7 +701,6 @@ function validateFilledLogicRules(
           }
 
           const containerFieldKey = fieldCode ? toContainerKey(entryKey, fieldCode) : entryKey;
-          // key 格式与 validateContainerFieldOnBlur / getContainerFieldError 保持一致（无前缀）
           const fullKey = containerFieldKey;
           const errMsgWithKey = `「${containerFieldKey}」：${errMsg}`;
           setFieldError(fullKey, errMsgWithKey, 'logic', false);
@@ -707,6 +713,8 @@ function validateFilledLogicRules(
             indicatorName: indicator.indicatorName,
             containerFieldKey,
           });
+
+          break; // 只报第一个，修复后再报下一个
         }
       }
     } else {
@@ -730,7 +738,9 @@ function validateFilledLogicRules(
       const results = validateJointRule(rules as any, codeValueMap, { triggerTiming: 'FILL' });
 
       if (results.length > 0) {
-        const errMsg = buildLogicRuleMsg(indicator.logicRule, indicatorsToValidate, codeValueMap);
+        // 只处理第一个失败的 IF，修复后再处理下一个
+        const firstFailed = results[0]!;
+        const errMsg = buildLogicRuleMsgForSingleRule(firstFailed);
         errors.push({
           indicatorId: indicator.id,
           indicatorCode: indicator.indicatorCode,
@@ -801,6 +811,82 @@ function validateSingleContainerLogicRule(
   return { fieldKey, errMsg };
 }
 
+// ==================== 容器级联互斥约束校验 ====================
+
+/**
+ * 校验容器级联互斥约束
+ *
+ * 公式：CC([01,02,03,04,05,06], FIRST_EQ(2), REST_NE(1))
+ * 语义：完整扫描字段列表，找到第一个满足 triggerOp(triggerVal) 的字段，
+ *       约束其之后所有字段不能选 forbidVal。
+ *
+ * @param rule  解析后的 CC 规则
+ * @param entry 条目数据
+ * @param entryKey 条目 rowKey
+ * @returns 违规字段的错误列表
+ */
+function validateContainerConstraint(
+  rule: { fieldCodes: string[]; triggerOp: string; triggerVal: string; forbidOp: string; forbidVal: string },
+  entry: any,
+  entryKey: string,
+): { fieldKey: string; errMsg: string }[] {
+  const { fieldCodes, triggerOp, triggerVal, forbidOp, forbidVal } = rule;
+  const errors: { fieldKey: string; errMsg: string }[] = [];
+
+  /** 判断单个字段值是否满足触发条件 */
+  const matchesTrigger = (val: any): boolean => {
+    const s = String(val ?? '');
+    switch (triggerOp) {
+      case 'FIRST_EQ': case 'LAST_EQ': return s === triggerVal;
+      case 'FIRST_GT': return !isNaN(Number(val)) && Number(val) > Number(triggerVal);
+      case 'FIRST_GTE': return !isNaN(Number(val)) && Number(val) >= Number(triggerVal);
+      case 'FIRST_LT': return !isNaN(Number(val)) && Number(val) < Number(triggerVal);
+      case 'FIRST_LTE': return !isNaN(Number(val)) && Number(val) <= Number(triggerVal);
+      case 'FIRST_IN': case 'LAST_IN': return triggerVal.split(',').map((v) => v.trim()).includes(s);
+      default: return false;
+    }
+  };
+
+  /** 判断单个字段值是否违反约束条件 */
+  const violatesForbid = (val: any): boolean => {
+    const s = String(val ?? '');
+    switch (forbidOp) {
+      case 'REST_EQ': return s === forbidVal;
+      case 'REST_NE': return s === forbidVal;
+      default: return false;
+    }
+  };
+
+  // 找触发字段索引（FIRST_* 从前扫，LAST_* 从后扫）
+  let triggerIdx = -1;
+  if (triggerOp.startsWith('FIRST_')) {
+    for (let i = 0; i < fieldCodes.length; i++) {
+      if (matchesTrigger(entry[`${entryKey}${fieldCodes[i]}`])) { triggerIdx = i; break; }
+    }
+  } else {
+    for (let i = fieldCodes.length - 1; i >= 0; i--) {
+      if (matchesTrigger(entry[`${entryKey}${fieldCodes[i]}`])) { triggerIdx = i; break; }
+    }
+  }
+
+  if (triggerIdx === -1) return []; // 无触发 → 通过
+
+  // 检查触发字段之后的字段
+  for (let i = triggerIdx + 1; i < fieldCodes.length; i++) {
+    const code = fieldCodes[i]!;
+    const key = `${entryKey}${code}`;
+    if (violatesForbid(entry[key])) {
+      const triggerCode = fieldCodes[triggerIdx]!;
+      errors.push({
+        fieldKey: key,
+        errMsg: `「${triggerCode}」选择了「${triggerVal}」，「${code}」不能选择「${forbidVal}」`,
+      });
+    }
+  }
+
+  return errors;
+}
+
 // ==================== 导出 ====================
 
 export {
@@ -813,4 +899,5 @@ export {
   validateLogicRules,
   validateLogicRuleForBlur,
   validateFilledLogicRules,
+  validateContainerConstraint,
 };

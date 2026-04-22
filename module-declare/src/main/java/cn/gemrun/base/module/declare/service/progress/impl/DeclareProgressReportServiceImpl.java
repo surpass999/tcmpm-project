@@ -486,6 +486,12 @@ public class DeclareProgressReportServiceImpl implements DeclareProgressReportSe
         String processInstanceId = processInstanceApi.createProcessInstance(
                 SecurityFrameworkUtils.getLoginUserId(), createReqDTO);
 
+        // 前置校验：审核人不能与填报人相同
+        if (StrUtil.isNotBlank(auditUserName) && StrUtil.isNotBlank(report.getReportUserName())
+                && auditUserName.trim().equals(report.getReportUserName().trim())) {
+            throw new RuntimeException("审核人不能与填报人相同");
+        }
+
         // 保存审核人姓名
         if (StrUtil.isNotBlank(auditUserName)) {
             report.setAuditUserName(auditUserName);
