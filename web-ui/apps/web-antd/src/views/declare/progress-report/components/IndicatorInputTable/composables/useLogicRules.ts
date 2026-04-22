@@ -8,7 +8,7 @@
  */
 
 import type { DeclareIndicatorApi } from '#/api/declare/indicator';
-import { validate as validateJointRule, parseLogicRule, parseContainerFieldShortcut, isContainerFieldShortcut, buildLogicRuleMsgForSingleRule } from '#/utils/indicatorValidator';
+import { validate as validateJointRule, parseLogicRule, parseContainerFieldShortcut, isContainerFieldShortcut, buildLogicRuleMsgForSingleRule, parseFORMATS } from '#/utils/indicatorValidator';
 import { isEmpty } from '../utils/validators';
 import type { ValidationError, FieldError } from '../types';
 import { formValues } from './useFormValues';
@@ -379,6 +379,58 @@ function validateLogicRules(
   for (const indicator of allIndicators) {
     if (!indicator.logicRule?.trim()) continue;
 
+    // 2. 新增：FORMATS 文件格式多样性验证
+    const formatsRule = parseFORMATS(indicator.logicRule);
+    if (formatsRule) {
+      let fileList: { name: string }[] = [];
+      const rawValue = formValues[indicator.indicatorCode];
+      if (rawValue) {
+        try {
+          fileList = JSON.parse(rawValue);
+        } catch { /* ignore */ }
+      }
+
+      const extToGroup: Record<string, string> = {};
+      for (const [groupName, extensions] of Object.entries(formatsRule.typeGroups)) {
+        for (const ext of extensions) {
+          extToGroup[ext.toLowerCase()] = groupName.toLowerCase();
+        }
+      }
+
+      const uploadedGroups = new Set<string>();
+      for (const file of fileList) {
+        const ext = file.name?.split('.').pop()?.toLowerCase() || '';
+        if (extToGroup[ext]) {
+          uploadedGroups.add(extToGroup[ext]);
+        } else if (Object.keys(formatsRule.typeGroups).length === 0) {
+          uploadedGroups.add(ext);
+        }
+      }
+
+      const missing = formatsRule.requiredFormats
+        .map((f) => f.toLowerCase())
+        .filter((f) => !uploadedGroups.has(f));
+
+      if (missing.length > 0) {
+        const errMsg = `${indicator.indicatorName}：必须包含以下格式的文件：${missing.join('、')}`;
+        if (indicator.id !== undefined) {
+          setFieldError(`t:${indicator.id}`, errMsg, 'logic', false);
+        }
+        errors.push({
+          indicatorId: indicator.id,
+          indicatorCode: indicator.indicatorCode,
+          message: errMsg,
+          errorType: 'logic',
+          indicatorName: indicator.indicatorName,
+        });
+      } else {
+        if (indicator.id !== undefined) {
+          clearFieldError(`t:${indicator.id}`);
+        }
+      }
+      continue; // FORMATS 规则已处理，跳过后续的 joint rule 解析
+    }
+
     // 检查联动状态：隐藏的指标不验证
     if (!isIndicatorVisible(indicator.indicatorCode)) {
       continue;
@@ -548,9 +600,61 @@ function validateLogicRuleForBlur(
       }
     }
 
-    if (!involvesChanged) continue;
+    if (!involvesChanged) {
+      // FORMATS 规则特殊处理：检查 changedCode 是否就是本指标的 indicatorCode
+      if (changedCode !== indicator.indicatorCode) continue;
+      // changedCode === indicatorCode，说明本指标就是文件上传指标，需要重新验证 FORMATS
+    }
 
     if (indicator.id !== undefined) setDirty(`t:${indicator.id}`);
+
+    // FORMATS 规则：直接验证，不需要走 joint rule 引擎
+    const formatsRule = parseFORMATS(indicator.logicRule);
+    if (formatsRule) {
+      let fileList: { name: string }[] = [];
+      const rawValue = formValues[indicator.indicatorCode];
+      if (rawValue) {
+        try {
+          fileList = JSON.parse(rawValue);
+        } catch { /* ignore */ }
+      }
+
+      // 空文件列表时跳过验证（不报错，等用户上传）
+      if (fileList.length === 0) {
+        // 清除之前的错误
+        if (indicator.id !== undefined) clearFieldError(`t:${indicator.id}`);
+        continue;
+      }
+
+      const extToGroup: Record<string, string> = {};
+      for (const [groupName, extensions] of Object.entries(formatsRule.typeGroups)) {
+        for (const ext of extensions) {
+          extToGroup[ext.toLowerCase()] = groupName.toLowerCase();
+        }
+      }
+
+      const uploadedGroups = new Set<string>();
+      for (const file of fileList) {
+        const ext = file.name?.split('.').pop()?.toLowerCase() || '';
+        if (extToGroup[ext]) {
+          uploadedGroups.add(extToGroup[ext]);
+        } else if (Object.keys(formatsRule.typeGroups).length === 0) {
+          uploadedGroups.add(ext);
+        }
+      }
+
+      const missing = formatsRule.requiredFormats
+        .map((f) => f.toLowerCase())
+        .filter((f) => !uploadedGroups.has(f));
+
+      if (missing.length > 0) {
+        const errMsg = `${indicator.indicatorName}：必须包含以下格式的文件：${missing.join('、')}`;
+        if (indicator.id !== undefined) setFieldError(`t:${indicator.id}`, errMsg, 'logic', false);
+      } else {
+        if (indicator.id !== undefined) clearFieldError(`t:${indicator.id}`);
+      }
+      continue;
+    }
 
     const containerType = getContainerType(indicator.valueOptions);
 
@@ -666,6 +770,56 @@ function validateFilledLogicRules(
 
     // 检查联动状态：隐藏的指标不验证
     if (!isIndicatorVisible(indicator.indicatorCode)) {
+      continue;
+    }
+
+    // FORMATS 文件格式多样性验证
+    const formatsRule = parseFORMATS(indicator.logicRule);
+    if (formatsRule) {
+      let fileList: { name: string }[] = [];
+      const rawValue = formValues[indicator.indicatorCode];
+      if (rawValue) {
+        try {
+          fileList = JSON.parse(rawValue);
+        } catch { /* ignore */ }
+      }
+
+      if (fileList.length === 0) continue; // 空文件不报错
+
+      const extToGroup: Record<string, string> = {};
+      for (const [groupName, extensions] of Object.entries(formatsRule.typeGroups)) {
+        for (const ext of extensions) {
+          extToGroup[ext.toLowerCase()] = groupName.toLowerCase();
+        }
+      }
+
+      const uploadedGroups = new Set<string>();
+      for (const file of fileList) {
+        const ext = file.name?.split('.').pop()?.toLowerCase() || '';
+        if (extToGroup[ext]) {
+          uploadedGroups.add(extToGroup[ext]);
+        } else if (Object.keys(formatsRule.typeGroups).length === 0) {
+          uploadedGroups.add(ext);
+        }
+      }
+
+      const missing = formatsRule.requiredFormats
+        .map((f) => f.toLowerCase())
+        .filter((f) => !uploadedGroups.has(f));
+
+      if (missing.length > 0) {
+        const errMsg = `${indicator.indicatorName}：必须包含以下格式的文件：${missing.join('、')}`;
+        errors.push({
+          indicatorId: indicator.id,
+          indicatorCode: indicator.indicatorCode,
+          message: errMsg,
+          errorType: 'logic',
+          indicatorName: indicator.indicatorName,
+        });
+        if (indicator.id !== undefined) setFieldError(`t:${indicator.id}`, errMsg, 'logic', false);
+      } else {
+        if (indicator.id !== undefined) clearFieldError(`t:${indicator.id}`);
+      }
       continue;
     }
 

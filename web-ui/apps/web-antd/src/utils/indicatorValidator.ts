@@ -816,6 +816,60 @@ export function buildLogicRuleMsgForSingleRule(
   return '校验失败';
 }
 
+// ==================== FORMATS 规则 ====================
+
+/** FORMATS 规则解析结果 */
+export interface FORMATSRule {
+  type: 'FORMATS';
+  /** typeGroups 映射：格式类别名 → 扩展名数组 */
+  typeGroups: Record<string, string[]>;
+  /** 必须包含的格式类别列表 */
+  requiredFormats: string[];
+}
+
+/**
+ * 解析 FORMATS 公式
+ * 格式: FORMATS(["word","pdf"])
+ *
+ * 完整示例（包含 typeGroups）：
+ * FORMATS(["word","pdf"], {word:["doc","docx"], pdf:["pdf"]})
+ *
+ * 简化示例（只指定类别名，扩展名在 typeGroups 中配置）：
+ * FORMATS(["word","pdf"])
+ */
+export function parseFORMATS(logicRule: string): FORMATSRule | null {
+  const rule = logicRule.trim();
+
+  // 完整格式: FORMATS(["word","pdf"], {word:["doc","docx"], pdf:["pdf"]})
+  const fullMatch = rule.match(
+    /^FORMATS\s*\(\s*\[([^\]]+)\]\s*(?:,\s*(\{[^}]+\}))?\s*\)\s*$/i,
+  );
+  if (!fullMatch) return null;
+
+  // 解析格式类别数组
+  const formatsStr = fullMatch[1]!;
+  const requiredFormats = formatsStr
+    .split(',')
+    .map((f) => f.trim().replace(/['"]/g, '').toLowerCase())
+    .filter(Boolean);
+
+  // 解析 typeGroups（如果有）
+  let typeGroups: Record<string, string[]> = {};
+  const typeGroupsStr = fullMatch[2];
+  if (typeGroupsStr) {
+    try {
+      // 将 JS 对象字面量的 key 引号补全（{word:[...]} → {"word":[...]}）
+      typeGroups = JSON.parse(
+        typeGroupsStr.replace(/([{,]\s*)(\w+)\s*:/g, '$1"$2":'),
+      );
+    } catch {
+      typeGroups = {};
+    }
+  }
+
+  return { type: 'FORMATS', typeGroups, requiredFormats };
+}
+
 export default {
   validate,
   calculateFormula,
