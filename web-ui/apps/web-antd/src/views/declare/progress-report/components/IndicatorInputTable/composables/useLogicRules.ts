@@ -10,7 +10,7 @@
 import type { DeclareIndicatorApi } from '#/api/declare/indicator';
 import { validate as validateJointRule, parseLogicRule, parseContainerFieldShortcut, isContainerFieldShortcut, buildLogicRuleMsgForSingleRule, parseFORMATS } from '#/utils/indicatorValidator';
 import { isEmpty } from '../utils/validators';
-import type { ValidationError, FieldError } from '../types';
+import type { ValidationError, FieldError, DynamicField } from '../types';
 import { formValues } from './useFormValues';
 import { containerValues, isEntryBasedContainer, getContainerEntryCount } from './useContainerValues';
 import { parseDynamicFields, generateContainerFieldKey, getContainerType } from '../utils/container';
@@ -970,24 +970,42 @@ function validateSingleContainerLogicRule(
 /**
  * 校验容器级联互斥约束
  *
- * 公式：CC([01,02,03,04,05,06], FIRST_EQ(2), REST_NE(1))
+ * 公式：CC([602_07,602_06,602_05,602_04,602_03], LAST_EQ(2), REST_NE(1))
  * 语义：完整扫描字段列表，找到第一个满足 triggerOp(triggerVal) 的字段，
  *       约束其之后所有字段不能选 forbidVal。
  *
- * @param rule  解析后的 CC 规则
+ * @param rule  解析后的 CC 规则（fieldCodes 已是展开后的完整 key，如 6020107）
  * @param entry 条目数据
- * @param entryKey 条目 rowKey
+ * @param indicator 指标配置，用于获取字段选项以展示友好文字
  * @returns 违规字段的错误列表
  */
 function validateContainerConstraint(
-  rule: { fieldCodes: string[]; triggerOp: string; triggerVal: string; forbidOp: string; forbidVal: string },
+  rule: { fieldCodes: string[]; originalFieldCodes: string[]; triggerOp: string; triggerVal: string; forbidOp: string; forbidVal: string },
   entry: any,
-  entryKey: string,
-  containerType?: string,
+  indicator: DeclareIndicatorApi.Indicator,
 ): { fieldKey: string; errMsg: string }[] {
-  const { fieldCodes, triggerOp, triggerVal, forbidOp, forbidVal } = rule;
+  const { fieldCodes, originalFieldCodes, triggerOp, triggerVal, forbidOp, forbidVal } = rule;
   const errors: { fieldKey: string; errMsg: string }[] = [];
-  const isConditional = containerType === 'conditional';
+
+  // 构建 fieldCode（两位，如 07）→ DynamicField 映射，用于查找选项 label
+  const fields = parseDynamicFields(indicator.valueOptions);
+  const fieldMap: Record<string, DynamicField> = {};
+  for (const f of fields) {
+    fieldMap[f.fieldCode] = f;
+  }
+
+  /**
+   * 将字段值转换为友好显示文字
+   * 单选/下拉类字段：返回 options 中的 label；其他类型：返回原始值
+   */
+  const formatFieldValue = (fieldCode: string, val: any): string => {
+    const field = fieldMap[fieldCode];
+    if (field?.options && Array.isArray(field.options)) {
+      const found = field.options.find((o: { value: string; label: string }) => String(o.value) === String(val ?? ''));
+      if (found) return found.label;
+    }
+    return String(val ?? '');
+  };
 
   /** 判断单个字段值是否满足触发条件 */
   const matchesTrigger = (val: any): boolean => {
@@ -1014,14 +1032,15 @@ function validateContainerConstraint(
   };
 
   // 找触发字段索引（FIRST_* 从前扫，LAST_* 从后扫）
+  // fieldCodes 已是展开后的完整 key（如 6020107），直接用 fieldCodes[i] 访问 entry
   let triggerIdx = -1;
   if (triggerOp.startsWith('FIRST_')) {
     for (let i = 0; i < fieldCodes.length; i++) {
-      if (matchesTrigger(entry[`${entryKey}${fieldCodes[i]}`])) { triggerIdx = i; break; }
+      if (matchesTrigger(entry[fieldCodes[i]!])) { triggerIdx = i; break; }
     }
   } else {
     for (let i = fieldCodes.length - 1; i >= 0; i--) {
-      if (matchesTrigger(entry[`${entryKey}${fieldCodes[i]}`])) { triggerIdx = i; break; }
+      if (matchesTrigger(entry[fieldCodes[i]!])) { triggerIdx = i; break; }
     }
   }
 
@@ -1030,13 +1049,19 @@ function validateContainerConstraint(
   // 检查触发字段之后的字段
   for (let i = triggerIdx + 1; i < fieldCodes.length; i++) {
     const code = fieldCodes[i]!;
-    const key = `${entryKey}${code}`;
-    if (violatesForbid(entry[key])) {
-      const triggerCode = fieldCodes[triggerIdx]!;
-      const fieldKey = isConditional ? code : key;
+    const originalCode = originalFieldCodes[i]!;
+    if (violatesForbid(entry[code])) {
+      const triggerFieldCode = fieldCodes[triggerIdx]!.slice(-2);
+      const forbidFieldCode = code.slice(-2);
+      const triggerFieldLabel = fieldMap[triggerFieldCode]?.fieldLabel ?? originalFieldCodes[triggerIdx]!;
+      const forbidFieldLabel = fieldMap[forbidFieldCode]?.fieldLabel ?? originalCode;
+      // 获取选项文字
+      const triggerValueLabel = formatFieldValue(triggerFieldCode, triggerVal);
+      const forbidValueLabel = formatFieldValue(forbidFieldCode, forbidVal);
+      const fieldKey = code;
       errors.push({
         fieldKey,
-        errMsg: `「${triggerCode}」选择了「${triggerVal}」，「${code}」不能选择「${forbidVal}」`,
+        errMsg: `「${triggerFieldLabel}」选择了「${triggerValueLabel}」，「${forbidFieldLabel}」不能选择「${forbidValueLabel}」`,
       });
     }
   }

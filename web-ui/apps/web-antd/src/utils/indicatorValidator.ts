@@ -529,7 +529,10 @@ function compareValues(current: any, operator: string, target: any): boolean {
 // CC 规则解析结果（不走 joint rule 引擎）
 export interface CCRule {
   type: 'CC';
+  /** 展开后的完整字段 key，如 6020107 */
   fieldCodes: string[];
+  /** 原始字段引用，用于错误消息友好显示，如 602_07 */
+  originalFieldCodes: string[];
   triggerOp: string;
   triggerVal: string;
   forbidOp: string;
@@ -542,14 +545,20 @@ const CC_FORBID_OPS = new Set(['REST_EQ', 'REST_NE']);
 
 /**
  * 解析 CC 公式
- * 格式: CC([01,02,03], FIRST_EQ(2), REST_NE(1))
+ * 格式: CC([602_07,602_06,602_05], FIRST_EQ(2), REST_NE(1))
+ * 字段支持容器简写格式（如 602_07），通过 parseContainerFieldShortcut 展开为完整 key（如 6020107）
+ *
+ * @param logicRule CC 公式字符串
+ * @param entryNumber 条目编号（从1开始），用于展开容器字段简写格式
  */
-export function parseCC(logicRule: string): CCRule | null {
+export function parseCC(logicRule: string, entryNumber: number = 1): CCRule | null {
   const rule = logicRule.trim();
-  const match = rule.match(/^CC\s*\(\s*\[([^\]]+)\]\s*,\s*(\w+)\s*\(\s*([^\)]+)\s*\)\s*,\s*(\w+)\s*\(\s*([^\)]+)\s*\)\s*\)\s*$/);
+  const match = rule.match(
+    /^CC\s*\(\s*\[([^\]]+)\]\s*,\s*(\w+)\s*\(\s*([^\)]+)\s*\)\s*,\s*(\w+)\s*\(\s*([^\)]+)\s*\)\s*\)\s*$/i,
+  );
   if (!match) return null;
 
-  const fieldCodes = match[1]!.split(',').map((s) => s.trim()).filter(Boolean);
+  const rawFieldCodes = match[1]!.split(',').map((s) => s.trim()).filter(Boolean);
   const triggerOp = match[2]!.toUpperCase();
   const triggerVal = match[3]!.trim();
   const forbidOp = match[4]!.toUpperCase();
@@ -564,7 +573,31 @@ export function parseCC(logicRule: string): CCRule | null {
     return null;
   }
 
-  return { type: 'CC', fieldCodes, triggerOp, triggerVal, forbidOp, forbidVal };
+  // 展开容器字段简写格式（如 602_07 → 6020107），与 IF 规则保持一致
+  const fieldCodes: string[] = [];
+  for (const raw of rawFieldCodes) {
+    if (isContainerFieldShortcut(raw)) {
+      const expanded = parseContainerFieldShortcut(raw, entryNumber);
+      if (!expanded) {
+        console.warn(`[indicatorValidator] CC: failed to expand shortcut "${raw}"`);
+        fieldCodes.push(raw); // fallback：保留原值
+      } else {
+        fieldCodes.push(expanded);
+      }
+    } else {
+      fieldCodes.push(raw);
+    }
+  }
+
+  return {
+    type: 'CC',
+    fieldCodes,
+    originalFieldCodes: rawFieldCodes,
+    triggerOp,
+    triggerVal,
+    forbidOp,
+    forbidVal,
+  };
 }
 
 /**

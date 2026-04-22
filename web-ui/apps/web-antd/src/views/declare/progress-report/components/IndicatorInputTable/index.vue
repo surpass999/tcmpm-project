@@ -412,9 +412,9 @@ function onContainerFieldChange(indicator: DeclareIndicatorApi.Indicator, entry:
 
     // ==================== 第2.5级：CC 容器级联互斥约束校验 ====================
     if (indicator.logicRule) {
-      const ccRule = parseCC(indicator.logicRule);
+      const ccRule = parseCC(indicator.logicRule, entryNum);
       if (ccRule) {
-        const ccErrors = validateContainerConstraint(ccRule, entry, entryKey, containerType);
+        const ccErrors = validateContainerConstraint(ccRule, entry, indicator);
         if (ccErrors.length > 0) {
           setFieldError(ccErrors[0]!.fieldKey, ccErrors[0]!.errMsg, 'logic', false);
           return;
