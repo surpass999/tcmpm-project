@@ -87,6 +87,8 @@ export interface RuleConfigItem {
     indicatorId?: number;
     operator?: string;
     value?: number;
+    /** IN / NOT_IN 操作符对应的值列表，如 [1, 2, 3, 4, 5, 6] */
+    values?: number[];
   };
   action: RuleAction;
 }
@@ -255,6 +257,30 @@ function validateRule(
               conditionMet = !isNaN(condNum) && condNum !== (condition.value ?? 0);
             }
             break;
+          case 'IN': {
+            const targetValues = (condition as any).values as number[];
+            if (Array.isArray(condValue)) {
+              // 多选：数组中包含任意一个目标值就触发
+              conditionMet = condValue.some((v) => targetValues.includes(Number(v)));
+            } else {
+              // 单选/普通值：直接判断
+              conditionMet = targetValues.includes(Number(condValue));
+            }
+            break;
+          }
+          case 'NOT_IN': {
+            const targetValues = (condition as any).values as number[];
+            if (Array.isArray(condValue)) {
+              if (condValue.length === 0) {
+                conditionMet = false; // 空数组 → 跳过验证
+              } else {
+                conditionMet = !condValue.some((v) => targetValues.includes(Number(v)));
+              }
+            } else {
+              conditionMet = !targetValues.includes(Number(condValue));
+            }
+            break;
+          }
         }
 
         // 条件不满足时，跳过验证
@@ -510,6 +536,29 @@ export function validateSingleRule(
   return validateRule(rule, values, {});
 }
 
+/**
+ * 解析条件操作符字符串，返回操作符类型和值数组
+ * @param opStr 原始操作符字符串，如 "IN(1,2,3)"、"NOT_IN(1001)"、"=="
+ */
+function parseConditionOperator(opStr: string): {
+  operator: string;
+  values: number[] | null;
+  threshold: number;
+} {
+  const inMatch = opStr.match(/^(IN|NOT_IN)\(([^)]+)\)$/);
+  if (inMatch) {
+    const op = inMatch[1]!;
+    const values = inMatch[2]!.split(',').map((v) => Number(v.trim()));
+    return { operator: op, values, threshold: 0 };
+  }
+  // 简单比较符：==  !=  >  >=  <  <=
+  return {
+    operator: opStr,
+    values: null,
+    threshold: Number(opStr.match(/\d+(?:\.\d+)?$/)?.[0]) || 0,
+  };
+}
+
 /** 解析逻辑校验字符串，返回 engine 认识的 JointRule 格式
  * @param logicRule 逻辑规则字符串
  * @param entryNumber 条目编号（从1开始），用于解析容器字段简写格式（如 602_01）
@@ -519,20 +568,22 @@ export function parseLogicRule(logicRule: string, entryNumber: number = 1): Join
 
   const results: JointRule[] = [];
 
-  // 先检测是否有 IF 函数需要处理
   // 格式: IF([indicator] condOp condVal, [verify] verifyOp verifyVal, [verify] verifyOp verifyVal, ..., TRUE)
-  // 使用非贪婪匹配中间部分，然后按 ", [" 分割多个 verify 表达式
-  const ifMatches = [...logicRule.matchAll(/IF\s*\(\s*\[([^\]]+)\]\s*(==|!=|<=|>=|<|>)\s*(\d+(?:\.\d+)?)\s*,\s*(.+?)\s*,\s*TRUE\s*\)/gi)];
+  // 条件操作符支持：==, !=, >, >=, <, <=, IN(v1,v2,...), NOT_IN(v1,v2,...)
+  const ifRegex = /IF\s*\(\s*\[([^\]]+)\]\s*(IN\([^)]+\)|NOT_IN\([^)]+\)|==|!=|<=|>=|<|>)\s*,\s*(.+?)\s*,\s*TRUE\s*\)/gi;
+  const ifMatches = [...logicRule.matchAll(ifRegex)];
   // console.log('[indicatorValidator] IF regex matched count:', ifMatches.length, '| rule:', logicRule);
 
   if (ifMatches.length > 0) {
     // 处理 IF 函数
     for (const match of ifMatches) {
       const conditionIndicator = match[1]!;
-      const conditionOperator = match[2]!;  // ==, !=, >, >=, <, <=
-      const conditionThreshold = match[3]!;  // 条件阈值
-      // 解析多个 verify 表达式: 按 ", [" 分割，然后每个解析为 [indicator] op value
-      const verifyPart = match[4]!;
+      const rawConditionOp = match[2]!;
+      const verifyPart = match[3]!;
+
+      // 解析条件操作符：支持 IN(v1,v2,...) 和 NOT_IN(v1,v2,...)
+      const { operator: conditionOperator, values: conditionValues, threshold: conditionThreshold } = parseConditionOperator(rawConditionOp);
+
       const verifyExprs = verifyPart.split(/\s*,\s*(?=\[)/);
 
       // 展开容器简写格式（如 502_07 → 5020107）
@@ -561,22 +612,34 @@ export function parseLogicRule(logicRule: string, entryNumber: number = 1): Join
           compareValue: Number(verifyThreshold),
         };
 
+        // 构造 condition：增加 values 字段（仅 IN/NOT_IN 有值）
+        const condition: any = {
+          indicatorCode: conditionIndicatorExpanded,
+          operator: conditionOperator,
+        };
+        if (conditionValues !== null) {
+          condition.values = conditionValues;
+          condition.value = conditionThreshold; // IN/NOT_IN 时为 0
+        } else {
+          condition.value = Number(conditionThreshold);
+        }
+
+        const condLabel = conditionValues
+          ? `${conditionOperator}(${conditionValues.join(',')})`
+          : `${conditionOperator} ${conditionThreshold}`;
+
         results.push({
           id: results.length + 1,
-          ruleName: `[${conditionIndicatorExpanded}] ${conditionOperator} ${conditionThreshold} 时, ${expr.trim()}`,
+          ruleName: `[${conditionIndicatorExpanded}] ${condLabel} 时, ${expr.trim()}`,
           triggerTiming: 'FILL',
           status: 1,
           projectType: 0,
           ruleConfig: JSON.stringify({
             rules: [{
               id: 1,
-              condition: {
-                indicatorCode: conditionIndicatorExpanded,
-                operator: conditionOperator,
-                value: Number(conditionThreshold),
-              },
+              condition,
               action,
-              name: `[${conditionIndicatorExpanded}] ${conditionOperator} ${conditionThreshold} 时, ${expr.trim()}`,
+              name: `[${conditionIndicatorExpanded}] ${condLabel} 时, ${expr.trim()}`,
             }],
           }),
         });
