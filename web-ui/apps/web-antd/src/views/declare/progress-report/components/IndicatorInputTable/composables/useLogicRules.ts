@@ -250,24 +250,50 @@ function buildLogicRuleMsg(
   };
 
   // 支持多 verify 表达式的 IF 函数: IF([cond] op val, [v1] op1 v1, [v2] op2 v2, ..., TRUE)
-  const ifMultiMatch = logicRule.trim().match(/^IF\s*\(\s*\[([^\]]+)\]\s*(==|!=|<=|>=|<|>)\s*(\d+(?:\.\d+)?)\s*,\s*(.+)\s*,\s*TRUE\s*\)$/i);
+  // 条件操作符支持基本比较符和 IN()/NOT_IN()，验证操作符同样支持
+  const ifMultiMatch = logicRule.trim().match(
+    /^IF\s*\(\s*\[([^\]]+)\]\s*(==|!=|<=|>=|<|>|(NOT_IN|IN)\([^)]+\))\s*,\s*(.+)\s*,\s*TRUE\s*\)$/i
+  );
   if (ifMultiMatch) {
     const condCode = ifMultiMatch[1]!.trim();
     const condOp = ifMultiMatch[2]!;
-    const condVal = ifMultiMatch[3]!;
-    const verifyPart = ifMultiMatch[4]!;
-    const condOpText: Record<string, string> = { '==': '等于', '!=': '不等于', '>': '大于', '>=': '大于等于', '<': '小于', '<=': '小于等于' };
-    const opText: Record<string, string> = { '>=': '应大于等于', '<=': '应小于等于', '>': '应大于', '<': '应小于', '==': '应等于', '!=': '不应等于' };
+    // IN/NOT_IN 时值嵌在操作符字符串中，需要单独解析；基本比较符用第 4 组
+    let condVal = '';
+    let condValues: string[] = [];
+    const listOpMatch = condOp.match(/^(IN|NOT_IN)\(([^)]+)\)$/);
+    if (listOpMatch) {
+      condValues = listOpMatch[2]!.split(',').map(v => v.trim());
+      condVal = condValues.join(',');
+    } else {
+      condVal = ifMultiMatch[4] ?? '';
+    }
+    const verifyPart = ifMultiMatch[3]!;
+    const condOpText: Record<string, string> = {
+      '==': '等于', '!=': '不等于', '>': '大于', '>=': '大于等于', '<': '小于', '<=': '小于等于',
+      'IN': '在列表中', 'NOT_IN': '不在列表中',
+    };
+    const opText: Record<string, string> = {
+      '>=': '应大于等于', '<=': '应小于等于', '>': '应大于', '<': '应小于',
+      '==': '应等于', '!=': '不应等于',
+      'IN': '应为', 'NOT_IN': '不应为',
+    };
 
-    // 条件阈值也需要显示 label
     const { fieldLabel: condFieldLabel, thresholdText: condThresholdText } = getFieldAndThresholdText(condCode, condVal);
     const verifyExprs = verifyPart.split(/\s*,\s*(?=\[)/);
     const verifyMsgs = verifyExprs.map((expr) => {
-      const vm = expr.trim().match(/^\[([^\]]+)\]\s*(==|!=|<=|>=|<|>)\s*(\d+(?:\.\d+)?)$/);
+      const vm = expr.trim().match(
+        /^\[([^\]]+)\]\s*(==|!=|<=|>=|<|>|(NOT_IN|IN)\([^)]+\))$/
+      );
       if (!vm) return expr.trim();
       const fieldCode = vm[1]!.trim();
-      const { fieldLabel, thresholdText } = getFieldAndThresholdText(fieldCode, vm[3]!);
-      return `${fieldLabel} ${opText[vm[2]!] || vm[2]} ${thresholdText}`;
+      const rawVerifyOp = vm[2]!;
+      // 列表操作符的值嵌在括号中（如 NOT_IN(7)），需要单独解析
+      const listOpMatch = rawVerifyOp.match(/^(NOT_IN|IN)\(([^)]+)\)$/);
+      const thresholdText = listOpMatch
+        ? listOpMatch[2]!
+        : vm[3]!;
+      const { fieldLabel, thresholdText: thText } = getFieldAndThresholdText(fieldCode, thresholdText);
+      return `${fieldLabel} ${opText[rawVerifyOp] || rawVerifyOp} ${thText}`;
     });
 
     return `当 ${condFieldLabel} ${condOpText[condOp] || condOp} ${condThresholdText} 时, ${verifyMsgs.join('; ')}`;
@@ -577,7 +603,6 @@ function validateLogicRuleForBlur(
 
     // 检查联动状态：隐藏的指标不验证
     const visible = isIndicatorVisible(indicator.indicatorCode);
-    // console.log('[LogicRuleBlur] 检查指标:', indicator.indicatorCode, 'visible:', visible, 'logicRule:', indicator.logicRule?.slice(0, 100));
     if (!visible) {
       // console.log('[LogicRuleBlur] 跳过隐藏指标:', indicator.indicatorCode);
       continue;

@@ -232,8 +232,8 @@ const controlAreaClass = computed(() => ({
         <a-checkbox-group
           :model-value="getValue()"
           :disabled="disabled"
-          @update:model-value="updateValue"
-          @change="handleSelectChange"
+          @update:model-value="(v) => updateValue(v)"
+          @change="(v) => handleSelectChange(v)"
         >
           <a-checkbox
             v-for="opt in field.options"
@@ -254,8 +254,8 @@ const controlAreaClass = computed(() => ({
         :placeholder="`请选择${fieldLabel}`"
         :show-search="field.showSearch"
         allow-clear
-        @update:model-value="updateValue"
-        @change="handleSelectChange"
+        @update:model-value="(v) => updateValue(v)"
+        @change="(v) => handleSelectChange(v)"
       >
         <a-select-option
           v-for="opt in field.options"
@@ -275,8 +275,8 @@ const controlAreaClass = computed(() => ({
         :placeholder="`请选择${fieldLabel}`"
         mode="multiple"
         allow-clear
-        @update:model-value="updateValue"
-        @change="handleSelectChange"
+        @update:model-value="(v) => updateValue(v)"
+        @change="(v) => handleSelectChange(v)"
       >
         <a-select-option
           v-for="opt in field.options"

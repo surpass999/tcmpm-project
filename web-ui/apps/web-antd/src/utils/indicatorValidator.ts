@@ -322,7 +322,9 @@ function validateRule(
 
       // 获取被比较指标的值
       let compareValue: any;
-      if (action.compareType === 'fixed') {
+      if (Array.isArray((action as any).compareValues)) {
+        compareValue = (action as any).compareValues;
+      } else if (action.compareType === 'fixed') {
         compareValue = Number(action.compareValue);
       } else if (action.compareFormula && action.compareFormula.length > 0) {
         const compareFormulaResult = calculateFormula(action.compareFormula, values, idToCode);
@@ -519,6 +521,16 @@ function compareValues(current: any, operator: string, target: any): boolean {
     case '!=':
       result = current !== target;
       break;
+    case 'NOT_IN': {
+      const targetList: any[] = Array.isArray(target) ? target : [];
+      result = !targetList.includes(Number(current));
+      break;
+    }
+    case 'IN': {
+      const targetList: any[] = Array.isArray(target) ? target : [];
+      result = targetList.includes(Number(current));
+      break;
+    }
     default:
       result = true;
   }
@@ -646,7 +658,6 @@ export function parseLogicRule(logicRule: string, entryNumber: number = 1): Join
   // 条件操作符支持：==, !=, >, >=, <, <=, IN(v1,v2,...), NOT_IN(v1,v2,...)
   const ifRegex = /IF\s*\(\s*\[([^\]]+)\]\s*(IN\([^)]+\)|NOT_IN\([^)]+\)|==|!=|<=|>=|<|>)\s*,\s*(.+?)\s*,\s*TRUE\s*\)/gi;
   const ifMatches = [...logicRule.matchAll(ifRegex)];
-  // console.log('[indicatorValidator] IF regex matched count:', ifMatches.length, '| rule:', logicRule);
 
   if (ifMatches.length > 0) {
     // 处理 IF 函数
@@ -666,25 +677,39 @@ export function parseLogicRule(logicRule: string, entryNumber: number = 1): Join
         : conditionIndicator;
 
       for (const expr of verifyExprs) {
-        const verifyMatch = expr.trim().match(/^\[([^\]]+)\]\s*(==|!=|<=|>=|<|>)\s*(\d+(?:\.\d+)?)$/);
+        const verifyMatch = expr.trim().match(
+          /^\[([^\]]+)\]\s*(==|!=|<=|>=|<|>|(NOT_IN|IN)\([^)]+\))\s*(\d+(?:\.\d+)?)$/
+        );
         if (!verifyMatch) continue;
 
         const verifyIndicatorRaw = verifyMatch[1]!;
-        const verifyOperator = verifyMatch[2]!;
-        const verifyThreshold = verifyMatch[3]!;
+        const rawVerifyOperator = verifyMatch[2]!;
+        const verifyThreshold = verifyMatch[4]!;
 
         // 展开容器简写格式（如 502_07 → 5020107）
         const verifyIndicator = isContainerFieldShortcut(verifyIndicatorRaw)
           ? parseContainerFieldShortcut(verifyIndicatorRaw, entryNumber) || verifyIndicatorRaw
           : verifyIndicatorRaw;
 
+        const isListOp = /^(NOT_IN|IN)\([^)]+\)$/.test(rawVerifyOperator);
         const action: any = {
           type: 'formula',
-          operator: verifyOperator,
           formula: [{ valueType: 'indicator', indicatorCode: verifyIndicator, mathOp: '+' }],
-          compareType: 'fixed',
-          compareValue: Number(verifyThreshold),
         };
+        if (isListOp) {
+          const listValues = rawVerifyOperator
+            .match(/^(NOT_IN|IN)\(([^)]+)\)$/)?.[2]
+            ?.split(',')
+            .map(v => Number(v.trim())) ?? [];
+          action.operator = rawVerifyOperator.replace(/\(.*\)/, '');
+          action.compareValues = listValues;
+          action.compareType = 'fixed';
+          action.compareValue = 0;
+        } else {
+          action.operator = rawVerifyOperator;
+          action.compareType = 'fixed';
+          action.compareValue = Number(verifyThreshold);
+        }
 
         // 构造 condition：增加 values 字段（仅 IN/NOT_IN 有值）
         const condition: any = {

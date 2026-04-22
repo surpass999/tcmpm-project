@@ -1122,7 +1122,7 @@ function addHighlight(el: Element) {
                         v-if="opt.inputType && formValues[indicator.indicatorCode] === opt.value"
                         :value="inputTypeValues[indicator.indicatorCode + '_' + opt.value] || ''"
                         :disabled="isIndicatorDisabled(indicator.indicatorCode, readonly)"
-                        :placeholder="getInputTypeLastPeriodContent(lastPeriodRawValues, indicator.indicatorCode, opt.value) ? '上期：' + getInputTypeLastPeriodContent(lastPeriodRawValues, indicator.indicatorCode, opt.value) : '请输入补充内容'"
+                        :placeholder="getInputTypeLastPeriodContent(lastPeriodRawValues, indicator.indicatorCode, opt.value) ? '上期：' + getInputTypeLastPeriodContent(lastPeriodRawValues, indicator.indicatorCode, opt.value) : '如有多项用逗号隔开'"
                         style="display: inline-block; width: 200px; padding: 0px 0px 0px 4px; border-radius: 4px; vertical-align: middle;"
                         @input="(e: any) => { const v = e.target.value; inputTypeValues[indicator.indicatorCode + '_' + opt.value] = v; syncInputTypeContent(indicator, opt, v); }"
                         @blur.stop="(e: any) => { handleInputTypeBlur(indicator, opt, e.target.value); }"
@@ -1178,7 +1178,7 @@ function addHighlight(el: Element) {
                         v-if="getPureCheckboxValues(indicator.indicatorCode).includes(opt.value)"
                         :value="inputTypeValues[indicator.indicatorCode + '_' + opt.value] || ''"
                         :disabled="isIndicatorDisabled(indicator.indicatorCode, readonly)"
-                        :placeholder="getInputTypeLastPeriodContent(lastPeriodRawValues, indicator.indicatorCode, opt.value) ? '上期：' + getInputTypeLastPeriodContent(lastPeriodRawValues, indicator.indicatorCode, opt.value) : '请输入补充内容'"
+                        :placeholder="getInputTypeLastPeriodContent(lastPeriodRawValues, indicator.indicatorCode, opt.value) ? '上期：' + getInputTypeLastPeriodContent(lastPeriodRawValues, indicator.indicatorCode, opt.value) : '如有多项用逗号隔开'"
                         style="display: inline-block; width: 140px; padding: 0px 0px 0px 4px; border-radius: 4px; vertical-align: middle;"
                         @input="(e: any) => { const v = e.target.value; inputTypeValues[indicator.indicatorCode + '_' + opt.value] = v; syncInputTypeContent(indicator, opt, v); }"
                         @blur.stop="(e: any) => { handleInputTypeBlur(indicator, opt, e.target.value); }"
@@ -1277,8 +1277,8 @@ function addHighlight(el: Element) {
                         :entry-index="0"
                         :container-last-values="containerLastPeriodValues[indicator.indicatorCode]"
                         :container-field-error="getContainerFieldError(entry, indicator.indicatorCode, field.fieldCode)"
-                        @blur="() => onContainerFieldChange(indicator, entry, field)"
-                        @field-change="() => onContainerFieldBasicChange(indicator, entry, field)"
+@blur="() => onContainerFieldChange(indicator, entry, field)"
+@field-change="() => onContainerFieldBasicChange(indicator, entry, field)"
                       />
                     </div>
                   </div>
@@ -1308,8 +1308,8 @@ function addHighlight(el: Element) {
                         :entry-index="entryIdx"
                         :container-last-values="containerLastPeriodValues[indicator.indicatorCode]"
                         :container-field-error="getContainerFieldError(entry, indicator.indicatorCode, field.fieldCode)"
-                        @blur="() => onContainerFieldChange(indicator, entry, field)"
-                        @field-change="() => onContainerFieldBasicChange(indicator, entry, field)"
+@blur="() => onContainerFieldChange(indicator, entry, field)"
+@field-change="() => onContainerFieldBasicChange(indicator, entry, field)"
                       />
                     </div>
                   </div>
@@ -1354,8 +1354,8 @@ function addHighlight(el: Element) {
                         :entry-index="entryIdx"
                         :container-last-values="containerLastPeriodValues[indicator.indicatorCode]"
                         :container-field-error="getContainerFieldError(entry, indicator.indicatorCode, field.fieldCode)"
-                        @blur="() => onContainerFieldChange(indicator, entry, field)"
-                        @field-change="() => onContainerFieldBasicChange(indicator, entry, field)"
+@blur="() => onContainerFieldChange(indicator, entry, field)"
+@field-change="() => onContainerFieldBasicChange(indicator, entry, field)"
                       />
                     </div>
                   </div>
