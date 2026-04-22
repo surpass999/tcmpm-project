@@ -1018,7 +1018,7 @@ function validateContainerConstraint(
   for (const key of fieldCodes) {
     entrySnapshot[key] = (entry as any)[key];
   }
-  console.log('[CC] validateContainerConstraint called', { fieldCodes, triggerOp, triggerVal, entrySnapshot: JSON.stringify(entrySnapshot) });
+  // console.log('[CC] validateContainerConstraint called', { fieldCodes, triggerOp, triggerVal, entrySnapshot: JSON.stringify(entrySnapshot) });
   const fields = parseDynamicFields(indicator.valueOptions);
   const fieldMap: Record<string, DynamicField> = {};
   for (const f of fields) {
