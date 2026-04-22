@@ -401,7 +401,6 @@ function validateLogicRules(
   const errors: ValidationError[] = [];
   const codeValueMap: Record<string, any> = {};
   for (const ind of allIndicators) codeValueMap[ind.indicatorCode] = formValues[ind.indicatorCode];
-
   for (const indicator of allIndicators) {
     if (!indicator.logicRule?.trim()) continue;
 
@@ -410,11 +409,13 @@ function validateLogicRules(
     if (formatsRule) {
       let fileList: { name: string }[] = [];
       const rawValue = formValues[indicator.indicatorCode];
-      if (rawValue) {
+      if (rawValue && rawValue !== '[]' && rawValue !== '[ ]') {
         try {
-          fileList = JSON.parse(rawValue);
+          fileList = JSON.parse(rawValue as string);
         } catch { /* ignore */ }
       }
+
+      if (fileList.length === 0) continue; // 空文件由必填校验兜底
 
       const extToGroup: Record<string, string> = {};
       for (const [groupName, extensions] of Object.entries(formatsRule.typeGroups)) {
@@ -485,7 +486,7 @@ function validateLogicRules(
           ? buildEntryValueMapForConditional(indicator)
           : buildEntryValueMap(indicator, entryNum);
 
-        const results = validateJointRule(rules as any, entryValueMap, { triggerTiming: 'FILL' });
+        const results = validateJointRule(rules as any, entryValueMap, { triggerTiming: 'FILL', allIndicators });
 
         if (results.length === 0) continue;
 
@@ -528,7 +529,7 @@ function validateLogicRules(
           : `${entryKey}${finalFieldCode}`;
         // =============================================
 
-        const errMsg = buildLogicRuleMsgForSingleRule(firstFailed);
+        const errMsg = buildLogicRuleMsgForSingleRule(firstFailed.ruleConfig, firstFailed.ruleName ?? '', codeValueMap, undefined, allIndicators);
         const errMsgWithKey = `「${fullKey}」：${errMsg}`;
         setFieldError(fullKey, errMsgWithKey, 'logic', false);
 
@@ -546,7 +547,7 @@ function validateLogicRules(
     } else {
       const rules = parseLogicRule(indicator.logicRule, 1);
       if (rules.length === 0) continue;
-      const results = validateJointRule(rules as any, codeValueMap, { triggerTiming: 'FILL' });
+      const results = validateJointRule(rules as any, codeValueMap, { triggerTiming: 'FILL', allIndicators });
       if (results.length === 0) {
         if (indicator.id !== undefined) {
           // 不能清除必填错误
@@ -558,7 +559,7 @@ function validateLogicRules(
       }
       // 只处理第一个失败的 IF，修复后再处理下一个
       const firstFailed = results[0]!;
-      const errMsg = buildLogicRuleMsgForSingleRule(firstFailed);
+      const errMsg = buildLogicRuleMsgForSingleRule(firstFailed.ruleConfig, firstFailed.ruleName ?? '', codeValueMap, undefined, allIndicators);
       if (indicator.id !== undefined) setFieldError(`t:${indicator.id}`, errMsg, 'logic', false);
       errors.push({ indicatorId: indicator.id, indicatorCode: indicator.indicatorCode, message: errMsg, errorType: 'logic', indicatorName: indicator.indicatorName });
     }
@@ -638,9 +639,9 @@ function validateLogicRuleForBlur(
     if (formatsRule) {
       let fileList: { name: string }[] = [];
       const rawValue = formValues[indicator.indicatorCode];
-      if (rawValue) {
+      if (rawValue && rawValue !== '[]' && rawValue !== '[ ]') {
         try {
-          fileList = JSON.parse(rawValue);
+          fileList = JSON.parse(rawValue as string);
         } catch { /* ignore */ }
       }
 
@@ -708,7 +709,7 @@ function validateLogicRuleForBlur(
           ? buildEntryValueMapForConditional(indicator)
           : buildEntryValueMap(indicator, entryNum);
 
-        const results = validateJointRule(rules as any, entryValueMap, { triggerTiming: 'FILL' });
+        const results = validateJointRule(rules as any, entryValueMap, { triggerTiming: 'FILL', allIndicators });
 
         if (results.length > 0) {
           const involvedCodesRes = results[0]?.involvedIndicatorCodes || [];
@@ -762,9 +763,10 @@ function validateLogicRuleForBlur(
         return val !== undefined && val !== null && val !== '';
       });
 
-      const results = validateJointRule(rules as any, codeValueMap, { triggerTiming: 'FILL' });
+      const results = validateJointRule(rules as any, codeValueMap, { triggerTiming: 'FILL', allIndicators });
       if (results.length > 0) {
-        const errMsg = buildLogicRuleMsg(indicator.logicRule, allIndicators, codeValueMap);
+        // 优先使用 validateRule 返回的 message（已包含 label 解析），否则 fallback
+        const errMsg = results[0]?.message || buildLogicRuleMsg(indicator.logicRule, allIndicators, codeValueMap);
         if (indicator.id !== undefined) setFieldError(`t:${indicator.id}`, errMsg, 'logic', false);
       } else if (allRefFieldsFilled) {
         // 被引用字段全都有值，验证真正通过 → 清除逻辑错误
@@ -784,6 +786,7 @@ function validateLogicRuleForBlur(
  */
 function validateFilledLogicRules(
   indicatorsToValidate: DeclareIndicatorApi.Indicator[],
+  allIndicators: DeclareIndicatorApi.Indicator[],
   setFieldError: (key: string, message: string, type: FieldError['errorType'], dirty?: boolean) => void,
   clearFieldError: (key: string) => void,
 ): ValidationError[] {
@@ -803,9 +806,9 @@ function validateFilledLogicRules(
     if (formatsRule) {
       let fileList: { name: string }[] = [];
       const rawValue = formValues[indicator.indicatorCode];
-      if (rawValue) {
+      if (rawValue && rawValue !== '[]' && rawValue !== '[ ]') {
         try {
-          fileList = JSON.parse(rawValue);
+          fileList = JSON.parse(rawValue as string);
         } catch { /* ignore */ }
       }
 
@@ -857,12 +860,12 @@ function validateFilledLogicRules(
         if (rules.length === 0) continue;
 
         const entryValueMap = buildEntryValueMap(indicator, entryNum);
-        const results = validateJointRule(rules as any, entryValueMap, { triggerTiming: 'FILL' });
+        const results = validateJointRule(rules as any, entryValueMap, { triggerTiming: 'FILL', allIndicators });
 
         if (results.length > 0) {
           // 只处理第一个失败的 IF，修复后再处理下一个
           const firstFailed = results[0]!;
-          const errMsg = buildLogicRuleMsgForSingleRule(firstFailed);
+          const errMsg = buildLogicRuleMsgForSingleRule(firstFailed.ruleConfig, firstFailed.ruleName ?? '', entryValueMap, undefined, allIndicators);
           const entryKey = `${indicator.indicatorCode}${String(entryNum).padStart(2, '0')}`;
 
           let fieldCode = '';
@@ -914,12 +917,12 @@ function validateFilledLogicRules(
         continue;
       }
 
-      const results = validateJointRule(rules as any, codeValueMap, { triggerTiming: 'FILL' });
+      const results = validateJointRule(rules as any, codeValueMap, { triggerTiming: 'FILL', allIndicators });
 
       if (results.length > 0) {
         // 只处理第一个失败的 IF，修复后再处理下一个
         const firstFailed = results[0]!;
-        const errMsg = buildLogicRuleMsgForSingleRule(firstFailed);
+        const errMsg = buildLogicRuleMsgForSingleRule(firstFailed.ruleConfig, firstFailed.ruleName ?? '', codeValueMap, undefined, allIndicators);
         errors.push({
           indicatorId: indicator.id,
           indicatorCode: indicator.indicatorCode,
@@ -960,7 +963,7 @@ function validateSingleContainerLogicRule(
     ? buildEntryValueMapForConditional(indicator)
     : buildEntryValueMap(indicator, entryNum);
 
-  const results = validateJointRule(rules as any, entryValueMap, { triggerTiming: 'FILL' });
+  const results = validateJointRule(rules as any, entryValueMap, { triggerTiming: 'FILL', allIndicators });
   if (results.length === 0) return null;
 
   const errMsg = buildLogicRuleMsg(
@@ -1005,89 +1008,91 @@ function validateSingleContainerLogicRule(
  * @returns 违规字段的错误列表
  */
 function validateContainerConstraint(
-  rule: { fieldCodes: string[]; originalFieldCodes: string[]; triggerOp: string; triggerVal: string; forbidOp: string; forbidVal: string },
+  rule: { fieldCodes: string[]; originalFieldCodes: string[]; triggerOp: string; triggerVal: string },
   entry: any,
   indicator: DeclareIndicatorApi.Indicator,
 ): { fieldKey: string; errMsg: string }[] {
-  const { fieldCodes, originalFieldCodes, triggerOp, triggerVal, forbidOp, forbidVal } = rule;
+  const { fieldCodes, originalFieldCodes, triggerOp, triggerVal } = rule;
   const errors: { fieldKey: string; errMsg: string }[] = [];
-
-  // 构建 fieldCode（两位，如 07）→ DynamicField 映射，用于查找选项 label
+  const entrySnapshot: Record<string, any> = {};
+  for (const key of fieldCodes) {
+    entrySnapshot[key] = (entry as any)[key];
+  }
+  console.log('[CC] validateContainerConstraint called', { fieldCodes, triggerOp, triggerVal, entrySnapshot: JSON.stringify(entrySnapshot) });
   const fields = parseDynamicFields(indicator.valueOptions);
   const fieldMap: Record<string, DynamicField> = {};
   for (const f of fields) {
     fieldMap[f.fieldCode] = f;
   }
 
-  /**
-   * 将字段值转换为友好显示文字
-   * 单选/下拉类字段：返回 options 中的 label；其他类型：返回原始值
-   */
-  const formatFieldValue = (fieldCode: string, val: any): string => {
-    const field = fieldMap[fieldCode];
-    if (field?.options && Array.isArray(field.options)) {
-      const found = field.options.find((o: { value: string; label: string }) => String(o.value) === String(val ?? ''));
-      if (found) return found.label;
-    }
-    return String(val ?? '');
-  };
+  // 收集有效字段：过滤空值和多选题数组值，保持 CC 规则书写顺序
+  const validFields: { code: string; originalCode: string; value: string }[] = [];
+  for (let i = 0; i < fieldCodes.length; i++) {
+    let val: any = entry[fieldCodes[i]!];
+    // 多选题：取第一个元素
+    if (Array.isArray(val)) val = val.length > 0 ? val[0] : undefined;
+    // 空值跳过
+    if (val === undefined || val === null || val === '') continue;
+    validFields.push({ code: fieldCodes[i]!, originalCode: originalFieldCodes[i]!, value: String(val) });
+  }
 
-  /** 判断单个字段值是否满足触发条件 */
-  const matchesTrigger = (val: any): boolean => {
-    const s = String(val ?? '');
+  if (validFields.length === 0) return []; // 全部未填 → 通过
+
+  // 判断触发条件
+  const matchesTrigger = (val: string): boolean => {
     switch (triggerOp) {
-      case 'FIRST_EQ': case 'LAST_EQ': return s === triggerVal;
+      case 'FIRST_EQ': case 'LAST_EQ': return val === triggerVal;
       case 'FIRST_GT': return !isNaN(Number(val)) && Number(val) > Number(triggerVal);
       case 'FIRST_GTE': return !isNaN(Number(val)) && Number(val) >= Number(triggerVal);
       case 'FIRST_LT': return !isNaN(Number(val)) && Number(val) < Number(triggerVal);
       case 'FIRST_LTE': return !isNaN(Number(val)) && Number(val) <= Number(triggerVal);
-      case 'FIRST_IN': case 'LAST_IN': return triggerVal.split(',').map((v) => v.trim()).includes(s);
+      case 'FIRST_IN': case 'LAST_IN': return triggerVal.split(',').map((v) => v.trim()).includes(val);
       default: return false;
     }
   };
 
-  /** 判断单个字段值是否违反约束条件 */
-  const violatesForbid = (val: any): boolean => {
-    const s = String(val ?? '');
-    switch (forbidOp) {
-      case 'REST_EQ': return s === forbidVal;
-      case 'REST_NE': return s === forbidVal;
-      default: return false;
+  // 将字段值转换为友好显示文字
+  const formatFieldValue = (fieldCode: string, val: string): string => {
+    const field = fieldMap[fieldCode];
+    if (field?.options && Array.isArray(field.options)) {
+      const found = field.options.find((o: { value: string; label: string }) => o.value === val || String(o.value) === val);
+      if (found) return found.label;
     }
+    return val;
   };
 
-  // 找触发字段索引（FIRST_* 从前扫，LAST_* 从后扫）
-  // fieldCodes 已是展开后的完整 key（如 6020107），直接用 fieldCodes[i] 访问 entry
+  // 找触发字段索引
+  // FIRST_：从左往右找第一个匹配
+  // LAST_：从右往左找最后一个匹配
   let triggerIdx = -1;
   if (triggerOp.startsWith('FIRST_')) {
-    for (let i = 0; i < fieldCodes.length; i++) {
-      if (matchesTrigger(entry[fieldCodes[i]!])) { triggerIdx = i; break; }
+    for (let i = 0; i < validFields.length; i++) {
+      if (matchesTrigger(validFields[i]!.value)) { triggerIdx = i; break; }
     }
   } else {
-    for (let i = fieldCodes.length - 1; i >= 0; i--) {
-      if (matchesTrigger(entry[fieldCodes[i]!])) { triggerIdx = i; break; }
+    for (let i = validFields.length - 1; i >= 0; i--) {
+      if (matchesTrigger(validFields[i]!.value)) { triggerIdx = i; break; }
     }
   }
-
   if (triggerIdx === -1) return []; // 无触发 → 通过
 
-  // 检查触发字段之后的字段
-  for (let i = triggerIdx + 1; i < fieldCodes.length; i++) {
-    const code = fieldCodes[i]!;
-    const originalCode = originalFieldCodes[i]!;
-    if (violatesForbid(entry[code])) {
-      const triggerFieldCode = fieldCodes[triggerIdx]!.slice(-2);
-      const forbidFieldCode = code.slice(-2);
-      const triggerFieldLabel = fieldMap[triggerFieldCode]?.fieldLabel ?? originalFieldCodes[triggerIdx]!;
+  // 找到触发字段后，立即锁定值；后续所有字段必须与触发值一致
+  const lockedValue = triggerVal;
+  for (let i = triggerIdx + 1; i < validFields.length; i++) {
+    const { code, originalCode, value } = validFields[i]!;
+    if (value !== lockedValue) {
+      // 违反规则：值不等于锁定值
+      const triggerOrigCode = validFields[triggerIdx]!.originalCode;
+      const triggerFieldCode = triggerOrigCode.split('_').pop() ?? triggerOrigCode;
+      const forbidFieldCode = originalCode.split('_').pop() ?? originalCode;
+      const triggerFieldLabel = fieldMap[triggerFieldCode]?.fieldLabel ?? triggerOrigCode;
       const forbidFieldLabel = fieldMap[forbidFieldCode]?.fieldLabel ?? originalCode;
-      // 获取选项文字
       const triggerValueLabel = formatFieldValue(triggerFieldCode, triggerVal);
-      const forbidValueLabel = formatFieldValue(forbidFieldCode, forbidVal);
-      const fieldKey = code;
       errors.push({
-        fieldKey,
-        errMsg: `「${triggerFieldLabel}」选择了「${triggerValueLabel}」，「${forbidFieldLabel}」不能选择「${forbidValueLabel}」`,
+        fieldKey: code,
+        errMsg: `「${triggerFieldLabel}」选择了「${triggerValueLabel}」，「${forbidFieldLabel}」必须选择「${triggerValueLabel}」`,
       });
+      return errors; // 只报第一个错误
     }
   }
 

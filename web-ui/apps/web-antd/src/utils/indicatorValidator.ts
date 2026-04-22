@@ -36,6 +36,8 @@ export interface ValidationResult {
   // 新增：涉及的所有指标ID
   involvedIndicatorIds?: number[];
   involvedIndicatorCodes?: string[];
+  /** 规则的原始配置 JSON，用于生成友好错误消息 */
+  ruleConfig?: string;
 }
 
 // 验证引擎选项
@@ -45,6 +47,8 @@ export interface ValidatorOptions {
   changedIndicatorId?: number;
   /** id → code 的映射，用于将 indicatorId 翻成 code 来查 values */
   idToCode?: Map<number, string>;
+  /** 所有指标定义，用于生成友好的错误消息（包含选项 label） */
+  allIndicators?: Array<Record<string, any>>;
 }
 
 // 规则配置中的公式项
@@ -196,9 +200,6 @@ function validateRule(
     const config: RuleConfig = JSON.parse(rule.ruleConfig);
     const ruleItems = config.rules || [];
 
-    // [#DEBUG] validateRule entry
-    fetch('http://127.0.0.1:7550/ingest/3f60b161-8a14-4e30-8c88-b76dc9cc5103',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e14be1'},body:JSON.stringify({sessionId:'e14be1',location:'indicatorValidator.ts:validateRule_entry',message:'validateRule ENTRY',data:{ruleId:rule.id,ruleName:rule.ruleName,ruleItemsCount:ruleItems.length,valuesKeys:Object.keys(values),options,config},timestamp:Date.now(),hypothesisId:'B'})}).catch(()=>{});
-
     for (const ruleItem of ruleItems) {
       const action = ruleItem.action || {};
       const condition = ruleItem.condition;
@@ -285,13 +286,18 @@ function validateRule(
             break;
           }
         }
-
+      
         // 条件不满足时，跳过验证
         if (!conditionMet) {
+          const logConditionValue = condition.operator === 'IN' || condition.operator === 'NOT_IN'
+            ? `condition.values=${JSON.stringify((condition as any).values)}`
+            : `condition.value=${condition.value}`;
+          // console.log(`[validateRule] COND NOT MET skip action: condValue=${condValue}, condition.operator=${condition.operator}, ${logConditionValue}`);
           return { valid: true, ruleId: rule.id, ruleName: rule.ruleName ?? '', message: '' };
         }
-      }
 
+        // console.log(`[validateRule] COND MET, evaluating action: condValue=${condValue}, action.operator=${action.operator}`);
+      }
       // 获取当前指标的值（保持 undefined/NaN 不被吞掉，交给 compareValues 判断）
       let currentValue: any;
       if (action.formula && action.formula.length > 0) {
@@ -369,6 +375,17 @@ function validateRule(
 
       // 执行比较
       const operator = action.operator;
+      // IN/NOT_IN 操作符：使用 compareValues 数组进行比较（compareValue 是 Number(0)，不能用）
+      if ((operator === 'IN' || operator === 'NOT_IN') && Array.isArray((action as any).compareValues)) {
+        const listValues = (action as any).compareValues;
+        const valid = currentValue !== undefined && currentValue !== null && !isNaN(currentValue)
+          ? (operator === 'NOT_IN' ? !listValues.includes(currentValue) : listValues.includes(currentValue))
+          : true;
+        if (!valid) {
+          return { valid: false, ruleId: rule.id, ruleName: rule.ruleName ?? '', message: buildLogicRuleMsgForSingleRule(rule.ruleConfig, rule.ruleName, values, idToCode, options?.allIndicators), ruleConfig: rule.ruleConfig };
+        }
+        return { valid: true, ruleId: rule.id, ruleName: rule.ruleName ?? '', message: '' };
+      }
       const compareResult = compareValues(currentValue, operator, compareValue);
 
       if (!compareResult) {
@@ -402,11 +419,12 @@ function validateRule(
           valid: false,
           ruleId: rule.id,
           ruleName: rule.ruleName ?? '',
-          message: action.message || '验证失败',
+          message: action.message || buildLogicRuleMsgForSingleRule(rule.ruleConfig, rule.ruleName ?? '', values, idToCode, options?.allIndicators),
           indicatorId: action.indicatorId ?? undefined,
           indicatorCode: action.indicatorCode ?? action.compareIndicatorCode ?? undefined,
           involvedIndicatorIds,
           involvedIndicatorCodes,
+          ruleConfig: rule.ruleConfig,
         };
       }
     }
@@ -449,7 +467,9 @@ export function calculateFormula(
         ? item.indicatorCode
         : (item.indicatorId !== undefined && idToCode ? idToCode.get(item.indicatorId) : undefined);
       const v = code !== undefined ? values[code] : undefined;
-      itemValue = v === undefined || v === null ? undefined : Number(v);
+      // 数组值（多选题）取第一个元素再转数字
+      const raw = Array.isArray(v) ? (v.length > 0 ? v[0] : undefined) : v;
+      itemValue = raw === undefined || raw === null ? undefined : Number(raw);
     }
 
     // 第一个数直接赋值，后续根据操作符计算
@@ -569,8 +589,9 @@ const CC_FORBID_OPS = new Set(['REST_EQ', 'REST_NE']);
 export function parseCC(logicRule: string, entryNumber: number = 1): CCRule | null {
   const rule = logicRule.trim();
   const match = rule.match(
-    /^CC\s*\(\s*\[([^\]]+)\]\s*,\s*(\w+)\s*\(\s*([^\)]+)\s*\)\s*,\s*(\w+)\s*\(\s*([^\)]+)\s*\)\s*\)\s*$/i,
+    /^CC\s*\(\s*\[([^\]]+)\]\s*,\s*([\w_]+)\s*\(\s*([^\)]+)\s*\)\s*,\s*([\w_]+)\s*\(\s*([^\)]+)\s*\)\s*\)\s*$/i,
   );
+  
   if (!match) return null;
 
   const rawFieldCodes = match[1]!.split(',').map((s) => s.trim()).filter(Boolean);
@@ -627,25 +648,31 @@ export function validateSingleRule(
 
 /**
  * 解析条件操作符字符串，返回操作符类型和值数组
- * @param opStr 原始操作符字符串，如 "IN(1,2,3)"、"NOT_IN(1001)"、"=="
+ * @param condStr 完整条件字符串，如 "[801] == 11" 或 "[801] IN(1,2,3)"
  */
-function parseConditionOperator(opStr: string): {
+function parseConditionOperator(condStr: string): {
   operator: string;
   values: number[] | null;
   threshold: number;
 } {
+  // 提取操作符和阈值部分（去掉 [指标代码] 部分）
+  const opMatch = condStr.match(/\[([^\]]+)\]\s*(.+)$/);
+  if (!opMatch) return { operator: condStr, values: null, threshold: 0 };
+
+  // 归一化：去掉操作符和值之间的空格，如 "== 11" → "==11"
+  const opStr = opMatch[2]!.replace(/(==|!=|<=|>=|<|>)\s+/g, '$1');
   const inMatch = opStr.match(/^(IN|NOT_IN)\(([^)]+)\)$/);
   if (inMatch) {
     const op = inMatch[1]!;
     const values = inMatch[2]!.split(',').map((v) => Number(v.trim()));
     return { operator: op, values, threshold: 0 };
   }
-  // 简单比较符：==  !=  >  >=  <  <=
-  return {
-    operator: opStr,
-    values: null,
-    threshold: Number(opStr.match(/\d+(?:\.\d+)?$/)?.[0]) || 0,
-  };
+  // 简单比较符：==  !=  >  >=  <  <=，阈值从操作符后提取
+  const simpleMatch = opStr.match(/^(==|!=|<=|>=|<|>)\s*(\d+(?:\.\d+)?)$/);
+  if (simpleMatch) {
+    return { operator: simpleMatch[1]!, values: null, threshold: Number(simpleMatch[2]) };
+  }
+  return { operator: opStr.trim(), values: null, threshold: 0 };
 }
 
 /** 解析逻辑校验字符串，返回 engine 认识的 JointRule 格式
@@ -655,149 +682,185 @@ function parseConditionOperator(opStr: string): {
 export function parseLogicRule(logicRule: string, entryNumber: number = 1): JointRule[] {
   if (!logicRule || !logicRule.trim()) return [];
 
+  // 归一化：去掉所有操作符和值之间的空格，如 "IF([801] == 11 ,[802] ==7,TRUE)" → "IF([801]==11,[802]==7,TRUE)"
+  logicRule = logicRule.replace(/(==|!=|<=|>=|<|>)\s+/g, '$1');
+
+  // console.log('[parseLogicRule] input:', logicRule);
   const results: JointRule[] = [];
 
-  // 格式: IF([indicator] condOp condVal, [verify] verifyOp verifyVal, [verify] verifyOp verifyVal, ..., TRUE)
-  // 条件操作符支持：==, !=, >, >=, <, <=, IN(v1,v2,...), NOT_IN(v1,v2,...)
-  const ifRegex = /IF\s*\(\s*\[([^\]]+)\]\s*(IN\([^)]+\)|NOT_IN\([^)]+\)|==|!=|<=|>=|<|>)\s*,\s*(.+?)\s*,\s*TRUE\s*\)/gi;
-  const ifMatches = [...logicRule.matchAll(ifRegex)];
+  // 策略：反向扫描
+  // 1. 找到 ",TRUE)" 结尾
+  // 2. 取 "IF(...)" 部分中，从 IF( 之后第一个深度为0的逗号 → 分割条件/动作
+  // 3. 分别解析条件部分和动作部分
+  const raw = logicRule.trim();
+  const upper = raw.toUpperCase();
+  let entryNumberInternal = 1;
 
-  // [#DEBUG] parseLogicRule: raw input
-  fetch('http://127.0.0.1:7550/ingest/3f60b161-8a14-4e30-8c88-b76dc9cc5103',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e14be1'},body:JSON.stringify({sessionId:'e14be1',location:'indicatorValidator.ts:parseLogicRule',message:'parseLogicRule ENTRY',data:{logicRule,entryNumber,ifMatchesCount:ifMatches.length},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
+  let trueEndPos = upper.lastIndexOf(',TRUE)');
+  while (trueEndPos !== -1) {
+    // beforeTrue = "IF( [801] IN(1,2,3), [802] NOT_IN(7) )" 或 "IF([801] == 11 ,[802] ==7"
+    const beforeTrue = raw.slice(0, trueEndPos);
 
-  if (ifMatches.length > 0) {
-    // 处理 IF 函数
-    for (const match of ifMatches) {
-      const conditionIndicator = match[1]!;
-      const rawConditionOp = match[2]!;
-      const verifyPart = match[3]!;
+    // 从 beforeTrue 找到 "IF(" 的位置
+    const ifStart = beforeTrue.toUpperCase().lastIndexOf('IF(');
+    if (ifStart === -1) { trueEndPos = upper.lastIndexOf(',TRUE)', trueEndPos - 1); continue; }
 
-      // 解析条件操作符：支持 IN(v1,v2,...) 和 NOT_IN(v1,v2,...)
-      const { operator: conditionOperator, values: conditionValues, threshold: conditionThreshold } = parseConditionOperator(rawConditionOp);
+    // IF( ... ) 内容：去掉前缀 IF( 和可能的尾随 )
+    const inner = beforeTrue.slice(ifStart + 3); // 跳过 "IF("
 
-      const verifyExprs = verifyPart.split(/\s*,\s*(?=\[)/);
+    // 去掉尾部多余的 )（如果存在）
+    const content = inner.replace(/\)\s*$/, '').trim();
 
-      // 展开容器简写格式（如 502_07 → 5020107）
-      const conditionIndicatorExpanded = isContainerFieldShortcut(conditionIndicator)
-        ? parseContainerFieldShortcut(conditionIndicator, entryNumber) || conditionIndicator
-        : conditionIndicator;
-
-      for (const expr of verifyExprs) {
-        const verifyMatch = expr.trim().match(
-          /^\[([^\]]+)\]\s*(==|!=|<=|>=|<|>|(NOT_IN|IN)\([^)]+\))\s*(\d+(?:\.\d+)?)$/
-        );
-        if (!verifyMatch) continue;
-
-        const verifyIndicatorRaw = verifyMatch[1]!;
-        const rawVerifyOperator = verifyMatch[2]!;
-        const verifyThreshold = verifyMatch[4]!;
-
-        // 展开容器简写格式（如 502_07 → 5020107）
-        const verifyIndicator = isContainerFieldShortcut(verifyIndicatorRaw)
-          ? parseContainerFieldShortcut(verifyIndicatorRaw, entryNumber) || verifyIndicatorRaw
-          : verifyIndicatorRaw;
-
-        const isListOp = /^(NOT_IN|IN)\([^)]+\)$/.test(rawVerifyOperator);
-        const action: any = {
-          type: 'formula',
-          formula: [{ valueType: 'indicator', indicatorCode: verifyIndicator, mathOp: '+' }],
-        };
-        if (isListOp) {
-          const listValues = rawVerifyOperator
-            .match(/^(NOT_IN|IN)\(([^)]+)\)$/)?.[2]
-            ?.split(',')
-            .map(v => Number(v.trim())) ?? [];
-          action.operator = rawVerifyOperator.replace(/\(.*\)/, '');
-          action.compareValues = listValues;
-          action.compareType = 'fixed';
-          action.compareValue = 0;
-        } else {
-          action.operator = rawVerifyOperator;
-          action.compareType = 'fixed';
-          action.compareValue = Number(verifyThreshold);
-        }
-
-        // 构造 condition：增加 values 字段（仅 IN/NOT_IN 有值）
-        const condition: any = {
-          indicatorCode: conditionIndicatorExpanded,
-          operator: conditionOperator,
-        };
-        if (conditionValues !== null) {
-          condition.values = conditionValues;
-          condition.value = conditionThreshold; // IN/NOT_IN 时为 0
-        } else {
-          condition.value = Number(conditionThreshold);
-        }
-
-        const condLabel = conditionValues
-          ? `${conditionOperator}(${conditionValues.join(',')})`
-          : `${conditionOperator} ${conditionThreshold}`;
-
-        results.push({
-          id: results.length + 1,
-          ruleName: `[${conditionIndicatorExpanded}] ${condLabel} 时, ${expr.trim()}`,
-          triggerTiming: 'FILL',
-          status: 1,
-          projectType: 0,
-          ruleConfig: JSON.stringify({
-            rules: [{
-              id: 1,
-              condition,
-              action,
-              name: `[${conditionIndicatorExpanded}] ${condLabel} 时, ${expr.trim()}`,
-            }],
-          }),
-        });
-
-        // [#DEBUG] parseLogicRule: parsed action
-        fetch('http://127.0.0.1:7550/ingest/3f60b161-8a14-4e30-8c88-b76dc9cc5103',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e14be1'},body:JSON.stringify({sessionId:'e14be1',location:'indicatorValidator.ts:parseLogicRule_parsed',message:'parseLogicRule PARSED action',data:{conditionIndicator,conditionOperator,conditionValues,conditionThreshold,expr:expr.trim(),action,condition,conditionIndicatorExpanded,entryNumber},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
-      }
+    // 从 content 末尾反向找第一个深度为0的逗号 → 分割条件/动作
+    let depth = 0;
+    let splitPos = -1;
+    for (let i = content.length - 1; i >= 0; i--) {
+      const ch = content[i]!;
+      if (ch === ')') depth++;
+      else if (ch === '(') depth = Math.max(0, depth - 1);
+      else if (ch === ',' && depth === 0) { splitPos = i; break; }
     }
 
-    // [#DEBUG] parseLogicRule: return
-    fetch('http://127.0.0.1:7550/ingest/3f60b161-8a14-4e30-8c88-b76dc9cc5103',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e14be1'},body:JSON.stringify({sessionId:'e14be1',location:'indicatorValidator.ts:parseLogicRule_return',message:'parseLogicRule RETURN',data:{resultsCount:results.length,resultsSummary:results.map(r=>({id:r.id,ruleName:r.ruleName,ruleConfig:r.ruleConfig})),logicRule,entryNumber},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
+    if (splitPos === -1) { trueEndPos = upper.lastIndexOf(',TRUE)', trueEndPos - 1); continue; }
 
-    return results;
+    const condRaw = content.slice(0, splitPos).trim();
+    const actionPart = content.slice(splitPos + 1).trim();
+
+    // 解析条件部分: "[indicator] op val"
+    const condMatch = condRaw.match(/^\[([^\]]+)\]\s*(.+)$/);
+    if (!condMatch) { trueEndPos = upper.lastIndexOf(',TRUE)', trueEndPos - 1); continue; }
+
+    const condIndicatorRaw = condMatch[1]!.trim();
+    const condOpStr = condMatch[2]!.trim();
+    const { operator: conditionOperator, values: conditionValues, threshold: conditionThreshold } = parseConditionOperator(`[${condIndicatorRaw}] ${condOpStr}`);
+
+    const conditionIndicator = isContainerFieldShortcut(condIndicatorRaw)
+      ? parseContainerFieldShortcut(condIndicatorRaw, entryNumber) || condIndicatorRaw
+      : condIndicatorRaw;
+
+    // 动作部分可能有多个子动作，用深度为0的逗号分隔
+    const actionParts: string[] = [];
+    let curStart = 0;
+    depth = 0;
+    for (let i = 0; i <= actionPart.length; i++) {
+      if (i === actionPart.length || (actionPart[i] === ',' && depth === 0)) {
+        const part = actionPart.slice(curStart, i === actionPart.length ? undefined : i).trim();
+        if (part) actionParts.push(part);
+        curStart = i + 1;
+      } else if (actionPart[i] === '(') depth++;
+      else if (actionPart[i] === ')') depth = Math.max(0, depth - 1);
+    }
+
+    for (const expr of actionParts) {
+      const verifyMatch = expr.match(/^\[([^\]]+)\]\s*(.+)$/);
+      if (!verifyMatch) continue;
+
+      const verifyIndicatorRaw = verifyMatch[1]!.trim();
+      const verifyOpStr = verifyMatch[2]!.trim();
+      const verifyIndicator = isContainerFieldShortcut(verifyIndicatorRaw)
+        ? parseContainerFieldShortcut(verifyIndicatorRaw, entryNumber) || verifyIndicatorRaw
+        : verifyIndicatorRaw;
+
+      const verifyInMatch = verifyOpStr.match(/^(IN|NOT_IN)\(([^)]+)\)$/);
+      const isListOp = verifyInMatch !== null;
+      const action: any = {
+        type: 'formula',
+        formula: [{ valueType: 'indicator', indicatorCode: verifyIndicator, mathOp: '+' }],
+      };
+
+      if (isListOp) {
+        const op = verifyInMatch![1]!;
+        const listValues = verifyInMatch![2]!.split(',').map((v) => Number(v.trim()));
+        action.operator = op;
+        action.compareValues = listValues;
+        action.compareType = 'fixed';
+        action.compareValue = 0;
+      } else {
+        const simpleMatch = verifyOpStr.match(/^(>=|<=|==|!=|<|>)\s*(\d+(?:\.\d+)?)$/);
+        if (!simpleMatch) continue;
+        action.operator = simpleMatch[1]!;
+        action.compareType = 'fixed';
+        action.compareValue = Number(simpleMatch[2]!);
+      }
+
+      const condition: any = {
+        indicatorCode: conditionIndicator,
+        operator: conditionOperator,
+      };
+      if (conditionValues !== null) {
+        condition.values = conditionValues;
+        condition.value = 0;
+      } else {
+        condition.value = conditionThreshold;
+      }
+
+      const condLabel = conditionValues !== null
+        ? `${conditionOperator}(${conditionValues.join(',')})`
+        : `${conditionOperator} ${conditionThreshold}`;
+
+      results.push({
+        id: entryNumberInternal,
+        ruleName: `[${conditionIndicator}] ${condLabel} 时, ${expr}`,
+        triggerTiming: 'FILL',
+        status: 1,
+        projectType: 0,
+        ruleConfig: JSON.stringify({
+          rules: [{
+            id: entryNumberInternal,
+            condition,
+            action,
+            name: `[${conditionIndicator}] ${condLabel} 时, ${expr}`,
+          }],
+        }),
+      });
+
+      entryNumberInternal++;
+    }
+
+    trueEndPos = upper.lastIndexOf(',TRUE)', trueEndPos - 1);
   }
 
-  // 普通规则解析
-  const parts = logicRule.split(/\n|；|;|AND|and|And/).filter(Boolean);
+  // 未能用 tokenizer 解析出 IF 块，降级为普通规则解析（原有逻辑不变）
+  if (results.length === 0) {
+    const parts = logicRule.split(/\n|；|;|AND|and|And/).filter(Boolean);
 
-  for (let i = 0; i < parts.length; i++) {
-    const part = parts[i]!.trim();
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i]!.trim();
 
-    const opMatch = part.match(/^(.+?)(>=|<=|>|<|==|!=)(.+)$/);
-    if (!opMatch) continue;
+      const opMatch = part.match(/^(.+?)(>=|<=|>|<|==|!=)(.+)$/);
+      if (!opMatch) continue;
 
-    const left = opMatch[1]!.trim();
-    const operator = opMatch[2]!;
-    const right = opMatch[3]!.trim();
+      const left = opMatch[1]!.trim();
+      const operator = opMatch[2]!;
+      const right = opMatch[3]!.trim();
 
-    // 传入 entryNumber 用于解析容器字段简写格式
-    const leftFormula = parseFormulaSide(left, entryNumber);
-    const rightFormula = parseFormulaSide(right, entryNumber);
+      // 传入 entryNumber 用于解析容器字段简写格式
+      const leftFormula = parseFormulaSide(left, entryNumber);
+      const rightFormula = parseFormulaSide(right, entryNumber);
 
-    // 构造 engine action
-    const action: any = {
-      type: 'formula',
-      operator,
-      formula: leftFormula,
-      compareType: 'indicator',
-      compareFormula: rightFormula,
-    };
+      // 构造 engine action
+      const action: any = {
+        type: 'formula',
+        operator,
+        formula: leftFormula,
+        compareType: 'indicator',
+        compareFormula: rightFormula,
+      };
 
-    results.push({
-      id: results.length + 1,
-      ruleName: part,
-      triggerTiming: 'FILL',
-      status: 1,
-      projectType: 0,
-      ruleConfig: JSON.stringify({
-        rules: [{ id: 1, action, name: part }],
-      }),
-    });
+      results.push({
+        id: results.length + 1,
+        ruleName: part,
+        triggerTiming: 'FILL',
+        status: 1,
+        projectType: 0,
+        ruleConfig: JSON.stringify({
+          rules: [{ id: 1, action, name: part }],
+        }),
+      });
+    }
   }
 
+  // console.log('[parseLogicRule] output:', results.map(r => ({ id: r.id, ruleName: r.ruleName, ruleConfig: r.ruleConfig })));
   return results;
 }
 
@@ -880,9 +943,88 @@ function parseFormulaSide(side: string, entryNumber: number = 1): FormulaItem[] 
 }
 
 export function buildLogicRuleMsgForSingleRule(
-  rule: { ruleName: string },
+  ruleConfig: any,
+  ruleName: string,
+  values: Record<string, any>,
+  idToCode?: Map<number, string>,
+  allIndicators?: Array<Record<string, any>>,
 ): string {
-  if (rule.ruleName) return rule.ruleName;
+  // 查找指标定义获取选项 label 和名称
+  const findIndicator = (code: string) => allIndicators?.find(i => i.indicatorCode === code);
+  const getIndicatorLabel = (code: string): string => {
+    const ind = findIndicator(code);
+    return ind?.indicatorName ? `${code} - ${ind.indicatorName}` : code;
+  };
+  const getOptionLabel = (indicator: any, val: string): string => {
+    if (!indicator) return val;
+    try {
+      const opts = JSON.parse(indicator.valueOptions || '[]');
+      if (Array.isArray(opts) && opts[0]?.label !== undefined) {
+        const opt = opts.find((o: any) => String(o.value) === val || o.value === val);
+        return opt?.label ?? val;
+      }
+    } catch { /* ignore */ }
+    return val;
+  };
+  const getMultiOptionLabels = (indicator: any, valList: string[]): string => {
+    if (!indicator) return valList.join('、');
+    return valList.map(v => getOptionLabel(indicator, v)).join('、');
+  };
+
+  // 分支一：IN/NOT_IN 格式的 IF 规则
+  const ifMatch = ruleName.match(/^\[([^\]]+)\]\s+(IN|NOT_IN)\(([^)]+)\)\s*时,\s*\[([^\]]+)\]\s+(IN|NOT_IN)\(([^)]+)\)/);
+  if (ifMatch) {
+    const [, condCode, , , verifyCode, verifyOp, verifyVals] = ifMatch;
+    const condRaw = values[condCode];
+    const condSelected = Array.isArray(condRaw) ? condRaw : condRaw !== undefined ? [condRaw] : [];
+    const condIndicator = findIndicator(condCode);
+    const condLabelStr = condSelected.length > 0 ? getMultiOptionLabels(condIndicator, condSelected) : `选择值`;
+    const verifyRaw = values[verifyCode];
+    const verifySelected = Array.isArray(verifyRaw) ? verifyRaw : verifyRaw !== undefined ? [verifyRaw] : [];
+    const verifyIndicator = findIndicator(verifyCode);
+    const verifyValsList = verifyVals.split(',').map(v => v.trim());
+    const condLabel = getIndicatorLabel(condCode);
+    const verifyLabel = getIndicatorLabel(verifyCode);
+    const verifyOpText = verifyOp === 'NOT_IN' ? '不能选择' : '必须选择';
+    return `当 ${condLabel} 选择 ${condLabelStr} 时，${verifyLabel} ${verifyOpText} ${getMultiOptionLabels(verifyIndicator, verifyValsList)}`;
+  }
+
+  // 分支二：==/!= 格式的 IF 规则，如 "[801] == 11 时, [802] ==7"
+  const ifEqMatch = ruleName.match(/^\[([^\]]+)\]\s*(==|!=)\s*(\S+)\s*时,\s*\[([^\]]+)\]\s*(==|!=)\s*(\S+)/);
+  if (ifEqMatch) {
+    const [, condCode, condOp, condVal, verifyCode, verifyOp, verifyVal] = ifEqMatch;
+    const condIndicator = findIndicator(condCode);
+    const verifyIndicator = findIndicator(verifyCode);
+    const condValLabel = getOptionLabel(condIndicator, condVal);
+    const verifyValLabel = getOptionLabel(verifyIndicator, verifyVal);
+    const condLabel = getIndicatorLabel(condCode);
+    const verifyLabel = getIndicatorLabel(verifyCode);
+    const condOpText = condOp === '==' ? '等于' : '不等于';
+    const verifyOpText = verifyOp === '==' ? '必须等于' : '不能等于';
+    return `当 ${condLabel} ${condOpText} ${condValLabel} 时，${verifyLabel} ${verifyOpText} ${verifyValLabel}`;
+  }
+
+  // 分支三：普通比较规则，如 "[202] <=[201]" 或 "[901] >[903]"
+  const simpleMatch = ruleName.match(/^\[([^\]]+)\]\s*(>=|<=|>|<|==|!=)\s*\[([^\]]+)\]$/);
+  if (simpleMatch) {
+    const [, leftCode, operator, rightCode] = simpleMatch;
+    const leftLabel = getIndicatorLabel(leftCode!);
+    const rightLabel = getIndicatorLabel(rightCode!);
+    const opText = { '>=': '应大于等于', '<=': '应小于等于', '>': '应大于', '<': '应小于', '==': '应等于', '!=': '应不等于' }[operator!];
+    return `${leftLabel} ${opText} ${rightLabel}`;
+  }
+
+  // 分支四：指标与固定值的比较，如 "[JS003] <=100"
+  const fixedMatch = ruleName.match(/^\[([^\]]+)\]\s*(>=|<=|>|<|==|!=)\s*(\d+(?:\.\d+)?)$/);
+  if (fixedMatch) {
+    const [, code, operator, fixedVal] = fixedMatch;
+    const label = getIndicatorLabel(code!);
+    const opText = { '>=': '应大于等于', '<=': '应小于等于', '>': '应大于', '<': '应小于', '==': '应等于', '!=': '应不等于' }[operator!];
+    return `${label} ${opText} ${fixedVal}`;
+  }
+
+  // 分支五：纯代码比较，无右侧指标，如 "[801] >= 5"
+  if (ruleName) return ruleName;
   return '校验失败';
 }
 
@@ -908,16 +1050,12 @@ export interface FORMATSRule {
  * FORMATS(["word","pdf"])
  */
 export function parseFORMATS(logicRule: string): FORMATSRule | null {
-  const rule = logicRule.trim();
-
-  // 完整格式: FORMATS(["word","pdf"], {word:["doc","docx"], pdf:["pdf"]})
-  const fullMatch = rule.match(
-    /^FORMATS\s*\(\s*\[([^\]]+)\]\s*(?:,\s*(\{[^}]+\}))?\s*\)\s*$/i,
-  );
-  if (!fullMatch) return null;
+  // 查找 FORMATS(...) 模式（不要求整个字符串完全匹配，容错空白字符）
+  const match = logicRule.match(/FORMATS\s*\(\s*\[([^\]]+)\]\s*(?:,\s*(\{[^}]+\}))?\s*\)/i);
+  if (!match) return null;
 
   // 解析格式类别数组
-  const formatsStr = fullMatch[1]!;
+  const formatsStr = match[1]!;
   const requiredFormats = formatsStr
     .split(',')
     .map((f) => f.trim().replace(/['"]/g, '').toLowerCase())
@@ -925,7 +1063,7 @@ export function parseFORMATS(logicRule: string): FORMATSRule | null {
 
   // 解析 typeGroups（如果有）
   let typeGroups: Record<string, string[]> = {};
-  const typeGroupsStr = fullMatch[2];
+  const typeGroupsStr = match[2];
   if (typeGroupsStr) {
     try {
       // 将 JS 对象字面量的 key 引号补全（{word:[...]} → {"word":[...]}）
