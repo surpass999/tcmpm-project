@@ -196,6 +196,9 @@ function validateRule(
     const config: RuleConfig = JSON.parse(rule.ruleConfig);
     const ruleItems = config.rules || [];
 
+    // [#DEBUG] validateRule entry
+    fetch('http://127.0.0.1:7550/ingest/3f60b161-8a14-4e30-8c88-b76dc9cc5103',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e14be1'},body:JSON.stringify({sessionId:'e14be1',location:'indicatorValidator.ts:validateRule_entry',message:'validateRule ENTRY',data:{ruleId:rule.id,ruleName:rule.ruleName,ruleItemsCount:ruleItems.length,valuesKeys:Object.keys(values),options,config},timestamp:Date.now(),hypothesisId:'B'})}).catch(()=>{});
+
     for (const ruleItem of ruleItems) {
       const action = ruleItem.action || {};
       const condition = ruleItem.condition;
@@ -659,6 +662,9 @@ export function parseLogicRule(logicRule: string, entryNumber: number = 1): Join
   const ifRegex = /IF\s*\(\s*\[([^\]]+)\]\s*(IN\([^)]+\)|NOT_IN\([^)]+\)|==|!=|<=|>=|<|>)\s*,\s*(.+?)\s*,\s*TRUE\s*\)/gi;
   const ifMatches = [...logicRule.matchAll(ifRegex)];
 
+  // [#DEBUG] parseLogicRule: raw input
+  fetch('http://127.0.0.1:7550/ingest/3f60b161-8a14-4e30-8c88-b76dc9cc5103',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e14be1'},body:JSON.stringify({sessionId:'e14be1',location:'indicatorValidator.ts:parseLogicRule',message:'parseLogicRule ENTRY',data:{logicRule,entryNumber,ifMatchesCount:ifMatches.length},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
+
   if (ifMatches.length > 0) {
     // 处理 IF 函数
     for (const match of ifMatches) {
@@ -742,8 +748,14 @@ export function parseLogicRule(logicRule: string, entryNumber: number = 1): Join
             }],
           }),
         });
+
+        // [#DEBUG] parseLogicRule: parsed action
+        fetch('http://127.0.0.1:7550/ingest/3f60b161-8a14-4e30-8c88-b76dc9cc5103',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e14be1'},body:JSON.stringify({sessionId:'e14be1',location:'indicatorValidator.ts:parseLogicRule_parsed',message:'parseLogicRule PARSED action',data:{conditionIndicator,conditionOperator,conditionValues,conditionThreshold,expr:expr.trim(),action,condition,conditionIndicatorExpanded,entryNumber},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
       }
     }
+
+    // [#DEBUG] parseLogicRule: return
+    fetch('http://127.0.0.1:7550/ingest/3f60b161-8a14-4e30-8c88-b76dc9cc5103',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e14be1'},body:JSON.stringify({sessionId:'e14be1',location:'indicatorValidator.ts:parseLogicRule_return',message:'parseLogicRule RETURN',data:{resultsCount:results.length,resultsSummary:results.map(r=>({id:r.id,ruleName:r.ruleName,ruleConfig:r.ruleConfig})),logicRule,entryNumber},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
 
     return results;
   }
