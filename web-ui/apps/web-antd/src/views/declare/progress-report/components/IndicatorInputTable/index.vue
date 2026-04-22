@@ -154,6 +154,8 @@ import {
   getFileList,
   isRichText,
   parseExtraConfig,
+  getMinFormats,
+  getRequiredGroups,
 } from './utils/indicator';
 
 // 子组件
@@ -1227,6 +1229,14 @@ function addHighlight(el: Element) {
                   <span v-if="getAcceptTypes(indicator)">支持 {{ getAcceptTypes(indicator) }}</span>
                   <span v-if="getAcceptTypes(indicator) && getMaxFileCount(indicator)">，</span>
                   <span v-if="getMaxFileCount(indicator)">最多 {{ getMaxFileCount(indicator) }} 个</span>
+                  <template v-if="getMinFormats(indicator) > 0">
+                    <span v-if="getAcceptTypes(indicator) || getMaxFileCount(indicator)">，</span>
+                    <span>至少包含 {{ getMinFormats(indicator) }} 种格式</span>
+                  </template>
+                  <template v-if="getRequiredGroups(indicator).length > 0">
+                    <span v-if="getAcceptTypes(indicator) || getMaxFileCount(indicator) || getMinFormats(indicator) > 0">，</span>
+                    <span>必须包含：{{ getRequiredGroups(indicator).join('、') }}</span>
+                  </template>
                   <span class="upload-count">({{ getFileList(fileListMap, indicator.indicatorCode).length }}/{{ getMaxFileCount(indicator) }})</span>
                 </div>
                 <!-- 上期值显示 -->

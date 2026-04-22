@@ -65,6 +65,65 @@ export function isRichText(indicator: DeclareIndicatorApi.Indicator): boolean {
   return parseExtraConfig(indicator.extraConfig).richText === true;
 }
 
+/** 获取文件类型分组（typeGroups）
+ *
+ * 配置示例：
+ * { "typeGroups": { "word": ["doc","docx"], "pdf": ["pdf"], "excel": ["xls","xlsx"] } }
+ */
+export function getFileTypeGroups(indicator: DeclareIndicatorApi.Indicator): Record<string, string[]> {
+  const cfg = parseExtraConfig(indicator.extraConfig);
+  if (!cfg.typeGroups) return {};
+  const groups: Record<string, string[]> = {};
+  for (const [name, exts] of Object.entries(cfg.typeGroups)) {
+    groups[name] = (exts as string[]).map((e: string) => e.toLowerCase());
+  }
+  return groups;
+}
+
+/** 获取最少格式数量（minFormats） */
+export function getMinFormats(indicator: DeclareIndicatorApi.Indicator): number {
+  const cfg = parseExtraConfig(indicator.extraConfig);
+  return cfg.minFormats !== undefined ? Number(cfg.minFormats) : 0;
+}
+
+/** 获取必须包含的分组列表（requiredGroups） */
+export function getRequiredGroups(indicator: DeclareIndicatorApi.Indicator): string[] {
+  const cfg = parseExtraConfig(indicator.extraConfig);
+  if (Array.isArray(cfg.requiredGroups)) return cfg.requiredGroups.map((g: string) => g.toLowerCase());
+  return [];
+}
+
+/**
+ * 将文件列表归并为逻辑类型集合
+ * - 如果配置了 typeGroups，同一分组内多个扩展名只算 1 种（如 doc+docx → word）
+ * - 如果未配置 typeGroups，每个扩展名单独计算（向后兼容旧配置）
+ */
+export function resolveFileGroups(
+  fileList: { name: string }[],
+  typeGroups: Record<string, string[]>,
+): Set<string> {
+  const groups = new Set<string>();
+
+  if (Object.keys(typeGroups).length > 0) {
+    const extToGroup: Record<string, string> = {};
+    for (const [groupName, extensions] of Object.entries(typeGroups)) {
+      for (const ext of extensions) extToGroup[ext] = groupName.toLowerCase();
+    }
+    for (const file of fileList) {
+      const ext = file.name?.split('.').pop()?.toLowerCase() || '';
+      const groupName = extToGroup[ext];
+      if (groupName) groups.add(groupName);
+    }
+  } else {
+    for (const file of fileList) {
+      const ext = file.name?.split('.').pop()?.toLowerCase() || '';
+      if (ext) groups.add(ext);
+    }
+  }
+
+  return groups;
+}
+
 /** 转为数字（安全） */
 export function toNumber(val: any): number | undefined {
   if (val == null || val === '') return undefined;

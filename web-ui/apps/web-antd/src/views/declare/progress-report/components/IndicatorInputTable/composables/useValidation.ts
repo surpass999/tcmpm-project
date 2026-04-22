@@ -10,9 +10,10 @@
  */
 
 import type { DeclareIndicatorApi } from '#/api/declare/indicator';
+import type { UploadFile } from 'ant-design-vue/es/upload/interface';
 import { isEmpty, checkRange, checkPrecision, checkSelectCount, checkRequired } from '../utils/validators';
 import { parseDynamicFields, generateContainerFieldKey, isFieldVisible } from '../utils/container';
-import { parseExtraConfig } from '../utils/indicator';
+import { parseExtraConfig, getFileTypeGroups, getMinFormats, getRequiredGroups, resolveFileGroups } from '../utils/indicator';
 import { parseOptions } from '../utils/options';
 import type { DynamicField, ValidationError, FieldError } from '../types';
 import { formValues, inputTypeValues } from './useFormValues';
@@ -413,7 +414,51 @@ function validateType9_File(indicator: DeclareIndicatorApi.Indicator): Validatio
   const errors: ValidationError[] = [];
   const value = formValues[indicator.indicatorCode];
   const isFileEmpty = isEmpty(value) || value === '[]' || value === '[ ]';
-  if (indicator.isRequired && isFileEmpty) errors.push({ indicatorId: indicator.id, indicatorCode: indicator.indicatorCode, message: `${indicator.indicatorName}：此项为必填`, errorType: 'required', dirty: true });
+
+  if (indicator.isRequired && isFileEmpty) {
+    errors.push({ indicatorId: indicator.id, indicatorCode: indicator.indicatorCode, message: `${indicator.indicatorName}：此项为必填`, errorType: 'required', dirty: true });
+    return errors;
+  }
+
+  if (isFileEmpty) return errors;
+
+  const minFormats = getMinFormats(indicator);
+  const requiredGroups = getRequiredGroups(indicator);
+  const typeGroups = getFileTypeGroups(indicator);
+
+  if (minFormats > 0 || requiredGroups.length > 0) {
+    let fileList: UploadFile[] = [];
+    try {
+      fileList = JSON.parse(value);
+    } catch { /* ignore */ }
+
+    const uploadedGroups = resolveFileGroups(fileList, typeGroups);
+
+    if (minFormats > 0 && uploadedGroups.size < minFormats) {
+      errors.push({
+        indicatorId: indicator.id,
+        indicatorCode: indicator.indicatorCode,
+        message: `${indicator.indicatorName}：至少需要上传 ${minFormats} 种不同格式的文件（当前覆盖 ${uploadedGroups.size} 种）`,
+        errorType: 'format',
+        dirty: true,
+      });
+    }
+
+    const missingGroups = requiredGroups
+      .map((g: string) => g.toLowerCase())
+      .filter((g: string) => !uploadedGroups.has(g));
+
+    if (missingGroups.length > 0) {
+      errors.push({
+        indicatorId: indicator.id,
+        indicatorCode: indicator.indicatorCode,
+        message: `${indicator.indicatorName}：必须包含以下格式的文件：${missingGroups.join('、')}`,
+        errorType: 'format',
+        dirty: true,
+      });
+    }
+  }
+
   return errors;
 }
 function validateType10_Dept(indicator: DeclareIndicatorApi.Indicator): ValidationError[] { return validateType6_Select(indicator); }
