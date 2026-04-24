@@ -613,6 +613,54 @@ function validateFilledContainer(
 }
 
 /**
+ * 顶层指标校验（全部，拆分自 validateAll）
+ */
+export function validateTopLevel(
+  _indicators: DeclareIndicatorApi.Indicator[],
+): ValidationError[] {
+  const messages: ValidationError[] = [];
+  const orderedIndicators = getIndicatorsInDisplayOrder();
+
+  for (const indicator of orderedIndicators) {
+    if (indicator.valueType === 12) continue;
+    (indicator as any)._formValue = formValues[indicator.indicatorCode];
+    const errs = validateIndicator(indicator);
+    if (errs.length > 0) {
+      for (const e of errs) {
+        messages.push({
+          message: e.message,
+          errorType: e.errorType,
+          indicatorId: indicator.id,
+          indicatorCode: indicator.indicatorCode,
+          indicatorName: indicator.indicatorName,
+        });
+      }
+    }
+  }
+  return messages;
+}
+
+/**
+ * 容器指标校验（全部，拆分自 validateAll）
+ */
+export function validateContainerAll(
+  _indicators: DeclareIndicatorApi.Indicator[],
+): ValidationError[] {
+  const messages: ValidationError[] = [];
+  const orderedIndicators = getIndicatorsInDisplayOrder();
+
+  for (const indicator of orderedIndicators) {
+    if (indicator.valueType !== 12) continue;
+    const entries = containerValues[indicator.indicatorCode] || [];
+    const errs = validateContainer(indicator, entries);
+    if (errs.length > 0) {
+      messages.push(...errs);
+    }
+  }
+  return messages;
+}
+
+/**
  * 全部校验（必填 + 格式 + 范围）
  * 返回所有错误消息，用于提交时弹出
  */
@@ -622,34 +670,12 @@ export function validateAll(
   _clearFieldErrorFn: (key: string) => void,
 ): { messages: ValidationError[]; hasErrors: boolean } {
   const messages: ValidationError[] = [];
-  // 按页面显示顺序遍历，避免容器指标被放到最后
-  const orderedIndicators = getIndicatorsInDisplayOrder();
 
-  for (const indicator of orderedIndicators) {
-    if (indicator.valueType === 12) {
-      // 容器指标：校验所有行
-      const entries = containerValues[indicator.indicatorCode] || [];
-      const errs = validateContainer(indicator, entries);
-      if (errs.length > 0) {
-        messages.push(...errs);
-      }
-    } else {
-      // 普通指标
-      (indicator as any)._formValue = formValues[indicator.indicatorCode];
-      const errs = validateIndicator(indicator);
-      if (errs.length > 0) {
-        for (const e of errs) {
-          messages.push({
-            message: e.message,
-            errorType: e.errorType,
-            indicatorId: indicator.id,
-            indicatorCode: indicator.indicatorCode,
-            indicatorName: indicator.indicatorName,
-          });
-        }
-      }
-    }
-  }
+  // 顶层指标
+  messages.push(...validateTopLevel(_indicators));
+
+  // 容器指标
+  messages.push(...validateContainerAll(_indicators));
 
   return { messages, hasErrors: messages.length > 0 };
 }

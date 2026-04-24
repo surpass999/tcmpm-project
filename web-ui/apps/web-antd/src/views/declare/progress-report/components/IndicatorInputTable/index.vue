@@ -99,8 +99,6 @@ import {
 // 工具函数
 import { parseOptions } from './utils/options';
 import { formatLastValueNumber, parseInputTypeLastPeriodRaw } from './utils/lastValue';
-import { parseCC } from '#/utils/indicatorValidator';
-
 // 输入型选项
 import {
   handleInputTypeRadioChange,
@@ -126,8 +124,9 @@ import {
   validateLogicRuleForBlur,
   validateSingleContainerLogicRule,
   clearContainerLogicRuleErrors,
-  validateContainerConstraint,
 } from './composables/useLogicRules';
+
+import { parseCC, evaluateCC } from './utils/indicator-validator';
 
 // 上期对比规则
 import {
@@ -413,10 +412,9 @@ function onContainerFieldChange(indicator: DeclareIndicatorApi.Indicator, entry:
     // ==================== 第2.5级：CC 容器级联互斥约束校验 ====================
     if (indicator.logicRule) {
       const ccRule = parseCC(indicator.logicRule, entryNum);
-      // console.log('[CC DEBUG] parseCC result:', ccRule, 'logicRule:', indicator.logicRule);
       if (ccRule) {
-        const ccErrors = validateContainerConstraint(ccRule, entry, indicator);
-        // console.log('[CC DEBUG] validateContainerConstraint errors:', ccErrors);
+        const fieldDefs = parseDynamicFields(indicator.valueOptions);
+        const ccErrors = evaluateCC(ccRule, entry, fieldDefs);
         if (ccErrors.length > 0) {
           setFieldError(ccErrors[0]!.fieldKey, ccErrors[0]!.errMsg, 'logic', false);
           return;
@@ -612,6 +610,45 @@ function setValues(values: Array<{
   }
 }
 
+/**
+ * 批量填入指标值（便捷方法）
+ * 接收简单的 { indicatorCode: value } 映射，自动查找 indicatorId 和 valueType
+ * 示例：fillValues({ '201': 500, '20101': 600 })
+ */
+function fillValues(values: Record<string, any>) {
+  for (const ind of indicators.value) {
+    const value = values[ind.indicatorCode];
+    if (value === undefined) continue;
+
+    const { indicatorCode, valueType } = ind;
+    if (valueType === 12) {
+      // 容器类型：解析 JSON 数组
+      try {
+        containerValues[indicatorCode] = JSON.parse(value || '[]');
+      } catch {
+        containerValues[indicatorCode] = [];
+      }
+      continue;
+    }
+
+    if (valueType === 6 || valueType === 7) {
+      // 输入型选项：直接赋值
+      formValues[indicatorCode] = value ?? undefined;
+      continue;
+    }
+
+    // 普通类型：直接赋值
+    formValues[indicatorCode] = value ?? undefined;
+  }
+  // 标记为脏
+  markDirty();
+  // 触发完整验证流水线（基础 + 逻辑 + 上期）
+  nextTick(() => {
+    recalculateComputedIndicators(indicators.value);
+    validateLogicRules(indicators.value, setFieldError, clearFieldError);
+  });
+}
+
 function syncContainerValuesToForm() {
   for (const ind of indicators.value) {
     if (ind.valueType === 12) formValues[ind.indicatorCode] = JSON.stringify(containerValues[ind.indicatorCode] || []);
@@ -725,6 +762,7 @@ defineExpose({
   getFillProgress,
   scrollToField,
   setValues,
+  fillValues,
   // 联动相关
   isIndicatorVisible,
   isIndicatorDisabled,

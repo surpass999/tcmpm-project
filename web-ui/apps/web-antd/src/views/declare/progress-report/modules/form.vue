@@ -460,6 +460,12 @@ const [Modal, modalApi] = useVbenModal({
             clearLocalDraft();
           }
         }
+        // 调试用：将 fillValues 暴露到 window
+        console.log('[fillValues] isLoading=false, indicatorTableRef.value=', indicatorTableRef.value, 'hospitalId=', formData.value.hospitalId);
+        (window as any).__fillValues = (v: Record<string, any>) => {
+          console.log('[fillValues called]', v);
+          return indicatorTableRef.value?.fillValues?.(v);
+        };
       });
     }
   },
@@ -726,7 +732,7 @@ function updateFillProgress() {
   fillProgress.value = indicatorTableRef.value.getFillProgress();
 }
 
-defineExpose({ setData: modalApi.setData });
+defineExpose({ setData: modalApi.setData, fillValues: (v: Record<string, any>) => indicatorTableRef.value?.fillValues?.(v) });
 
 /** 防抖同步表单数据到 Store（用于 idle 超时保存） */
 const debouncedSyncFormData = useDebounceFn(() => {
