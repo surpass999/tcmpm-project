@@ -801,9 +801,18 @@ function buildMsgFromConfig(
           const code = item.indicatorCode;
           const label = getIndicatorLabel(code);
           const numVal = values[code] !== undefined && values[code] !== null ? Number(values[code]) : 0;
-          const prefix = item.mathOp === '-' ? '-' : (rightParts.length > 0 ? '+' : '');
+          const mathOp = item.mathOp || '+';
+          const prefix = mathOp === '-' ? '-' : (rightParts.length > 0 ? '+' : '');
           rightParts.push(`${prefix}${label}(${numVal})`);
-          rightTotal += numVal;
+          if (mathOp === '-') {
+            rightTotal -= numVal;
+          } else if (mathOp === '*') {
+            rightTotal *= numVal;
+          } else if (mathOp === '/') {
+            rightTotal = numVal !== 0 ? rightTotal / numVal : 0;
+          } else {
+            rightTotal += numVal;
+          }
         }
       }
       const rightFriendlyText = rightParts.join('') + ` = ${rightTotal}`;
@@ -926,13 +935,31 @@ function buildSimpleMessage(rule: ParsedRule, ctx: MessageContext): string {
         const label = findIndicatorLabel(code, allIndicators);
         const val = values[code];
         const numVal = val !== undefined && val !== null && val !== '' ? Number(val) : 0;
-        const prefix = item.mathOp === '-' ? '-' : (rightParts.length > 0 ? '+' : '');
+        const mathOp = item.mathOp || '+';
+        const prefix = mathOp === '-' ? '-' : (rightParts.length > 0 ? '+' : '');
         rightParts.push(`${prefix}${label}(${numVal})`);
-        rightTotal += numVal;
+        if (mathOp === '-') {
+          rightTotal -= numVal;
+        } else if (mathOp === '*') {
+          rightTotal *= numVal;
+        } else if (mathOp === '/') {
+          rightTotal = numVal !== 0 ? rightTotal / numVal : 0;
+        } else {
+          rightTotal += numVal;
+        }
       } else if (item.value !== undefined) {
-        const prefix = item.mathOp === '-' ? '-' : (rightParts.length > 0 ? '+' : '');
+        const mathOp = item.mathOp || '+';
+        const prefix = mathOp === '-' ? '-' : (rightParts.length > 0 ? '+' : '');
         rightParts.push(`${prefix}${item.value}`);
-        rightTotal += item.value;
+        if (mathOp === '-') {
+          rightTotal -= item.value;
+        } else if (mathOp === '*') {
+          rightTotal *= item.value;
+        } else if (mathOp === '/') {
+          rightTotal = item.value !== 0 ? rightTotal / item.value : 0;
+        } else {
+          rightTotal += item.value;
+        }
       }
     }
     return `${leftLabel}(${leftValText}) ${opText} ${rightParts.join(' ')} = ${rightTotal}`;

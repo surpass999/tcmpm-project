@@ -1,0 +1,1 @@
+{"id":"log_1777028006875","sessionId":"513d33","timestamp":1777028006875,"location":"engine.ts:806","message":"buildMsgFromConfig rightTotal bug","data":{"rightFormula":[{"code":"202","op":"+","val":500},{"code":"201","op":"-","val":500},{"code":"20101","op":"+","val":490}],"wrongTotal":1490,"correctTotal":490}}

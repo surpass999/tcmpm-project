@@ -3,6 +3,7 @@ node_modules/
 .idea/
 .target
 .gitnexus/
+.cursor/
 
 # ignore build artifacts
 **/target/
