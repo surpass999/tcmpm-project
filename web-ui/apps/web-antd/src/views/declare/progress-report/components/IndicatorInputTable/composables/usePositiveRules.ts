@@ -17,15 +17,9 @@ import type { PositiveRuleConfig, PositiveRuleItem, PositiveRuleError } from '..
 import { jointRules, lastPeriodValues, lastPeriodRawValues } from './useIndicatorData';
 import { formValues } from './useFormValues';
 import { containerValues } from './useContainerValues';
-import { setFieldError, clearFieldErrorIfType } from './useErrorKeys';
+import { setFieldError, clearFieldErrorByType } from './useErrorKeys';
 
 // ==================== 辅助函数 ====================
-
-/** 生成上期规则错误 key */
-function makePositiveErrorKey(indicator: DeclareIndicatorApi.Indicator, fieldCode?: string): string {
-  if (fieldCode) return fieldCode; // 容器场景
-  return indicator.id !== undefined ? `t:${indicator.id}` : indicator.indicatorCode;
-}
 
 /** 提取纯 value（去掉 inputType 的 ∵ 分隔符） */
 function extractPureValue(value: any): string {
@@ -260,7 +254,7 @@ export function validatePositiveRuleForIndicator(
         if (item.indicatorCode !== changedIndicatorCode) continue;
         const error = validateSinglePositiveRule(item, indicators);
         if (error) {
-          setPositiveRuleError(error);
+          setPositiveRuleError(error, item.indicatorCode);
           return error;
         } else {
           clearPositiveRuleError(item.indicatorCode, indicators);
@@ -291,6 +285,7 @@ export function validateAllPositiveRules(
       for (const item of config.rules) {
         const error = validateSinglePositiveRule(item, indicators);
         if (error) {
+          setPositiveRuleError(error, item.indicatorCode);
           errors.push(error);
         } else {
           clearPositiveRuleError(item.indicatorCode, indicators);
@@ -305,13 +300,14 @@ export function validateAllPositiveRules(
 
 // ==================== 辅助函数 ====================
 
-function setPositiveRuleError(error: PositiveRuleError): void {
-  setFieldError(error.errorKey, `${error.ruleName}：${error.message}`, 'joint', false);
+function setPositiveRuleError(error: PositiveRuleError, indicatorCode: string): void {
+  const ruleId = `positive:${indicatorCode}`;
+  setFieldError(error.errorKey, `${error.ruleName}：${error.message}`, 'joint', ruleId);
 }
 
 function clearPositiveRuleError(indicatorCode: string, indicators: DeclareIndicatorApi.Indicator[]): void {
   const indicator = indicators.find((i) => i.indicatorCode === indicatorCode);
   if (indicator?.id) {
-    clearFieldErrorIfType(`t:${indicator.id}`, 'joint');
+    clearFieldErrorByType(`t:${indicator.id}`, 'joint');
   }
 }

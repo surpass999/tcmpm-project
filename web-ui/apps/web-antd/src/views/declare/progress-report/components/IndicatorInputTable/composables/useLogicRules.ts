@@ -12,6 +12,11 @@
  * - 本文件（~300行）→ 集成层：Vue 上下文 + 值映射 + 错误上报
  * - engine.ts        → 验证执行引擎
  * - parser.ts        → 规则字符串解析器
+ *
+ * ruleId 体系：
+ * - 顶层指标:  "logic:{indicatorCode}"
+ * - 条目容器:  "logic:{indicatorCode}:{entryNum}"
+ * - 条件容器:  "logic:{indicatorCode}"
  */
 
 import type { DeclareIndicatorApi } from '#/api/declare/indicator';
@@ -24,6 +29,41 @@ import { fieldErrors, toContainerKey } from './useErrorKeys';
 import { isIndicatorVisible } from './useLinkage';
 
 // ==================== 辅助函数 ====================
+
+/** 生成逻辑规则的 ruleId */
+function makeLogicRuleId(indicatorCode: string, entryNum?: number): string {
+  if (entryNum !== undefined) {
+    return `logic:${indicatorCode}:${String(entryNum).padStart(2, '0')}`
+  }
+  return `logic:${indicatorCode}`
+}
+
+/** 从 logicRule 字符串解析出涉及的指标代码集合 */
+function parseInvolvedCodes(logicRule: string): string[] {
+  const codes: string[] = []
+  for (const m of logicRule.matchAll(/\[([^\]]+)\]/g)) {
+    codes.push(m[1]!.trim())
+  }
+  return codes
+}
+
+/** 清除顶层指标的 logic 规则错误（精确匹配 ruleId） */
+function clearTopLevelLogicErrors(
+  allIndicators: DeclareIndicatorApi.Indicator[],
+  involvedCodes: string[],
+  ruleId: string,
+  clearFieldError: (key: string) => void,
+): void {
+  for (const code of involvedCodes) {
+    const ind = allIndicators.find((i) => i.indicatorCode === code)
+    if (ind?.id !== undefined) {
+      const err = fieldErrors[`t:${ind.id}`]
+      if (err?.errorType === 'logic' && err.ruleId === ruleId) {
+        clearFieldError(`t:${ind.id}`)
+      }
+    }
+  }
+}
 
 /** 判断是否为自动计算指标 */
 function isComputedIndicator(indicator: DeclareIndicatorApi.Indicator): boolean {
@@ -110,7 +150,7 @@ function buildTopLevelValueMap(allIndicators: DeclareIndicatorApi.Indicator[]): 
  */
 function validateFORMATS(
   indicator: DeclareIndicatorApi.Indicator,
-  setFieldError: (key: string, message: string, type: FieldError['errorType'], dirty?: boolean) => void,
+  setFieldError: (key: string, message: string, type: FieldError['errorType'], ruleId?: string) => void,
   clearFieldError: (key: string) => void,
 ): string | null {
   const formatsRule = parseFORMATS(indicator.logicRule);
@@ -124,21 +164,22 @@ function validateFORMATS(
     } catch { /* ignore */ }
   }
 
+  const key = indicator.id !== undefined ? `t:${indicator.id}` : indicator.indicatorCode;
+
   if (fileList.length === 0) {
     // 空文件列表时：不清除也不报错（由必填校验兜底）
-    clearFieldError(indicator.id !== undefined ? `t:${indicator.id}` : indicator.indicatorCode);
+    clearFieldError(key);
     return null;
   }
 
   const missing = evaluateFORMATS(formatsRule, fileList);
   if (missing.length > 0) {
     const errMsg = `${indicator.indicatorName}：必须包含以下格式的文件：${missing.join('、')}`;
-    const key = indicator.id !== undefined ? `t:${indicator.id}` : indicator.indicatorCode;
-    setFieldError(key, errMsg, 'logic', false);
+    const ruleId = makeLogicRuleId(indicator.indicatorCode);
+    setFieldError(key, errMsg, 'logic', ruleId);
     return errMsg;
   }
 
-  const key = indicator.id !== undefined ? `t:${indicator.id}` : indicator.indicatorCode;
   clearFieldError(key);
   return null;
 }
@@ -167,16 +208,11 @@ function findFirstFilledFieldCode(indicator: DeclareIndicatorApi.Indicator, entr
 
 function clearContainerLogicRuleErrors(
   indicator: DeclareIndicatorApi.Indicator,
-  clearFieldError: (key: string) => void,
+  entryNum?: number,
 ) {
+  const ruleId = makeLogicRuleId(indicator.indicatorCode, entryNum)
   const containerType = getContainerType(indicator.valueOptions);
   const entries = containerValues[indicator.indicatorCode] || [];
-
-  const shouldClear = (key: string) => {
-    const err = fieldErrors[key];
-    if (!err) return true;
-    return err.errorType === 'logic' || err.errorType === 'joint';
-  };
 
   if (containerType === 'conditional') {
     const fields = parseDynamicFields(indicator.valueOptions);
@@ -184,14 +220,20 @@ function clearContainerLogicRuleErrors(
     const entryRowKey = entries2[0]?.rowKey ?? indicator.indicatorCode;
     for (const field of fields) {
       const fieldKey = toContainerKey(entryRowKey, field.fieldCode);
-      if (shouldClear(fieldKey)) clearFieldError(fieldKey);
+      const err = fieldErrors[fieldKey];
+      if (err?.errorType === 'logic' && err.ruleId === ruleId) {
+        delete fieldErrors[fieldKey];
+      }
     }
   } else {
     for (const entry of entries) {
       const fields = parseDynamicFields(indicator.valueOptions);
       for (const field of fields) {
         const fieldKey = toContainerKey(entry.rowKey, field.fieldCode);
-        if (shouldClear(fieldKey)) clearFieldError(fieldKey);
+        const err = fieldErrors[fieldKey];
+        if (err?.errorType === 'logic' && err.ruleId === ruleId) {
+          delete fieldErrors[fieldKey];
+        }
       }
     }
   }
@@ -204,7 +246,7 @@ function clearContainerLogicRuleErrors(
  */
 function validateLogicRules(
   allIndicators: DeclareIndicatorApi.Indicator[],
-  setFieldError: (key: string, message: string, type: FieldError['errorType'], dirty?: boolean) => void,
+  setFieldError: (key: string, message: string, type: FieldError['errorType'], ruleId?: string) => void,
   clearFieldError: (key: string) => void,
 ): ValidationError[] {
   const errors: ValidationError[] = [];
@@ -240,6 +282,7 @@ function validateLogicRules(
         const entryKey = containerType === 'conditional'
           ? indicator.indicatorCode
           : `${indicator.indicatorCode}${String(entryNum).padStart(2, '0')}`;
+        const ruleId = makeLogicRuleId(indicator.indicatorCode, containerType === 'conditional' ? undefined : entryNum);
 
         // CC 规则
         const ccRule = parseCC(indicator.logicRule, containerType === 'conditional' ? 1 : entryNum);
@@ -252,7 +295,8 @@ function validateLogicRules(
             const fields = parseDynamicFields(indicator.valueOptions);
             const ccErrors = evaluateCC(ccRule, entry, fields);
             if (ccErrors.length > 0) {
-              setFieldError(ccErrors[0]!.fieldKey, ccErrors[0]!.errMsg, 'logic', false);
+              const ruleId = makeLogicRuleId(indicator.indicatorCode, containerType === 'conditional' ? undefined : entryNum);
+              setFieldError(ccErrors[0]!.fieldKey, ccErrors[0]!.errMsg, 'logic', ruleId);
               errors.push({
                 indicatorId: indicator.id,
                 indicatorCode: indicator.indicatorCode,
@@ -272,7 +316,12 @@ function validateLogicRules(
 
         const entryValueMap = buildValueMap(indicator, containerType === 'conditional' ? 1 : entryNum);
         const results = validateJointRule(rules as any, entryValueMap, { triggerTiming: 'FILL', allIndicators });
-        if (results.length === 0) continue;
+
+        if (results.length === 0) {
+          // 规则通过：清除该 entry 的 logic 错误
+          clearContainerLogicRuleErrors(indicator, containerType === 'conditional' ? undefined : entryNum);
+          continue;
+        }
 
         const firstFailed = results[0]!;
         const allFields = parseDynamicFields(indicator.valueOptions);
@@ -294,7 +343,7 @@ function validateLogicRules(
           ? buildRuleMessage(firstFailed as any, { values: codeValueMap, allIndicators, ruleConfigStr: firstFailed.ruleConfig })
           : firstFailed.message || firstFailed.ruleName;
 
-        setFieldError(fullKey, `「${fullKey}」：${errMsg}`, 'logic', false);
+        setFieldError(fullKey, `「${fullKey}」：${errMsg}`, 'logic', ruleId);
         errors.push({
           indicatorId: indicator.id,
           indicatorCode: indicator.indicatorCode,
@@ -309,11 +358,12 @@ function validateLogicRules(
       // 顶层指标
       const rules = parseLogicRule(indicator.logicRule, 1);
       if (rules.length === 0) continue;
+      const involvedCodes = parseInvolvedCodes(indicator.logicRule);
       const results = validateJointRule(rules as any, codeValueMap, { triggerTiming: 'FILL', allIndicators });
+      const ruleId = makeLogicRuleId(indicator.indicatorCode);
+
       if (results.length === 0) {
-        if (indicator.id !== undefined && fieldErrors[`t:${indicator.id}`]?.errorType !== 'required') {
-          clearFieldError(`t:${indicator.id}`);
-        }
+        clearTopLevelLogicErrors(allIndicators, involvedCodes, ruleId, clearFieldError);
         continue;
       }
 
@@ -322,7 +372,7 @@ function validateLogicRules(
         ? buildRuleMessage(firstFailed as any, { values: codeValueMap, allIndicators, ruleConfigStr: firstFailed.ruleConfig })
         : firstFailed.message || firstFailed.ruleName;
 
-      if (indicator.id !== undefined) setFieldError(`t:${indicator.id}`, errMsg, 'logic', false);
+      if (indicator.id !== undefined) setFieldError(`t:${indicator.id}`, errMsg, 'logic', ruleId);
       errors.push({
         indicatorId: indicator.id,
         indicatorCode: indicator.indicatorCode,
@@ -344,9 +394,8 @@ function validateLogicRules(
 function validateLogicRuleForBlur(
   changedIndicator: DeclareIndicatorApi.Indicator,
   allIndicators: DeclareIndicatorApi.Indicator[],
-  setFieldError: (key: string, message: string, type: FieldError['errorType'], dirty?: boolean) => void,
+  setFieldError: (key: string, message: string, type: FieldError['errorType'], ruleId?: string) => void,
   clearFieldError: (key: string) => void,
-  setDirty: (key: string) => void,
 ): 'early-return' | 'proceeded' {
   const changedCode = changedIndicator.indicatorCode;
 
@@ -381,8 +430,6 @@ function validateLogicRuleForBlur(
     }
 
     if (!involvesChanged && changedCode !== indicator.indicatorCode) continue;
-
-    if (indicator.id !== undefined) setDirty(`t:${indicator.id}`);
 
     // FORMATS 规则
     const formatsErr = validateFORMATS(indicator, setFieldError, clearFieldError);
@@ -435,7 +482,8 @@ function validateLogicRuleForBlur(
         }
       }
 
-      clearContainerLogicRuleErrors(indicator, clearFieldError);
+      const ruleId = makeLogicRuleId(indicator.indicatorCode, containerType === 'conditional' ? undefined : 1);
+      clearContainerLogicRuleErrors(indicator, containerType === 'conditional' ? undefined : 1);
 
       if (logicFieldErrors.length > 0) {
         const firstError = logicFieldErrors[0]!;
@@ -446,24 +494,15 @@ function validateLogicRuleForBlur(
           const entryKey = `${indicator.indicatorCode}${String(firstError.entryNum).padStart(2, '0')}`;
           errorKey = `${entryKey}${firstError.fieldCode}`;
         }
-        setFieldError(errorKey, firstError.errMsg, 'logic', false);
-        setDirty(errorKey);
+        setFieldError(errorKey, firstError.errMsg, 'logic', ruleId);
       }
     } else {
       // 顶层指标
       const rules = parseLogicRule(indicator.logicRule, 1);
       if (rules.length === 0) continue;
 
-      const involvedCodes: string[] = [];
-      for (const m of indicator.logicRule.matchAll(/\[([^\]]+)\]/g)) {
-        involvedCodes.push(m[1]!.trim());
-      }
-      const allRefFieldsFilled = involvedCodes.every((code) => {
-        const val = formValues[code];
-        return val !== undefined && val !== null && val !== '';
-      });
-
       const results = validateJointRule(rules as any, codeValueMap, { triggerTiming: 'FILL', allIndicators });
+      const ruleId = makeLogicRuleId(indicator.indicatorCode);
 
       if (results.length > 0) {
         const firstFailed = results[0]!;
@@ -471,17 +510,22 @@ function validateLogicRuleForBlur(
         const errMsg = parsed.length > 0
           ? buildRuleMessage(parsed[0]!, { values: codeValueMap, allIndicators, ruleConfigStr: firstFailed.ruleConfig })
           : firstFailed.message || indicator.logicRule;
+        // 设置错误到涉及的所有指标上
         const targetCode = firstFailed.indicatorCode || indicator.indicatorCode;
         const targetIndicator = allIndicators.find((ind) => ind.indicatorCode === targetCode);
         if (targetIndicator?.id !== undefined) {
-          setFieldError(`t:${targetIndicator.id}`, errMsg, 'logic', false);
+          setFieldError(`t:${targetIndicator.id}`, errMsg, 'logic', ruleId);
         }
-      } else if (allRefFieldsFilled) {
-        const firstRule = (rules as any[])[0];
-        const verifyCode = firstRule?.verifyIndicatorCode || indicator.indicatorCode;
-        const verifyIndicator = allIndicators.find((ind) => ind.indicatorCode === verifyCode);
-        if (verifyIndicator?.id !== undefined && fieldErrors[`t:${verifyIndicator.id}`]?.errorType !== 'required') {
-          clearFieldError(`t:${verifyIndicator.id}`);
+      } else {
+        // 规则通过：精确清除 ruleId 在所有涉及字段上的 logic 错误
+        for (const code of involvedCodes) {
+          const ind = allIndicators.find((i) => i.indicatorCode === code);
+          if (ind?.id !== undefined) {
+            const err = fieldErrors[`t:${ind.id}`];
+            if (err?.errorType === 'logic' && err.ruleId === ruleId) {
+              clearFieldError(`t:${ind.id}`);
+            }
+          }
         }
       }
     }
@@ -496,7 +540,7 @@ function validateLogicRuleForBlur(
 function validateFilledLogicRules(
   indicatorsToValidate: DeclareIndicatorApi.Indicator[],
   allIndicators: DeclareIndicatorApi.Indicator[],
-  setFieldError: (key: string, message: string, type: FieldError['errorType'], dirty?: boolean) => void,
+  setFieldError: (key: string, message: string, type: FieldError['errorType'], ruleId?: string) => void,
   clearFieldError: (key: string) => void,
 ): ValidationError[] {
   const errors: ValidationError[] = [];
@@ -527,8 +571,10 @@ function validateFilledLogicRules(
         const rules = parseLogicRule(indicator.logicRule, entryNum);
         if (rules.length === 0) continue;
 
+        const entryKey = `${indicator.indicatorCode}${String(entryNum).padStart(2, '0')}`;
         const entryValueMap = buildEntryValueMap(indicator, entryNum);
         const results = validateJointRule(rules as any, entryValueMap, { triggerTiming: 'FILL', allIndicators });
+        const ruleId = makeLogicRuleId(indicator.indicatorCode, entryNum);
 
         if (results.length > 0) {
           const firstFailed = results[0]!;
@@ -546,9 +592,8 @@ function validateFilledLogicRules(
           }
           if (!fieldCode) fieldCode = findFirstFilledFieldCode(indicator, entryNum) || '';
 
-          const entryKey = `${indicator.indicatorCode}${String(entryNum).padStart(2, '0')}`;
           const containerFieldKey = fieldCode ? toContainerKey(entryKey, fieldCode) : entryKey;
-          setFieldError(containerFieldKey, `「${containerFieldKey}」：${errMsg}`, 'logic', false);
+          setFieldError(containerFieldKey, `「${containerFieldKey}」：${errMsg}`, 'logic', ruleId);
 
           errors.push({
             indicatorId: indicator.id,
@@ -559,6 +604,16 @@ function validateFilledLogicRules(
             containerFieldKey,
           });
           return errors;
+        } else {
+          // 规则通过：清除该 entry 之前设置的容器字段错误
+          const allFields = parseDynamicFields(indicator.valueOptions);
+          for (const fd of allFields ?? []) {
+            const fieldKey = toContainerKey(entryKey, fd.fieldCode);
+            const err = fieldErrors[fieldKey];
+            if (err?.errorType === 'logic' && err.ruleId === ruleId) {
+              delete fieldErrors[fieldKey];
+            }
+          }
         }
       }
     } else {
@@ -577,6 +632,7 @@ function validateFilledLogicRules(
       if (!allRefFieldsFilled) continue;
 
       const results = validateJointRule(rules as any, codeValueMap, { triggerTiming: 'FILL', allIndicators });
+      const ruleId = makeLogicRuleId(indicator.indicatorCode);
 
       if (results.length > 0) {
         const firstFailed = results[0]!;
@@ -592,10 +648,17 @@ function validateFilledLogicRules(
           errorType: 'logic',
           indicatorName: indicator.indicatorName,
         });
-        if (indicator.id !== undefined) setFieldError(`t:${indicator.id}`, errMsg, 'logic', false);
+        if (indicator.id !== undefined) setFieldError(`t:${indicator.id}`, errMsg, 'logic', ruleId);
       } else {
-        if (indicator.id !== undefined && fieldErrors[`t:${indicator.id}`]?.errorType !== 'required') {
-          clearFieldError(`t:${indicator.id}`);
+        // 规则通过：精确清除 ruleId 在所有涉及字段上的 logic 错误
+        for (const code of involvedCodes) {
+          const ind = allIndicators.find((i) => i.indicatorCode === code);
+          if (ind?.id !== undefined) {
+            const err = fieldErrors[`t:${ind.id}`];
+            if (err?.errorType === 'logic' && err.ruleId === ruleId) {
+              clearFieldError(`t:${ind.id}`);
+            }
+          }
         }
       }
     }

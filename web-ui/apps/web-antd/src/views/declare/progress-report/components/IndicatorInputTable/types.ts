@@ -71,7 +71,12 @@ export interface ContainerConfig {
 export interface FieldError {
   message: string
   errorType: 'required' | 'format' | 'range' | 'logic' | 'joint'
-  dirty: boolean
+  /** 设置此错误的规则唯一标识，用于验证通过时精确清除
+   * 格式: "{type}:{sourceId}[:{subId}]"
+   *   - 基础验证:  "basic:{indicatorCode}[:{fieldCode}]"
+   *   - 逻辑规则:  "logic:{indicatorCode}[:{entryNum}]"
+   *   - 上期值:    "positive:{indicatorCode}" */
+  ruleId?: string
 }
 
 /** 校验错误 */
@@ -83,7 +88,6 @@ export interface ValidationError {
   errorType?: 'required' | 'format' | 'range' | 'logic' | 'joint';
   indicatorName?: string;
   fieldLabel?: string;
-  dirty?: boolean;
 }
 
 /** 容器字段校验上下文 */

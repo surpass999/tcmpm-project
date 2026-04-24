@@ -34,15 +34,12 @@ import {
   clearFieldError,
   clearAllErrors,
   toTopLevelKey,
-  setDirty,
   getContainerFieldError,
   getTopLevelError,
   validateContainerFieldOnBlur,
   validateIndicator,
   validateAll,
   validateFilledData,
-  markTopLevelDirty,
-  markContainerFieldDirty,
 } from './composables/useValidation';
 
 import { fieldErrors } from './composables/useErrorKeys';
@@ -291,7 +288,6 @@ setOnIndicatorChangeCallback((indicator) => {
 });
 
 function handleNumberBlur(indicator: DeclareIndicatorApi.Indicator, _event: Event) {
-  if (indicator.id !== undefined) markTopLevelDirty(indicator.id);
   checkAndSyncLinkedAutoContainers(indicator.indicatorCode, indicators.value);
   if (indicator.id !== undefined) {
     // 只清除格式/范围/联动/逻辑错误，保留必填错误（必填错误只能通过填写内容清除）
@@ -307,7 +303,7 @@ function handleNumberBlur(indicator: DeclareIndicatorApi.Indicator, _event: Even
     if (basicErrs.length > 0) return; // ← fail-fast
 
     // ==================== 第2级：逻辑验证 ====================
-    const logicResult = validateLogicRuleForBlur(indicator, indicators.value, setFieldError, clearFieldError, setDirty);
+    const logicResult = validateLogicRuleForBlur(indicator, indicators.value, setFieldError, clearFieldError);
     if (logicResult === 'early-return') return;
 
     // ==================== 第3级：上期值验证 ====================
@@ -318,7 +314,6 @@ function handleNumberBlur(indicator: DeclareIndicatorApi.Indicator, _event: Even
 }
 
 function handleTextBlur(indicator: DeclareIndicatorApi.Indicator, _event: Event) {
-  if (indicator.id !== undefined) markTopLevelDirty(indicator.id);
   if (indicator.id !== undefined) {
     const key = toTopLevelKey(indicator.id);
     clearFieldError(key, true);
@@ -355,7 +350,6 @@ function onIndicatorChange(indicator: DeclareIndicatorApi.Indicator, rawValue?: 
     formValues[indicator.indicatorCode] = rawValue;
   }
   if (indicator.id !== undefined) {
-    markTopLevelDirty(indicator.id);
     const key = toTopLevelKey(indicator.id);
     clearFieldError(key, true);
   }
@@ -371,7 +365,7 @@ function onIndicatorChange(indicator: DeclareIndicatorApi.Indicator, rawValue?: 
     if (basicErrs.length > 0) return; // ← fail-fast：有错直接阻断
 
     // ==================== 第2级：逻辑验证 ====================
-    const logicResult = validateLogicRuleForBlur(indicator, indicators.value, setFieldError, clearFieldError, setDirty);
+    const logicResult = validateLogicRuleForBlur(indicator, indicators.value, setFieldError, clearFieldError);
     if (logicResult === 'early-return') return;
 
     // ==================== 第3级：上期值验证 ====================
@@ -389,9 +383,6 @@ function handleInputTypeBlur(indicator: DeclareIndicatorApi.Indicator, opt: any,
 }
 
 function onContainerFieldChange(indicator: DeclareIndicatorApi.Indicator, entry: any, field: DynamicField) {
-  const containerType = getContainerType(indicator.valueOptions);
-  markContainerFieldDirty(indicator.indicatorCode, entry.rowKey, field.fieldCode, containerType);
-
   // ==================== 第1级：基础验证 ====================
   const step1Err = validateContainerFieldOnBlur(entry, indicator, field, containerValues[indicator.indicatorCode] || []);
   if (step1Err) return; // ← fail-fast：基础验证有错直接阻断
@@ -403,9 +394,10 @@ function onContainerFieldChange(indicator: DeclareIndicatorApi.Indicator, entry:
     // 从 entry.rowKey 解析出行号和 entryKey
     const entryNum = parseInt(entry.rowKey.replace(indicator.indicatorCode, ''), 10);
     const entryKey = entry.rowKey;
+    const ruleId = `logic:${indicator.indicatorCode}:${String(entryNum).padStart(2, '0')}`;
     const step2 = validateSingleContainerLogicRule(indicator, entryNum, entryKey, indicators.value);
     if (step2) {
-      setFieldError(step2.fieldKey, step2.errMsg, 'logic', false);
+      setFieldError(step2.fieldKey, step2.errMsg, 'logic', ruleId);
       return;
     }
 
@@ -416,14 +408,14 @@ function onContainerFieldChange(indicator: DeclareIndicatorApi.Indicator, entry:
         const fieldDefs = parseDynamicFields(indicator.valueOptions);
         const ccErrors = evaluateCC(ccRule, entry, fieldDefs);
         if (ccErrors.length > 0) {
-          setFieldError(ccErrors[0]!.fieldKey, ccErrors[0]!.errMsg, 'logic', false);
+          setFieldError(ccErrors[0]!.fieldKey, ccErrors[0]!.errMsg, 'logic', ruleId);
           return;
         }
       }
     }
 
     // 逻辑验证通过 → 清除该行逻辑错误
-    clearContainerLogicRuleErrors(indicator, clearFieldError);
+    clearContainerLogicRuleErrors(indicator, entryNum);
 
     // ==================== 第3级：上期值验证（容器当前返回 null） ====================
     // if (hasAnyLastPeriodValue()) { validatePositiveRuleForIndicator(indicator.indicatorCode, indicators.value); }
@@ -435,8 +427,6 @@ function onContainerFieldChange(indicator: DeclareIndicatorApi.Indicator, entry:
  * 不触发逻辑验证，避免与 blur 重复
  */
 function onContainerFieldBasicChange(indicator: DeclareIndicatorApi.Indicator, entry: any, field: DynamicField) {
-  const containerType = getContainerType(indicator.valueOptions);
-  markContainerFieldDirty(indicator.indicatorCode, entry.rowKey, field.fieldCode, containerType);
   validateContainerFieldOnBlur(entry, indicator, field, containerValues[indicator.indicatorCode] || []);
 }
 
@@ -693,8 +683,9 @@ function doValidateAll() {
       // 转换为 ErrorItem 格式，同时写入 fieldErrors（持久化显示）
       for (const e of positiveErrors) {
         const indicator = indicators.value.find((i) => i.indicatorCode === e.indicatorCode);
-        // 写入 fieldErrors 以便页面上显示（使用 joint 类型，dirty=false）
-        setFieldError(e.errorKey, `${e.ruleName}：${e.message}`, 'joint', false);
+        // 写入 fieldErrors 以便页面上显示
+        const ruleId = `positive:${e.indicatorCode}`;
+        setFieldError(e.errorKey, `${e.ruleName}：${e.message}`, 'joint', ruleId);
         allErrors.push({
           indicatorId: e.indicatorId,
           indicatorCode: e.indicatorCode,

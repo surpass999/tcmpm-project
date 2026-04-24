@@ -17,7 +17,6 @@ import type {
   ParsedRule,
   ParsedCCRule,
   ParsedFORMATSRule,
-  ParsedAction,
   JointRule,
   RuleConfig,
   ValidationResult,
@@ -149,7 +148,7 @@ export function calculateFormula(
         case '+': result = (result ?? 0) + (itemValue ?? 0); break;
         case '-': result = (result ?? 0) - (itemValue ?? 0); break;
         case '*': result = (result ?? 0) * (itemValue ?? 0); break;
-        case '/': result = itemValue !== 0 ? (result ?? 0) / itemValue : 0; break;
+        case '/': result = (itemValue ?? 0) !== 0 ? (result ?? 0) / (itemValue ?? 0) : 0; break;
       }
     }
   }
@@ -649,7 +648,7 @@ export function buildRuleMessage(
   rule: ParsedRule,
   ctx: MessageContext,
 ): string {
-  const { values, allIndicators, ruleConfigStr } = ctx;
+  const { ruleConfigStr } = ctx;
 
   // 如果有原始 JSON，优先使用（使用 ctx.ruleConfigStr）
   const rawCfg = ruleConfigStr;
@@ -680,11 +679,7 @@ function buildMsgFromConfig(
 
   const getIndicatorLabel = (code: string): string => {
     const ind = findIndicator(code);
-    if (!ind) {
-      console.log('[buildMsgFromConfig] getIndicatorLabel: not found for', code, '| allCodes:', allIndicators?.map((i: any) => i.indicatorCode));
-      return code; // fallback：找不到时返回原始 code
-    }
-    console.log('[buildMsgFromConfig] getIndicatorLabel: found', code, '| indicatorName:', ind.indicatorName, '| allKeys:', Object.keys(ind));
+    if (!ind) return code;
     return ind?.indicatorName ? `${code} - ${ind.indicatorName}` : code;
   };
   const getOptionLabel = (indicator: any, val: string): string => {
@@ -735,7 +730,7 @@ function buildMsgFromConfig(
       if (m) verifyCode = m[1] ?? '';
     }
     const verifyVals = (action.compareValues ?? []).map(String).join(',');
-    const verifyValsList = verifyVals.split(',').map((v) => v.trim());
+    const verifyValsList = verifyVals.split(',').map((v: string) => v.trim());
     const condLabel = getIndicatorLabel(condCode);
     const verifyLabel = getIndicatorLabel(verifyCode);
     const verifyOpText = action.operator === 'NOT_IN' ? '不能选择' : '必须选择';
@@ -769,12 +764,8 @@ function buildMsgFromConfig(
           if (!verifyVal) verifyVal = (verifyMatch[3] ?? '').replace(/^=+/, '');
         }
         if (condMatch) {
-          // 也设置 condCode / condVal 以便后续使用
-          const cCode = condMatch[1];
-          const cVal = (condMatch[3] ?? '').replace(/^=+/, '');
-          // 如果 action 里 condCode 为空，也从 ruleName 拿（虽然这里主要修 verify）
-          if (!condCode && condition) condition.indicatorCode = cCode ?? '';
-          if (!condVal) condIndicator; // condVal 已经从 condition.value 获取，这里不必覆盖
+          // 如果 action 里 condCode 为空，也从 ruleName 拿
+          if (!condCode && condition) condition.indicatorCode = condMatch[1] ?? '';
         }
       }
     }

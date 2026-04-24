@@ -10,7 +10,7 @@ import { nextTick } from 'vue';
 import type { DeclareIndicatorApi } from '#/api/declare/indicator';
 import { formValues } from './useFormValues';
 import { getNumberPrecision } from '../utils/indicator';
-import { setDirty, validateTopLevelOnBlur } from './useValidation';
+import { clearFieldError, validateTopLevelOnBlur } from './useValidation';
 import { indicators } from './useIndicatorData';
 
 // ==================== 辅助函数 ====================
@@ -104,7 +104,7 @@ function recalculateComputedIndicators(_indicators?: DeclareIndicatorApi.Indicat
         }
       }
       if (ind.id !== undefined) {
-        setDirty(`t:${ind.id}`);
+        clearFieldError(`t:${ind.id}`);
         // 触发范围校验，让 fieldErrors 写入错误信息，UI 立即显示
         validateTopLevelOnBlur(ind, formValues[ind.indicatorCode]);
       }

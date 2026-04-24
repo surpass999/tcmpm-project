@@ -14,7 +14,7 @@ import { uploadFile } from '#/api/infra/file';
 import { getAcceptTypes, getMaxFileCount } from '../utils/indicator';
 import type { DeclareIndicatorApi } from '#/api/declare/indicator';
 import { formValues } from './useFormValues';
-import { fieldErrors, setFieldError, setDirty, toTopLevelKey } from './useErrorKeys';
+import { fieldErrors, setFieldError, toTopLevelKey } from './useErrorKeys';
 
 // ==================== 文件列表状态 ====================
 
