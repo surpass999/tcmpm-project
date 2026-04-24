@@ -680,7 +680,11 @@ function buildMsgFromConfig(
 
   const getIndicatorLabel = (code: string): string => {
     const ind = findIndicator(code);
-    if (!ind) return code; // fallback：找不到时返回原始 code
+    if (!ind) {
+      console.log('[buildMsgFromConfig] getIndicatorLabel: not found for', code, '| allCodes:', allIndicators?.map((i: any) => i.indicatorCode));
+      return code; // fallback：找不到时返回原始 code
+    }
+    console.log('[buildMsgFromConfig] getIndicatorLabel: found', code, '| indicatorName:', ind.indicatorName, '| allKeys:', Object.keys(ind));
     return ind?.indicatorName ? `${code} - ${ind.indicatorName}` : code;
   };
   const getOptionLabel = (indicator: any, val: string): string => {
@@ -723,7 +727,13 @@ function buildMsgFromConfig(
       ? getMultiOptionLabels(condIndicator, userVals.map(String))
       : '选择值';
     // action.indicatorCode 可能为空（如 802），用 rule.verifyIndicatorCode fallback
-    const verifyCode = action.indicatorCode || action.compareIndicatorCode || rule.verifyIndicatorCode || '';
+    let verifyCode = action.indicatorCode || action.compareIndicatorCode || rule.verifyIndicatorCode || '';
+    // fallback：verifyCode 为空时，从 ruleName 解析 [verifyCode][condCode]
+    if (!verifyCode) {
+      const ruleName = item?.name ?? rule.ruleName ?? '';
+      const m = ruleName.match(/\[(\w+)\]/);
+      if (m) verifyCode = m[1] ?? '';
+    }
     const verifyVals = (action.compareValues ?? []).map(String).join(',');
     const verifyValsList = verifyVals.split(',').map((v) => v.trim());
     const condLabel = getIndicatorLabel(condCode);
@@ -741,14 +751,31 @@ function buildMsgFromConfig(
     const condCode = condition.indicatorCode ?? '';
     const condVal = String(condition.value ?? '');
     const condIndicator = findIndicator(condCode);
-    const verifyCode = action.indicatorCode ?? '';
+    // 用 || 而非 ??，确保空字符串也能回退
+    let verifyCode = action.indicatorCode || action.compareIndicatorCode || rule.verifyIndicatorCode || '';
     let verifyVal = String(action.compareValue ?? '');
-    // fallback：compareValue 可能为 0（来自 IN/NOT_IN 分支残留），从 ruleName 解析
-    if (verifyVal === '0' || verifyVal === '') {
-      const ruleName = item?.name ?? '';
-      const actionMatch = ruleName.match(/\]\s*(==|!=|>=|<=|>|<)\s*(\d+)/);
-      if (actionMatch) {
-        verifyVal = actionMatch[2] ?? '';
+    // fallback：code/value 为空时，从 ruleName 解析 "[verifyCode] == val 时, [condCode] == val" 或 "[condCode] == val 时, [verifyCode] == val"
+    if (!verifyCode || !verifyVal) {
+      const ruleName = item?.name ?? rule.ruleName ?? '';
+      // 格式: "[code1] == val1 时, [code2] == val2"
+      const parts = ruleName.split(/时,\s*/);
+      if (parts.length >= 2) {
+        const lastPart = parts[parts.length - 1]!.trim(); // [verifyCode] ==7
+        const condPart = parts[0]!.trim();                 // [801] == 11
+        const verifyMatch = lastPart.match(/^\[(\w+)\]\s*(==|!=)\s*(\S+)/);
+        const condMatch = condPart.match(/^\[(\w+)\]\s*(==|!=)\s*(\S+)/);
+        if (verifyMatch) {
+          if (!verifyCode) verifyCode = verifyMatch[1] ?? '';
+          if (!verifyVal) verifyVal = (verifyMatch[3] ?? '').replace(/^=+/, '');
+        }
+        if (condMatch) {
+          // 也设置 condCode / condVal 以便后续使用
+          const cCode = condMatch[1];
+          const cVal = (condMatch[3] ?? '').replace(/^=+/, '');
+          // 如果 action 里 condCode 为空，也从 ruleName 拿（虽然这里主要修 verify）
+          if (!condCode && condition) condition.indicatorCode = cCode ?? '';
+          if (!condVal) condIndicator; // condVal 已经从 condition.value 获取，这里不必覆盖
+        }
       }
     }
     const condValLabel = getOptionLabel(condIndicator, condVal);
@@ -868,8 +895,6 @@ function buildIFMessage(rule: ParsedRule, ctx: MessageContext): string {
     const condValText = condVals.map((v) => findOptionLabel(condCode, Number(v), allIndicators)).join('、');
     const verifyCode = action.indicatorCode || action.compareIndicatorCode || rule.verifyIndicatorCode || '';
     const verifyLabel = findIndicatorLabel(verifyCode, allIndicators);
-    const ind802 = allIndicators?.find((i: any) => i.indicatorCode === '802');
-    console.log('[engine] ind802', ind802);
     const verifyOpText = action.operator === 'NOT_IN' ? '不能选择' : '必须选择';
     const actionValues = (action as any).compareValues as number[] | undefined;
     const actionValText = actionValues
