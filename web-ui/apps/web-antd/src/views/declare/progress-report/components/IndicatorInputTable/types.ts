@@ -144,6 +144,28 @@ export interface PositiveRuleItem {
   options?: Array<{ value: string; label: string }>;
   excludeOptions?: string[];
   minNewCount?: number;
+  /** 容器字段配置（仅 valueType === 12 时有效） */
+  containerFields?: ContainerPositiveRuleField[];
+}
+
+/** 容器字段上期值验证配置 */
+export interface ContainerPositiveRuleField {
+  /** 字段编码 */
+  fieldCode: string;
+  /** 字段名称 */
+  fieldLabel: string;
+  /** 字段值类型：1=数字, 2=文本, 6=单选, 10=下拉, 7=多选 */
+  fieldValueType: number;
+  /** 比较模式 */
+  compareMode?: string;
+  /** 比较子类型 */
+  compareType?: string;
+  /** 选项列表 */
+  options?: Array<{ value: string; label: string }>;
+  /** 排除选项 */
+  excludeOptions?: string[];
+  /** 最小新增数量 */
+  minNewCount?: number;
 }
 
 /** 上期规则校验错误 */

@@ -793,4 +793,4 @@ export function clearContainerFieldError(
 
 // ==================== 统一错误结构导出（供 index.vue 使用） ====================
 // 使用 export ... from 语法，将 useErrorKeys 的符号直接转发，不产生重复导出
-export { fieldErrors, toTopLevelKey, toContainerKey, getFieldError, setFieldError, clearFieldError, clearAllErrors } from './useErrorKeys';
+export { fieldErrors, toTopLevelKey, toContainerKey, getFieldError, setFieldError, clearFieldError, clearFieldErrorByType, clearAllErrors } from './useErrorKeys';

@@ -13,8 +13,8 @@
  */
 
 import type { DeclareIndicatorApi } from '#/api/declare/indicator';
-import type { PositiveRuleConfig, PositiveRuleItem, PositiveRuleError } from '../types';
-import { jointRules, lastPeriodValues, lastPeriodRawValues } from './useIndicatorData';
+import type { PositiveRuleConfig, PositiveRuleItem, PositiveRuleError, DynamicField, ContainerPositiveRuleField } from '../types';
+import { jointRules, lastPeriodValues, lastPeriodRawValues, lastPeriodValues as lpValues } from './useIndicatorData';
 import { formValues } from './useFormValues';
 import { containerValues } from './useContainerValues';
 import { setFieldError, clearFieldErrorByType } from './useErrorKeys';
@@ -71,6 +71,7 @@ function compareByType(
 ): ComparisonResult {
   switch (valueType) {
     case 1:  return compareNumbers(current, last, item);
+    case 2:  return compareText(current, last);
     case 6:  return compareRadio(current, last, item);
     case 7:  return compareMultiSelect(current, lastRaw, item);
     case 12: return compareContainer(current, last, item);
@@ -187,8 +188,18 @@ function compareMultiSelect(currentValue: any, lastRawValue: string, item: Posit
   return { valid: true };
 }
 
+function compareText(currentValue: any, lastValue: string): ComparisonResult {
+  const current = String(currentValue ?? '').trim();
+  const last = lastValue.trim();
+  if (current !== last) {
+    return { valid: false, message: `当前值「${current}」必须与上期「${last}」完全相等` };
+  }
+  return { valid: true };
+}
+
 function compareContainer(_currentValue: any, _lastValue: string, _item: PositiveRuleItem): ComparisonResult {
-  return { valid: true }; // 容器类型暂不支持
+  // 容器类型不再在此做单值比较，由 validateContainerFields 处理逐字段验证
+  return { valid: true };
 }
 
 // ==================== 核心校验函数 ====================
@@ -214,6 +225,26 @@ function validateSinglePositiveRule(
 
   if (!hasLastPeriodValue(indicatorCode)) return null;
 
+  // 容器类型：遍历所有条目执行上期值验证
+  if (valueType === 12) {
+    const fieldErrors = validateContainerFields(indicatorCode, item);
+    const errorKeys = Object.keys(fieldErrors);
+    if (errorKeys.length === 0) {
+      clearContainerPositiveRuleErrors(indicatorCode);
+      return null;
+    }
+    const firstKey = errorKeys[0]!;
+    const { message, fieldLabel } = fieldErrors[firstKey]!;
+    return {
+      indicatorCode,
+      indicatorId: indicators.find((i) => i.indicatorCode === indicatorCode)?.id,
+      ruleName: item.name,
+      message: `「${fieldLabel}」${message}`,
+      errorKey: firstKey,
+    };
+  }
+
+  // 顶层指标（数字/文本/单选/多选）
   const currentValue = getCurrentValue(indicatorCode, valueType);
   const lastValue = getLastPeriodValue(indicatorCode);
   const lastRawValue = getLastPeriodRawValue(indicatorCode);
@@ -300,14 +331,175 @@ export function validateAllPositiveRules(
 
 // ==================== 辅助函数 ====================
 
-function setPositiveRuleError(error: PositiveRuleError, indicatorCode: string): void {
-  const ruleId = `positive:${indicatorCode}`;
-  setFieldError(error.errorKey, `${error.ruleName}：${error.message}`, 'joint', ruleId);
+function setPositiveRuleError(error: PositiveRuleError, _indicatorCode: string): void {
+  setFieldError(error.errorKey, `${error.ruleName}：${error.message}`, 'joint', error.errorKey);
 }
 
 function clearPositiveRuleError(indicatorCode: string, indicators: DeclareIndicatorApi.Indicator[]): void {
+  // 容器类型：清除所有条目的 joint 错误
+  if (containerValues[indicatorCode]?.length) {
+    clearContainerPositiveRuleErrors(indicatorCode);
+    return;
+  }
+  // 顶层指标
   const indicator = indicators.find((i) => i.indicatorCode === indicatorCode);
   if (indicator?.id) {
     clearFieldErrorByType(`t:${indicator.id}`, 'joint');
   }
+}
+
+/** 清除容器所有条目的上期值错误 */
+function clearContainerPositiveRuleErrors(indicatorCode: string): void {
+  const entries = containerValues[indicatorCode];
+  if (!entries?.length) return;
+  const fillRules = jointRules.value.filter((r) => r.triggerTiming === 'FILL');
+  for (const rule of fillRules) {
+    if (!rule.ruleConfig) continue;
+    try {
+      const config: PositiveRuleConfig = JSON.parse(rule.ruleConfig);
+      for (const item of config.rules || []) {
+        if (item.indicatorCode !== indicatorCode) continue;
+        if (item.valueType !== 12 || !item.containerFields?.length) continue;
+        for (const entry of entries) {
+          for (const fieldConfig of item.containerFields) {
+            clearFieldErrorByType(`${entry.rowKey}${fieldConfig.fieldCode}`, 'joint');
+          }
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+}
+
+/** 获取容器字段的上期值（按 rowKey 精确匹配条目） */
+export function getContainerFieldLastValue(
+  indicatorCode: string,
+  rowKey: string,
+  fieldCode: string,
+): string | null {
+  const entries = lpValues.value[indicatorCode];
+  if (!entries) return null;
+  let parsed: any;
+  try {
+    parsed = JSON.parse(entries);
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(parsed)) return null;
+  const entry = parsed.find((e: any) => {
+    const rk = e.rowKey || '';
+    return rk === rowKey || rk.endsWith(rowKey) || rowKey.endsWith(rk);
+  });
+  if (!entry) return null;
+  const fullKey = `${rowKey}${fieldCode}`;
+  if (entry[fullKey] !== undefined && entry[fullKey] !== null) return String(entry[fullKey]);
+  if (entry[fieldCode] !== undefined && entry[fieldCode] !== null) return String(entry[fieldCode]);
+  return null;
+}
+
+/** 比较单个容器字段值 */
+function compareContainerFieldValue(
+  current: any,
+  last: string,
+  fieldConfig: ContainerPositiveRuleField,
+): ComparisonResult {
+  const item: PositiveRuleItem = {
+    name: '',
+    indicatorCode: '',
+    valueType: fieldConfig.fieldValueType as any,
+    compareMode: (fieldConfig.compareMode || 'positive') as any,
+    compareType: fieldConfig.compareType as any,
+    options: fieldConfig.options,
+    excludeOptions: fieldConfig.excludeOptions,
+    minNewCount: fieldConfig.minNewCount,
+  };
+
+  switch (fieldConfig.fieldValueType) {
+    case 2:  return compareText(current, last);
+    case 7:  return compareMultiSelect(current, last, item);
+    case 6:
+    case 10: return compareRadio(current, last, item);
+    default: return compareNumbers(current, last, item);
+  }
+}
+
+/** 遍历容器所有条目和字段，执行上期值验证（提交时调用） */
+function validateContainerFields(
+  indicatorCode: string,
+  item: PositiveRuleItem,
+): Record<string, { message: string; fieldLabel: string }> {
+  const errors: Record<string, { message: string; fieldLabel: string }> = {};
+  const fields = item.containerFields;
+  if (!fields?.length) return errors;
+
+  const entries = containerValues[indicatorCode];
+  if (!entries?.length) return errors;
+
+  for (const entry of entries) {
+    for (const fieldConfig of fields) {
+      const fullKey = `${entry.rowKey}${fieldConfig.fieldCode}`;
+      const currentFieldValue = entry[fullKey];
+      const lastFieldValue = getContainerFieldLastValue(indicatorCode, entry.rowKey, fieldConfig.fieldCode);
+
+      if (!lastFieldValue) continue;
+      if (currentFieldValue === undefined || currentFieldValue === null || currentFieldValue === '') continue;
+
+      const result = compareContainerFieldValue(currentFieldValue, lastFieldValue, fieldConfig);
+      if (!result.valid && result.message) {
+        errors[fullKey] = { message: result.message, fieldLabel: fieldConfig.fieldLabel };
+      }
+    }
+  }
+  return errors;
+}
+
+/**
+ * 校验单个容器字段的上期值（blur 实时校验）
+ * @returns 错误消息字符串，验证通过返回 null
+ */
+export function validateSingleContainerPositiveRule(
+  indicator: DeclareIndicatorApi.Indicator,
+  entry: any,
+  field: DynamicField,
+): string | null {
+  const indicatorCode = indicator.indicatorCode;
+  const fullKey = `${entry.rowKey}${field.fieldCode}`;
+
+  const fillRules = jointRules.value.filter((r) => r.triggerTiming === 'FILL');
+  for (const rule of fillRules) {
+    if (!rule.ruleConfig) continue;
+    try {
+      const config: PositiveRuleConfig = JSON.parse(rule.ruleConfig);
+      for (const item of config.rules || []) {
+        if (item.indicatorCode !== indicatorCode) continue;
+        if (item.valueType !== 12 || !item.containerFields?.length) continue;
+
+        const fieldConfig = item.containerFields.find((f) => f.fieldCode === field.fieldCode);
+        if (!fieldConfig) return null;
+
+        const currentValue = entry[fullKey];
+        const lastValue = getContainerFieldLastValue(indicatorCode, entry.rowKey, field.fieldCode);
+
+        if (!lastValue) return null;
+        if (currentValue === undefined || currentValue === null || currentValue === '') return null;
+
+        let result: ComparisonResult;
+        switch (fieldConfig.fieldValueType) {
+          case 2:  result = compareText(currentValue, lastValue); break;
+          case 7:  result = compareMultiSelect(currentValue, lastValue, fieldConfig as any); break;
+          case 6:
+          case 10: result = compareRadio(currentValue, lastValue, fieldConfig as any); break;
+          default: result = compareNumbers(currentValue, lastValue, fieldConfig as any);
+        }
+
+        if (!result.valid && result.message) {
+          return `「${fieldConfig.fieldLabel}」${result.message}`;
+        }
+      }
+    } catch (e) {
+      console.error('[validateSingleContainerPositiveRule]', e);
+    }
+  }
+  return null;
 }

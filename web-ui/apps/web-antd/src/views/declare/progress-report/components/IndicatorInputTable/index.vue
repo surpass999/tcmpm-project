@@ -32,6 +32,7 @@ import type { DynamicField } from './types';
 import {
   setFieldError,
   clearFieldError,
+  clearFieldErrorByType,
   clearAllErrors,
   toTopLevelKey,
   getContainerFieldError,
@@ -129,6 +130,7 @@ import { parseCC, evaluateCC } from './utils/indicator-validator';
 import {
   validateAllPositiveRules,
   validatePositiveRuleForIndicator,
+  validateSingleContainerPositiveRule,
   hasAnyLastPeriodValue,
 } from './composables/usePositiveRules';
 
@@ -417,8 +419,17 @@ function onContainerFieldChange(indicator: DeclareIndicatorApi.Indicator, entry:
     // 逻辑验证通过 → 清除该行逻辑错误
     clearContainerLogicRuleErrors(indicator, entryNum);
 
-    // ==================== 第3级：上期值验证（容器当前返回 null） ====================
-    // if (hasAnyLastPeriodValue()) { validatePositiveRuleForIndicator(indicator.indicatorCode, indicators.value); }
+    // ==================== 第3级：容器字段上期值验证 ====================
+    const fullKey = `${entry.rowKey}${field.fieldCode}`;
+    if (hasAnyLastPeriodValue()) {
+      const positiveErr = validateSingleContainerPositiveRule(indicator, entry, field);
+      if (positiveErr) {
+        setFieldError(fullKey, `上期值校验：${positiveErr}`, 'joint', fullKey);
+        return;
+      }
+      // 验证通过 → 清除该字段的 joint 错误
+      clearFieldErrorByType(fullKey, 'joint');
+    }
   });
 }
 
