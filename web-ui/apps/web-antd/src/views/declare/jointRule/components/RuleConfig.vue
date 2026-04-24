@@ -12,12 +12,19 @@ import {
   VALUE_TYPE_OPTIONS,
   COMPARE_MODE_OPTIONS,
   MULTI_SELECT_COMPARE_TYPE_OPTIONS,
+  CONTAINER_FIELD_VALUE_TYPE_OPTIONS,
+  CONTAINER_FIELD_MULTI_COMPARE_TYPE_OPTIONS,
+  CONTAINER_FIELD_DEFAULT_COMPARE_TYPE,
+  TEXT_COMPARE_TYPE_OPTIONS,
   type PositiveRuleItem,
   type PositiveRuleConfig,
   type PositiveRuleOption,
+  type ContainerPositiveRuleField,
   ValueType,
   CompareMode,
   MultiSelectCompareType,
+  ContainerFieldValueType,
+  TextCompareType,
 } from '../types';
 
 // Props
@@ -189,8 +196,21 @@ watch(
         if (!currentRule.value.name) {
           currentRule.value.name = indicator.indicatorName;
         }
-        // 自动设置值类型
-        currentRule.value.valueType = indicator.valueType;
+        // 根据指标类型自动设置值类型
+        if (indicator.valueType === ValueType.CONTAINER) {
+          // 容器类型：只设置 valueType，containerFields 初始化为空
+          currentRule.value.valueType = ValueType.CONTAINER;
+          currentRule.value.containerFields = [];
+          currentRule.value.compareMode = CompareMode.POSITIVE;
+        } else if (indicator.valueType === ValueType.TEXT) {
+          // 文本类型：自动设置 compareType = 'equal'
+          currentRule.value.valueType = ValueType.TEXT;
+          currentRule.value.compareMode = CompareMode.POSITIVE;
+          currentRule.value.compareType = 'equal';
+        } else {
+          // 其他类型：使用指标自身的 valueType
+          currentRule.value.valueType = indicator.valueType;
+        }
         // 自动填充选项（单选/多选）
         if (
           (indicator.valueType === ValueType.RADIO ||
@@ -244,8 +264,145 @@ function addRule() {
     options: [],
     excludeOptions: [],
     minNewCount: 1,
+    containerFields: [],
   };
   loadIndicatorOptions();
+}
+
+// ========== 容器字段配置 ==========
+
+/** 获取当前选中容器指标的全部字段列表（从 valueOptions.fields 解析） */
+const allContainerFields = computed(() => {
+  if (currentRule.value.valueType !== ValueType.CONTAINER) return [];
+  const indicator = indicatorOptions.value.find(
+    (i) => i.indicatorCode === currentRule.value.indicatorCode,
+  );
+  if (!indicator?.valueOptions) return [];
+  try {
+    const config = JSON.parse(indicator.valueOptions);
+    if (Array.isArray(config)) {
+      return config.map((f: any) => ({
+        fieldCode: f.fieldCode || f.fieldName,
+        fieldLabel: f.fieldLabel || f.label || f.fieldName || f.fieldCode,
+        fieldValueType:
+          f.fieldType === 'text' ? ContainerFieldValueType.TEXT
+          : f.fieldType === 'number' ? ContainerFieldValueType.NUMBER
+          : f.fieldType === 'radio' ? ContainerFieldValueType.RADIO
+          : f.fieldType === 'select' ? ContainerFieldValueType.SELECT
+          : f.fieldType === 'checkbox' || f.fieldType === 'multiSelect'
+            ? ContainerFieldValueType.MULTI_SELECT
+            : ContainerFieldValueType.TEXT,
+        options: f.options || [],
+      }));
+    }
+    if (config.fields) {
+      return config.fields.map((f: any) => ({
+        fieldCode: f.fieldCode || f.fieldName,
+        fieldLabel: f.fieldLabel || f.label || f.fieldName || f.fieldCode,
+        fieldValueType:
+          f.fieldType === 'text' ? ContainerFieldValueType.TEXT
+          : f.fieldType === 'number' ? ContainerFieldValueType.NUMBER
+          : f.fieldType === 'radio' ? ContainerFieldValueType.RADIO
+          : f.fieldType === 'select' ? ContainerFieldValueType.SELECT
+          : f.fieldType === 'checkbox' || f.fieldType === 'multiSelect'
+            ? ContainerFieldValueType.MULTI_SELECT
+            : ContainerFieldValueType.TEXT,
+        options: f.options || [],
+      }));
+    }
+  } catch (e) { /* ignore */ }
+  return [];
+});
+
+/** 当前编辑的容器字段 */
+const currentContainerField = ref<ContainerPositiveRuleField | null>(null);
+/** 容器字段编辑弹窗显示状态 */
+const isContainerFieldEditorVisible = ref(false);
+/** 当前编辑的容器字段索引（-1 表示新增） */
+const currentContainerFieldIndex = ref<number>(-1);
+/** 容器字段弹窗操作模式 */
+const containerFieldDialogMode = ref<'add' | 'edit'>('add');
+
+function openContainerFieldEditor(index: number = -1) {
+  currentContainerFieldIndex.value = index;
+  if (index === -1) {
+    containerFieldDialogMode.value = 'add';
+    currentContainerField.value = {
+      fieldCode: '',
+      fieldLabel: '',
+      fieldValueType: ContainerFieldValueType.NUMBER,
+      compareMode: CompareMode.POSITIVE,
+      compareType: 'number',
+      options: [],
+      excludeOptions: [],
+      minNewCount: 1,
+    };
+  } else {
+    containerFieldDialogMode.value = 'edit';
+    currentContainerField.value = JSON.parse(
+      JSON.stringify(currentRule.value.containerFields![index]),
+    );
+  }
+  isContainerFieldEditorVisible.value = true;
+}
+
+function saveContainerField(closeAfter = false) {
+  if (!currentContainerField.value) return;
+  if (!currentContainerField.value.fieldCode) {
+    message.error('请选择字段'); return;
+  }
+
+  const ft = currentContainerField.value.fieldValueType;
+  if (
+    (ft === ContainerFieldValueType.RADIO
+      || ft === ContainerFieldValueType.SELECT
+      || ft === ContainerFieldValueType.MULTI_SELECT)
+    && (!currentContainerField.value.options || currentContainerField.value.options.length === 0)
+  ) {
+    message.error('单选/下拉/多选类型必须配置选项'); return;
+  }
+
+  if (!currentRule.value.containerFields) {
+    currentRule.value.containerFields = [];
+  }
+
+  if (currentContainerFieldIndex.value === -1) {
+    // 新增
+    currentRule.value.containerFields.push({ ...currentContainerField.value });
+    message.success('字段已添加');
+    if (!closeAfter) {
+      // 重置为空的字段选择状态，继续添加下一个
+      currentContainerField.value = {
+        fieldCode: '',
+        fieldLabel: '',
+        fieldValueType: ContainerFieldValueType.NUMBER,
+        compareMode: CompareMode.POSITIVE,
+        compareType: 'number',
+        options: [],
+        excludeOptions: [],
+        minNewCount: 1,
+      };
+    } else {
+      isContainerFieldEditorVisible.value = false;
+    }
+  } else {
+    // 编辑
+    currentRule.value.containerFields[currentContainerFieldIndex.value] = {
+      ...currentContainerField.value,
+    };
+    isContainerFieldEditorVisible.value = false;
+    message.success('字段已更新');
+  }
+}
+
+function deleteContainerField(index: number) {
+  currentRule.value.containerFields!.splice(index, 1);
+  message.success('字段已删除');
+}
+
+function getContainerFieldTypeName(fieldValueType: number): string {
+  const opt = CONTAINER_FIELD_VALUE_TYPE_OPTIONS.find((o) => o.value === fieldValueType);
+  return opt?.label || '未知';
 }
 
 // 编辑规则
@@ -272,6 +429,44 @@ function saveRule() {
 
   if (!currentRule.value.name) {
     message.error('请输入规则名称');
+    return;
+  }
+
+  // 容器类型校验
+  if (currentRule.value.valueType === ValueType.CONTAINER) {
+    if (!currentRule.value.containerFields?.length) {
+      message.error('容器类型必须配置至少一个字段的验证规则'); return;
+    }
+    for (const f of currentRule.value.containerFields) {
+      if (!f.fieldCode) { message.error('字段配置的字段编码不能为空'); return; }
+      if (!f.fieldLabel) { message.error('字段配置的字段名称不能为空'); return; }
+    }
+    const ruleToSave = { ...currentRule.value };
+    if (currentRuleIndex.value === -1) {
+      ruleConfig.value.rules.push(ruleToSave);
+    } else {
+      ruleConfig.value.rules[currentRuleIndex.value] = ruleToSave;
+    }
+    isRuleEditorVisible.value = false;
+    message.success('规则保存成功');
+    return;
+  }
+
+  // 文本类型：自动设置固定值
+  if (currentRule.value.valueType === ValueType.TEXT) {
+    currentRule.value.compareMode = CompareMode.POSITIVE;
+    // compareType 必须是 equal 或 contain
+    if (!currentRule.value.compareType || !['equal', 'contain'].includes(currentRule.value.compareType)) {
+      message.error('请选择文本比较类型'); return;
+    }
+    const ruleToSave = { ...currentRule.value };
+    if (currentRuleIndex.value === -1) {
+      ruleConfig.value.rules.push(ruleToSave);
+    } else {
+      ruleConfig.value.rules[currentRuleIndex.value] = ruleToSave;
+    }
+    isRuleEditorVisible.value = false;
+    message.success('规则保存成功');
     return;
   }
 
@@ -331,12 +526,19 @@ function getCompareModeName(compareMode: string): string {
 // 获取比较类型名称（包含所有类型）
 function getCompareTypeName(compareType: string | undefined, valueType?: number): string {
   if (!compareType) return '-';
-  // 根据值类型显示不同的名称
   if (valueType === ValueType.NUMBER) {
     return '数值比较';
   }
+  if (valueType === ValueType.TEXT) {
+    if (compareType === 'equal') return '必须相等';
+    if (compareType === 'contain') return '必须包含';
+    return compareType;
+  }
   if (valueType === ValueType.RADIO) {
     return '单选比较';
+  }
+  if (valueType === ValueType.CONTAINER) {
+    return '容器字段';
   }
   // 多选类型
   const option = MULTI_SELECT_COMPARE_TYPE_OPTIONS.find((o) => o.value === compareType);
@@ -437,7 +639,7 @@ loadIndicatorOptions();
         <a-table-column title="指标编码" data-index="indicatorCode" key="indicatorCode" />
         <a-table-column title="值类型" key="valueType">
           <template #default="{ record }">
-            <a-tag :color="record.valueType === 1 ? 'blue' : record.valueType === 2 ? 'green' : 'orange'">
+            <a-tag :color="record.valueType === 1 ? 'blue' : record.valueType === 2 ? 'cyan' : record.valueType === 6 ? 'green' : record.valueType === 12 ? 'purple' : 'orange'">
               {{ getValueTypeName(record.valueType) }}
             </a-tag>
           </template>
@@ -449,7 +651,17 @@ loadIndicatorOptions();
         </a-table-column>
         <a-table-column title="比较类型" key="compareType">
           <template #default="{ record }">
-            {{ getCompareTypeName(record.compareType, record.valueType) }}
+            <template v-if="record.valueType === ValueType.CONTAINER">
+              <a-tag color="purple">容器</a-tag>
+              <span v-if="record.containerFields?.length">({{ record.containerFields.length }} 个字段)</span>
+            </template>
+            <template v-else-if="record.valueType === ValueType.TEXT">
+              <a-tag color="cyan">文本</a-tag>
+              <span>{{ record.compareType === 'contain' ? '必须包含' : '必须相等' }}</span>
+            </template>
+            <template v-else>
+              {{ getCompareTypeName(record.compareType, record.valueType) }}
+            </template>
           </template>
         </a-table-column>
         <a-table-column title="操作" key="action" width="150">
@@ -506,9 +718,44 @@ loadIndicatorOptions();
           </div>
         </a-form-item>
 
-        <!-- 比较模式（数值和单选始终显示，多选时排除选项数量、新增数量、上期必须保持） -->
+        <!-- 文本类型：显示提示和比较类型选择 -->
+        <template v-if="currentRule.valueType === ValueType.TEXT">
+          <a-alert
+            type="info"
+            class="mb-4"
+            message="文本类型验证：本期填写的文本与上期进行比较校验。"
+            show-icon
+          />
+          <a-form-item label="文本比较类型" required>
+            <a-radio-group v-model:value="currentRule.compareType">
+              <a-radio-button
+                v-for="opt in TEXT_COMPARE_TYPE_OPTIONS"
+                :key="opt.value"
+                :value="opt.value"
+              >
+                {{ opt.label }}
+              </a-radio-button>
+            </a-radio-group>
+            <a-alert
+              v-if="currentRule.compareType === 'equal'"
+              type="info"
+              class="mt-1"
+              message="本期值必须与上期完全相等（忽略首尾空格）"
+              show-icon
+            />
+            <a-alert
+              v-else-if="currentRule.compareType === 'contain'"
+              type="info"
+              class="mt-1"
+              message="本期值必须包含上期的全部内容"
+              show-icon
+            />
+          </a-form-item>
+        </template>
+
+        <!-- 比较模式（数字/单选/多选显示，文本和容器不显示） -->
         <a-form-item
-          v-if="currentRule.valueType !== ValueType.MULTI_SELECT || !['count', 'new_count', 'keep_required'].includes(currentRule.compareType)"
+          v-if="currentRule.valueType !== ValueType.TEXT && currentRule.valueType !== ValueType.CONTAINER"
           label="比较模式"
           required
         >
@@ -536,11 +783,13 @@ loadIndicatorOptions();
             class="mt-1"
           />
           <a-alert
-            v-else-if="!['count', 'new_count', 'keep_required'].includes(currentRule.compareType)"
+            v-else-if="currentRule.valueType === ValueType.MULTI_SELECT && !['count', 'new_count', 'keep_required'].includes(currentRule.compareType)"
             type="info"
             show-icon
             class="mt-1"
-            :message="COMPARE_MODE_OPTIONS.find(o => o.value === currentRule.compareMode)?.description || ''"
+            :message="currentRule.compareMode === 'positive'
+              ? '选项等级比较：选中选项等级必须 >= 上期（只能升级）'
+              : '选项等级比较：选中选项等级必须 <= 上期（只能降级）'"
           />
         </a-form-item>
 
@@ -674,6 +923,63 @@ loadIndicatorOptions();
             />
           </a-form-item>
         </template>
+
+        <!-- ===== 容器类型字段配置面板 ===== -->
+        <template v-if="currentRule.valueType === ValueType.CONTAINER">
+          <a-divider>容器字段配置</a-divider>
+          <a-alert
+            type="info"
+            class="mb-4"
+            message="配置需要上期值验证的容器字段，从指标字段列表中选择后逐个添加。"
+            show-icon
+          />
+
+          <!-- 已配置的字段列表 -->
+          <a-table
+            v-if="currentRule.containerFields?.length"
+            :data-source="currentRule.containerFields"
+            :pagination="false"
+            size="small"
+            row-key="fieldCode"
+            class="mb-4"
+          >
+            <a-table-column title="字段编码" data-index="fieldCode" />
+            <a-table-column title="字段名称" data-index="fieldLabel" />
+            <a-table-column title="字段类型" key="fieldValueType">
+              <template #default="{ record }">
+                <a-tag>{{ getContainerFieldTypeName(record.fieldValueType) }}</a-tag>
+              </template>
+            </a-table-column>
+            <a-table-column title="比较模式" key="compareMode">
+              <template #default="{ record }">
+                {{ record.compareMode === 'positive' ? '正向' : '负向' }}
+              </template>
+            </a-table-column>
+            <a-table-column title="操作" width="150">
+              <template #default="{ record, index }">
+                <a-button type="link" size="small" @click="openContainerFieldEditor(index)">编辑</a-button>
+                <a-button type="link" size="small" danger @click="deleteContainerField(index)">删除</a-button>
+              </template>
+            </a-table-column>
+          </a-table>
+
+          <!-- 添加按钮 -->
+          <a-button
+            v-if="allContainerFields.length > (currentRule.containerFields?.length || 0)"
+            type="dashed"
+            block
+            @click="openContainerFieldEditor(-1)"
+          >
+            <template #icon><PlusOutlined /></template>
+            添加字段配置
+          </a-button>
+          <div
+            v-if="allContainerFields.length === 0"
+            class="text-center text-gray-400 py-4"
+          >
+            请先选择一个容器类型的指标
+          </div>
+        </template>
       </a-form>
     </a-modal>
 
@@ -695,6 +1001,242 @@ loadIndicatorOptions();
           <a-input v-model:value="currentOption.label" placeholder="如：启动阶段" />
           <div class="text-xs text-gray-500 mt-1">显示给用户的文本</div>
         </a-form-item>
+      </a-form>
+    </a-modal>
+
+    <!-- 容器字段编辑弹窗（连续添加模式） -->
+    <a-modal
+      v-model:open="isContainerFieldEditorVisible"
+      :title="containerFieldDialogMode === 'add' ? '添加字段配置' : '编辑字段配置'"
+      width="600px"
+      destroy-on-close
+      :footer="null"
+    >
+      <a-form layout="vertical">
+        <!-- 添加模式：选择字段 -->
+        <template v-if="containerFieldDialogMode === 'add'">
+          <a-form-item label="选择字段" required>
+            <a-select
+              v-model:value="currentContainerField!.fieldCode"
+              placeholder="请从容器字段列表中选择"
+              @change="(val: string) => {
+                const field = allContainerFields.find(f => f.fieldCode === val);
+                if (field) {
+                  currentContainerField!.fieldLabel = field.fieldLabel;
+                  currentContainerField!.fieldValueType = field.fieldValueType;
+                  currentContainerField!.options = field.options || [];
+                  currentContainerField!.compareMode = CompareMode.POSITIVE;
+                  currentContainerField!.compareType =
+                    CONTAINER_FIELD_DEFAULT_COMPARE_TYPE[field.fieldValueType] || 'number';
+                  currentContainerField!.excludeOptions = [];
+                  currentContainerField!.minNewCount = 1;
+                }
+              }"
+            >
+              <a-select-option
+                v-for="f in allContainerFields.filter(
+                  f => !currentRule.containerFields?.some(cf => cf.fieldCode === f.fieldCode)
+                )"
+                :key="f.fieldCode"
+                :value="f.fieldCode"
+              >
+                {{ f.fieldLabel }} ({{ f.fieldCode }})
+              </a-select-option>
+            </a-select>
+            <div class="text-xs text-gray-500 mt-1">
+              已配置上期验证的字段不会出现在列表中
+            </div>
+          </a-form-item>
+        </template>
+
+        <!-- 编辑模式：显示字段信息 -->
+        <template v-else>
+          <a-form-item label="字段">
+            <a-tag color="blue">
+              {{ currentContainerField!.fieldCode }} — {{ currentContainerField!.fieldLabel }}
+            </a-tag>
+          </a-form-item>
+        </template>
+
+        <!-- 字段值类型（选择字段后显示） -->
+        <a-form-item label="字段值类型" v-if="currentContainerField!.fieldCode">
+          <a-radio-group v-model:value="currentContainerField!.fieldValueType">
+            <a-radio-button
+              v-for="opt in CONTAINER_FIELD_VALUE_TYPE_OPTIONS"
+              :key="opt.value"
+              :value="opt.value"
+            >
+              {{ opt.label }}
+            </a-radio-button>
+          </a-radio-group>
+        </a-form-item>
+
+        <!-- 比较模式（数字/单选/下拉） -->
+        <a-form-item
+          v-if="currentContainerField!.fieldValueType === ContainerFieldValueType.NUMBER
+                   || currentContainerField!.fieldValueType === ContainerFieldValueType.RADIO
+                   || currentContainerField!.fieldValueType === ContainerFieldValueType.SELECT"
+          label="比较模式"
+          required
+        >
+          <a-radio-group v-model:value="currentContainerField!.compareMode">
+            <a-radio-button
+              v-for="opt in COMPARE_MODE_OPTIONS"
+              :key="opt.value"
+              :value="opt.value"
+            >
+              {{ opt.label }}
+            </a-radio-button>
+          </a-radio-group>
+          <a-alert
+            v-if="currentContainerField!.fieldValueType === ContainerFieldValueType.NUMBER"
+            :message="currentContainerField!.compareMode === 'positive' ? '数字必须 >= 上期值（只能增大）' : '数字必须 <= 上期值（只能减小）'"
+            type="info"
+            show-icon
+            class="mt-1"
+          />
+          <a-alert
+            v-else-if="currentContainerField!.fieldValueType === ContainerFieldValueType.RADIO
+                       || currentContainerField!.fieldValueType === ContainerFieldValueType.SELECT"
+            :message="currentContainerField!.compareMode === 'positive' ? '选项等级只能升（只能升级，不能降级）' : '选项等级只能降（只能降级，不能升级）'"
+            type="info"
+            show-icon
+            class="mt-1"
+          />
+        </a-form-item>
+
+        <!-- 文本类型比较类型选择 -->
+        <a-form-item
+          v-if="currentContainerField!.fieldValueType === ContainerFieldValueType.TEXT"
+          label="文本比较类型"
+          required
+        >
+          <a-radio-group v-model:value="currentContainerField!.compareType">
+            <a-radio-button
+              v-for="opt in TEXT_COMPARE_TYPE_OPTIONS"
+              :key="opt.value"
+              :value="opt.value"
+            >
+              {{ opt.label }}
+            </a-radio-button>
+          </a-radio-group>
+          <a-alert
+            v-if="currentContainerField!.compareType === 'equal'"
+            type="info"
+            class="mt-1"
+            message="本期值必须与上期完全相等（忽略首尾空格）"
+            show-icon
+          />
+          <a-alert
+            v-else-if="currentContainerField!.compareType === 'contain'"
+            type="info"
+            class="mt-1"
+            message="本期值必须包含上期的全部内容"
+            show-icon
+          />
+        </a-form-item>
+
+        <!-- 多选比较类型 -->
+        <a-form-item
+          v-if="currentContainerField!.fieldValueType === ContainerFieldValueType.MULTI_SELECT"
+          label="多选比较类型"
+          required
+        >
+          <a-select
+            v-model:value="currentContainerField!.compareType"
+            placeholder="请选择比较类型"
+            style="width: 100%"
+          >
+            <a-select-option
+              v-for="opt in CONTAINER_FIELD_MULTI_COMPARE_TYPE_OPTIONS"
+              :key="opt.value"
+              :value="opt.value"
+            >
+              <div>{{ opt.label }}</div>
+              <div class="text-xs text-gray-400">{{ opt.description }}</div>
+            </a-select-option>
+          </a-select>
+        </a-form-item>
+
+        <!-- 选项配置（单选/下拉/多选） -->
+        <template
+          v-if="(currentContainerField!.fieldValueType === ContainerFieldValueType.RADIO
+                || currentContainerField!.fieldValueType === ContainerFieldValueType.SELECT
+                || currentContainerField!.fieldValueType === ContainerFieldValueType.MULTI_SELECT)
+                && currentContainerField!.options?.length > 0"
+        >
+          <a-divider>选项配置</a-divider>
+          <a-table
+            :data-source="currentContainerField!.options"
+            :pagination="false"
+            size="small"
+            row-key="value"
+            class="mb-4"
+          >
+            <a-table-column title="选项值" data-index="value" />
+            <a-table-column title="选项标签" data-index="label" />
+            <a-table-column title="等级" width="80">
+              <template #default="{ index }">{{ index + 1 }}</template>
+            </a-table-column>
+          </a-table>
+          <div class="text-xs text-gray-500 mb-4">
+            选项已自动从指标字段配置中带入，无需手动编辑
+          </div>
+
+          <!-- 排除选项（仅多选） -->
+          <template v-if="currentContainerField!.fieldValueType === ContainerFieldValueType.MULTI_SELECT">
+            <a-divider>排除选项</a-divider>
+            <a-select
+              v-model:value="currentContainerField!.excludeOptions"
+              mode="multiple"
+              placeholder="选择不参与比较的选项"
+              style="width: 100%"
+            >
+              <a-select-option
+                v-for="opt in currentContainerField!.options"
+                :key="opt.value"
+                :value="opt.value"
+              >
+                {{ opt.label }}
+              </a-select-option>
+            </a-select>
+          </template>
+
+          <!-- 新增数量（仅 new_count） -->
+          <template v-if="currentContainerField!.compareType === 'new_count'">
+            <a-divider>新增数量配置</a-divider>
+            <a-form-item label="最小新增数量">
+              <a-input-number
+                v-model:value="currentContainerField!.minNewCount"
+                :min="1"
+                :max="100"
+              />
+            </a-form-item>
+          </template>
+        </template>
+
+        <!-- 操作按钮 -->
+        <a-divider />
+        <div class="flex justify-between">
+          <a-button @click="isContainerFieldEditorVisible = false">关闭</a-button>
+          <a-space>
+            <!-- 添加模式：两个按钮 -->
+            <template v-if="containerFieldDialogMode === 'add'">
+              <a-button type="primary" @click="() => saveContainerField(false)">
+                保存并继续添加
+              </a-button>
+              <a-button type="primary" @click="() => saveContainerField(true)">
+                保存
+              </a-button>
+            </template>
+            <!-- 编辑模式：一个按钮 -->
+            <template v-else>
+              <a-button type="primary" @click="() => saveContainerField(true)">
+                保存
+              </a-button>
+            </template>
+          </a-space>
+        </div>
       </a-form>
     </a-modal>
   </div>
