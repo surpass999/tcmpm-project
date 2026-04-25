@@ -89,12 +89,12 @@ defineExpose({
       </slot>
       <template #desc>
         <slot name="subTitle">
-          {{ subTitle || $t('authentication.forgetPasswordSubtitle') }}
+          <!-- {{ subTitle || $t('authentication.forgetPasswordSubtitle') }} -->
         </slot>
       </template>
     </Title>
     <!-- <Form /> -->
-    <div class="text-center text-2xl font-bold text-red-500 text-color-primary">
+    <div class="text-center text-2xl font-bold text-red-500 text-color-primary mt-20 mb-10">
       请联系管理员重置密码
     </div>
     <div>
