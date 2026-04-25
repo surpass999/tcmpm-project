@@ -16,9 +16,9 @@ import { parseDynamicFields, generateContainerFieldKey, isFieldVisible } from '.
 import { parseExtraConfig, getFileTypeGroups, getMinFormats, getRequiredGroups, resolveFileGroups } from '../utils/indicator';
 import { parseOptions } from '../utils/options';
 import type { DynamicField, ValidationError, FieldError } from '../types';
-import { formValues, inputTypeValues } from './useFormValues';
+import { formValues, inputTypeValues, validateInputContent } from './useFormValues';
 import { containerValues } from './useContainerValues';
-import { INPUT_VALUE_SEPARATOR, deserializeInputTypeValue } from './useFormValues';
+import { deserializeInputTypeValue } from './useFormValues';
 import {
   fieldErrors,
   toTopLevelKey,
@@ -297,10 +297,10 @@ export function validateIndicator(indicator: DeclareIndicatorApi.Indicator): Fie
               setFieldError(key, err.message, err.errorType, err.ruleId);
               errors.push(err);
             } else {
-              const trimmed = content.trim();
-              if (/^\d+$/.test(trimmed)) {
-                const ruleId = `basic:${indicator.indicatorCode}:${opt.value}`;
-                const err = { message: `"${opt.label}"的补充内容：输入内容不能是纯数字`, errorType: 'format' as const, ruleId };
+              const ruleId = `basic:${indicator.indicatorCode}:${opt.value}`;
+              const formatErr = validateInputContent(content, options, opt.value);
+              if (formatErr) {
+                const err = { message: `"${opt.label}"的补充内容：${formatErr}`, errorType: 'format' as const, ruleId };
                 setFieldError(key, err.message, err.errorType, err.ruleId);
                 errors.push(err);
               }
@@ -374,18 +374,11 @@ function validateInputTypeRequired(indicator: DeclareIndicatorApi.Indicator): st
         const inputKey = indicator.indicatorCode + '_' + opt.value;
         const content = inputTypeValues[inputKey] || '';
         if (!content.trim()) return `请填写"${opt.label}"的补充内容`;
-        const error = validateInputContentLocal(content);
-        if (error) return `"${opt.label}"的补充内容：${error}`;
+        const formatError = validateInputContent(content, options, opt.value);
+        if (formatError) return `"${opt.label}"的补充内容：${formatError}`;
       }
     }
   }
-  return null;
-}
-
-/** 内联：校验输入内容格式 */
-function validateInputContentLocal(content: string): string | null {
-  if (content.includes(INPUT_VALUE_SEPARATOR)) return `输入内容不能包含特殊符号 "∵"`;
-  if (content.trim() !== '' && /^\d+$/.test(content)) return '输入内容不能是纯数字';
   return null;
 }
 

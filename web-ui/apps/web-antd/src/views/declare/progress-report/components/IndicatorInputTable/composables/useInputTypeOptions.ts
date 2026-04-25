@@ -263,11 +263,12 @@ export function onInputTypeBlur(indicator: DeclareIndicatorApi.Indicator, opt: a
   }
 
   if (!content.trim()) {
-    setFieldError(toTopLevelKey(indicator.id!), `请填写"${opt.label}"的补充内容`, 'required', true);
+    setFieldError(toTopLevelKey(indicator.id!), `请填写"${opt.label}"的补充内容`, 'required');
   } else {
-    const formatErr = validateInputContent(content);
+    const options = parseOptions(indicator.valueOptions);
+    const formatErr = validateInputContent(content, options, opt.value);
     if (formatErr) {
-      setFieldError(toTopLevelKey(indicator.id!), `"${opt.label}"的补充内容：${formatErr}`, 'required', true);
+      setFieldError(toTopLevelKey(indicator.id!), `"${opt.label}"的补充内容：${formatErr}`, 'required');
     } else {
       clearFieldError(toTopLevelKey(indicator.id!));
     }
@@ -291,7 +292,7 @@ export function validateInputTypeRequired(indicator: DeclareIndicatorApi.Indicat
         if (!content.trim()) {
           return `请填写"${opt.label}"的补充内容`;
         }
-        const formatError = validateInputContent(content);
+        const formatError = validateInputContent(content, options, opt.value);
         if (formatError) {
           return `"${opt.label}"的补充内容：${formatError}`;
         }
@@ -307,7 +308,8 @@ export function validateInputTypeRequired(indicator: DeclareIndicatorApi.Indicat
 export function getInputTypeError(indicator: DeclareIndicatorApi.Indicator, opt: any): string | null {
   const inputKey = indicator.indicatorCode + '_' + opt.value;
   const content = inputTypeValues[inputKey] || '';
-  return validateInputContent(content);
+  const options = parseOptions(indicator.valueOptions);
+  return validateInputContent(content, options, opt.value);
 }
 
 // ==================== 从 useFormValues 和 utils/options 重新导出（供 index.vue 统一导入）====================

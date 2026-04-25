@@ -56,13 +56,41 @@ export function deserializeInputTypeValue(optionValue: string): { value: string;
 }
 
 /** 校验输入内容 */
-export function validateInputContent(content: string): string | null {
+export function validateInputContent(
+  content: string,
+  options?: Array<{ value: string; label: string; inputType?: boolean }>,
+  currentOptionValue?: string,
+): string | null {
   if (content.includes(INPUT_VALUE_SEPARATOR)) {
     return `输入内容不能包含特殊符号 "∵"`;
   }
   if (content.trim() !== '' && /^\d+$/.test(content)) {
     return '输入内容不能是纯数字';
   }
+
+  // 按逗号分割后，检查是否与其他选项 label 重复
+  if (options && options.length > 0 && content.trim() !== '') {
+    const parts = content.split(/[,，]/).map((p) => p.trim()).filter((p) => p !== '');
+    if (parts.length === 0) return null;
+
+    const otherLabels: string[] = [];
+    for (const part of parts) {
+      const matched = options.filter((o) => {
+        // 排除自身选项（按 value 匹配，不论是否为 inputType）
+        if (o.value === currentOptionValue) return false;
+        return o.label === part;
+      });
+      for (const m of matched) {
+        otherLabels.push(m.label);
+      }
+    }
+
+    if (otherLabels.length > 0) {
+      const unique = [...new Set(otherLabels)];
+      return `输入内容"${unique.join('、')}"与其他选项重复`;
+    }
+  }
+
   return null;
 }
 
