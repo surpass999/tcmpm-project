@@ -93,10 +93,12 @@ defineExpose({
         </slot>
       </template>
     </Title>
-    <Form />
-
+    <!-- <Form /> -->
+    <div class="text-center text-2xl font-bold text-red-500 text-color-primary">
+      请联系管理员重置密码
+    </div>
     <div>
-      <VbenButton
+      <!-- <VbenButton
         :class="{
           'cursor-wait': loading,
         }"
@@ -107,7 +109,7 @@ defineExpose({
         <slot name="submitButtonText">
           {{ submitButtonText || $t('authentication.resetPassword') }}
         </slot>
-      </VbenButton>
+      </VbenButton> -->
       <VbenButton class="mt-4 w-full" variant="outline" @click="goToLogin()">
         {{ $t('common.back') }}
       </VbenButton>
