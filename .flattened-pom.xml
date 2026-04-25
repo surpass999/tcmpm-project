@@ -7,7 +7,7 @@
   <version>2025.12-jdk8-SNAPSHOT</version>
   <packaging>pom</packaging>
   <name>base</name>
-  <description>芋道项目基础脚手架</description>
+  <description>Gemrun基础脚手架</description>
   <url>https://github.com/YunaiV/ruoyi-vue-pro</url>
   <repositories>
     <repository>

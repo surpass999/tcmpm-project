@@ -1,8 +1,10 @@
 package cn.gemrun.base.module.system.controller.admin.user.vo.user;
 
 import cn.idev.excel.annotation.ExcelProperty;
+import cn.gemrun.base.framework.excel.core.annotations.ExcelColumnSelect;
 import cn.gemrun.base.framework.excel.core.annotations.DictFormat;
 import cn.gemrun.base.framework.excel.core.convert.DictConvert;
+import cn.gemrun.base.module.system.convert.user.DeptConvert;
 import cn.gemrun.base.module.system.enums.DictTypeConstants;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -24,7 +26,8 @@ public class UserImportExcelVO {
     @ExcelProperty("用户名称")
     private String nickname;
 
-    @ExcelProperty("部门编号")
+    @ExcelProperty(value = "部门编号", converter = DeptConvert.class)
+    @ExcelColumnSelect(functionName = "deptListForExcel")
     private Long deptId;
 
     @ExcelProperty("用户邮箱")

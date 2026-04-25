@@ -156,10 +156,10 @@ public class UserController {
     public void importTemplate(HttpServletResponse response) throws IOException {
         // 手动创建导出 demo
         List<UserImportExcelVO> list = Arrays.asList(
-                UserImportExcelVO.builder().username("yunai").deptId(1L).email("yunai@iocoder.cn").mobile("15601691300")
-                        .nickname("芋道").status(CommonStatusEnum.ENABLE.getStatus()).sex(SexEnum.MALE.getSex()).build(),
-                UserImportExcelVO.builder().username("yuanma").deptId(2L).email("yuanma@iocoder.cn").mobile("15601701300")
-                        .nickname("源码").status(CommonStatusEnum.DISABLE.getStatus()).sex(SexEnum.FEMALE.getSex()).build()
+                UserImportExcelVO.builder().username("zxy").deptId(1L).email("gem@gemrun.cn").mobile("15910532228")
+                        .nickname("中讯院").status(CommonStatusEnum.ENABLE.getStatus()).sex(SexEnum.MALE.getSex()).build(),
+                UserImportExcelVO.builder().username("dcy").deptId(2L).email("run@gemrun.cn").mobile("18322533399")
+                        .nickname("杜春渔").status(CommonStatusEnum.DISABLE.getStatus()).sex(SexEnum.FEMALE.getSex()).build()
         );
         // 输出
         ExcelUtils.write(response, "用户导入模板.xls", "用户列表", UserImportExcelVO.class, list);
